@@ -2,3 +2,14 @@
 cmake-build-debug
 cmake-build-*
 !cmake-build-release-mingw-1/libtwdll.dll
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
+libtwdll.dll
+libtwdll.dll.a
+lua-5.1.5/src/*.o
+lua-5.1.5/src/liblua.a
+lua-5.1.5/src/lua.exe
+lua-5.1.5/src/lua51.dll
+lua-5.1.5/src/luac.exe
