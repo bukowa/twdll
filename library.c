@@ -1,16 +1,21 @@
 #include <lua.h>
+#include <stdio.h>
 
-static int log_message(lua_State *L) {
-    // Check if at least one argument is passed and is a string
-    if (lua_isstring(L, 1)) {
-        const char *message = lua_tostring(L, 1);
-    } else {
+int ping(lua_State *L) {
+    lua_pushstring(L, "pong");
+    return 1;
+}
+
+void log_lua_state(lua_State *L) {
+    FILE *file = fopen("logging.txt", "a");
+    if (file) {
+        fprintf(file, "Hello World!\n");
     }
-
-    return 0;  // No return value
+    fclose(file);
 }
 
 __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
-    lua_register(L, "log_message", log_message);
+    log_lua_state(L);
+    lua_pushcfunction(L, ping);
     return 1;
 }
