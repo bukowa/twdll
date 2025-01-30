@@ -13,3 +13,4 @@ lua-5.1.5/src/liblua.a
 lua-5.1.5/src/lua.exe
 lua-5.1.5/src/lua51.dll
 lua-5.1.5/src/luac.exe
+liblibtwdll.dll.a
