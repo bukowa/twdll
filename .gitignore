@@ -1,3 +1,4 @@
 .idea
 cmake-build-debug
 cmake-build-*
+!cmake-build-release-mingw-1/libtwdll.dll

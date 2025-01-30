@@ -1,13 +1,21 @@
 #include <lua.h>
 #include <stdio.h>
+#include <string.h>
 
-int ping(lua_State *L) {
-    lua_pushstring(L, "pong");
+int respond_to_ping(lua_State *L) {
+    const char *msg = lua_tostring(L, 1);
+
+    if (msg && strcmp(msg, "ping") == 0) {
+        lua_pushstring(L, "pong");
+    } else {
+        lua_pushstring(L, "Invalid message");
+    }
+
     return 1;
 }
 
-void log_lua_state(lua_State *L) {
-    FILE *file = fopen("logging.txt", "a");
+void log_hello_world_to_file(lua_State *L) {
+    FILE *file = fopen("ping_response_log.txt", "a");
     if (file) {
         fprintf(file, "Hello World!\n");
     }
@@ -15,7 +23,7 @@ void log_lua_state(lua_State *L) {
 }
 
 __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
-    log_lua_state(L);
-    lua_pushcfunction(L, ping);
+    log_hello_world_to_file(L);
+    lua_pushcfunction(L, respond_to_ping);
     return 1;
 }
