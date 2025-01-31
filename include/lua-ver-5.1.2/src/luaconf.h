@@ -501,7 +501,7 @@
 */
 
 #define LUA_NUMBER_DOUBLE
-#define LUA_NUMBER	double
+#define LUA_NUMBER	float
 
 /*
 @@ LUAI_UACNUMBER is the result of an 'usual argument conversion'
