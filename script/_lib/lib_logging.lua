@@ -15,9 +15,10 @@ local Logger = {}
 Logger.__index = Logger
 
 -- Constructor for creating a new logger instance
-function Logger.new(log_file_path, log_level)
+function Logger.new(name, log_file_path, log_level)
     local self = setmetatable({}, Logger)
 
+    self.name = name or "Unnamed Logger"  -- Default to "Unnamed Logger" if no name is provided
     self.log_file_path = log_file_path or default_log_file_path
     self.log_level = levels[log_level] or levels.INFO -- Default to INFO if an invalid level is provided
 
@@ -32,9 +33,9 @@ function Logger:_write_log_entry(level, text)
         error("Failed to open log file: " .. (err or "Unknown error"))
     end
 
-    -- Format log entry with timestamp
+    -- Format log entry with timestamp and logger name
     local timestamp = os.date("[%Y-%m-%d %H:%M:%S]")
-    local log_entry = string.format("%s [%s] %s", timestamp, level, text)
+    local log_entry = string.format("%s [%s] %s: %s", timestamp, level, self.name, text)
 
     -- Write the log entry and close the file
     logfile:write(log_entry .. "\n")
@@ -97,8 +98,8 @@ end
 
 -- Module return
 return {
-    new_logger = function(log_file_path, log_level)
-        return Logger.new(log_file_path, log_level)
+    new_logger = function(name, log_file_path, log_level)
+        return Logger.new(name, log_file_path, log_level)
     end,
     levels = levels -- Expose logging levels for external use
 }
