@@ -64,14 +64,46 @@ add_dependencies(twdll lua)
 
 # If you want to ensure CL-specific configuration, you can set specific flags
 if(MSVC)
-    target_compile_options(lua PRIVATE "/Wall" "/W3")
-    target_compile_options(twdll PRIVATE "/Wall" "/W3")
+#    target_compile_options(lua PRIVATE "/Wall" "/W3")
+#    target_compile_options(twdll PRIVATE "/Wall" "/W3")
 endif()
 
-# Custom command to copy the built DLL after build
+# For multi-configuration generators (e.g., Visual Studio)
+if(CMAKE_CONFIGURATION_TYPES MATCHES "Release")
+    target_compile_options(lua PRIVATE "/O2" "/DNDEBUG")
+    target_compile_options(twdll PRIVATE "/O2" "/DNDEBUG")
+endif()
+
+# For multi-configuration generators (e.g., Visual Studio)
+if(CMAKE_CONFIGURATION_TYPES MATCHES "Debug")
+    # Debugging options for MSVC
+    target_compile_options(lua PRIVATE "/Od" "/Z7" "/D_DEBUG")  # Disable optimizations, add debug info
+    target_compile_options(twdll PRIVATE "/Od" "/Z7" "/D_DEBUG")
+endif()
+
+# Custom command to build and copy the DLL
 add_custom_command(
         TARGET twdll POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
         $<TARGET_FILE:twdll>  # Path to the built DLL
-        "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Total War Rome II"  # Destination directory
+        "C:\\Games\\Total War - Rome 2"  # Destination directory
+)
+
+# Define the MOD_FILE_NAME and IMG_FILE_NAME variables
+set(MOD_FILE_NAME "libtwdll.pack")
+#set(IMG_FILE_NAME "libtwdll.png")
+
+# Get the current working directory
+get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
+
+# Get the current build directory (where TARGET_FILE resides)
+get_filename_component(BUILD_DIR ${CMAKE_BINARY_DIR} REALPATH)
+
+# Custom command to build and copy the mod files
+add_custom_command(
+        TARGET twdll POST_BUILD
+        COMMAND rpfm_cli --game rome_2 pack create --pack-path=${MOD_FILE_NAME}
+        COMMAND rpfm_cli --game rome_2 pack add --pack-path=${MOD_FILE_NAME} -F "${CURRENT_DIR}/pack;"  # Full path to the pack directory in the build folder
+        COMMAND ${CMAKE_COMMAND} -E copy ${MOD_FILE_NAME} "C:\\Games\\Total War - Rome 2\\data"
+#        COMMAND ${CMAKE_COMMAND} -E copy ${IMG_FILE_NAME} "C:\\Games\\Total War - Rome 2\\data"
 )
