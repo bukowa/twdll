@@ -8,8 +8,20 @@ set(CMAKE_C_STANDARD 99)
 # Set Visual Studio-specific flags (optional, depending on the version)
 set(CMAKE_GENERATOR_PLATFORM x64)  # Set to x86 if needed
 
-# Set Lua include and source directories
-set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lua-5.1.5/src")
+# Option to specify Lua version (default 5.1)
+option(LUA_VERSION "Lua version to use (e.g., 5.1, 5.4)" "5.1")
+
+# Set Lua include and source directories based on version
+if(LUA_VERSION STREQUAL "5.1")
+    set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lua-5.1/src")
+elseif(LUA_VERSION STREQUAL "5.1.5") # Example for Lua 5.1.5
+    set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lua-5.1.5/src")
+else()
+    message(FATAL_ERROR "Unsupported Lua version: ${LUA_VERSION}")
+endif()
+
+message("${LUA_SRC_DIR}")
+
 set(LUA_INCLUDE_DIR "${LUA_SRC_DIR}")
 set(LUA_LIB_DIR "${LUA_SRC_DIR}")
 
@@ -22,8 +34,8 @@ add_library(lua STATIC ${LUA_SOURCES})
 # Include Lua headers
 include_directories(${LUA_INCLUDE_DIR})
 
-# Set the Lua library for dynamic linking at runtime (optional)
-link_directories(${LUA_LIB_DIR})
+# Set the Lua library for dynamic linking at runtime (optional - usually not needed with static linking)
+# link_directories(${LUA_LIB_DIR})  # Remove this line for static linking
 
 # Build your own DLL (twdll)
 add_library(twdll SHARED library.c)
