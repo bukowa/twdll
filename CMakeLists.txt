@@ -47,3 +47,11 @@ if(MSVC)
     target_compile_options(lua PRIVATE "/Wall" "/W3")
     target_compile_options(twdll PRIVATE "/Wall" "/W3")
 endif()
+
+# Custom command to copy the built DLL after build
+add_custom_command(
+        TARGET twdll POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:twdll>  # Path to the built DLL
+        "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Total War Rome II"  # Destination directory
+)
