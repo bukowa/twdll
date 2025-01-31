@@ -1,0 +1,12 @@
+<application>
+  <component name="CPPToolchains" version="9">
+    <toolchains detectedVersion="5">
+      <toolchain name="MinGW" toolSetKind="MINGW" toolSetPath="BUNDLED_MINGW" debuggerKind="BUNDLED_GDB" />
+      <toolchain name="Visual Studio" toolSetKind="MSVC" toolSetPath="C:\Program Files\Microsoft Visual Studio\2022\Community" debuggerKind="BUNDLED_LLDB" />
+      <toolchain name="mingw32" toolSetKind="MINGW" toolSetPath="C:\msys64\mingw32" customMakePath="C:\msys64\mingw32\bin\ninja.exe" customCCompilerPath="C:\msys64\mingw32\bin\gcc.exe" customCXXCompilerPath="C:\msys64\mingw32\bin\g++.exe" debuggerKind="BUNDLED_GDB" />
+      <toolchain name="cl" toolSetKind="MSVC" toolSetPath="C:\Program Files\Microsoft Visual Studio\2022\Community" customCMakePath="C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" customCCompilerPath="C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\bin\Hostx86\x86\cl.exe" debuggerKind="BUNDLED_LLDB">
+        <toolSetOption type="msvc.arch" value="x86" />
+      </toolchain>
+    </toolchains>
+  </component>
+</application>

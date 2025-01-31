@@ -16,3 +16,5 @@ lua-5.1.5/src/luac.exe
 liblibtwdll.dll.a
 out
 .vs
+!/.idea/runConfigurations
+!.idea/cmake.xml
