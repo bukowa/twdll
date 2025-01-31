@@ -33,3 +33,15 @@ else
     assert(result == "pong", "Expected 'pong' from ping, but got: " .. tostring(result))
 end
 ```
+
+### Notes
+Need lua 5.1.1 or 5.1.2
+
+5.1 does no return from dostring
+5.1.3 and up crashes with memory access
+if you use these files from 5.1.2 into 5.1.3 it wont crash
+````
+lstate.h
+lstate.c
+ldo.c
+````

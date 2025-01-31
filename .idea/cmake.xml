@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CMakeSharedSettings">
+    <configurations>
+      <configuration PROFILE_NAME="cl:DEBUG:5.1" ENABLED="true" CONFIG_NAME="Debug" TOOLCHAIN_NAME="cl" GENERATION_OPTIONS="-DLUA_VERSION=5.1" />
+      <configuration PROFILE_NAME="cl:DEBUG:5.1.1" ENABLED="true" CONFIG_NAME="Debug" TOOLCHAIN_NAME="cl" GENERATION_OPTIONS="-DLUA_VERSION=5.1.1" />
+      <configuration PROFILE_NAME="cl:DEBUG:5.1.2" ENABLED="true" CONFIG_NAME="Debug" TOOLCHAIN_NAME="cl" GENERATION_OPTIONS="-DLUA_VERSION=5.1.2" />
+      <configuration PROFILE_NAME="cl:DEBUG:5.1.3" ENABLED="true" CONFIG_NAME="Debug" TOOLCHAIN_NAME="cl" GENERATION_OPTIONS="-DLUA_VERSION=5.1.3" />
+      <configuration PROFILE_NAME="cl:DEBUG:5.1.4" ENABLED="true" CONFIG_NAME="Debug" TOOLCHAIN_NAME="cl" GENERATION_OPTIONS="-DLUA_VERSION=5.1.4" />
+      <configuration PROFILE_NAME="cl:DEBUG:5.1.5" ENABLED="true" CONFIG_NAME="Debug" TOOLCHAIN_NAME="cl" GENERATION_OPTIONS="-DLUA_VERSION=5.1.5" />
+      <configuration PROFILE_NAME="mingw32:DEBUG:5.1" ENABLED="true" CONFIG_NAME="Debug" TOOLCHAIN_NAME="mingw32" GENERATION_OPTIONS="-DLUA_VERSION=5.1" />
+    </configurations>
+  </component>
+</project>
