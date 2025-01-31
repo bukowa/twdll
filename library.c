@@ -26,11 +26,17 @@ DWORD WINAPI ConsoleThread(LPVOID param) {
                 // Print Lua function's return value (if any)
                 int nresults = lua_gettop(global_luaState);  // Get the number of return values
                 for (int i = 1; i <= nresults; ++i) {
-                    if (lua_isstring(global_luaState, i)) {
+                    if (lua_isnil(global_luaState, i)) {
+                        printf("twdll>nil\n");
+                    }
+                    else if (lua_isstring(global_luaState, i)) {
                         printf("%s\n", lua_tostring(global_luaState, i));
                     } else if (lua_isnumber(global_luaState, i)) {
                         printf("%g\n", lua_tonumber(global_luaState, i));
-                    } else {
+                    } else if (lua_istable(global_luaState, i)) {
+                        printf("twdll>table\n");
+                    }
+                    else {
                         printf("Unknown return type\n");
                     }
                 }
