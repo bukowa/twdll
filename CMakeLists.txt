@@ -99,11 +99,12 @@ get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
 # Get the current build directory (where TARGET_FILE resides)
 get_filename_component(BUILD_DIR ${CMAKE_BINARY_DIR} REALPATH)
 
-# Custom command to build and copy the mod files
-add_custom_command(
-        TARGET twdll POST_BUILD
+add_custom_target(update_mod
         COMMAND rpfm_cli --game rome_2 pack create --pack-path=${MOD_FILE_NAME}
-        COMMAND rpfm_cli --game rome_2 pack add --pack-path=${MOD_FILE_NAME} -F "${CURRENT_DIR}/pack;"  # Full path to the pack directory in the build folder
+        COMMAND rpfm_cli --game rome_2 pack add --pack-path=${MOD_FILE_NAME} -F "${CURRENT_DIR}/pack;"
         COMMAND ${CMAKE_COMMAND} -E copy ${MOD_FILE_NAME} "C:\\Games\\Total War - Rome 2\\data"
-#        COMMAND ${CMAKE_COMMAND} -E copy ${IMG_FILE_NAME} "C:\\Games\\Total War - Rome 2\\data"
+        BYPRODUCTS ${MOD_FILE_NAME}
 )
+
+# Ensure `twdll` depends on `update_mod`
+add_dependencies(twdll update_mod)
