@@ -22,4 +22,13 @@
     lstate.c
     ldo.c
   ```
+- `CA` uses this method of table insertion that doesn't work in our lua VM
+
+  ```lua
+  -- CA method
+  events[event][#events[event]+1] = func
+  
+  -- REQUIRED method
+  table.insert(events[event], #events[event], func)
+  ```
   
