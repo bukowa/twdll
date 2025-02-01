@@ -17,32 +17,42 @@ DWORD WINAPI ConsoleThread(LPVOID param) {
         fflush(stdout);
 
         if (fgets(input, sizeof(input), stdin)) {
-            // Read user input
-            if (luaL_dostring(global_luaState, input)) {
+
+            if (strcmp(input, ">pg\n") == 0) {
+                luaL_dostring(global_luaState,
+                    "return (function(tbl) "
+                    "local str = '' "
+                    "for k, v in pairs(tbl) do "
+                    "    str = str .. tostring(k) .. ': ' .. tostring(v) .. '\\n' "
+                    "end "
+                    "return str "
+                    "end)(_G)");
+            }
+
+            else if (luaL_dostring(global_luaState, input)) {
                 // Execute in Lua 5.1
                 printf("Lua Error: %s\n", lua_tostring(global_luaState, -1));
                 lua_pop(global_luaState, 1); // Remove error message from stack
-            } else {
-                // Print Lua function's return value (if any)
-                int nresults = lua_gettop(global_luaState); // Get the number of return values
-                for (int i = 1; i <= nresults; ++i) {
-                    if (lua_isnil(global_luaState, i)) {
-                        printf("twdll>nil\n");
-                    } else if (lua_isstring(global_luaState, i)) {
-                        printf("%s\n", lua_tostring(global_luaState, i));
-                    } else if (lua_isnumber(global_luaState, i)) {
-                        printf("%g\n", lua_tonumber(global_luaState, i));
-                    } else if (lua_istable(global_luaState, i)) {
-                        printf("twdll>table\n");
-                    } else {
-                        printf("Unknown return type\n");
-                    }
-                }
-                lua_settop(global_luaState, 0); // Clear the stack after handling the results
             }
+
+            // Print Lua function's return value (if any)
+            int nresults = lua_gettop(global_luaState); // Get the number of return values
+            for (int i = 1; i <= nresults; ++i) {
+                if (lua_isnil(global_luaState, i)) {
+                    printf("twdll>nil\n");
+                } else if (lua_isstring(global_luaState, i)) {
+                    printf("%s\n", lua_tostring(global_luaState, i));
+                } else if (lua_isnumber(global_luaState, i)) {
+                    printf("%g\n", lua_tonumber(global_luaState, i));
+                } else if (lua_istable(global_luaState, i)) {
+                    printf("twdll>table\n");
+                } else {
+                    printf("Unknown return type\n");
+                }
+            }
+            lua_settop(global_luaState, 0); // Clear the stack after handling the results
         }
     }
-    return 0;
 }
 
 void start_interactive_console() {
