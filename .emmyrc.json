@@ -1,0 +1,62 @@
+{
+  "completion": {
+    "autoRequire": true,
+    "autoRequireFunction": "require",
+    "autoRequireNamingConvention": "camelCase",
+    "callSnippet": true,
+    "postfix": "@"
+  },
+  "signature": {
+    "detailSignatureHelper": true
+  },
+  "diagnostics": {
+    "disable": [
+    ],
+    "globals": [],
+    "globalsRegex": [],
+    "severity": {
+      "undefined-global": "warning"
+    },
+    "enables": [
+    ]
+  },
+  "hint": {
+    "paramHint": false,
+    "indexHint": false,
+    "localHint": false,
+    "overrideHint": false
+  },
+  "runtime": {
+    "version": "Lua5.1",
+    "requireLikeFunction": [],
+    "frameworkVersions": [],
+    "extensions": [],
+    "requirePattern": []
+  },
+  "workspace": {
+    "ignoreDir": [
+      "include",
+      "helpers"
+    ],
+    "ignoreGlobs": [
+    ],
+    "library": [
+
+    ],
+    "workspaceRoots": [],
+    "preloadFileSize": 1048576,
+    "encoding": ""
+  },
+  "resource": {
+    "paths": [
+      "pack"
+    ]
+  },
+  "codeLens": {
+    "enable": true
+  },
+  "strict": {
+    "requirePath": false,
+    "typeCall": true
+  }
+}
