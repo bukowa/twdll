@@ -5,20 +5,22 @@ cmake_minimum_required(VERSION 3.29)
 # ========================
 
 set(CMAKE_C_STANDARD 99)
-project(twdll C)
+project(libtwdll C)
 
 # ========================
 # Lua Configuration
 # ========================
 
 # Set the Lua version and directory containing Lua source files
-set(LUA_VERSION "5.1")  # Default Lua version
 set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-${LUA_VERSION}/src")
 
 # Check if Lua source directory exists, otherwise throw an error
 if(NOT EXISTS "${LUA_SRC_DIR}")
     message(FATAL_ERROR "Lua version ${LUA_VERSION} not found in ${LUA_SRC_DIR}")
 endif()
+
+# Print the Lua Version
+message(STATUS "LUA_VERSION: " ${LUA_VERSION})
 
 # Collect Lua source files (*.c files in the Lua source directory)
 file(GLOB LUA_SOURCES "${LUA_SRC_DIR}/*.c")
@@ -44,6 +46,20 @@ add_dependencies(twdll lua)
 
 # Link twdll to the Lua static library
 target_link_libraries(twdll lua)
+
+# ========================
+# Lua Setup (lua.exe)
+# ========================
+add_executable(lua.exe "${LUA_SRC_DIR}/lua.c")
+target_link_libraries(lua.exe PRIVATE lua)
+set_target_properties(lua.exe PROPERTIES OUTPUT_NAME "lua")
+
+# ========================
+# Lua Setup (luac.exe)
+# ========================
+add_executable(luac.exe "${LUA_SRC_DIR}/luac.c")
+target_link_libraries(luac.exe PRIVATE lua)
+set_target_properties(luac.exe PROPERTIES OUTPUT_NAME "luac")
 
 # ========================
 # Compiler Settings

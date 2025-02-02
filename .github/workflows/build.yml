@@ -31,7 +31,7 @@ jobs:
         run: cmake \
           -B ${{github.workspace}}/build \
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
-          -DLUA_VERSION=5.1.2 \
+          -DLUA_VERSION="5.1.2" \
           -G Ninja \
           .
 
