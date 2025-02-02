@@ -1,110 +1,137 @@
 cmake_minimum_required(VERSION 3.29)
 
-# Set the project name and language
-project(twdll C)
+# ========================
+# Set C Standard and Project Info
+# ========================
 
 set(CMAKE_C_STANDARD 99)
+project(twdll C)
 
-# Set Visual Studio-specific flags (optional, depending on the version)
-set(CMAKE_GENERATOR_PLATFORM x64)  # Set to x86 if needed
+# ========================
+# Lua Configuration
+# ========================
 
-# Option to specify Lua version (default 5.1)
-option(LUA_VERSION "Lua version to use (e.g., 5.1, 5.4)" "5.1")
+# Set the Lua version and directory containing Lua source files
+set(LUA_VERSION "5.1")  # Default Lua version
+set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-${LUA_VERSION}/src")
 
-# Set Lua include and source directories based on version
-if(LUA_VERSION STREQUAL "5.1")
-    set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-5.1/src")
-elseif(LUA_VERSION STREQUAL "5.1.1")
-set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-5.1.1/src")
-elseif(LUA_VERSION STREQUAL "5.1.2")
-    set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-5.1.2/src")
-elseif(LUA_VERSION STREQUAL "5.1.3")
-    set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-5.1.3/src")
-elseif(LUA_VERSION STREQUAL "5.1.4")
-    set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-5.1.4/src")
-elseif(LUA_VERSION STREQUAL "5.1.5")
-    set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-5.1.5/src")
-else()
-    message(FATAL_ERROR "Unsupported Lua version: ${LUA_VERSION}")
+# Check if Lua source directory exists, otherwise throw an error
+if(NOT EXISTS "${LUA_SRC_DIR}")
+    message(FATAL_ERROR "Lua version ${LUA_VERSION} not found in ${LUA_SRC_DIR}")
 endif()
 
-message("${LUA_SRC_DIR}")
-
-set(LUA_INCLUDE_DIR "${LUA_SRC_DIR}")
-set(LUA_LIB_DIR "${LUA_SRC_DIR}")
-
-# Add Lua source files
+# Collect Lua source files (*.c files in the Lua source directory)
 file(GLOB LUA_SOURCES "${LUA_SRC_DIR}/*.c")
 
-# Add Lua as a static library (compiled with CL)
+# Add Lua source directory to include path
+include_directories(${LUA_SRC_DIR})
+
+# Add Lua as a static library to the project
 add_library(lua STATIC ${LUA_SOURCES})
 
-# Include Lua headers
-include_directories(${LUA_INCLUDE_DIR})
+# ========================
+# DLL Setup (twdll)
+# ========================
 
-# Set the Lua library for dynamic linking at runtime (optional - usually not needed with static linking)
-# link_directories(${LUA_LIB_DIR})  # Remove this line for static linking
-
-# Build your own DLL (twdll)
+# Build the shared DLL (twdll) from the library source file (library.c)
 add_library(twdll SHARED library.c)
 
-# Link your DLL to Lua (this is the Lua static library we just built)
-target_link_libraries(twdll lua ${CMAKE_DL_LIBS})
+# Set the output name of the DLL to be "libtwdll"
+set_target_properties(twdll PROPERTIES OUTPUT_NAME "libtwdll")
 
-# Output settings for DLL
-set_target_properties(twdll PROPERTIES
-        OUTPUT_NAME "libtwdll"  # The name of the DLL without any extension
-        PREFIX ""              # Prevents the toolchain from adding a prefix (like msys-)
-        SUFFIX ".dll"          # Ensures the correct extension
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"  # Outputs to 'bin' folder
-)
-
-# Set custom build steps to ensure Lua is compiled before your project
+# Set a dependency between the twdll and lua libraries to ensure Lua is built before twdll
 add_dependencies(twdll lua)
 
-# If you want to ensure CL-specific configuration, you can set specific flags
-if(MSVC)
-#    target_compile_options(lua PRIVATE "/Wall" "/W3")
-#    target_compile_options(twdll PRIVATE "/Wall" "/W3")
+# Link twdll to the Lua static library
+target_link_libraries(twdll lua)
+
+# ========================
+# Compiler Settings
+# ========================
+
+# Compiler settings based on the build type (Release or Debug)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(lua PRIVATE "/O2" "/Z7" "/DNDEBUG")
+    target_compile_options(twdll PRIVATE "/O2" "/Z7" "/DNDEBUG")
+elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(lua PRIVATE "/Od" "/Z7" "/D_DEBUG /Gz")
+    target_compile_options(twdll PRIVATE "/Od" "/Z7" "/D_DEBUG /Gz")
 endif()
 
-# For multi-configuration generators (e.g., Visual Studio)
-if(CMAKE_CONFIGURATION_TYPES MATCHES "Release")
-    target_compile_options(lua PRIVATE "/O2" "/DNDEBUG")
-    target_compile_options(twdll PRIVATE "/O2" "/DNDEBUG")
-endif()
+# ========================
+# Custom Post-Build Command (Copy DLL)
+# ========================
 
-# For multi-configuration generators (e.g., Visual Studio)
-if(CMAKE_CONFIGURATION_TYPES MATCHES "Debug")
-    # Debugging options for MSVC
-    target_compile_options(lua PRIVATE "/Od" "/Z7" "/D_DEBUG")  # Disable optimizations, add debug info
-    target_compile_options(twdll PRIVATE "/Od" "/Z7" "/D_DEBUG")
-endif()
-
-# Custom command to build and copy the DLL
+# After building twdll, copy the DLL to the specified target directory
 add_custom_command(
         TARGET twdll POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
         $<TARGET_FILE:twdll>  # Path to the built DLL
         "C:\\Games\\Total War - Rome 2"  # Destination directory
+        COMMENT "Copying libtwdll DLL to target directory..."
 )
 
-# Define the MOD_FILE_NAME and IMG_FILE_NAME variables
-set(MOD_FILE_NAME "libtwdll.pack")
-#set(IMG_FILE_NAME "libtwdll.png")
+# ========================
+# Mod File Setup
+# ========================
 
-# Get the current working directory
+# Define the path where the mod file will be generated
+set(MOD_FILE_PATH "${CMAKE_BINARY_DIR}/libtwdll.pack")
+
+# Get the absolute path of the current source directory
 get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
 
-# Get the current build directory (where TARGET_FILE resides)
-get_filename_component(BUILD_DIR ${CMAKE_BINARY_DIR} REALPATH)
+# Specify the directory containing files for the mod (these files will be included in the mod)
+set(MOD_WATCH_DIR "${CURRENT_DIR}/pack")
 
-add_custom_target(update_mod
-        COMMAND rpfm_cli --game rome_2 pack create --pack-path=${MOD_FILE_NAME}
-        COMMAND rpfm_cli --game rome_2 pack add --pack-path=${MOD_FILE_NAME} -F "${CURRENT_DIR}/pack;"
-        COMMAND ${CMAKE_COMMAND} -E copy ${MOD_FILE_NAME} "C:\\Games\\Total War - Rome 2\\data"
-        BYPRODUCTS ${MOD_FILE_NAME}
+# Collect all files in the MOD_WATCH_DIR recursively (files that will be added to the mod)
+file(GLOB_RECURSE MOD_FILES "${MOD_WATCH_DIR}/*.*")
+
+# ========================
+# Mod File Generation Command
+# ========================
+
+# Add a custom command to generate the mod pack
+# This command runs if any files in MOD_FILES change
+add_custom_command(
+        OUTPUT ${MOD_FILE_PATH}  # The output mod pack file
+        COMMAND rpfm_cli --game rome_2 pack create --pack-path=${MOD_FILE_PATH}  # Create the mod pack
+        COMMAND rpfm_cli --game rome_2 pack add --pack-path=${MOD_FILE_PATH} -F "${MOD_WATCH_DIR};"  # Add files to the mod pack
+        COMMAND ${CMAKE_COMMAND} -E copy ${MOD_FILE_PATH} "C:\\Games\\Total War - Rome 2\\data"  # Copy the mod pack to the game directory
+        DEPENDS ${MOD_FILES}  # The command runs only if any of the files in MOD_FILES change
+        COMMENT "Generating mod pack file..."
 )
 
-# Ensure `twdll` depends on `update_mod`
-add_dependencies(twdll update_mod)
+# ========================
+# Custom Target for Mod File Creation
+# ========================
+
+# Create a custom target that will trigger the mod generation command
+add_custom_target(create_mod_pack
+        DEPENDS ${MOD_FILE_PATH}  # Ensure this target runs only if the MOD file is up-to-date
+)
+
+# Ensure the twdll target depends on create_mod_pack so it builds after the mod file is ready
+add_dependencies(twdll create_mod_pack)
+
+# ========================
+# Output Directory Setup
+# ========================
+
+# Define the directory where the mod file and DLL will be copied
+set(MOD_TARGET_DIR "${CMAKE_BINARY_DIR}/mod")
+
+# Ensure the target directory exists (create it if it doesn't)
+file(MAKE_DIRECTORY ${MOD_TARGET_DIR})
+
+# ========================
+# Copy Files to Output Directory
+# ========================
+
+# After building twdll, copy both the mod file and the DLL to the output directory
+add_custom_command(
+        TARGET twdll POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy ${MOD_FILE_PATH} ${MOD_TARGET_DIR}  # Copy the mod pack
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:twdll> ${MOD_TARGET_DIR}  # Copy the built DLL
+        COMMENT "Copying MOD file and libtwdll DLL to output directory..."
+)
