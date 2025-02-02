@@ -1,0 +1,39 @@
+name: MSVC x86
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: windows
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@460a772e4cf7358f9f2f23773240813e40e7a894
+        with:
+          arch: 'x86'
+#          toolset: 14.42.34433
+
+      - name: Configure CMake
+        run: cmake \
+          -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DLUA_VERSION=5.1.2 \
+          -G Ninja
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+
+#      - name: Test
+#        working-directory: ${{github.workspace}}/build
+#        # Execute tests defined by the CMake configuration.
+#        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+#        run: ctest -C ${{env.BUILD_TYPE}}
+#
