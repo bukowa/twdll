@@ -63,8 +63,9 @@ local function tostring(value)
         return "NaN"
     elseif value == mhuge then
         return "Inf"
-    elseif value == -mhuge then
-        return "-Inf"
+    -- fix attempt to perform arithmetic on upvalue 'mhuge' (a nil value)
+    --elseif value == -mhuge then
+    --    return "-Inf"
     elseif is_integer(value) then
         return ("%d"):format(value)
     else
