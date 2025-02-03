@@ -33,6 +33,11 @@ function Logger:_write_log_entry(level, text)
         error("Failed to open log file: " .. (err or "Unknown error"))
     end
 
+    -- Add extra space for clean log message
+    if #level == 4 then
+        level = level .. " "
+    end
+
     -- Format log entry with timestamp and logger name
     local timestamp = os.date("[%Y-%m-%d %H:%M:%S]")
     local log_entry = string.format("%s [%s] %s: %s", timestamp, level, self.name, text)
@@ -85,6 +90,17 @@ function Logger:pcall(func, ...)
         self:error("Error during execution: " .. tostring(result))
     end
     return success, result
+end
+
+function Logger:require(moduleName)
+    self:debug("Loading module: " .. moduleName)
+    local success, result = pcall(require, moduleName)
+    if not success then
+        self:error("Error loading module '" .. moduleName .. "': " .. tostring(result))
+        return nil
+    end
+    self:debug("Module loaded: " .. moduleName)
+    return result
 end
 
 -- Set the logging level dynamically
