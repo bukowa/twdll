@@ -117,7 +117,8 @@ function Logger:set_level(level)
     end
 end
 
-function Logger:start_trace(write_log_entry, callback)
+function Logger:start_trace(mask, write_log_entry, callback)
+    mask = (mask == nil) and "c" or mask
     write_log_entry = (write_log_entry == nil) and true or write_log_entry
 
     debug.sethook(function(event)
@@ -135,7 +136,7 @@ function Logger:start_trace(write_log_entry, callback)
         if callback then
             self:pcall(callback, event, info)
         end
-    end, "c")
+    end, mask)
 end
 
 -- Method to stop the trace hook
