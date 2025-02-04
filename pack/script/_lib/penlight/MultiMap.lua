@@ -3,10 +3,10 @@
 -- Dependencies: `pl.utils`, `pl.class`, `pl.List`, `pl.Map`
 -- @classmod pl.MultiMap
 
-local utils = require 'pl.utils'
-local class = require 'pl.class'
-local List = require 'pl.List'
-local Map = require 'pl.Map'
+local utils = require 'script._lib.penlight.utils'
+local class = require 'script._lib.penlight.class'
+local List = require 'script._lib.penlight.List'
+local Map = require 'script._lib.penlight.Map'
 
 -- MultiMap is a standard MT
 local MultiMap = utils.stdmt.MultiMap

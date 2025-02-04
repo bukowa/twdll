@@ -5,7 +5,7 @@
 --   <li>[2] http://search.cpan.org/dist/Text-Balanced/lib/Text/Balanced.pm</li>
 -- </ul> <br/>
 -- <pre class=example>
--- local lb = require "pl.luabalanced"
+-- local lb = require "script._lib.penlight.luabalanced"
 -- --Extract Lua expression starting at position 4.
 --  print(lb.match_expression("if x^2 + x > 5 then print(x) end", 4))
 --  --> x^2 + x > 5     16

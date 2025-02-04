@@ -8,8 +8,8 @@
 --
 -- Dependencies: `pl.utils`, `pl.types`
 -- @module pl.stringx
-local utils = require 'pl.utils'
-local is_callable = require 'pl.types'.is_callable
+local utils = require 'script._lib.penlight.utils'
+local is_callable = require 'script._lib.penlight.types'.is_callable
 local string = string
 local find = string.find
 local type,setmetatable,ipairs = type,setmetatable,ipairs
@@ -867,7 +867,7 @@ end
 -- See <a href="http://lua-users.org/wiki/StringInterpolation">the lua-users wiki</a>
 --
 -- @usage
--- require 'pl.text'.format_operator()
+-- require 'script._lib.penlight.text'.format_operator()
 -- local out1 = '%s = %5.3f' % {'PI',math.pi}                   --> 'PI = 3.142'
 -- local out2 = '$name = $value' % {name='dog',value='Pluto'}   --> 'dog = Pluto'
 function stringx.format_operator()

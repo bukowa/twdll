@@ -23,4 +23,4 @@ utils.raise_deprecation {
   no_trace = true,
 }
 
-return require "pl.stringx"
+return require "script._lib.penlight.stringx"

@@ -8,10 +8,10 @@
 -- Dependencies: `pl.utils`, `pl.tablex`, `pl.pretty`, `pl.path`, `debug`
 -- @module pl.test
 
-local tablex = require 'pl.tablex'
-local utils = require 'pl.utils'
-local pretty = require 'pl.pretty'
-local path = require 'pl.path'
+local tablex = require 'script._lib.penlight.tablex'
+local utils = require 'script._lib.penlight.utils'
+local pretty = require 'script._lib.penlight.pretty'
+local path = require 'script._lib.penlight.path'
 local type,unpack,pack = type,utils.unpack,utils.pack
 local clock = os.clock
 local debug = require 'debug'

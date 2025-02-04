@@ -8,10 +8,10 @@
 -- @classmod pl.Date
 -- @pragma nostrip
 
-local class = require 'pl.class'
+local class = require 'script._lib.penlight.class'
 local os_time, os_date = os.time, os.date
-local stringx = require 'pl.stringx'
-local utils = require 'pl.utils'
+local stringx = require 'script._lib.penlight.stringx'
+local utils = require 'script._lib.penlight.utils'
 local assert_arg,assert_string = utils.assert_arg,utils.assert_string
 
 

@@ -2,7 +2,7 @@
 --
 -- See the [wiki page](http://lua-users.org/wiki/ListComprehensions)
 --
---    local C= require 'pl.comprehension' . new()
+--    local C= require 'script._lib.penlight.comprehension' . new()
 --
 --    C ('x for x=1,10') ()
 --    ==> {1,2,3,4,5,6,7,8,9,10}
@@ -30,7 +30,7 @@
 -- See @{07-functional.md.List_Comprehensions|the Guide}
 -- @module pl.comprehension
 
-local utils = require 'pl.utils'
+local utils = require 'script._lib.penlight.utils'
 
 local status,lb = pcall(require, "pl.luabalanced")
 if not status then

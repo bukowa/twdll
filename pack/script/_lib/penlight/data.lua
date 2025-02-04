@@ -17,7 +17,7 @@
 -- Dependencies: `pl.utils`, `pl.array2d` (fallback methods)
 -- @module pl.data
 
-local utils = require 'pl.utils'
+local utils = require 'script._lib.penlight.utils'
 local _DEBUG = rawget(_G,'_DEBUG')
 
 local patterns,function_arg,usplit,array_tostring = utils.patterns,utils.function_arg,utils.split,utils.array_tostring
@@ -118,7 +118,7 @@ DataMT.__index = function(self,name)
     local f = DataMT[name]
     if f then return f end
     if not array2d then
-        array2d = require 'pl.array2d'
+        array2d = require 'script._lib.penlight.array2d'
     end
     return array2d[name]
 end

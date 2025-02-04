@@ -28,7 +28,7 @@
 -- Dependencies: `pl.utils`
 -- @module pl.template
 
-local utils = require 'pl.utils'
+local utils = require 'script._lib.penlight.utils'
 
 local append, concat = table.insert, table.concat
 local format, strsub, strfind, strgsub, strrep = string.format, string.sub, string.find, string.gsub, string.rep

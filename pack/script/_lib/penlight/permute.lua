@@ -2,8 +2,8 @@
 --
 -- Dependencies: `pl.utils`, `pl.tablex`
 -- @module pl.permute
-local tablex = require 'pl.tablex'
-local utils = require 'pl.utils'
+local tablex = require 'script._lib.penlight.tablex'
+local utils = require 'script._lib.penlight.utils'
 local copy = tablex.deepcopy
 local append = table.insert
 local assert_arg = utils.assert_arg

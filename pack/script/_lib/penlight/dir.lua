@@ -5,8 +5,8 @@
 -- Soft Dependencies: `alien`, `ffi` (either are used on Windows for copying/moving files)
 -- @module pl.dir
 
-local utils = require 'pl.utils'
-local path = require 'pl.path'
+local utils = require 'script._lib.penlight.utils'
+local path = require 'script._lib.penlight.path'
 local is_windows = path.is_windows
 local ldir = path.dir
 local mkdir = path.mkdir

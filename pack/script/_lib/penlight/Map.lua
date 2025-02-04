@@ -1,6 +1,6 @@
 --- A Map class.
 --
---    > Map = require 'pl.Map'
+--    > Map = require 'script._lib.penlight.Map'
 --    > m = Map{one=1,two=2}
 --    > m:update {three=3,four=4,two=20}
 --    > = m == M{one=1,two=20,three=3,four=4}
@@ -9,16 +9,16 @@
 -- Dependencies: `pl.utils`, `pl.class`, `pl.tablex`, `pl.pretty`
 -- @classmod pl.Map
 
-local tablex = require 'pl.tablex'
-local utils = require 'pl.utils'
+local tablex = require 'script._lib.penlight.tablex'
+local utils = require 'script._lib.penlight.utils'
 local stdmt = utils.stdmt
 local deepcompare = tablex.deepcompare
 
-local pretty_write = require 'pl.pretty' . write
+local pretty_write = require 'script._lib.penlight.pretty' . write
 local Map = stdmt.Map
 local Set = stdmt.Set
 
-local class = require 'pl.class'
+local class = require 'script._lib.penlight.class'
 
 -- the Map class ---------------------
 class(nil,nil,Map)

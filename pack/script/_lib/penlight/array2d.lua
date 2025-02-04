@@ -14,9 +14,9 @@ local tonumber,tostring,io,ipairs,string,table =
     _G.tonumber,_G.tostring,_G.io,_G.ipairs,_G.string,_G.table
 local setmetatable,getmetatable = setmetatable,getmetatable
 
-local tablex = require 'pl.tablex'
-local utils = require 'pl.utils'
-local types = require 'pl.types'
+local tablex = require 'script._lib.penlight.tablex'
+local utils = require 'script._lib.penlight.utils'
+local types = require 'script._lib.penlight.types'
 local imap,tmap,reduce,keys,tmap2,tset,index_by = tablex.imap,tablex.map,tablex.reduce,tablex.keys,tablex.map2,tablex.set,tablex.index_by
 local remove = table.remove
 local splitv,fprintf,assert_arg = utils.splitv,utils.fprintf,utils.assert_arg

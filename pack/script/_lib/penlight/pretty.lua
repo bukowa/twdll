@@ -9,10 +9,10 @@ local append = table.insert
 local concat = table.concat
 local mfloor, mhuge = math.floor, math.huge
 local mtype = math.type
-local utils = require 'pl.utils'
-local lexer = require 'pl.lexer'
+local utils = require 'script._lib.penlight.utils'
+local lexer = require 'script._lib.penlight.lexer'
 local debug = require 'debug'
-local quote_string = require'pl.stringx'.quote_string
+local quote_string = require'script._lib.penlight.stringx'.quote_string
 local assert_arg = utils.assert_arg
 
 local original_tostring = tostring

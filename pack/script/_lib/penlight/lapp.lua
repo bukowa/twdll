@@ -1,7 +1,7 @@
 --- Simple command-line parsing using human-readable specification.
 -- Supports GNU-style parameters.
 --
---      lapp = require 'pl.lapp'
+--      lapp = require 'script._lib.penlight.lapp'
 --      local args = lapp [[
 --      Does some calculations
 --        -o,--offset (default 0.0)  Offset to add to scaled number

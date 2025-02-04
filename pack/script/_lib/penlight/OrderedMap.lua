@@ -5,13 +5,13 @@
 -- Dependencies: `pl.utils`, `pl.tablex`, `pl.class`, `pl.List`, `pl.Map`
 -- @classmod pl.OrderedMap
 
-local tablex = require 'pl.tablex'
-local utils = require 'pl.utils'
-local List = require 'pl.List'
+local tablex = require 'script._lib.penlight.tablex'
+local utils = require 'script._lib.penlight.utils'
+local List = require 'script._lib.penlight.List'
 local index_by,tsort,concat = tablex.index_by,table.sort,table.concat
 
-local class = require 'pl.class'
-local Map = require 'pl.Map'
+local class = require 'script._lib.penlight.class'
+local Map = require 'script._lib.penlight.Map'
 
 local OrderedMap = class(Map)
 OrderedMap._name = 'OrderedMap'
