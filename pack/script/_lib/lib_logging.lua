@@ -3,11 +3,12 @@ local default_log_file_path = "log_lib_logging.txt"
 
 -- Define logging levels
 local levels = {
-    DISABLED = 0,
+    DISABLED = -1,
+    INTERNAL = 0,
     DEBUG = 1,
     INFO = 2,
     WARN = 3,
-    ERROR = 4
+    ERROR = 4,
 }
 
 -- Logger class-like structure
@@ -78,6 +79,10 @@ function Logger:error(text)
     self:log("ERROR", text)
 end
 
+function Logger:internal(text)
+    self:log("INTERNAL", text)
+end
+
 -- Safely execute a function and log errors if it fails
 function Logger:pcall(func, ...)
     -- Skip error logging if the logger is disabled
@@ -130,6 +135,78 @@ function Logger:start_trace()
     debug.sethook(function(event)
         self:trace(event)
     end, "c")
+end
+
+-- Method to stop the trace hook
+function Logger:stop_trace()
+    -- Remove the hook by passing nil
+    debug.sethook(nil)
+end
+
+-- Log events based on a filter function, with always-filtered events
+function Logger:log_events(events, filter_func)
+
+    -- Define events to always filter out
+    local always_filtered = {
+        ["_PACKAGE"] = true,
+        ["_M"] = true,
+        ["_NAME"] = true,
+    }
+
+    -- Load scripting module
+    local scripting = self:require('lua_scripts.episodicscripting')
+
+    -- Loop through all events and apply the filter
+    for event, _ in pairs(events) do
+
+        -- Skip always filtered events
+        if not always_filtered[event] and filter_func(event) then
+
+            -- Attempt to register the event callback with error handling
+            local success, err = pcall(function()
+                scripting.AddEventCallBack(event, function()
+                    self:info("Event fired: " .. event)
+                end)
+            end)
+
+            -- If callback registration fails, log the error
+            if not success then
+                self:error("Failed to register logging for event: " .. event .. " Error: " .. err)
+            else
+                self:internal("Successfully registered logging for event: " .. event)  -- Log again when the event is fired
+            end
+        end
+    end
+end
+
+-- Log all events
+function Logger:log_events_all()
+    -- Import all events
+    local all_events = self:require('lua_scripts.events')
+    -- Log events
+    self:log_events(all_events, function(e)
+        return true
+    end)
+end
+
+-- Log all events excluding specified events
+function Logger:log_events_all_excluding(excluded_events_list)
+    -- Import all events
+    local all_events = self:require('lua_scripts.events')
+
+    -- Convert list to a lookup table for quick filtering
+    local excluded_events = {}
+    for _, event in ipairs(excluded_events_list) do
+        excluded_events[event] = true
+    end
+
+    -- Create a filter function that excludes the specified events
+    local function filter_func(event)
+        return not excluded_events[event]  -- Only log events not in the excluded list
+    end
+
+    -- Log events with the custom filter
+    self:log_events(all_events, filter_func)
 end
 
 -- Module return
