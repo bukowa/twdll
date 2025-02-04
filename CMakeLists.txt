@@ -101,7 +101,10 @@ get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
 set(MOD_WATCH_DIR "${CURRENT_DIR}/pack")
 
 # Collect all files in the MOD_WATCH_DIR recursively (files that will be added to the mod)
-file(GLOB_RECURSE MOD_FILES "${MOD_WATCH_DIR}/*.*")
+set(MOD_FILES
+        "${MOD_WATCH_DIR}/lua_scripts/all_scripted.lua"
+        "${MOD_WATCH_DIR}/script/_lib/lib_logging.lua"
+        "${MOD_WATCH_DIR}/script/_lib/lib_twdll.lua")
 
 # ========================
 # Mod File Generation Command
