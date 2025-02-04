@@ -112,6 +112,26 @@ function Logger:set_level(level)
     end
 end
 
+-- Method to log trace events
+function Logger:trace(event)
+    local info = debug.getinfo(3, 'nSluf')
+    local message = string.format(
+            "[TRACE] Event: %s | Function: %s | Source: %s | Line: %d",
+            event,
+            info.name or "unknown",
+            info.short_src or "unknown",
+            info.currentline or -1
+    )
+    self:_write_log_entry("INFO", message)  -- Reuse the internal method to log the entry
+end
+
+-- Method to start the trace hook
+function Logger:start_trace()
+    debug.sethook(function(event)
+        self:trace(event)
+    end, "c")
+end
+
 -- Module return
 return {
     new_logger = function(name, log_file_path, log_level)
