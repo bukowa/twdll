@@ -9,6 +9,7 @@ local levels = {
     INFO = 2,
     WARN = 3,
     ERROR = 4,
+    CRITICAL = 5,
 }
 
 -- Logger class-like structure
@@ -83,6 +84,10 @@ function Logger:internal(text)
     self:log("INTERNAL", text)
 end
 
+function Logger:critical(text)
+    self:log("CRITICAL", text)
+end
+
 -- Safely execute a function and log errors if it fails
 function Logger:pcall(func, ...)
     -- Skip error logging if the logger is disabled
@@ -97,11 +102,19 @@ function Logger:pcall(func, ...)
     return success, result
 end
 
-function Logger:require(moduleName)
-    self:debug("Loading module: " .. moduleName)
+function Logger:require(moduleName, is_critical_module)
+    self:debug("Loading module: '" .. moduleName .. "'")
     local success, result = pcall(require, moduleName)
     if not success then
-        self:error("Error loading module '" .. moduleName .. "': " .. tostring(result))
+
+        if is_critical_module then
+            self:critical("Critical error loading module: '" .. moduleName .. "'")
+            -- Quit
+            if CliExecute ~= nil then CliExecute('quit') end
+        else
+            self:error("Error loading module: '" .. moduleName .. "': " .. tostring(result))
+        end
+
         return nil
     end
     self:debug("Module loaded: " .. moduleName)
