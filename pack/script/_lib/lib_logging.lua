@@ -10,6 +10,7 @@ local levels = {
     WARN = 3,
     ERROR = 4,
     CRITICAL = 5,
+    TRACE = 6,
 }
 
 -- Logger class-like structure
@@ -24,29 +25,39 @@ function Logger.new(name, log_file_path, log_level)
     self.log_file_path = log_file_path or default_log_file_path
     self.log_level = levels[log_level] or levels.INFO -- Default to INFO if an invalid level is provided
 
+    -- Internal Libraries
+    self.lib_pl__pretty = self:require('script._lib.penlight.pretty')
     return self
 end
 
--- Internal method to write a log entry to the file
-function Logger:_write_log_entry(level, text)
-    -- Open the log file in append mode
+
+function Logger:pretty_table(table)
+    self:raw(self.lib_pl__pretty.write(table))
+end
+
+-- Internal method to write directly to the log file
+function Logger:_write_to_file(text)
     local logfile, err = io.open(self.log_file_path, "a")
     if not logfile then
         error("Failed to open log file: " .. (err or "Unknown error"))
     end
+    logfile:write(text .. "\n")
+    logfile:close()
+end
 
-    -- Add extra space for clean log message
+-- Internal method to write a log entry with level and formatting
+function Logger:_write_log_entry(level, text)
     if #level == 4 then
-        level = level .. " "
+        level = level .. " "  -- Add extra space for alignment
     end
-
-    -- Format log entry with timestamp and logger name
     local timestamp = os.date("[%Y-%m-%d %H:%M:%S]")
     local log_entry = string.format("%s [%s] %s: %s", timestamp, level, self.name, text)
+    self:_write_to_file(log_entry)
+end
 
-    -- Write the log entry and close the file
-    logfile:write(log_entry .. "\n")
-    logfile:close()
+-- Public method to write raw text to the log file
+function Logger:raw(text)
+    self:_write_to_file(text)
 end
 
 -- Generic log function
@@ -86,6 +97,10 @@ end
 
 function Logger:critical(text)
     self:log("CRITICAL", text)
+end
+
+function Logger:trace(text)
+    self:log("TRACE", text)
 end
 
 -- Safely execute a function and log errors if it fails
@@ -144,7 +159,7 @@ function Logger:start_trace(mask, write_log_entry, callback)
                 info.currentline or -1
         )
         if write_log_entry then
-            self:_write_log_entry("TRACE", message)
+            self:trace(message)
         end
         if callback then
             self:pcall(callback, event, info)
