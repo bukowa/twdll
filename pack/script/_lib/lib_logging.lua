@@ -26,6 +26,7 @@ function Logger.new(name, log_file_path, log_level)
     self.log_level = levels[log_level] or levels.INFO -- Default to INFO if an invalid level is provided
 
     -- Internal Libraries
+    self._require_func = require
     self.lib_pl__pretty = self:require('script._lib.penlight.pretty')
     return self
 end
@@ -119,7 +120,7 @@ end
 
 function Logger:require(moduleName, is_critical_module)
     self:debug("Loading module: '" .. moduleName .. "'")
-    local success, result = pcall(require, moduleName)
+    local success, result = pcall(self._require_func, moduleName)
     if not success then
 
         if is_critical_module then
@@ -132,7 +133,7 @@ function Logger:require(moduleName, is_critical_module)
 
         return nil
     end
-    self:debug("Module loaded: " .. moduleName)
+    self:internal("Module loaded: " .. moduleName)
     return result
 end
 
@@ -145,6 +146,7 @@ function Logger:set_level(level)
     end
 end
 
+-- todo: do not log if source is in this file <<
 function Logger:start_trace(mask, write_log_entry, callback)
     mask = (mask == nil) and "c" or mask
     write_log_entry = (write_log_entry == nil) and true or write_log_entry
@@ -180,7 +182,7 @@ end
 -- Method to stop the trace hook
 function Logger:stop_trace()
     -- Remove the hook by passing nil
-    debug.sethook(nil)
+    debug.sethook()
 end
 
 -- Log events based on a filter function, with always-filtered events
