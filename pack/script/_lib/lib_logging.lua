@@ -151,6 +151,16 @@ function Logger:start_trace(mask, write_log_entry, callback)
 
     debug.sethook(function(event)
         local info = debug.getinfo(3, 'nSluf')
+
+        -- Add event to info table
+        if info == nil then
+            info = {
+                ["event"] = event
+            }
+        else
+            info['event'] = event
+        end
+
         local message = string.format(
                 "Event: %s | Function: %s | Source: %s | Line: %d",
                 event,
