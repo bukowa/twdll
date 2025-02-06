@@ -94,7 +94,7 @@ set(RELEASE_PACK "${RELEASE_DIR}/libtwdll.pack")
 ## ======================================
 add_custom_target(
         build_release ALL
-        DEPENDS ${RELEASE_PACK} ${RELEASE_DLL} ${RELEASE_LUA_EXE} ${RELEASE_LUA}
+        DEPENDS ${RELEASE_PACK} ${RELEASE_DLL} ${RELEASE_LUA_EXE} ${RELEASE_LUAC_EXE}
 )
 add_custom_command(
         DEPENDS ${MOD_PACK}
