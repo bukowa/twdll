@@ -14,18 +14,16 @@ get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
 # ========================
 # Lua Config
 # ========================
+message("LUA_VERSION is set to: ${LUA_VERSION}")
 set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-${LUA_VERSION}/src")
-if (NOT EXISTS "${LUA_SRC_DIR}")
-    message(FATAL_ERROR "Lua version ${LUA_VERSION} not found in ${LUA_SRC_DIR}")
-endif ()
 
 # ========================
 # Lua Files
 # ========================
-message("LUA_VERSION is set to: ${LUA_VERSION}")
 file(GLOB LUA_SOURCES "${LUA_SRC_DIR}/*.c")
-list(REMOVE_ITEM LUA_SOURCES "${LUA_SRC_DIR}/lua.c")
-list(REMOVE_ITEM LUA_SOURCES "${LUA_SRC_DIR}/luac.c")
+list(REMOVE_ITEM LUA_SOURCES "${LUA_SRC_DIR}/lua.c" "${LUA_SRC_DIR}/luac.c")
+
+
 
 # ========================
 # Lua Setup (lua)
