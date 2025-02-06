@@ -1,6 +1,9 @@
 -- Default log file path
 local default_log_file_path = "log_lib_logging.txt"
 
+-- Path to this file
+local PACKAGE_PATH = debug.getinfo(1, 'S').source
+
 -- Define logging levels
 local levels = {
     DISABLED = -1,
@@ -126,7 +129,9 @@ function Logger:require(moduleName, is_critical_module)
         if is_critical_module then
             self:critical("Critical error loading module: '" .. moduleName .. "'")
             -- Quit
-            if CliExecute ~= nil then CliExecute('quit') end
+            if CliExecute ~= nil then
+                CliExecute('quit')
+            end
         else
             self:error("Error loading module: '" .. moduleName .. "': " .. tostring(result))
         end
@@ -152,24 +157,32 @@ function Logger:start_trace(mask, write_log_entry, callback)
     write_log_entry = (write_log_entry == nil) and true or write_log_entry
 
     debug.sethook(function(event)
+
+        -- Gather info
         local info = debug.getinfo(3, 'nSluf')
 
         -- Add event to info table
         if info == nil then
             info = {
-                ["event"] = event
+                ["event"] = event,
             }
         else
             info['event'] = event
         end
 
+        -- Skip if source is this file
+        if info.source == PACKAGE_PATH then
+            return
+        end
+
         local message = string.format(
                 "Event: %s | Function: %s | Source: %s | Line: %d",
                 event,
-                info.name or "unknown",
-                info.short_src or "unknown",
-                info.currentline or -1
+                info.name or "?",
+                info.source or "?",
+                info.currentline or "?"
         )
+
         if write_log_entry then
             self:trace(message)
         end
