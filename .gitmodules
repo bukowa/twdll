@@ -1,0 +1,3 @@
+[submodule "include/luasocket"]
+	path = include/luasocket
+	url = git@github.com:lunarmodules/luasocket.git
