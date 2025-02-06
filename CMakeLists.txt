@@ -31,6 +31,7 @@ list(REMOVE_ITEM LUA_SOURCES "${LUA_SRC_DIR}/lua.c" "${LUA_SRC_DIR}/luac.c")
 add_library(lua OBJECT ${LUA_SOURCES})
 set_target_properties(lua PROPERTIES EXCLUDE_FROM_ALL TRUE)
 include_directories(${LUA_SRC_DIR})
+target_compile_definitions(lua PRIVATE -DLUA_CORE)
 
 # ========================
 # Lua Setup (lua.exe)
@@ -162,6 +163,7 @@ endif ()
 # Compiler Settings
 # ========================
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+target_compile_options(lua PRIVATE "/wd4005")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_options(lua PUBLIC "/O2" "/Z7" "/DNDEBUG" "/W4")
