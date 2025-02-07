@@ -129,6 +129,7 @@ set(INSTALL_DIR "C:\\Games\\Total War - Rome 2")
 
 get_filename_component(INSTALL_DLL ${RELEASE_DLL} NAME)
 set(INSTALL_DLL ${INSTALL_DIR}/${INSTALL_DLL})
+option(SHOULD_INSTALL_DLL "Install dll into game dir" ON)
 
 get_filename_component(INSTALL_PACK ${RELEASE_PACK} NAME)
 set(INSTALL_PACK ${INSTALL_DIR}/data/${INSTALL_PACK})
@@ -137,27 +138,35 @@ set(INSTALL_PACK ${INSTALL_DIR}/data/${INSTALL_PACK})
 # Install Files Setup
 # ===========================================
 message("INSTALL_MOD is set to: ${INSTALL_MOD}")
-
 if (INSTALL_MOD)
+    # =============================================================================
     message("INSTALL_DIR is set to: ${INSTALL_DIR}")
-    add_custom_target(
-            install_mod ALL
-            DEPENDS ${INSTALL_DLL} ${INSTALL_PACK}
-    )
-    add_custom_command(
-            DEPENDS ${RELEASE_DLL}
-            OUTPUT ${INSTALL_DLL}
-            COMMAND ${CMAKE_COMMAND} -E copy ${RELEASE_DLL} ${INSTALL_DLL}
-            COMMENT "Copying dll to install dir"
-    )
+    add_custom_target(install_mod ALL)
+    # =============================================================================
+    message("SHOULD_INSTALL_DLL is set to: ${SHOULD_INSTALL_DLL}")
+
+    # Create a custom target for copying the DLL, only if it should be installed
+    if (SHOULD_INSTALL_DLL)
+        add_custom_command(
+                DEPENDS ${RELEASE_DLL}
+                OUTPUT ${INSTALL_DLL}
+                COMMAND ${CMAKE_COMMAND} -E copy ${RELEASE_DLL} ${INSTALL_DLL}
+                COMMENT "Copying dll to install dir: ${INSTALL_DLL}"
+        )
+        add_custom_target(copy_dll ALL DEPENDS ${INSTALL_DLL})
+        add_dependencies(install_mod copy_dll)
+    endif ()
+    # =============================================================================
+    # Always copy the pack file
     add_custom_command(
             DEPENDS ${RELEASE_PACK}
             OUTPUT ${INSTALL_PACK}
             COMMAND ${CMAKE_COMMAND} -E copy ${RELEASE_PACK} ${INSTALL_PACK}
-            COMMENT "Copying pack to install dir"
+            COMMENT "Copying pack to install dir: ${INSTALL_PACK}"
     )
+    add_custom_target(copy_pack ALL DEPENDS ${INSTALL_PACK})
+    add_dependencies(install_mod copy_pack)
 endif ()
-
 
 # ========================
 # Compiler Settings
