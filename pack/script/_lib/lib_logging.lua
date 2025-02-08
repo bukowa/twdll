@@ -6,14 +6,14 @@ local PACKAGE_PATH = debug.getinfo(1, 'S').source
 
 -- Define logging levels
 local levels = {
-    DISABLED = -1,
+    DISABLED = -2,
+    TRACE = -1,
     INTERNAL = 0,
     DEBUG = 1,
     INFO = 2,
     WARN = 3,
     ERROR = 4,
     CRITICAL = 5,
-    TRACE = 6,
 }
 
 -- Logger class-like structure
@@ -51,9 +51,13 @@ end
 
 -- Internal method to write a log entry with level and formatting
 function Logger:_write_log_entry(level, text)
+
     if #level == 4 then
         level = level .. " "  -- Add extra space for alignment
+    elseif #level > 6 then
+        level = string.sub(level, 1, 7)
     end
+
     local timestamp = os.date("[%Y-%m-%d %H:%M:%S]")
     local log_entry = string.format("%s [%s] %s: %s", timestamp, level, self.name, text)
     self:_write_to_file(log_entry)
@@ -138,6 +142,7 @@ function Logger:require(moduleName, is_critical_module)
 
         return nil
     end
+
     self:internal("Module loaded: " .. moduleName)
     return result
 end
@@ -171,7 +176,7 @@ function Logger:start_trace(mask, write_log_entry, callback)
         end
 
         -- Skip if source is this file
-        if info.source == PACKAGE_PATH then
+        if info.source ~= nil and info.source == PACKAGE_PATH then
             return
         end
 
@@ -180,7 +185,7 @@ function Logger:start_trace(mask, write_log_entry, callback)
                 event,
                 info.name or "?",
                 info.source or "?",
-                info.currentline or "?"
+                info.currentline or "-1"
         )
 
         if write_log_entry then
