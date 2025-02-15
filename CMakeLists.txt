@@ -62,6 +62,21 @@ target_link_libraries(twdll PRIVATE $<TARGET_OBJECTS:lua>)
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "libtwdll")
 add_dependencies(twdll lua)
 
+# ========================
+# LuaSocket Setup (luasocket.dll)
+# ========================
+set(LUASOCKET_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/luasocket/src")
+set(LUASOCKET_SOURCES
+        luasocket.c timeout.c buffer.c io.c auxiliar.c compat.c options.c
+        inet.c except.c select.c tcp.c udp.c wsocket.c)
+list(TRANSFORM LUASOCKET_SOURCES PREPEND "${LUASOCKET_SRC_DIR}/")
+
+add_library(luasocket SHARED ${LUASOCKET_SOURCES})
+target_link_libraries(luasocket PRIVATE lua)
+target_link_libraries(luasocket PRIVATE ws2_32.lib)
+add_dependencies(luasocket lua)
+set_target_properties(luasocket PROPERTIES OUTPUT_NAME "socket")
+
 # ================================
 # Mod Files
 # ================================
