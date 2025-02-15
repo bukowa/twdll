@@ -35,8 +35,9 @@ target_compile_definitions(lua PRIVATE -DLUA_CORE)
 # ========================
 # Lua Setup (luadll)
 # ========================
-add_library(luadll SHARED ${LUA_SOURCES})
-set_target_properties(lua PROPERTIES EXCLUDE_FROM_ALL TRUE)
+add_library(luadll SHARED)
+target_sources(luadll PRIVATE $<TARGET_OBJECTS:lua>)
+set_target_properties(luadll PROPERTIES OUTPUT_NAME "luadll")
 target_compile_definitions(lua PRIVATE -DLUA_CORE) # ?
 target_compile_definitions(lua PRIVATE -DLUA_WIN)  # ?
 
@@ -106,6 +107,8 @@ file(MAKE_DIRECTORY ${RELEASE_DIR})
 
 set(RELEASE_LUA_EXE "${RELEASE_DIR}/lua.exe")
 set(RELEASE_LUAC_EXE "${RELEASE_DIR}/luac.exe")
+set(RELEASE_LUA_DLL "${RELEASE_DIR}/lua.dll")
+set(RELEASE_LUASOCKET_DLL "${RELEASE_DIR}/socket.dll")
 
 set(RELEASE_DLL "${RELEASE_DIR}/libtwdll.dll")
 set(RELEASE_PACK "${RELEASE_DIR}/libtwdll.pack")
@@ -115,32 +118,47 @@ set(RELEASE_PACK "${RELEASE_DIR}/libtwdll.pack")
 ## ======================================
 add_custom_target(
         build_release ALL
-        DEPENDS ${RELEASE_PACK} ${RELEASE_DLL} ${RELEASE_LUA_EXE} ${RELEASE_LUAC_EXE}
+        DEPENDS ${RELEASE_PACK} ${RELEASE_DLL} ${RELEASE_LUA_EXE} ${RELEASE_LUAC_EXE} ${RELEASE_LUA_DLL} ${RELEASE_LUASOCKET_DLL}
 )
+
 add_custom_command(
         DEPENDS ${MOD_PACK}
         OUTPUT ${RELEASE_PACK}
-        COMMAND ${CMAKE_COMMAND} -E copy ${MOD_PACK} ${RELEASE_PACK}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MOD_PACK} ${RELEASE_PACK}
         COMMENT "Copying pack to release directory"
 )
 add_custom_command(
         DEPENDS $<TARGET_FILE:twdll>
         OUTPUT ${RELEASE_DLL}
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:twdll> ${RELEASE_DLL}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:twdll> ${RELEASE_DLL}
         COMMENT "Copying dll to release directory"
 )
 add_custom_command(
         DEPENDS $<TARGET_FILE:lua.exe>
         OUTPUT ${RELEASE_LUA_EXE}
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:lua.exe> ${RELEASE_LUA_EXE}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:lua.exe> ${RELEASE_LUA_EXE}
         COMMENT "Copying lua.exe to release directory"
 )
 
 add_custom_command(
         DEPENDS $<TARGET_FILE:luac.exe>
         OUTPUT ${RELEASE_LUAC_EXE}
-        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:luac.exe> ${RELEASE_LUAC_EXE}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:luac.exe> ${RELEASE_LUAC_EXE}
         COMMENT "Copying luac.exe to release directory"
+)
+
+add_custom_command(
+        DEPENDS $<TARGET_FILE:luadll>
+        OUTPUT ${RELEASE_LUA_DLL}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:luadll> ${RELEASE_LUA_DLL}
+        COMMENT "Copying lua.dll to release directory"
+)
+
+add_custom_command(
+        DEPENDS $<TARGET_FILE:luasocket>
+        OUTPUT ${RELEASE_LUASOCKET_DLL}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:luasocket> ${RELEASE_LUASOCKET_DLL}
+        COMMENT "Copying socket.dll to release directory"
 )
 
 # ===========================================
