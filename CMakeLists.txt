@@ -33,6 +33,14 @@ include_directories(${LUA_SRC_DIR})
 target_compile_definitions(lua PRIVATE -DLUA_CORE)
 
 # ========================
+# Lua Setup (luadll)
+# ========================
+add_library(luadll SHARED ${LUA_SOURCES})
+set_target_properties(lua PROPERTIES EXCLUDE_FROM_ALL TRUE)
+target_compile_definitions(lua PRIVATE -DLUA_CORE) # ?
+target_compile_definitions(lua PRIVATE -DLUA_WIN)  # ?
+
+# ========================
 # Lua Setup (lua.exe)
 # ========================
 add_executable(lua.exe "${LUA_SRC_DIR}/lua.c")
