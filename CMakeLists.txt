@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.29)
 # ========================
 set(CMAKE_C_STANDARD 99)
 project(libtwdll C)
-#set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # ========================
 # Project Variables
@@ -23,23 +23,21 @@ set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-${LUA_VERSION}/src"
 # ========================
 file(GLOB LUA_SOURCES "${LUA_SRC_DIR}/*.c")
 list(REMOVE_ITEM LUA_SOURCES "${LUA_SRC_DIR}/lua.c" "${LUA_SRC_DIR}/luac.c")
+list(SORT LUA_SOURCES)
+include_directories(${LUA_SRC_DIR})
 
 # ========================
 # Lua Setup (lua)
 # ========================
 add_library(lua OBJECT ${LUA_SOURCES})
-set_target_properties(lua PROPERTIES EXCLUDE_FROM_ALL TRUE)
-include_directories(${LUA_SRC_DIR})
 target_compile_definitions(lua PRIVATE -DLUA_CORE)
+target_compile_definitions(lua PRIVATE -DLUA_WIN)
 
 # ========================
 # Lua Setup (luadll)
 # ========================
-add_library(luadll SHARED)
-target_sources(luadll PRIVATE $<TARGET_OBJECTS:lua>)
+add_library(luadll SHARED $<TARGET_OBJECTS:lua>)
 set_target_properties(luadll PROPERTIES OUTPUT_NAME "luadll")
-target_compile_definitions(lua PRIVATE -DLUA_CORE) # ?
-target_compile_definitions(lua PRIVATE -DLUA_WIN)  # ?
 
 # ========================
 # Lua Setup (lua.exe)
@@ -52,7 +50,7 @@ set_target_properties(lua.exe PROPERTIES OUTPUT_NAME "lua")
 # Lua Setup (luac.exe)
 # ========================
 add_executable(luac.exe "${LUA_SRC_DIR}/luac.c")
-target_link_libraries(luac.exe PUBLIC $<TARGET_OBJECTS:lua>)
+target_link_libraries(luac.exe PRIVATE $<TARGET_OBJECTS:lua>)
 set_target_properties(luac.exe PROPERTIES OUTPUT_NAME "luac")
 
 # ========================
@@ -61,21 +59,19 @@ set_target_properties(luac.exe PROPERTIES OUTPUT_NAME "luac")
 add_library(twdll SHARED library.c)
 target_link_libraries(twdll PRIVATE $<TARGET_OBJECTS:lua>)
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "libtwdll")
-add_dependencies(twdll lua)
 
 # ========================
 # LuaSocket Setup (luasocket.dll)
 # ========================
 set(LUASOCKET_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/luasocket/src")
 set(LUASOCKET_SOURCES
-        luasocket.c timeout.c buffer.c io.c auxiliar.c compat.c options.c
-        inet.c except.c select.c tcp.c udp.c wsocket.c)
+        luasocket.c timeout.c buffer.c io.c auxiliar.c compat.c
+        options.c inet.c except.c select.c tcp.c udp.c wsocket.c)
 list(TRANSFORM LUASOCKET_SOURCES PREPEND "${LUASOCKET_SRC_DIR}/")
 
 add_library(luasocket SHARED ${LUASOCKET_SOURCES})
-target_link_libraries(luasocket PRIVATE lua)
+target_link_libraries(luasocket PRIVATE $<TARGET_OBJECTS:lua>)
 target_link_libraries(luasocket PRIVATE ws2_32.lib)
-add_dependencies(luasocket lua)
 set_target_properties(luasocket PROPERTIES OUTPUT_NAME "socket")
 
 # ================================
@@ -89,7 +85,8 @@ file(GLOB_RECURSE MOD_FILES CONFIGURE_DEPENDS "${MOD_DIR}/*.*")
 # Mod Setup (libtwdll.pack)
 # ================================
 add_custom_target(
-        build_mod_pack ALL DEPENDS ${MOD_PACK}
+        build_mod_pack ALL
+        DEPENDS ${MOD_PACK}
 )
 add_custom_command(
         OUTPUT ${MOD_PACK}
@@ -214,8 +211,7 @@ endif ()
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 target_compile_options(lua PRIVATE "/wd4005")
 
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    add_compile_options("/O2" "/Z7" "/DNDEBUG" "/W4")
-elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    add_compile_options("/Od" "/Zi" "/D_DEBUG" "/W4")
-endif ()
+if (MSVC)
+    set(CMAKE_C_FLAGS_RELEASE "/O2 /Z7 /DNDEBUG /W4")
+    set(CMAKE_C_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
+endif()
