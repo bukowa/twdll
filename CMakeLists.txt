@@ -5,6 +5,7 @@ cmake_minimum_required(VERSION 3.29)
 # ========================
 set(CMAKE_C_STANDARD 99)
 project(libtwdll C)
+#set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # ========================
 # Project Variables
@@ -22,8 +23,6 @@ set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-${LUA_VERSION}/src"
 # ========================
 file(GLOB LUA_SOURCES "${LUA_SRC_DIR}/*.c")
 list(REMOVE_ITEM LUA_SOURCES "${LUA_SRC_DIR}/lua.c" "${LUA_SRC_DIR}/luac.c")
-
-
 
 # ========================
 # Lua Setup (lua)
@@ -175,9 +174,7 @@ add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 target_compile_options(lua PRIVATE "/wd4005")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    target_compile_options(lua PUBLIC "/O2" "/Z7" "/DNDEBUG" "/W4")
-    target_compile_options(twdll PUBLIC "/O2" "/Z7" "/DNDEBUG" "/W4")
+    add_compile_options("/O2" "/Z7" "/DNDEBUG" "/W4")
 elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
-    target_compile_options(lua PUBLIC "/Od" "/Zi" "/D_DEBUG" "/W4")
-    target_compile_options(twdll PUBLIC "/Od" "/Zi" "/D_DEBUG" "/W4")
+    add_compile_options("/Od" "/Zi" "/D_DEBUG" "/W4")
 endif ()
