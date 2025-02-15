@@ -5,7 +5,16 @@ cmake_minimum_required(VERSION 3.29)
 # ========================
 set(CMAKE_C_STANDARD 99)
 project(libtwdll C)
-set(CMAKE_VERBOSE_MAKEFILE ON)
+#set(CMAKE_VERBOSE_MAKEFILE ON)
+
+# ========================
+# CLion Environment Setup
+# ========================
+string(REPLACE ";" ":" CMAKE_PATH_MODIFIED "$ENV{PATH}")
+string(REPLACE "C:\\" "/c/" CMAKE_PATH_MODIFIED "${CMAKE_PATH_MODIFIED}")
+string(REPLACE "c:\\" "/c/" CMAKE_PATH_MODIFIED "${CMAKE_PATH_MODIFIED}")
+file(WRITE cmakeenv "export PATH=\"${CMAKE_PATH_MODIFIED}:$PATH\"\n")
+file(APPEND cmakeenv "alias cmake='\"${CMAKE_COMMAND}\"'\n")
 
 # ========================
 # Project Variables
