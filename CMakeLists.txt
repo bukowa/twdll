@@ -74,8 +74,9 @@ set_target_properties(twdll PROPERTIES OUTPUT_NAME "libtwdll")
 # ========================
 set(LUASOCKET_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/luasocket/src")
 set(LUASOCKET_SOURCES
-        luasocket.c timeout.c buffer.c io.c auxiliar.c compat.c
-        options.c inet.c except.c select.c tcp.c udp.c wsocket.c)
+        luasocket.c timeout.c buffer.c io.c auxiliar.c options.c
+        compat.c inet.c except.c select.c tcp.c udp.c compat.c wsocket.c
+)
 list(TRANSFORM LUASOCKET_SOURCES PREPEND "${LUASOCKET_SRC_DIR}/")
 
 add_library(luasocket SHARED ${LUASOCKET_SOURCES})
@@ -115,6 +116,7 @@ set(RELEASE_LUA_EXE "${RELEASE_DIR}/lua.exe")
 set(RELEASE_LUAC_EXE "${RELEASE_DIR}/luac.exe")
 set(RELEASE_LUA_DLL "${RELEASE_DIR}/lua.dll")
 set(RELEASE_LUASOCKET_DLL "${RELEASE_DIR}/socket.dll")
+set(RELEASE_LUASOCKET_LUA_SOCKET "${RELEASE_DIR}/socket.lua")
 
 set(RELEASE_DLL "${RELEASE_DIR}/libtwdll.dll")
 set(RELEASE_PACK "${RELEASE_DIR}/libtwdll.pack")
@@ -124,7 +126,7 @@ set(RELEASE_PACK "${RELEASE_DIR}/libtwdll.pack")
 ## ======================================
 add_custom_target(
         build_release ALL
-        DEPENDS ${RELEASE_PACK} ${RELEASE_DLL} ${RELEASE_LUA_EXE} ${RELEASE_LUAC_EXE} ${RELEASE_LUA_DLL} ${RELEASE_LUASOCKET_DLL}
+        DEPENDS ${RELEASE_PACK} ${RELEASE_DLL} ${RELEASE_LUA_EXE} ${RELEASE_LUAC_EXE} ${RELEASE_LUA_DLL} ${RELEASE_LUASOCKET_DLL} ${RELEASE_LUASOCKET_LUA_SOCKET}
 )
 
 add_custom_command(
@@ -165,6 +167,13 @@ add_custom_command(
         OUTPUT ${RELEASE_LUASOCKET_DLL}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:luasocket> ${RELEASE_LUASOCKET_DLL}
         COMMENT "Copying socket.dll to release directory"
+)
+
+add_custom_command(
+        DEPENDS $<TARGET_FILE:luasocket>
+        OUTPUT ${RELEASE_LUASOCKET_LUA_SOCKET}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LUASOCKET_SRC_DIR}/socket.lua ${RELEASE_LUASOCKET_LUA_SOCKET}
+        COMMENT "Copying socket.lua to release directory"
 )
 
 # ===========================================
