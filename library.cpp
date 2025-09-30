@@ -8,7 +8,14 @@ extern "C" {
     #include <lauxlib.h>
 }
 
-lua_State *g_luaState = NULL;
+void Log(const char* message) {
+    FILE* file = nullptr;
+    fopen_s(&file, "libtwdll.log", "a"); // append mode
+    if (!file) return;
+
+    fprintf(file, "[libtwdll] %s\n", message);
+    fclose(file);
+}
 
 // First, define a type for the original function we are hooking.
 // From Ghidra, we know its signature is: float __fastcall GetUnitStrength(void* pUnit);
@@ -18,31 +25,18 @@ typedef float (__fastcall *tGetUnitStrength)(void* pUnit);
 // This global variable will store a pointer to the original, un-hooked game function.
 tGetUnitStrength oGetUnitStrength = NULL;
 
-// This is our custom hook function. It will run INSTEAD of the game's function.
-float __fastcall hkGetUnitStrength(void* pUnit) {
+float __fastcall hkGetUnitStrength(void* pUnit_Cpp) { // pUnit_Cpp is the REAL C++ pointer
 
-    // --- CRITICAL STEP ---
-    // First, call the original game function to get the real strength value.
-    // If we don't do this, we'll have nothing to print, and the game will get a bad value.
-    float original_strength = oGetUnitStrength(pUnit);
+    // --- LOGGING ---
+    // Now we log both pointers at the same time!
+    char buffer[256];
+    sprintf_s(buffer, sizeof(buffer),
+              "C++ Ptr: 0x%p",
+              pUnit_Cpp);
+    Log(buffer);
 
-    // --- Our Proof-of-Concept Logic ---
-    // Create a message to print. We'll include the unit's address AND the strength.
-    // We use %f to format a floating-point number.
-    char message_buffer[256];
-    sprintf_s(message_buffer, sizeof(message_buffer),
-              "pwrite('HOOKED! Unit: 0x%p | Original Strength: %f')",
-              pUnit, original_strength);
-
-    // Execute this Lua string in the game's Lua state to print to the console.
-    if (g_luaState) {
-        luaL_dostring(g_luaState, message_buffer);
-    }
-
-    // --- Final Step ---
-    // Now, return the original value that we got from the game's function.
-    // This ensures the Lua script that called it gets the correct result.
-    return original_strength;
+    // Call the original function to keep the game running
+    return oGetUnitStrength(pUnit_Cpp);
 }
 // This function follows the pointer chain to find the real address
 uintptr_t GetMoneyAddress() {
@@ -122,6 +116,75 @@ static int GetMoney(lua_State* L) {
     return 1; // Return 1 value to Lua.
 }
 
+// Heals a unit by setting its current strength to its max strength.
+static int HealUnit(lua_State* L) {
+    Log("HealUnit function called from Lua.");
+
+    // Step 1: Get the userdata "wrapper" object from the first Lua argument.
+    void* wrapper = lua_touserdata(L, 1);
+    if (!wrapper) {
+        Log("ERROR: Argument 1 was not a userdata object. Aborting.");
+        return 0;
+    }
+
+    // Log the address of the wrapper object itself
+    char buffer[128];
+    sprintf_s(buffer, sizeof(buffer), "Step 1 SUCCESS: Got userdata wrapper at address: 0x%p", wrapper);
+    Log(buffer);
+
+    // Step 2: Get the REAL CppUnit* pointer from inside the wrapper at offset +8.
+    void* pUnit = *(void**)((char*)wrapper + 8);
+    if (!pUnit) {
+        Log("ERROR: Pointer at offset +8 was NULL. Aborting.");
+        return 0;
+    }
+
+    // Log the address of the real C++ unit object
+    sprintf_s(buffer, sizeof(buffer), "Step 2 SUCCESS: Found real C++ Unit pointer at address: 0x%p", pUnit);
+    Log(buffer);
+
+    // Step 3: Read the max strength from offset +0x48 of the REAL unit object.
+    int max_strength = *(int*)((char*)pUnit + 0x48);
+    sprintf_s(buffer, sizeof(buffer), "Step 3 SUCCESS: Read MaxStrength. Value is: %d", max_strength);
+    Log(buffer);
+
+    // Check if the value is reasonable. If it's a huge or negative number, something is still wrong.
+    if (max_strength <= 0 || max_strength > 500) {
+        Log("WARNING: MaxStrength value seems incorrect. The unit structure may be wrong.");
+    }
+
+    // Step 4: Write the max strength value to the current strength offset (+0x44).
+    *(int*)((char*)pUnit + 0x44) = max_strength;
+    Log("Step 4 SUCCESS: Wrote new value to CurrentStrength offset.");
+
+    return 0; // Return nothing to Lua
+}
+//
+// // Our NEW Lua-callable function. It will heal the LAST unit we hooked.
+// static int HealLastUnit(lua_State* L) {
+//     g_luaState = L;
+//     if (!g_lastHookedUnit) {
+//         Log("ERROR: No unit has been hooked yet. Query a unit's strength first.");
+//         return 0;
+//     }
+//
+//     void* pUnit = g_lastHookedUnit;
+//
+//     char buffer[128];
+//     sprintf_s(buffer, sizeof(buffer), "HealLastUnit called for unit at 0x%p", pUnit);
+//     Log(buffer);
+//
+//     // Read max strength from offset +0x48
+//     int max_strength = *(int*)((char*)pUnit + 0x48);
+//
+//     // Write it to current strength at offset +0x44
+//     *(int*)((char*)pUnit + 0x44) = max_strength;
+//
+//     Log("Unit healed successfully.");
+//
+//     return 0;
+// }
+
 static int PatchSettlementSlots(lua_State* L) {
     uintptr_t moduleBase = (uintptr_t)GetModuleHandleA("Rome2.dll");
     if (!moduleBase) {
@@ -153,15 +216,69 @@ static int PatchSettlementSlots(lua_State* L) {
     return 1;
 }
 
+// The offset for the number of men within the C++ Unit object.
+// We discovered this from Ghidra (param_1 + 0x44).
+#define UNIT_STRENGTH_OFFSET 0x44
+
+// The offset of the REAL C++ pointer inside the Lua userdata block.
+// We discovered this from Ghidra (*(int *)((int)this + 8)).
+#define POINTER_IN_USERDATA_OFFSET 0x8
+
+static int SetUnitStrength(lua_State* L) {
+    char log_buffer[256];
+
+    // --- Step 1: Get the pointer to the SCRIPT_INTERFACE object ---
+    // The userdata block from Lua contains a pointer to our interface object.
+    void** p_interface_ptr = (void**)lua_touserdata(L, 1);
+    if (!p_interface_ptr) {
+        Log("SetUnitStrength ERROR: Argument is not a userdata object.");
+        return 0;
+    }
+    void* interface_object = *p_interface_ptr;
+    if (!interface_object) {
+        Log("SetUnitStrength ERROR: Pointer to interface object is null.");
+        return 0;
+    }
+    // --- LOGGING ---
+    sprintf_s(log_buffer, sizeof(log_buffer), "SetUnitStrength: 1. Got SCRIPT_INTERFACE pointer [0x%p]", interface_object);
+    Log(log_buffer);
+
+    // --- Step 2: Get the pointer to the REAL Unit object ---
+    // The real pointer is at an offset inside the interface object.
+    void* unit_object = *(void**)((char*)interface_object + POINTER_IN_USERDATA_OFFSET);
+    if (!unit_object) {
+        Log("SetUnitStrength ERROR: Real Unit pointer is null.");
+        return 0;
+    }
+    // --- LOGGING ---
+    sprintf_s(log_buffer, sizeof(log_buffer), "SetUnitStrength: 2. Extracted REAL Unit pointer [0x%p]", unit_object);
+    Log(log_buffer);
+
+    // --- Step 3: Get the value from Lua and perform the write ---
+    int new_strength = (int)lua_tointeger(L, 2);
+    int* strength_variable_address = (int*)((char*)unit_object + UNIT_STRENGTH_OFFSET);
+
+    // --- LOGGING ---
+    sprintf_s(log_buffer, sizeof(log_buffer), "SetUnitStrength: 3. Writing value [%d] to final address [0x%p]...", new_strength, strength_variable_address);
+    Log(log_buffer);
+
+    *strength_variable_address = new_strength;
+
+    Log("SetUnitStrength: Write complete.");
+    return 0;
+}
+
 // The main entry point for the DLL, called by Lua
 extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     // Register our new, powerful functions
     lua_register(L, "set_money", SetMoney);
     lua_register(L, "get_money", GetMoney);
     lua_register(L, "set_settl", PatchSettlementSlots);
+    lua_register(L, "heal_unit", HealUnit);
+    lua_register(L, "set_unit_strength", SetUnitStrength);
+
 
     luaL_dostring(L, "pwrite('libtwdll with PERMANENT money cheat loaded!')");
-    g_luaState = L; // Save the Lua state globally
 
     if (MH_Initialize() != MH_OK) {
         luaL_dostring(L, "pwrite('ERROR: MinHook failed to initialize!')");
