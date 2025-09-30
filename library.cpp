@@ -268,6 +268,63 @@ static int SetUnitStrength(lua_State* L) {
     return 0;
 }
 
+// The offset for movement points within the C++ Unit object.
+// We discovered this from your Cheat Engine analysis.
+#define UNIT_MOVEMENT_POINTS_OFFSET 0x64
+
+// The offset of the REAL C++ Unit pointer inside the SCRIPT_INTERFACE object.
+// This remains the same.
+#define REAL_POINTER_IN_INTERFACE_OFFSET 0x8
+
+// Our new function to modify a unit's movement points.
+// Lua usage: set_movement_points(unit_object, 3000)
+static int SetMovementPoints(lua_State* L) {
+    // --- Step 1: Get the pointer to the SCRIPT_INTERFACE object ---
+    void** p_interface_ptr = (void**)lua_touserdata(L, 1);
+    if (!p_interface_ptr) { return 0; } // Safety check
+    void* interface_object = *p_interface_ptr;
+    if (!interface_object) { return 0; }
+
+    // --- Step 2: Get the pointer to the REAL Unit object ---
+    void* unit_object = *(void**)((char*)interface_object + REAL_POINTER_IN_INTERFACE_OFFSET);
+    if (!unit_object) { return 0; }
+
+    // --- Step 3: Get the new movement points value from Lua ---
+    int new_movement_points = (int)lua_tointeger(L, 2);
+
+    // --- Step 4: Calculate the final memory address ---
+    int* movement_points_address = (int*)((char*)unit_object + UNIT_MOVEMENT_POINTS_OFFSET);
+
+    // --- Step 5: Write the new value ---
+    *movement_points_address = new_movement_points;
+
+    return 0; // Return 0 values to Lua.
+}
+
+// Our new function to read a unit's movement points.
+// Lua usage: local mp = get_movement_points(unit_object)
+static int GetMovementPoints(lua_State* L) {
+    // --- Step 1 & 2: Get the real C++ Unit pointer (same as before) ---
+    void** p_interface_ptr = (void**)lua_touserdata(L, 1);
+    if (!p_interface_ptr) { lua_pushnil(L); return 1; } // Return nil on error
+    void* interface_object = *p_interface_ptr;
+    if (!interface_object) { lua_pushnil(L); return 1; }
+
+    void* unit_object = *(void**)((char*)interface_object + REAL_POINTER_IN_INTERFACE_OFFSET);
+    if (!unit_object) { lua_pushnil(L); return 1; }
+
+    // --- Step 3: Calculate the memory address of the movement points variable ---
+    int* movement_points_address = (int*)((char*)unit_object + UNIT_MOVEMENT_POINTS_OFFSET);
+
+    // --- Step 4: Read the value from that address ---
+    int current_movement_points = *movement_points_address;
+
+    // --- Step 5: Push the value back to Lua as a return value ---
+    lua_pushinteger(L, current_movement_points);
+
+    return 1; // We are returning 1 value to Lua.
+}
+
 // The main entry point for the DLL, called by Lua
 extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     static bool hooks_are_initialized = false;
@@ -278,6 +335,8 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     lua_register(L, "set_settl", PatchSettlementSlots);
     lua_register(L, "heal_unit", HealUnit);
     lua_register(L, "set_unit_strength", SetUnitStrength);
+    lua_register(L, "set_movement_points", SetMovementPoints);
+    lua_register(L, "get_movement_points", GetMovementPoints);
     luaL_dostring(L, "pwrite('libtwdll with PERMANENT money cheat loaded!')");
 
     // --- The Safety Check ---
