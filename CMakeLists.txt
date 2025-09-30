@@ -208,39 +208,71 @@ get_filename_component(INSTALL_PACK ${RELEASE_PACK} NAME)
 set(INSTALL_PACK ${INSTALL_DIR}/data/${INSTALL_PACK})
 
 # ===========================================
+# Install Files
+# ===========================================
+option(INSTALL_MOD "Install mod into game dir" OFF)
+
+# Define a list of all directories to install to.
+# Using forward slashes is recommended in CMake for cross-platform compatibility.
+set(INSTALL_DIRS
+        "C:/Games/Total War - Rome 2"
+        "C:/Program Files (x86)/Steam/steamapps/common/Total War Rome II"
+)
+
+# Get just the filenames, which are constant for all installations
+get_filename_component(DLL_NAME ${RELEASE_DLL} NAME)
+get_filename_component(PACK_NAME ${RELEASE_PACK} NAME)
+
+option(SHOULD_INSTALL_DLL "Install dll into game dir" ON)
+
+# ===========================================
 # Install Files Setup
 # ===========================================
 message("INSTALL_MOD is set to: ${INSTALL_MOD}")
 if (INSTALL_MOD)
-    # =============================================================================
-    message("INSTALL_DIR is set to: ${INSTALL_DIR}")
+    # Create a single parent target to group all copy operations
     add_custom_target(install_mod ALL)
-    # =============================================================================
     message("SHOULD_INSTALL_DLL is set to: ${SHOULD_INSTALL_DLL}")
 
-    # Create a custom target for copying the DLL, only if it should be installed
-    if (SHOULD_INSTALL_DLL)
-        add_custom_command(
-                DEPENDS ${RELEASE_DLL}
-                OUTPUT ${INSTALL_DLL}
-                COMMAND ${CMAKE_COMMAND} -E copy ${RELEASE_DLL} ${INSTALL_DLL}
-                COMMENT "Copying dll to install dir: ${INSTALL_DLL}"
-        )
-        add_custom_target(copy_dll ALL DEPENDS ${INSTALL_DLL})
-        add_dependencies(install_mod copy_dll)
-    endif ()
-    # =============================================================================
-    # Always copy the pack file
-    add_custom_command(
-            DEPENDS ${RELEASE_PACK}
-            OUTPUT ${INSTALL_PACK}
-            COMMAND ${CMAKE_COMMAND} -E copy ${RELEASE_PACK} ${INSTALL_PACK}
-            COMMENT "Copying pack to install dir: ${INSTALL_PACK}"
-    )
-    add_custom_target(copy_pack ALL DEPENDS ${INSTALL_PACK})
-    add_dependencies(install_mod copy_pack)
-endif ()
+    # Loop over each directory in the list
+    foreach(CURRENT_DIR IN LISTS INSTALL_DIRS)
+        message("Setting up install for directory: ${CURRENT_DIR}")
 
+        # Sanitize the directory path to create a valid and unique target name suffix
+        string(MAKE_C_IDENTIFIER "${CURRENT_DIR}" DIR_ID)
+
+        # =============================================================================
+        # Install DLL for the current directory
+        if (SHOULD_INSTALL_DLL)
+            set(INSTALL_DLL "${CURRENT_DIR}/${DLL_NAME}")
+
+            add_custom_command(
+                    DEPENDS ${RELEASE_DLL}
+                    OUTPUT ${INSTALL_DLL}
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RELEASE_DLL} ${INSTALL_DLL}
+                    COMMENT "Copying dll to: ${INSTALL_DLL}"
+            )
+            # Create a unique target name for this specific copy operation
+            add_custom_target(copy_dll_${DIR_ID} ALL DEPENDS ${INSTALL_DLL})
+            add_dependencies(install_mod copy_dll_${DIR_ID})
+        endif ()
+
+        # =============================================================================
+        # Install Pack file for the current directory
+        set(INSTALL_PACK "${CURRENT_DIR}/data/${PACK_NAME}")
+
+        add_custom_command(
+                DEPENDS ${RELEASE_PACK}
+                OUTPUT ${INSTALL_PACK}
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RELEASE_PACK} ${INSTALL_PACK}
+                COMMENT "Copying pack to: ${INSTALL_PACK}"
+        )
+        # Create a unique target name for this specific copy operation
+        add_custom_target(copy_pack_${DIR_ID} ALL DEPENDS ${INSTALL_PACK})
+        add_dependencies(install_mod copy_pack_${DIR_ID})
+
+    endforeach()
+endif ()
 # ========================
 # Compiler Settings
 # ========================

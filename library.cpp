@@ -9,27 +9,46 @@ extern "C" {
 
 // This function follows the pointer chain to find the real address
 uintptr_t GetMoneyAddress() {
-    // Step 1: Get the base address of Rome2.dll.
-    uintptr_t moduleBase = (uintptr_t)GetModuleHandleA("Rome2.dll");
-    if (!moduleBase) {
-        return 0; // Return 0 if the DLL isn't loaded, for safety
+    uintptr_t moduleBase = 0;
+    uintptr_t staticOffset = 0;
+    uintptr_t finalOffset = 0;
+
+    // First, check if we're running the Steam version by looking for its DLL.
+    moduleBase = (uintptr_t)GetModuleHandleA("Empire.Retail.dll");
+    if (moduleBase) {
+        // --- STEAM VERSION DETECTED ---
+        staticOffset = 0x01EF2A00;
+        finalOffset = 0x80C;
+    } else {
+        // If the Steam DLL is not found, check for the Standalone version's DLL.
+        moduleBase = (uintptr_t)GetModuleHandleA("Rome2.dll");
+        if (moduleBase) {
+            // --- STANDALONE VERSION DETECTED ---
+            staticOffset = 0x01EAF268;
+            finalOffset = 0xF6C;
+        } else {
+            // If neither DLL is found, we can't continue.
+            return 0;
+        }
     }
 
-    // Step 2: Calculate the address of our static starting pointer.
-    uintptr_t staticAddress = moduleBase + 0x01EAF268;
+    // The rest of the logic is the same for both versions, just with different variables.
 
-    // Step 3: Read the pointer at that location to get the dynamic base address.
-    // The asterisk (*) "dereferences" the pointer, reading the value inside it.
+    // 1. Calculate the address of our static starting pointer.
+    uintptr_t staticAddress = moduleBase + staticOffset;
+
+    // 2. Read the pointer at that location to get the dynamic base address.
     uintptr_t dynamicBase = *(uintptr_t*)staticAddress;
     if (!dynamicBase) {
-        return 0; // Safety check in case the pointer is null
+        return 0; // Safety check
     }
 
-    // Step 4: Add the final offset to get the money address.
-    uintptr_t moneyAddress = dynamicBase + 0xF6C;
+    // 3. Add the final offset to get the money address.
+    uintptr_t moneyAddress = dynamicBase + finalOffset;
 
     return moneyAddress;
 }
+
 
 // Writes a 4-byte integer to the money address.
 // Lua usage: set_money(99999)
