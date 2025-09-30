@@ -3,9 +3,14 @@ cmake_minimum_required(VERSION 3.29)
 # ========================
 # Project Config
 # ========================
+project(libtwdll) # <-- Remove the language here
+
+# Explicitly enable both C and C++ as project languages
+enable_language(C CXX)
+
+# Set the standards for each language
 set(CMAKE_C_STANDARD 99)
-project(libtwdll C)
-#set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_CXX_STANDARD 11) # A reasonable standard for modern C++
 
 # ========================
 # CLion Environment Setup
@@ -65,9 +70,22 @@ set_target_properties(luac.exe PROPERTIES OUTPUT_NAME "luac")
 # ========================
 # Lib Setup (libtwdll.dll)
 # ========================
-add_library(twdll SHARED library.c)
-target_link_libraries(twdll PRIVATE $<TARGET_OBJECTS:lua>)
+set(MINHOOK_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/include)
+set(MINHOOK_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib) # Corrected lib name
+add_library(twdll SHARED library.cpp)
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "libtwdll")
+
+# Tell the twdll target where to find header files
+target_include_directories(twdll PRIVATE
+        ${MINHOOK_INCLUDE_DIR}
+        ${LUA_SRC_DIR}  # This was missing, it adds the Lua headers
+)
+
+# Tell the twdll target which libraries to link against
+target_link_libraries(twdll PRIVATE
+        ${MINHOOK_LIBRARY}
+        $<TARGET_OBJECTS:lua> # This correctly links the Lua object files
+)
 
 # ========================
 # LuaSocket Setup (luasocket.dll)
