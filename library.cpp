@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <stdint.h> // For uintptr_t
+#include "MinHook.h"
 
 // We still need the extern "C" block for the Lua headers
 extern "C" {
@@ -7,6 +8,42 @@ extern "C" {
     #include <lauxlib.h>
 }
 
+lua_State *g_luaState = NULL;
+
+// First, define a type for the original function we are hooking.
+// From Ghidra, we know its signature is: float __fastcall GetUnitStrength(void* pUnit);
+// The 'this' pointer (pUnit) is passed in the ECX register.
+typedef float (__fastcall *tGetUnitStrength)(void* pUnit);
+
+// This global variable will store a pointer to the original, un-hooked game function.
+tGetUnitStrength oGetUnitStrength = NULL;
+
+// This is our custom hook function. It will run INSTEAD of the game's function.
+float __fastcall hkGetUnitStrength(void* pUnit) {
+
+    // --- CRITICAL STEP ---
+    // First, call the original game function to get the real strength value.
+    // If we don't do this, we'll have nothing to print, and the game will get a bad value.
+    float original_strength = oGetUnitStrength(pUnit);
+
+    // --- Our Proof-of-Concept Logic ---
+    // Create a message to print. We'll include the unit's address AND the strength.
+    // We use %f to format a floating-point number.
+    char message_buffer[256];
+    sprintf_s(message_buffer, sizeof(message_buffer),
+              "pwrite('HOOKED! Unit: 0x%p | Original Strength: %f')",
+              pUnit, original_strength);
+
+    // Execute this Lua string in the game's Lua state to print to the console.
+    if (g_luaState) {
+        luaL_dostring(g_luaState, message_buffer);
+    }
+
+    // --- Final Step ---
+    // Now, return the original value that we got from the game's function.
+    // This ensures the Lua script that called it gets the correct result.
+    return original_strength;
+}
 // This function follows the pointer chain to find the real address
 uintptr_t GetMoneyAddress() {
     uintptr_t moduleBase = 0;
@@ -85,13 +122,86 @@ static int GetMoney(lua_State* L) {
     return 1; // Return 1 value to Lua.
 }
 
+static int PatchSettlementSlots(lua_State* L) {
+    uintptr_t moduleBase = (uintptr_t)GetModuleHandleA("Rome2.dll");
+    if (!moduleBase) {
+        lua_pushstring(L, "PatchNotSet");
+        return 1;
+    }
+    // --- Patch #1: Building Slots ---
+    uintptr_t buildSlotInstruction = moduleBase + 0xFC94E0;
+    DWORD* buildSlotValue = (DWORD*)(buildSlotInstruction + 3); // The value is 3 bytes into the instruction
+
+    // --- Patch #2: Population Slots ---
+    uintptr_t popSlotInstruction = moduleBase + 0xFB1AAF;
+
+    DWORD* popSlotValue = (DWORD*)(popSlotInstruction + 3); // The value is 3 bytes into this instruction too
+
+    // --- Apply Patches (with memory protection changes) ---
+    DWORD oldProtect;
+
+    // Patch building slots to 10
+    VirtualProtect(buildSlotValue, sizeof(DWORD), PAGE_EXECUTE_READWRITE, &oldProtect);
+    *buildSlotValue = 10;
+    VirtualProtect(buildSlotValue, sizeof(DWORD), oldProtect, &oldProtect);
+
+    // Patch population slots to 6 (or higher if you want)
+    VirtualProtect(popSlotValue, sizeof(DWORD), PAGE_EXECUTE_READWRITE, &oldProtect);
+    *popSlotValue = 6;
+    VirtualProtect(popSlotValue, sizeof(DWORD), oldProtect, &oldProtect);
+    lua_pushstring(L, "PatchSet");
+    return 1;
+}
 
 // The main entry point for the DLL, called by Lua
 extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     // Register our new, powerful functions
     lua_register(L, "set_money", SetMoney);
     lua_register(L, "get_money", GetMoney);
+    lua_register(L, "set_settl", PatchSettlementSlots);
 
     luaL_dostring(L, "pwrite('libtwdll with PERMANENT money cheat loaded!')");
+    g_luaState = L; // Save the Lua state globally
+
+    if (MH_Initialize() != MH_OK) {
+        luaL_dostring(L, "pwrite('ERROR: MinHook failed to initialize!')");
+        return 0;
+    }
+
+    // --- Define the static offset for our target function ---
+    // This is the value we calculated: 0x94CA60
+    DWORD offset_GetUnitStrength = 0x94CA60;
+
+    // Get the base address of the game's DLL at runtime
+    HMODULE hGameDll = GetModuleHandleA("Rome2.dll");
+
+    if (!hGameDll) {
+        luaL_dostring(L, "pwrite('ERROR: Could not find Rome2.dll in memory!')");
+        // As a fallback for the Steam version, you could add:
+        // hGameDll = GetModuleHandleA("empire.retail.dll");
+        // if (!hGameDll) { /* return error */ }
+        return 0;
+    }
+
+    // Calculate the real, dynamic address of the function to hook
+    LPVOID pTarget = (LPVOID)((DWORD)hGameDll + offset_GetUnitStrength);
+
+    // --- Create and enable the hook ---
+    // MH_CreateHook takes:
+    // 1. The address of the function to hook (pTarget).
+    // 2. The address of our custom function (hkGetUnitStrength).
+    // 3. A pointer to a variable where it can store the original function's address (oGetUnitStrength).
+    if (MH_CreateHook(pTarget, &hkGetUnitStrength, reinterpret_cast<LPVOID*>(&oGetUnitStrength)) != MH_OK) {
+        luaL_dostring(L, "pwrite('ERROR: MinHook failed to create hook!')");
+        return 0;
+    }
+
+    if (MH_EnableHook(pTarget) != MH_OK) {
+        luaL_dostring(L, "pwrite('ERROR: MinHook failed to enable hook!')");
+        return 0;
+    }
+
+    // Let the user know it worked
+    luaL_dostring(L, "pwrite('libtwdll.dll loaded and unit strength hook placed successfully!')");
     return 0;
 }
