@@ -66,25 +66,32 @@ set_target_properties(lua.exe PROPERTIES OUTPUT_NAME "lua")
 add_executable(luac.exe "${LUA_SRC_DIR}/luac.c")
 target_link_libraries(luac.exe PRIVATE $<TARGET_OBJECTS:lua>)
 set_target_properties(luac.exe PROPERTIES OUTPUT_NAME "luac")
-
 # ========================
 # Lib Setup (libtwdll.dll)
 # ========================
 set(MINHOOK_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/include)
-set(MINHOOK_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib) # Corrected lib name
-add_library(twdll SHARED library.cpp)
-set_target_properties(twdll PROPERTIES OUTPUT_NAME "libtwdll")
+set(MINHOOK_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib)
 
-# Tell the twdll target where to find header files
-target_include_directories(twdll PRIVATE
-        ${MINHOOK_INCLUDE_DIR}
-        ${LUA_SRC_DIR}  # This was missing, it adds the Lua headers
+add_library(twdll SHARED
+        src/libtwdll.cpp
+        src/log.cpp
+        src/unit_script_interface.cpp
+        src/log.h
+        src/unit_script_interface.h
 )
 
-# Tell the twdll target which libraries to link against
+set_target_properties(twdll PROPERTIES OUTPUT_NAME "libtwdll")
+
+target_include_directories(twdll
+        PUBLIC
+        src # Its own headers are public
+        PRIVATE
+        ${MINHOOK_INCLUDE_DIR} # Dependency headers are private
+)
+
 target_link_libraries(twdll PRIVATE
+        lua # Link to the CMake target
         ${MINHOOK_LIBRARY}
-        $<TARGET_OBJECTS:lua> # This correctly links the Lua object files
 )
 
 # ========================
