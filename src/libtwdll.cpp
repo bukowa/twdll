@@ -45,7 +45,6 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     luaL_register(L, "unit", unit_functions);
     luaL_register(L, "battle_unit", battle_unit_functions);
     luaL_register(L, "battle_unit_stats", battle_unit_stats_functions);
-    luaL_dostring(L, "pwrite('libtwdll with PERMANENT money cheat loaded!')");
 
     // --- The Safety Check ---
     if (hooks_are_initialized) {
@@ -64,7 +63,7 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
         }
 
         if (MH_Initialize() != MH_OK) {
-            luaL_dostring(L, "pwrite('ERROR: MinHook failed to initialize!')");
+            Log("FATAL: MinHook failed to initialize!");
             return 0;
         }
 
@@ -76,7 +75,7 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
         HMODULE hGameDll = GetModuleHandleA("Rome2.dll");
 
         if (!hGameDll) {
-            luaL_dostring(L, "pwrite('ERROR: Could not find Rome2.dll in memory!')");
+            Log("FATAL: Could not find Rome2.dll in memory!");
             // As a fallback for the Steam version, you could add:
             // hGameDll = GetModuleHandleA("empire.retail.dll");
             // if (!hGameDll) { /* return error */ }
@@ -93,11 +92,11 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
         // 3. A pointer to a variable where it can store the original function's address (oGetUnitStrength).
 
         if (MH_CreateHook(pTarget, &hkGetUnitStrength, reinterpret_cast<LPVOID*>(&oGetUnitStrength)) != MH_OK) {
-            luaL_dostring(L, "pwrite('ERROR: MinHook failed to create hook!')");
+            Log("FATAL: Hook failed to create!");
             return 0;
         }
         if (MH_EnableHook(pTarget) != MH_OK) {
-            luaL_dostring(L, "pwrite('ERROR: MinHook failed to enable hook!')");
+            Log("ERROR: MinHook failed to enable hook!");
             return 0;
         }
 
@@ -106,6 +105,6 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     }
 
     // Let the user know it worked
-    luaL_dostring(L, "pwrite('libtwdll.dll loaded and unit strength hook placed successfully!')");
+    Log("--- libtwdll first-time initialization. ---");
     return 0;
 }
