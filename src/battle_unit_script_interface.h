@@ -5,3 +5,4 @@ extern "C" {
 }
 
 extern const struct luaL_Reg battle_unit_functions[];
+extern const struct luaL_Reg battle_unit_stats_functions[];

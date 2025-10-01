@@ -8,6 +8,25 @@ extern "C" {
 }
 
 #define REAL_BATTLE_UNIT_POINTER_OFFSET 0x4
+// --- Offsets within the main Unit object to find POINTERS to other objects ---
+#define UNIT_STATS_POINTER_OFFSET 0x20
+
+// --- Offsets within the nested Unit Stats object ---
+#define STATS_CHARGE_BONUS_OFFSET 0x010C
+#define STATS_MELEE_ATTACK_OFFSET 0x011C
+#define STATS_BASE_MORALE_OFFSET  0x0118
+#define STATS_FLOAT_EXAMPLE_OFFSET 0x0110 // To jest ten float ze zdjęcia
+
+template<typename T>
+T read_from(void *base_address, const size_t offset) {
+    return *reinterpret_cast<T *>(static_cast<char *>(base_address) + offset);
+}
+
+template<typename T>
+void write_to(void *base_address, const size_t offset, T value) {
+    *reinterpret_cast<T *>(static_cast<char *>(base_address) + offset) = value;
+}
+
 
 static void *get_battle_unit_from_indirect_wrapper(lua_State *L) {
     void **p_wrapper = static_cast<void **>(lua_touserdata(L, 1));
@@ -24,6 +43,33 @@ static void *get_battle_unit_from_indirect_wrapper(lua_State *L) {
     return battle_unit_object;
 }
 
+// --- Generic "Engine" Functions for Nested Objects ---
+
+// Silnik, który czyta int z zagnieżdżonego obiektu.
+static int read_nested_int_property(lua_State* L, size_t nested_obj_ptr_offset, size_t final_property_offset) {
+    void* base_unit = get_battle_unit_from_indirect_wrapper(L);
+    if (!base_unit) { lua_pushnil(L); return 1; }
+
+    void* nested_obj = read_from<void*>(base_unit, nested_obj_ptr_offset);
+    if (!nested_obj) { lua_pushnil(L); return 1; }
+
+    int final_value = read_from<int>(nested_obj, final_property_offset);
+    lua_pushinteger(L, final_value);
+    return 1;
+}
+
+// Silnik, który czyta float z zagnieżdżonego obiektu.
+static int read_nested_float_property(lua_State* L, size_t nested_obj_ptr_offset, size_t final_property_offset) {
+    void* base_unit = get_battle_unit_from_indirect_wrapper(L);
+    if (!base_unit) { lua_pushnil(L); return 1; }
+
+    void* nested_obj = read_from<void*>(base_unit, nested_obj_ptr_offset);
+    if (!nested_obj) { lua_pushnil(L); return 1; }
+
+    float final_value = read_from<float>(nested_obj, final_property_offset);
+    lua_pushnumber(L, final_value);
+    return 1;
+}
 static int script_GetBattleMemoryAddress(lua_State* L) {
     void* battle_unit = get_battle_unit_from_indirect_wrapper(L);
     if (!battle_unit) {
@@ -36,8 +82,36 @@ static int script_GetBattleMemoryAddress(lua_State* L) {
     return 1;
 }
 
+// --- Lua API Bridge Functions for Unit Stats ---
+
+static int script_stats_GetChargeBonus(lua_State* L) {
+    return read_nested_int_property(L, UNIT_STATS_POINTER_OFFSET, STATS_CHARGE_BONUS_OFFSET);
+}
+
+static int script_stats_GetMeleeAttack(lua_State* L) {
+    return read_nested_int_property(L, UNIT_STATS_POINTER_OFFSET, STATS_MELEE_ATTACK_OFFSET);
+}
+
+static int script_stats_GetBaseMorale(lua_State* L) {
+    return read_nested_int_property(L, UNIT_STATS_POINTER_OFFSET, STATS_BASE_MORALE_OFFSET);
+}
+
+// Przykład dla float-a z twojego obrazka (offset 0x110)
+static int script_stats_GetSomeFloatValue(lua_State* L) {
+    return read_nested_float_property(L, UNIT_STATS_POINTER_OFFSET, STATS_FLOAT_EXAMPLE_OFFSET);
+}
+
 // Tablica z funkcjami, BEZ "static", aby była widoczna na zewnątrz.
 const struct luaL_Reg battle_unit_functions[] = {
     {"GetMemoryAddress",  script_GetBattleMemoryAddress},
+    {NULL, NULL}
+};
+
+// Funkcje operujące na zagnieżdżonym obiekcie Unit Stats
+static const struct luaL_Reg battle_unit_stats_functions[] = {
+    {"GetChargeBonus",     script_stats_GetChargeBonus},
+    {"GetMeleeAttack",     script_stats_GetMeleeAttack},
+    {"GetBaseMorale",      script_stats_GetBaseMorale},
+    {"GetSomeFloatValue",  script_stats_GetSomeFloatValue},
     {NULL, NULL}
 };

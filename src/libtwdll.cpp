@@ -44,6 +44,7 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     // lua_register(L, "get_movement_points", GetMovementPoints);
     luaL_register(L, "unit", unit_functions);
     luaL_register(L, "battle_unit", battle_unit_functions);
+    luaL_register(L, "battle_unit_stats", battle_unit_stats_functions);
     luaL_dostring(L, "pwrite('libtwdll with PERMANENT money cheat loaded!')");
 
     // --- The Safety Check ---
