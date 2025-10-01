@@ -17,6 +17,9 @@ extern "C" {
 #define STATS_BASE_MORALE_OFFSET  0x0118
 #define STATS_FLOAT_EXAMPLE_OFFSET 0x0110 // To jest ten float ze zdjęcia
 
+#define UNIT_FATIGUE_OFFSET 0x948
+
+
 template<typename T>
 T read_from(void *base_address, const size_t offset) {
     return *reinterpret_cast<T *>(static_cast<char *>(base_address) + offset);
@@ -70,6 +73,18 @@ static int read_nested_float_property(lua_State* L, size_t nested_obj_ptr_offset
     lua_pushnumber(L, final_value);
     return 1;
 }
+
+static int read_int_property(lua_State* L, size_t property_offset) {
+    void* battle_unit = get_battle_unit_from_indirect_wrapper(L);
+    if (!battle_unit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    const int current_value = read_from<int>(battle_unit, property_offset);
+    lua_pushinteger(L, current_value);
+    return 1;
+}
+
 static int script_GetBattleMemoryAddress(lua_State* L) {
     void* battle_unit = get_battle_unit_from_indirect_wrapper(L);
     if (!battle_unit) {
@@ -101,9 +116,14 @@ static int script_stats_GetSomeFloatValue(lua_State* L) {
     return read_nested_float_property(L, UNIT_STATS_POINTER_OFFSET, STATS_FLOAT_EXAMPLE_OFFSET);
 }
 
+static int script_unit_GetFatigue(lua_State* L) {
+    return read_int_property(L, UNIT_FATIGUE_OFFSET);
+}
+
 // Tablica z funkcjami, BEZ "static", aby była widoczna na zewnątrz.
 const struct luaL_Reg battle_unit_functions[] = {
     {"GetMemoryAddress",  script_GetBattleMemoryAddress},
+    {"GetFatigue",       script_unit_GetFatigue},
     {NULL, NULL}
 };
 
