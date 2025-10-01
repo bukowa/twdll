@@ -76,8 +76,10 @@ add_library(twdll SHARED
         src/libtwdll.cpp
         src/log.cpp
         src/unit_script_interface.cpp
+        src/battle_unit_script_interface.cpp
         src/log.h
         src/unit_script_interface.h
+        src/battle_unit_script_interface.h
 )
 
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "libtwdll")

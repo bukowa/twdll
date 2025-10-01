@@ -2,6 +2,7 @@
 #include "MinHook.h"
 #include "log.h"
 #include "unit_script_interface.cpp"
+#include "battle_unit_script_interface.h"
 
 // We still need the extern "C" block for the Lua headers
 extern "C" {
@@ -42,6 +43,7 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     // lua_register(L, "set_movement_points", SetMovementPoints);
     // lua_register(L, "get_movement_points", GetMovementPoints);
     luaL_register(L, "unit", unit_functions);
+    luaL_register(L, "battle_unit", battle_unit_functions);
     luaL_dostring(L, "pwrite('libtwdll with PERMANENT money cheat loaded!')");
 
     // --- The Safety Check ---
