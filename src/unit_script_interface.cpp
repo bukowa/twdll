@@ -96,19 +96,48 @@ static int script_GetMovementPoints(lua_State *L) {
     return read_int_property(L, UNIT_MOVEMENT_POINTS_OFFSET);
 }
 
+// Returns the memory address of the "real" unit object as a hexadecimal string.
+// Lua usage: local address_str = unit.GetMemoryAddress(unit_object) -- e.g., "0x00AABBCC"
+static int script_GetMemoryAddress(lua_State* L) {
+    // Step 1: Get the pointer to the unit object.
+    void* unit = get_unit_from_indirect_wrapper(L);
+    if (!unit) {
+        lua_pushnil(L); // If there's an error, return nil.
+        return 1;
+    }
+
+    // Step 2: Prepare a buffer for the resulting string.
+    // A 64-bit address in hex is 16 chars + "0x" + null terminator = 19.
+    // 64 characters is more than enough and is safe.
+    char address_buffer[64];
+
+    // Step 3: Format the pointer into a hexadecimal string.
+    // %p is the standard, portable format specifier for printing pointers.
+    sprintf_s(address_buffer, sizeof(address_buffer), "0x%p", unit);
+
+    // Step 4: Push the formatted string to Lua.
+    lua_pushstring(L, address_buffer);
+
+    // We are returning 1 value (the string).
+    return 1;
+}
+
 
 // =============================================================================
 //  Lua Function Registration
 // =============================================================================
 
 static const struct luaL_Reg unit_functions[] = {
+    // Setters
     {"SetStrength", script_SetStrength},
     {"SetMaxStrength", script_SetMaxStrength},
     {"SetMovementPoints", script_SetMovementPoints},
-
+    // Getters
     {"GetStrength", script_GetStrength},
     {"GetMaxStrength", script_GetMaxStrength},
     {"GetMovementPoints", script_GetMovementPoints},
+    // Diagnostic Functions
+    {"GetMemoryAddress",   script_GetMemoryAddress}, // <-- DODAJ TĘ LINIJKĘ
 
     {NULL, NULL}
 };
