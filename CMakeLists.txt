@@ -29,6 +29,7 @@ get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
 # ========================
 # Lua Config
 # ========================
+set(LUA_VERSION "5.1.2")
 message("LUA_VERSION is set to: ${LUA_VERSION}")
 set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-${LUA_VERSION}/src")
 
@@ -77,6 +78,8 @@ add_library(twdll SHARED
         src/log.cpp
         src/unit_script_interface.cpp
         src/battle_unit_script_interface.cpp
+        src/character_script_interface.cpp
+        src/character_script_interface.h
         src/log.h
         src/unit_script_interface.h
         src/battle_unit_script_interface.h
