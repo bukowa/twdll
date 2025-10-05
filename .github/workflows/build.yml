@@ -149,7 +149,7 @@ jobs:
           files: release-assets/*
 
   # ===============================================================
-  # JOB 4: Publish the Nightly Release
+  # JOB 4: Publish the Nightly Release - OSTATECZNA WERSJA Z POPRAWKĄ KODU ŹRÓDŁOWEGO
   # ===============================================================
   publish-nightly-release:
     needs: build
@@ -158,19 +158,30 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download release assets
+        uses: actions/download-artifact@v4
         with: { name: release-assets, path: release-assets }
-      - run: rm -f release-assets/*.stamp
-      - id: archive
+
+      - name: Remove useless stamp file
+        run: rm -f release-assets/*.stamp
+
+      - name: Create ZIP archive for nightly
+        id: archive
         run: |
           ARCHIVE_NAME="libtwdll-nightly.zip"
           zip -r -j "${ARCHIVE_NAME}" release-assets/
           mv "${ARCHIVE_NAME}" release-assets/
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
-      - name: Create or Update Nightly Release Body
+
+      - name: Remove luadoc directory before upload
+        run: rm -rf release-assets/luadoc
+
+      - name: Prepare Release Notes
+        id: prep_notes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           {
@@ -184,10 +195,17 @@ jobs:
             echo ""
             echo "Individual files are attached below."
           } > release_notes.md
-          gh release view nightly || gh release create nightly --title "Nightly Build (from master)" --prerelease --notes-file release_notes.md
-          gh release edit nightly --prerelease --notes-file release_notes.md
-      - run: rm -rf release-assets/luadoc
-      - name: Upload/Overwrite Release Assets (using gh CLI)
+
+      - name: Delete old nightly release to update source code snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload nightly release-assets/* --clobber
+        run: gh release delete nightly --yes || true
+
+      - name: Create New Nightly Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: 'nightly'
+          name: 'Nightly Build (from master)'
+          body_path: 'release_notes.md'
+          prerelease: true
+          files: release-assets/*
