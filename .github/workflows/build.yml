@@ -116,7 +116,7 @@ jobs:
           user_email: 'github-actions[bot]@users.noreply.github.com'
 
   # ===============================================================
-  # JOB 3: Create an official GitHub Release (for tags) - Z ZABEZPIECZENIEM
+  # JOB 3: Create an official GitHub Release (for tags) - WERSJA ODPORNA NA BŁĘDY
   # ===============================================================
   create-official-release:
     needs: build
@@ -127,11 +127,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
       - name: Download release assets
         uses: actions/download-artifact@v4
         with: { name: release-assets, path: release-assets }
+
       - name: Remove useless stamp file
         run: rm -f release-assets/*.stamp
+
       - name: Create ZIP archive for the release
         id: archive
         run: |
@@ -140,23 +143,33 @@ jobs:
           zip -r -j "${ARCHIVE_NAME}" release-assets/
           mv "${ARCHIVE_NAME}" release-assets/
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+
       - name: Remove luadoc directory before upload
         run: rm -rf release-assets/luadoc
+
       - name: Extract Changelog Entry
         id: changelog
         run: |
           VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           
-          # Wyciągnij zawartość changeloga
+          # ===============================================================
+          # KLUCZOWA POPRAWKA JEST TUTAJ
+          # Konwertujemy znaki końca linii z Windows (CRLF) na Unix (LF)
+          # To sprawia, że 'awk' zawsze zadziała poprawnie.
+          # ===============================================================
+          sed -i 's/\r$//' CHANGELOG.md
+          
+          # Ten krok pozostaje bez zmian, ale teraz zadziała
           CHANGELOG_BODY=$(awk -v ver="$VERSION" '/^## \['ver'\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
           
-          # NOWE ZABEZPIECZENIE: Sprawdź, czy changelog nie jest pusty
           if [ -z "$CHANGELOG_BODY" ]; then
-            echo "::error::Nie znaleziono wpisu dla wersji '$VERSION' w pliku CHANGELOG.md! Upewnij się, że nagłówek ma format '## [$VERSION]'."
+            echo "::error::Po sanityzacji nadal nie znaleziono wpisu dla wersji '$VERSION' w pliku CHANGELOG.md! Sprawdź format nagłówka '## [$VERSION]'."
+            # Dodatkowy krok diagnostyczny, aby zobaczyć, co widzi maszyna
+            echo "::debug::Zawartość pliku CHANGELOG.md po konwersji:"
+            cat CHANGELOG.md
             exit 1
           fi
           
-          # Zapisz pełną treść opisu do zmiennej dla następnego kroku
           echo "body<<EOF" >> $GITHUB_ENV
           echo "## Quick Download" >> $GITHUB_ENV
           echo "**All files in one package: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**" >> $GITHUB_ENV
