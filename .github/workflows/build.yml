@@ -68,19 +68,17 @@ jobs:
           path: ${{github.workspace}}/luadoc
 
   # ===============================================================
-  # JOB 2: Deploy Docs
+  # JOB 2: Deploy Docs - Z POPRAWKĄ INSTALACJI PAKIETU
   # ===============================================================
   deploy-docs:
     needs: build
     runs-on: ubuntu-latest
-    # Ten job uruchomi się tylko, jeśli 'build' się powiedzie (nie zostanie pominięty)
     if: github.event_name == 'push'
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with: { path: main,
-                fetch-depth: '0' }
+        with: { path: main, fetch-depth: '0' }
       - uses: actions/download-artifact@v4
         with: { name: docs-html, path: new-docs }
       - id: docs_dir
@@ -95,6 +93,14 @@ jobs:
         with: { ref: gh-pages, path: gh-pages }
       - uses: actions/setup-python@v5
         with: { python-version: '3.x' }
+
+      # ===============================================================
+      # KLUCZOWA POPRAWKA JEST TUTAJ
+      # Instalujemy brakujący pakiet 'packaging' za pomocą pip
+      # ===============================================================
+      - name: Install Python dependencies
+        run: pip install packaging
+
       - name: Generate dynamic index.html
         run: |
           python main/.github/scripts/generate_doc_index.py \
