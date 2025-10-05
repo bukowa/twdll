@@ -59,5 +59,5 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
         Log("--- libtwdll modules registered and hooks placed. ---");
     }
 
-    return 1; // Return the main 'twdll' table
+    return 0;
 }
