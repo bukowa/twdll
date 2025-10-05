@@ -12,8 +12,33 @@ env:
   BUILD_TYPE: Release
 
 jobs:
-  # JOB 1: Build (remains the same)
+  # ===============================================================
+  # JOB 0: Filtruj zmiany w plikach
+  # ===============================================================
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      src_files: ${{ steps.filter.outputs.src_files }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src_files:
+              - 'src/**'
+              - 'include/**'
+              - 'luadoc/**'
+              - 'pack/**'
+              - 'CMakeLists.txt'
+              - '.github/workflows/**'
+
+  # ===============================================================
+  # JOB 1: Build - teraz z warunkiem
+  # ===============================================================
   build:
+    needs: changes
+    if: needs.changes.outputs.src_files == 'true' || github.event_name == 'pull_request'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,10 +63,13 @@ jobs:
           name: docs-html
           path: ${{github.workspace}}/luadoc
 
-  # JOB 2: Deploy Docs (remains the same)
+  # ===============================================================
+  # JOB 2: Deploy Docs
+  # ===============================================================
   deploy-docs:
     needs: build
     runs-on: ubuntu-latest
+    # Ten job uruchomi się tylko, jeśli 'build' się powiedzie (nie zostanie pominięty)
     if: github.event_name == 'push'
     permissions:
       contents: write
@@ -70,7 +98,7 @@ jobs:
             gh-pages/index.html \
             gh-pages \
             ${{ steps.docs_dir.outputs.dir }} \
-            main  # <-- TEN NOWY ARGUMENT przekazuje ścieżkę do repozytorium
+            main
       - name: Prepare deployment directory
         run: |
           mkdir -p gh-pages/${{ steps.docs_dir.outputs.dir }}
@@ -84,7 +112,7 @@ jobs:
           user_email: 'github-actions[bot]@users.noreply.github.com'
 
   # ===============================================================
-  # JOB 3: Create an official GitHub Release (for tags) - FINAL FIX
+  # JOB 3: Create an official GitHub Release (for tags)
   # ===============================================================
   create-official-release:
     needs: build
@@ -121,7 +149,7 @@ jobs:
           files: release-assets/*
 
   # ===============================================================
-  # JOB 4: Publish the Nightly Release - POPRAWIONA NAZWA
+  # JOB 4: Publish the Nightly Release
   # ===============================================================
   publish-nightly-release:
     needs: build

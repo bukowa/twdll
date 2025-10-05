@@ -19,3 +19,4 @@ out
 !/.idea/runConfigurations
 !.idea/cmake.xml
 research
+cmakeenv
