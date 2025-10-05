@@ -12,7 +12,13 @@ extern "C" {
 }
 
 
-// The main entry point for the DLL, called by Lua
+/// @module libtwdll
+/// The main entry point for the twdll Lua extension library.
+
+/// @function luaopen_libtwdll
+/// Initializes all twdll submodules and registers them in Lua.
+/// @tparam lua_State L
+/// @treturn integer always 0
 extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     static bool hooks_are_initialized = false;
 

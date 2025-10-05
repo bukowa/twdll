@@ -1,3 +1,5 @@
+/// @module twdll_character
+/// Functions for interacting with game characters.
 #include "character_script_interface.h"
 #include "log.h"
 #include <cstdio>
@@ -59,8 +61,10 @@ static int read_int_property(lua_State* L, size_t property_offset) {
     return 1;
 }
 
-// A generic interface that lets scripts specify raw offsets explicitly.
-// Lua: character.SetIntAtOffset(character_obj, offset, value)
+/***
+Writes a 32-bit integer at the given memory offset.
+@function SetIntAtOffset
+*/
 static int script_SetIntAtOffset(lua_State* L) {
     void* character = get_character_from_indirect_wrapper(L);
     if (!character) return 0;
@@ -70,7 +74,12 @@ static int script_SetIntAtOffset(lua_State* L) {
     return 0;
 }
 
-// Lua: local v = character.GetIntAtOffset(character_obj, offset)
+/**
+ * Reads a 32-bit integer at the given memory offset.
+ * @function GetIntAtOffset
+ * @tparam integer offset
+ * @treturn integer value
+ */
 static int script_GetIntAtOffset(lua_State* L) {
     void* character = get_character_from_indirect_wrapper(L);
     if (!character) { lua_pushnil(L); return 1; }
@@ -80,7 +89,11 @@ static int script_GetIntAtOffset(lua_State* L) {
     return 1;
 }
 
-// Returns the memory address of the real character object
+/**
+ * Returns the memory address of the real character object.
+ * @function GetMemoryAddress
+ * @treturn string memory address (e.g. "0x12345678")
+ */
 static int script_GetMemoryAddress(lua_State* L) {
     void* character = get_character_from_indirect_wrapper(L);
     if (!character) { lua_pushnil(L); return 1; }
