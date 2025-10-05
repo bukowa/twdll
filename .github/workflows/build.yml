@@ -116,7 +116,7 @@ jobs:
           user_email: 'github-actions[bot]@users.noreply.github.com'
 
   # ===============================================================
-  # JOB 3: Create an official GitHub Release (for tags)
+  # JOB 3: Create an official GitHub Release (for tags) - Z ZABEZPIECZENIEM
   # ===============================================================
   create-official-release:
     needs: build
@@ -142,14 +142,38 @@ jobs:
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
       - name: Remove luadoc directory before upload
         run: rm -rf release-assets/luadoc
+      - name: Extract Changelog Entry
+        id: changelog
+        run: |
+          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          
+          # Wyciągnij zawartość changeloga
+          CHANGELOG_BODY=$(awk -v ver="$VERSION" '/^## \['ver'\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
+          
+          # NOWE ZABEZPIECZENIE: Sprawdź, czy changelog nie jest pusty
+          if [ -z "$CHANGELOG_BODY" ]; then
+            echo "::error::Nie znaleziono wpisu dla wersji '$VERSION' w pliku CHANGELOG.md! Upewnij się, że nagłówek ma format '## [$VERSION]'."
+            exit 1
+          fi
+          
+          # Zapisz pełną treść opisu do zmiennej dla następnego kroku
+          echo "body<<EOF" >> $GITHUB_ENV
+          echo "## Quick Download" >> $GITHUB_ENV
+          echo "**All files in one package: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "---" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "## Changelog" >> $GITHUB_ENV
+          echo "$CHANGELOG_BODY" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "---" >> $GITHUB_ENV
+          echo "Individual files are attached below." >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Create GitHub Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          body: |
-            ## Quick Download
-            **All files in one package: [`${{ steps.archive.outputs.name }}`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**
-            ---
-            Individual files are attached below.
+          body: ${{ env.body }}
           files: release-assets/*
 
   # ===============================================================
