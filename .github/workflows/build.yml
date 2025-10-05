@@ -34,11 +34,15 @@ jobs:
               - '.github/workflows/**'
 
   # ===============================================================
-  # JOB 1: Build - teraz z warunkiem
+  # JOB 1: Build - z poprawionym warunkiem 'if'
   # ===============================================================
   build:
     needs: changes
-    if: needs.changes.outputs.src_files == 'true' || github.event_name == 'pull_request'
+    # OSTATECZNA POPRAWKA: Dodajemy warunek sprawdzający, czy to jest push taga
+    if: >
+      needs.changes.outputs.src_files == 'true' ||
+      github.event_name == 'pull_request' ||
+      startsWith(github.ref, 'refs/tags/')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
