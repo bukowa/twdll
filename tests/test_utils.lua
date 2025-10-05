@@ -1,47 +1,26 @@
--- tests/test_utils.lua
 -- A simple, non-intrusive assertion and test running framework for in-game use.
 
--- Load the library to get access to the global logger
-if not package.loaded["libtwdll"] then
-    local _lib, err = package.loadlib("libtwdll.dll", "luaopen_libtwdll")
+if not package.loaded["twdll"] then
+    local _lib, err = package.loadlib("twdll.dll", "luaopen_twdll")
     if not _lib then
-        error("FATAL: Failed to load libtwdll.dll: " .. tostring(err))
+        error("FATAL: Failed to load twdll.dll: " .. tostring(err))
     end
     _lib()
 end
 
 local TestUtils = {}
 
---- Logs a message to the libtwdll.log file.
--- @tparam string message The message to log.
 function TestUtils.Log(message)
-    -- This relies on a Log function being exposed in your main libtwdll table.
-    -- We need to add this to libtwdll.cpp
     if twdll and twdll.Log then
         twdll.Log(message)
     else
-        -- Fallback for when running outside the game, prints to console.
         print(message)
     end
 end
 
---- Asserts a condition is true, logging a failure if not.
--- Does not halt execution.
--- @tparam any condition The condition to check (if false or nil, it's a failure).
--- @tparam string message The failure message to log.
--- @treturn boolean True if the assertion passed, false otherwise.
-function TestUtils.Assert(condition, message)
-    if not condition then
-        TestUtils.Log("  [FAIL] " .. message)
-        return false
-    end
-    TestUtils.Log("  [PASS]")
-    return true
-end
-
 --- Runs all functions in a given table that start with "test_".
 -- @tparam table test_suite A table containing the test functions.
--- @tparam function get_subject_factory A function that returns a new test subject (e.g., a unit or character).
+-- @tparam function get_subject_factory A function that returns a new test subject.
 function TestUtils.run_tests(test_suite, get_subject_factory)
     local passed_count = 0
     local failed_count = 0
@@ -52,18 +31,46 @@ function TestUtils.run_tests(test_suite, get_subject_factory)
     for name, func in pairs(test_suite) do
         if name:match("^test_") and type(func) == "function" then
             TestUtils.Log("-> Executing: " .. name)
+
+            -- FIX #1: Track assertion status for the CURRENT test.
+            -- This variable will be flipped to `false` by our custom Assert function if any check fails.
+            local test_passed_assertions = true
+
+            -- FIX #2: Create a custom Assert function for each test run.
+            -- This makes the test API cleaner and allows us to track failures.
+            -- It will only log failures, reducing log spam.
+            local function Assert(condition, message)
+                if not condition then
+                    TestUtils.Log("  [FAIL] " .. message)
+                    test_passed_assertions = false
+                end
+                -- No more "[PASS]" logs for cleaner output.
+            end
+
             local subject = get_subject_factory()
             if not subject then
                 TestUtils.Log("  [FATAL] Could not get a test subject for: " .. name)
                 failed_count = failed_count + 1
             else
-                -- Run the test in a protected call to catch errors
-                local status, err = pcall(func, TestUtils, subject)
-                if status then
+                -- FIX #3: Call the test correctly and check both crash status AND assertion results.
+                -- `pcall(func, test_suite, Assert, subject)`
+                --   - `func`: The test function (e.g., UnitSuite:test_strength_property)
+                --   - `test_suite`: This becomes `self` inside the function because of the ':' syntax. CORRECT!
+                --   - `Assert`: This is our custom assert function. CORRECT!
+                --   - `subject`: This is the test subject (the unit). CORRECT!
+                local status, err = pcall(func, test_suite, Assert, subject)
+
+                if status and test_passed_assertions then
+                    -- To pass, the test must NOT crash (status=true) AND all its assertions must have passed.
                     passed_count = passed_count + 1
+                    TestUtils.Log("  [PASS]") -- A single pass message for the whole test function.
                 else
                     failed_count = failed_count + 1
-                    TestUtils.Log("  [ERROR] Test crashed: " .. tostring(err))
+                    if not status then
+                        -- The test crashed with a Lua error.
+                        TestUtils.Log("  [ERROR] Test crashed: " .. tostring(err))
+                    end
+                    -- If it failed due to an assertion, the [FAIL] message was already logged by Assert().
                 end
             end
         end

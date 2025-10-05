@@ -5,11 +5,15 @@ local TestUtils = require("tests.test_utils")
 -- Define the test suite for the Unit interface
 local UnitSuite = { name = "twdll_unit" }
 
---- This is the placeholder function for this test suite.
 -- It will be called before each test to get a fresh test subject.
 -- @return userdata A valid unit object for testing.
 local function get_test_subject()
-    -- TODO: Fill this in to return a real unit object from the game.
+    local chars = consul._game():model():world():faction_by_key('inv_rome'):character_list()
+    for i = 0, chars:num_items() - 1 do
+        if chars:item_at(i):cqi() == 6 then
+            return chars:item_at(i):military_force():unit_list():item_at(0)
+        end
+    end
     error("get_test_subject() is not implemented for the Unit suite.")
     return nil
 end

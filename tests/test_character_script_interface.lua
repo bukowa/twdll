@@ -9,9 +9,13 @@ local CharacterSuite = { name = "twdll_character" }
 -- It will be called before each test to get a fresh test subject.
 -- @return userdata A valid character object for testing.
 local function get_test_subject()
-    -- TODO: Fill this in to return a real character object from the game.
+    local chars = consul._game():model():world():faction_by_key('inv_rome'):character_list()
+    for i = 0, chars:num_items()-1 do
+        if chars:item_at(i):cqi() == 6 then
+            return chars:item_at(i)
+        end
+    end
     error("get_test_subject() is not implemented for the Character suite.")
-    return nil
 end
 
 --- Tests the Get/Set IntAtOffset functions.
