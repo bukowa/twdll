@@ -5,19 +5,19 @@ from pathlib import Path
 def generate_version_list(versions, repo_slug):
     """Generates HTML list items for each version."""
     html = ""
-    # Sort versions, putting 'latest' first, then others in reverse order
-    sorted_versions = sorted([v for v in versions if v != 'latest'], reverse=True)
-    if 'latest' in versions:
-        sorted_versions.insert(0, 'latest')
+    # Sort versions, putting 'master' first, then others in reverse order
+    sorted_versions = sorted([v for v in versions if v != 'master'], reverse=True)
+    if 'master' in versions:
+        sorted_versions.insert(0, 'master')
 
     for version in sorted_versions:
         docs_link = f'<li><a href="./{version}/">{version}</a>'
 
         release_html = ""
-        if version == 'latest':
-            # Link to the special 'nightly' release tag
-            release_url = f"https://github.com/{repo_slug}/releases/tag/nightly"
-            release_html = f'<a href="{release_url}" class="release-link" target="_blank">Download Nightly Build</a>'
+        if version == 'master':
+            # Link to the special 'master' release tag
+            release_url = f"https://github.com/{repo_slug}/releases/tag/master"
+            release_html = f'<a href="{release_url}" class="release-link" target="_blank">Download Master Build</a>'
         else:
             # Assumes Git tags are like 'v1.2.3' for a version '1.2.3'
             release_tag = f"v{version}"

@@ -56,7 +56,7 @@ jobs:
             VERSION=$(echo $GITHUB_REF | sed 's/refs\/tags\/v//')
             echo "dir=$VERSION" >> $GITHUB_OUTPUT
           else
-            echo "dir=latest" >> $GITHUB_OUTPUT
+            echo "dir=master" >> $GITHUB_OUTPUT
           fi
       - uses: actions/checkout@v4
         with: { ref: gh-pages, path: gh-pages }
@@ -119,50 +119,45 @@ jobs:
           files: release-assets/*
 
   # ===============================================================
-  # JOB 4: Publish the rolling Nightly Release (for master) - FINAL FIX
+  # JOB 4: Publish the Master Branch Release - ZMIENIONY
   # ===============================================================
-  publish-nightly-release:
+  publish-master-release:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
     permissions:
       contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Download release assets
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with: { name: release-assets, path: release-assets }
-      - name: Remove useless stamp file
-        run: rm -f release-assets/*.stamp
-      - name: Create ZIP archive for nightly
-        id: archive
+      - run: rm -f release-assets/*.stamp
+      - id: archive
         run: |
-          ARCHIVE_NAME="libtwdll-nightly.zip"
+          ARCHIVE_NAME="libtwdll-master.zip"
           zip -r -j "${ARCHIVE_NAME}" release-assets/
           mv "${ARCHIVE_NAME}" release-assets/
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
-      - name: Create or Update Nightly Release Body
+      - name: Create or Update Master Release Body
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
           {
-            echo "This is the latest development build from the master branch. Assets are automatically updated on every push."
+            echo "This is the latest development build from the **master** branch. Assets are automatically updated on every push."
             echo ""
             echo "## Quick Download"
-            echo "**All files in one package: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
+            echo "**All files in one package: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/master/${{ steps.archive.outputs.name }})**"
             echo ""
             echo "---"
             echo "**Build triggered by commit:** \`${COMMIT_SHA::7}\` ([view commit](https://github.com/${{ github.repository }}/commit/${COMMIT_SHA}))"
             echo ""
             echo "Individual files are attached below."
           } > release_notes.md
-          gh release view nightly || gh release create nightly --title "Nightly Build (from master)" --prerelease --notes-file release_notes.md
-          gh release edit nightly --notes-file release_notes.md
-      - name: Remove luadoc directory before upload
-        run: rm -rf release-assets/luadoc
+          gh release view master || gh release create master --title "Master Branch Build" --notes-file release_notes.md --prerelease
+          gh release edit master --notes-file release_notes.md
+      - run: rm -rf release-assets/luadoc
       - name: Upload/Overwrite Release Assets (using gh CLI)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload nightly release-assets/* --clobber
+        run: gh release upload master release-assets/* --clobber
