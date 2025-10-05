@@ -59,31 +59,31 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#SetStrength">SetStrength (value)</a></td>
+	<td class="name" nowrap><a href="#SetStrength">SetStrength (unit, value)</a></td>
 	<td class="summary">Sets the current unit strength (soldier count).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetMaxStrength">SetMaxStrength (value)</a></td>
+	<td class="name" nowrap><a href="#SetMaxStrength">SetMaxStrength (unit, value)</a></td>
 	<td class="summary">Sets the maximum unit strength (soldier capacity).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (value)</a></td>
+	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (unit, value)</a></td>
 	<td class="summary">Sets the remaining movement points for the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetStrength">GetStrength ()</a></td>
+	<td class="name" nowrap><a href="#GetStrength">GetStrength (unit)</a></td>
 	<td class="summary">Gets the current unit strength (soldier count).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMaxStrength">GetMaxStrength ()</a></td>
+	<td class="name" nowrap><a href="#GetMaxStrength">GetMaxStrength (unit)</a></td>
 	<td class="summary">Gets the maximum unit strength (soldier capacity).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints ()</a></td>
+	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints (unit)</a></td>
 	<td class="summary">Gets the remaining movement points for the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (unit)</a></td>
 	<td class="summary">Returns the memory address of the real unit object as a hexadecimal string.</td>
 	</tr>
 </table>
@@ -97,7 +97,7 @@
     <dl class="function">
     <dt>
     <a name = "SetStrength"></a>
-    <strong>SetStrength (value)</strong>
+    <strong>SetStrength (unit, value)</strong>
     </dt>
     <dd>
     Sets the current unit strength (soldier count).
@@ -105,6 +105,10 @@
 
     <h3>Parameters:</h3>
     <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
          new current strength
@@ -118,7 +122,7 @@
 </dd>
     <dt>
     <a name = "SetMaxStrength"></a>
-    <strong>SetMaxStrength (value)</strong>
+    <strong>SetMaxStrength (unit, value)</strong>
     </dt>
     <dd>
     Sets the maximum unit strength (soldier capacity).
@@ -126,6 +130,10 @@
 
     <h3>Parameters:</h3>
     <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
          new maximum strength
@@ -139,7 +147,7 @@
 </dd>
     <dt>
     <a name = "SetMovementPoints"></a>
-    <strong>SetMovementPoints (value)</strong>
+    <strong>SetMovementPoints (unit, value)</strong>
     </dt>
     <dd>
     Sets the remaining movement points for the unit.
@@ -147,6 +155,10 @@
 
     <h3>Parameters:</h3>
     <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
          new movement points
@@ -160,12 +172,19 @@
 </dd>
     <dt>
     <a name = "GetStrength"></a>
-    <strong>GetStrength ()</strong>
+    <strong>GetStrength (unit)</strong>
     </dt>
     <dd>
     Gets the current unit strength (soldier count).
 
 
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
+    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -180,12 +199,19 @@
 </dd>
     <dt>
     <a name = "GetMaxStrength"></a>
-    <strong>GetMaxStrength ()</strong>
+    <strong>GetMaxStrength (unit)</strong>
     </dt>
     <dd>
     Gets the maximum unit strength (soldier capacity).
 
 
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
+    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -200,12 +226,19 @@
 </dd>
     <dt>
     <a name = "GetMovementPoints"></a>
-    <strong>GetMovementPoints ()</strong>
+    <strong>GetMovementPoints (unit)</strong>
     </dt>
     <dd>
     Gets the remaining movement points for the unit.
 
 
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
+    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -220,12 +253,19 @@
 </dd>
     <dt>
     <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
+    <strong>GetMemoryAddress (unit)</strong>
     </dt>
     <dd>
     Returns the memory address of the real unit object as a hexadecimal string.
 
 
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
+    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -245,7 +285,7 @@
 </div> <!-- id="main" -->
 <div id="about">
 <i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
-<i style="float:right;">Last updated 2025-10-05 16:06:14 </i>
+<i style="float:right;">Last updated 2025-10-05 16:17:38 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>
