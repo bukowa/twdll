@@ -4,4 +4,4 @@ extern "C" {
 #include <lauxlib.h>
 }
 
-extern const struct luaL_Reg battle_unit_functions[];
+extern const luaL_Reg battle_unit_functions[];
