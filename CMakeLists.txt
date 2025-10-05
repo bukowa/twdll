@@ -42,31 +42,49 @@ list(SORT LUA_SOURCES)
 include_directories(${LUA_SRC_DIR})
 
 # ========================
-# Lua Setup (lua)
-# ========================
-add_library(lua OBJECT ${LUA_SOURCES})
-target_compile_definitions(lua PRIVATE -DLUA_CORE)
-target_compile_definitions(lua PRIVATE -DLUA_WIN)
-
-# ========================
 # Lua Setup (luadll)
+# This is the central fix. We build Lua as a single shared library (DLL)
+# and all other components (lua.exe, luasocket, twdll, etc.) will link against it.
+# This prevents multiple static copies of the Lua runtime from being loaded into
+# memory, which was the cause of the heap corruption and crash.
 # ========================
-add_library(luadll SHARED $<TARGET_OBJECTS:lua>)
+add_library(luadll SHARED ${LUA_SOURCES})
 set_target_properties(luadll PROPERTIES OUTPUT_NAME "luadll")
+
+add_executable(lua_for_docs "${LUA_SRC_DIR}/lua.c")
+target_link_libraries(lua_for_docs PRIVATE luadll)
+
+# Set up the necessary preprocessor definitions for building and using the DLL.
+# - LUA_BUILD_AS_DLL: Is used internally by the Lua source code when building the DLL
+#   to export its functions (__declspec(dllexport)). It's PRIVATE to this target.
+# - LUA_LIB: Is used by any code that CONSUMES the DLL to import its functions
+#   (__declspec(dllimport)). It's PUBLIC so any target linking to luadll inherits it.
+target_compile_definitions(luadll
+        PRIVATE
+        LUA_BUILD_AS_DLL
+        LUA_CORE
+        LUA_WIN
+        PUBLIC
+        LUA_LIB
+)
 
 # ========================
 # Lua Setup (lua.exe)
 # ========================
-add_executable(lua.exe "${LUA_SRC_DIR}/lua.c")
-target_link_libraries(lua.exe PRIVATE $<TARGET_OBJECTS:lua>)
+# Budujemy lua.exe jako samodzielny program, dołączając do niego wszystkie
+# potrzebne pliki źródłowe Lua. Dzięki temu ma dostęp do funkcji wewnętrznych.
+add_executable(lua.exe "${LUA_SRC_DIR}/lua.c" ${LUA_SOURCES})
+target_compile_definitions(lua.exe PRIVATE LUA_CORE LUA_WIN)
 set_target_properties(lua.exe PROPERTIES OUTPUT_NAME "lua")
 
 # ========================
 # Lua Setup (luac.exe)
 # ========================
-add_executable(luac.exe "${LUA_SRC_DIR}/luac.c")
-target_link_libraries(luac.exe PRIVATE $<TARGET_OBJECTS:lua>)
+# Robimy to samo dla luac.exe. To rozwiązuje błędy linkera LNK2019.
+add_executable(luac.exe "${LUA_SRC_DIR}/luac.c" ${LUA_SOURCES})
+target_compile_definitions(luac.exe PRIVATE LUA_CORE LUA_WIN)
 set_target_properties(luac.exe PROPERTIES OUTPUT_NAME "luac")
+
 # ========================
 # Lib Setup (libtwdll.dll)
 # ========================
@@ -82,6 +100,8 @@ add_library(twdll SHARED
         src/character_script_interface.h
         src/log.h
         src/unit_script_interface.h
+        src/script_utils.cpp
+        src/script_utils.h
         src/battle_unit_script_interface.h
 )
 
@@ -95,7 +115,7 @@ target_include_directories(twdll
 )
 
 target_link_libraries(twdll PRIVATE
-        lua # Link to the CMake target
+        luadll # Link against the shared library
         ${MINHOOK_LIBRARY}
 )
 
@@ -110,7 +130,7 @@ set(LUASOCKET_SOURCES
 list(TRANSFORM LUASOCKET_SOURCES PREPEND "${LUASOCKET_SRC_DIR}/")
 
 add_library(luasocket SHARED ${LUASOCKET_SOURCES})
-target_link_libraries(luasocket PRIVATE $<TARGET_OBJECTS:lua>)
+target_link_libraries(luasocket PRIVATE luadll) # Link against the shared library
 target_link_libraries(luasocket PRIVATE ws2_32.lib)
 set_target_properties(luasocket PROPERTIES OUTPUT_NAME "socket")
 
@@ -144,7 +164,7 @@ file(MAKE_DIRECTORY ${RELEASE_DIR})
 
 set(RELEASE_LUA_EXE "${RELEASE_DIR}/lua.exe")
 set(RELEASE_LUAC_EXE "${RELEASE_DIR}/luac.exe")
-set(RELEASE_LUA_DLL "${RELEASE_DIR}/lua.dll")
+set(RELEASE_LUA_DLL "${RELEASE_DIR}/luadll.dll") # Corrected name from lua.dll
 set(RELEASE_LUASOCKET_DLL "${RELEASE_DIR}/socket.dll")
 set(RELEASE_LUASOCKET_LUA_SOCKET "${RELEASE_DIR}/socket.lua")
 set(DOCS_RELEASE_DIR "${RELEASE_DIR}/luadoc")
@@ -310,7 +330,9 @@ endif ()
 # Compiler Settings
 # ========================
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-target_compile_options(lua PRIVATE "/wd4005")
+# This flag is specific to the 'lua' target, but since we removed it,
+# we apply it to 'luadll' which contains the same sources.
+target_compile_options(luadll PRIVATE "/wd4005")
 
 if (MSVC)
     set(CMAKE_C_FLAGS_RELEASE "/O2 /Z7 /DNDEBUG /W4")
@@ -321,21 +343,6 @@ endif()
 # LuaFileSystem Setup (lfs.dll)
 # ========================
 add_subdirectory(include/luafilesystem)
-
-# Tworzymy nowy, własny target, którego zadaniem jest skopiowanie lfs.dll.
-# Słowo kluczowe 'ALL' sprawia, że ten target będzie częścią domyślnego builda.
-add_custom_target(copy_lfs_for_docs ALL
-        # Komenda do wykonania: kopiowanie pliku
-        COMMAND ${CMAKE_COMMAND} -E copy
-        $<TARGET_FILE:lfs>
-        ${CMAKE_SOURCE_DIR}/tools/bin/lfs.dll
-
-        # KLUCZOWY MOMENT: Ten target zależy od 'lfs'. CMake zapewni, że 'lfs'
-        # zostanie zbudowany ZANIM ta komenda kopiowania się uruchomi.
-        DEPENDS lfs
-
-        COMMENT "Kopiowanie lfs.dll do tools/bin..."
-)
 
 # ===========================================
 # Documentation Generation (ldoc)
@@ -351,27 +358,43 @@ file(GLOB_RECURSE DOC_SOURCES
 # Define the path to the main file that LDoc creates. This is the real output.
 set(DOCS_MAIN_OUTPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/luadoc/index.html")
 
-# Construct the paths for LUA_PATH and LUA_CPATH.
+# Construct the paths for LUA_PATH. This remains the same.
 set(LUA_MODULE_PATH
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/ldoc/?.lua;"
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/penlight/lua/?.lua;"
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/penlight/lua/?/init.lua"
 )
-set(LUA_CMODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin/?.dll")
 
-# This command's OUTPUT is the actual file it creates, which fixes the error.
+# --- REWORKED PART ---
+# Construct a dynamic LUA_CPATH using Generator Expressions.
+# This tells Lua to look for DLLs in the actual directories where CMake builds them.
+set(LUA_CMODULE_PATH
+        "$<TARGET_FILE_DIR:lfs>/?.dll;"
+        "$<TARGET_FILE_DIR:luasocket>/?.dll"
+)
+# --- END REWORKED PART ---
+# The custom command for generating docs.
+# The custom command for generating docs.
 add_custom_command(
         OUTPUT ${DOCS_MAIN_OUTPUT_FILE}
 
+        # --- OSTATECZNA POPRAWKA ---
+        # Ustawiamy zmienną środowiskową PATH na czas działania komendy,
+        # aby system operacyjny mógł znaleźć wszystkie potrzebne pliki DLL
+        # (luadll.dll, lfs.dll, socket.dll) w momencie uruchamiania lua_for_docs.exe.
+        # Bez tego program wywala się po cichu, nie generując żadnych plików.
         COMMAND ${CMAKE_COMMAND} -E env
+        "PATH=$<TARGET_FILE_DIR:luadll>;$<TARGET_FILE_DIR:lfs>;$ENV{PATH}"
         "LUA_PATH=${LUA_MODULE_PATH}"
         "LUA_CPATH=${LUA_CMODULE_PATH}"
-        $<TARGET_FILE:lua.exe>
+        $<TARGET_FILE:lua_for_docs>
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/ldoc/ldoc.lua" .
 
+        # Zależności pozostają te same, zapewniając, że DLLki są zbudowane przed uruchomieniem.
         DEPENDS
-        lua.exe
-        copy_lfs_for_docs
+        lua_for_docs
+        lfs
+        luasocket
         ${DOC_SOURCES}
 
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -379,7 +402,7 @@ add_custom_command(
         VERBATIM
 )
 
-# The 'docs' target now depends on the real output file.
+# The 'docs' target remains the same.
 add_custom_target(docs
         DEPENDS ${DOCS_MAIN_OUTPUT_FILE}
 )

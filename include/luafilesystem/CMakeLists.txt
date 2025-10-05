@@ -1,21 +1,14 @@
-# --- CMakeLists.txt dla luafilesystem (wersja dla Twojego projektu) ---
+# Pobiera ścieżkę do C/C++ nagłówków Lua z głównego projektu
+include_directories(${LUA_SRC_DIR})
 
-cmake_minimum_required(VERSION 3.10)
-project(LuaFileSystem C)
+# Tworzy bibliotekę 'lfs' (LuaFileSystem) jako bibliotekę współdzieloną (DLL)
+add_library(lfs SHARED src/lfs.c)
 
-# Znajduje pliki źródłowe .c w folderze src
-file(GLOB LFS_SOURCES "src/*.c")
+# --- TUTAJ JEST NAPRAWA ---
+# Zamiast linkować do nieistniejącej biblioteki obiektów 'lua',
+# linkujemy do nowej biblioteki współdzielonej 'luadll', którą zdefiniowaliśmy wcześniej.
+# To gwarantuje, że lfs.dll będzie używać tej samej, jednej instancji Lua.
+target_link_libraries(lfs PRIVATE luadll)
 
-# Tworzy bibliotekę .dll (SHARED)
-add_library(lfs SHARED ${LFS_SOURCES})
-
-# Definicja preprocesora wymagana do poprawnego budowania lfs.dll w Windows
-target_compile_definitions(lfs PRIVATE LFS_LIB)
-
-# --- NAJWAŻNIEJSZE ZMIANY ---
-
-# 1. Dodajemy ścieżkę do nagłówków Lua, korzystając z Twojego targetu `lua`
-#    CMake automatycznie przekaże include directories z targetu `lua`.
-# 2. Linkujemy z obiektami Lua, które już skompilowałeś w głównym projekcie.
-#    To jest dokładnie ten sam mechanizm, którego używasz dla `luasocket`.
-target_link_libraries(lfs PRIVATE $<TARGET_OBJECTS:lua>)
+# Definiuje makro preprocesora potrzebne dla zgodności z Twoją wersją Lua.
+target_compile_definitions(lfs PRIVATE -DLUA_COMPAT_ALL)
