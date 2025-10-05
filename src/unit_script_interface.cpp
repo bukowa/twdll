@@ -1,3 +1,5 @@
+/// @module twdll_unit
+/// Functions for interacting with campaign units.
 #include "log.h"
 #include <cstdio> // For sprintf_s
 
@@ -72,32 +74,65 @@ static int read_int_property(lua_State *L, size_t property_offset) {
     return 1;
 }
 
+/***
+Sets the current unit strength (soldier count).
+@function SetStrength
+@tparam integer value new current strength
+*/
 static int script_SetStrength(lua_State *L) {
     return write_int_property(L, UNIT_CURRENT_STRENGTH_OFFSET);
 }
 
+/***
+Sets the maximum unit strength (soldier capacity).
+@function SetMaxStrength
+@tparam integer value new maximum strength
+*/
 static int script_SetMaxStrength(lua_State *L) {
     return write_int_property(L, UNIT_MAX_STRENGTH_OFFSET);
 }
 
+/***
+Sets the remaining movement points for the unit.
+@function SetMovementPoints
+@tparam integer value new movement points
+*/
 static int script_SetMovementPoints(lua_State *L) {
     return write_int_property(L, UNIT_MOVEMENT_POINTS_OFFSET);
 }
 
+/***
+Gets the current unit strength (soldier count).
+@function GetStrength
+@treturn integer current strength
+*/
 static int script_GetStrength(lua_State *L) {
     return read_int_property(L, UNIT_CURRENT_STRENGTH_OFFSET);
 }
 
+/***
+Gets the maximum unit strength (soldier capacity).
+@function GetMaxStrength
+@treturn integer maximum strength
+*/
 static int script_GetMaxStrength(lua_State *L) {
     return read_int_property(L, UNIT_MAX_STRENGTH_OFFSET);
 }
 
+/***
+Gets the remaining movement points for the unit.
+@function GetMovementPoints
+@treturn integer movement points
+*/
 static int script_GetMovementPoints(lua_State *L) {
     return read_int_property(L, UNIT_MOVEMENT_POINTS_OFFSET);
 }
 
-// Returns the memory address of the "real" unit object as a hexadecimal string.
-// Lua usage: local address_str = unit.GetMemoryAddress(unit_object) -- e.g., "0x00AABBCC"
+/**
+ * Returns the memory address of the real unit object as a hexadecimal string.
+ * @function GetMemoryAddress
+ * @treturn string memory address (e.g. "0x12345678")
+ */
 static int script_GetMemoryAddress(lua_State* L) {
     // Step 1: Get the pointer to the unit object.
     void* unit = get_unit_from_indirect_wrapper(L);

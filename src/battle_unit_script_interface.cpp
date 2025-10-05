@@ -1,3 +1,5 @@
+/// @module twdll_battle_unit
+/// Functions for interacting with battle units.
 #include "battle_unit_script_interface.h"
 #include "log.h"
 #include <cstdio>
@@ -85,6 +87,11 @@ static int read_int_property(lua_State* L, size_t property_offset) {
     return 1;
 }
 
+/**
+ * Returns the memory address of the real battle unit object.
+ * @function GetMemoryAddress
+ * @treturn string memory address (e.g. "0x12345678")
+ */
 static int script_GetBattleMemoryAddress(lua_State* L) {
     void* battle_unit = get_battle_unit_from_indirect_wrapper(L);
     if (!battle_unit) {
@@ -99,23 +106,48 @@ static int script_GetBattleMemoryAddress(lua_State* L) {
 
 // --- Lua API Bridge Functions for Unit Stats ---
 
+/***
+Gets the unit's charge bonus from the nested stats object.
+@function GetChargeBonus
+@treturn integer charge bonus
+*/
 static int script_stats_GetChargeBonus(lua_State* L) {
     return read_nested_int_property(L, UNIT_STATS_POINTER_OFFSET, STATS_CHARGE_BONUS_OFFSET);
 }
 
+/***
+Gets the unit's melee attack from the nested stats object.
+@function GetMeleeAttack
+@treturn integer melee attack
+*/
 static int script_stats_GetMeleeAttack(lua_State* L) {
     return read_nested_int_property(L, UNIT_STATS_POINTER_OFFSET, STATS_MELEE_ATTACK_OFFSET);
 }
 
+/***
+Gets the unit's base morale from the nested stats object.
+@function GetBaseMorale
+@treturn integer base morale
+*/
 static int script_stats_GetBaseMorale(lua_State* L) {
     return read_nested_int_property(L, UNIT_STATS_POINTER_OFFSET, STATS_BASE_MORALE_OFFSET);
 }
 
+/***
+Reads an example float stat from the nested stats object at offset 0x110.
+@function GetSomeFloatValue
+@treturn number value
+*/
 // Przykład dla float-a z twojego obrazka (offset 0x110)
 static int script_stats_GetSomeFloatValue(lua_State* L) {
     return read_nested_float_property(L, UNIT_STATS_POINTER_OFFSET, STATS_FLOAT_EXAMPLE_OFFSET);
 }
 
+/***
+Gets the unit's fatigue level.
+@function GetFatigue
+@treturn integer fatigue
+*/
 static int script_unit_GetFatigue(lua_State* L) {
     return read_int_property(L, UNIT_FATIGUE_OFFSET);
 }
@@ -123,15 +155,11 @@ static int script_unit_GetFatigue(lua_State* L) {
 // Tablica z funkcjami, BEZ "static", aby była widoczna na zewnątrz.
 const struct luaL_Reg battle_unit_functions[] = {
     {"GetMemoryAddress",  script_GetBattleMemoryAddress},
-    {"GetFatigue",       script_unit_GetFatigue},
-    {NULL, NULL}
-};
-
-// Funkcje operujące na zagnieżdżonym obiekcie Unit Stats
-static const struct luaL_Reg battle_unit_stats_functions[] = {
-    {"GetChargeBonus",     script_stats_GetChargeBonus},
-    {"GetMeleeAttack",     script_stats_GetMeleeAttack},
-    {"GetBaseMorale",      script_stats_GetBaseMorale},
-    {"GetSomeFloatValue",  script_stats_GetSomeFloatValue},
+    {"GetFatigue",        script_unit_GetFatigue},
+    // Merged stats functions
+    {"GetChargeBonus",    script_stats_GetChargeBonus},
+    {"GetMeleeAttack",    script_stats_GetMeleeAttack},
+    {"GetBaseMorale",     script_stats_GetBaseMorale},
+    {"GetSomeFloatValue", script_stats_GetSomeFloatValue},
     {NULL, NULL}
 };

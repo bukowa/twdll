@@ -25,7 +25,6 @@ extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
     luaL_register(L, "twdll_unit", unit_functions);
     luaL_register(L, "twdll_character", character_functions);
     luaL_register(L, "twdll_battle_unit", battle_unit_functions);
-    luaL_register(L, "twdll_battle_unit_stats", battle_unit_stats_functions);
 
     if (hooks_are_initialized) {
         Log("--- libtwdll already initialized.---");
