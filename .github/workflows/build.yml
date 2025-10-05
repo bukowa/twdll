@@ -11,6 +11,9 @@ on:
 env:
   BUILD_TYPE: Release
 
+permissions:
+  contents: read
+
 jobs:
   # ===============================================================
   # JOB 1: Build the project on Windows
@@ -61,49 +64,73 @@ jobs:
           path: ${{github.workspace}}/luadoc # LDoc generates docs in the source tree
 
   # ===============================================================
-  # JOB 2: Deploy documentation to GitHub Pages
-  # This job only runs on pushes to master or tags, not on PRs.
+  # JOB 2: Deploy documentation to GitHub Pages (FINAL VERSION)
   # ===============================================================
   deploy-docs:
     needs: build
     runs-on: ubuntu-latest
-    # Condition: Only run on a push event (not a pull_request)
     if: github.event_name == 'push'
     permissions:
-      contents: write # Required to push to the gh-pages branch
+      contents: write
 
     steps:
+      - name: Checkout main branch for scripts/templates
+        uses: actions/checkout@v4
+        with:
+          path: main
+
       - name: Download documentation artifact
         uses: actions/download-artifact@v4
         with:
           name: docs-html
-          path: docs-html
+          path: new-docs
 
-      - name: Determine Documentation Directory
+      - name: Determine Documentation Directory Name
         id: docs_dir
         run: |
           if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            # For a tag like 'v1.2.3', use directory '1.2.3'
             VERSION=$(echo $GITHUB_REF | sed 's/refs\/tags\/v//')
             echo "dir=$VERSION" >> $GITHUB_OUTPUT
           else
-            # For master branch, use directory 'latest'
             echo "dir=latest" >> $GITHUB_OUTPUT
           fi
+
+      - name: Checkout gh-pages branch to get existing versions
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Generate dynamic index.html
+        run: |
+          python main/.github/scripts/generate_doc_index.py \
+            main/.github/docs_template/index.template.html \
+            gh-pages/index.html \
+            gh-pages \
+            ${{ steps.docs_dir.outputs.dir }}
+
+      - name: Prepare deployment directory
+        run: |
+          # The index.html is already in gh-pages/.
+          # Now, copy the new documentation into its versioned subdirectory.
+          # This will create the directory if it's a new version, or overwrite the old 'latest'.
+          mkdir -p gh-pages/${{ steps.docs_dir.outputs.dir }}
+          cp -r new-docs/* gh-pages/${{ steps.docs_dir.outputs.dir }}/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs-html
-          # Deploy to a subdirectory based on the previous step's output
-          destination_dir: ${{ steps.docs_dir.outputs.dir }}
-          # The user deploying the docs
+          publish_dir: ./gh-pages
+          # Important: Keep existing files (old doc versions)
+          keep_files: true
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
-          # Optional: Create a CNAME file if you have a custom domain
-          # cname: docs.example.com
-
   # ===============================================================
   # JOB 3: Create a GitHub Release
   # This job only runs when a tag is pushed.
