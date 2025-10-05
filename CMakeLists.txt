@@ -147,7 +147,8 @@ set(RELEASE_LUAC_EXE "${RELEASE_DIR}/luac.exe")
 set(RELEASE_LUA_DLL "${RELEASE_DIR}/lua.dll")
 set(RELEASE_LUASOCKET_DLL "${RELEASE_DIR}/socket.dll")
 set(RELEASE_LUASOCKET_LUA_SOCKET "${RELEASE_DIR}/socket.lua")
-
+set(DOCS_RELEASE_DIR "${RELEASE_DIR}/luadoc")
+set(RELEASE_DOCS_STAMP "${RELEASE_DIR}/luadoc.stamp")
 set(RELEASE_DLL "${RELEASE_DIR}/libtwdll.dll")
 set(RELEASE_PACK "${RELEASE_DIR}/libtwdll.pack")
 
@@ -156,7 +157,7 @@ set(RELEASE_PACK "${RELEASE_DIR}/libtwdll.pack")
 ## ======================================
 add_custom_target(
         build_release ALL
-        DEPENDS ${RELEASE_PACK} ${RELEASE_DLL} ${RELEASE_LUA_EXE} ${RELEASE_LUAC_EXE} ${RELEASE_LUA_DLL} ${RELEASE_LUASOCKET_DLL} ${RELEASE_LUASOCKET_LUA_SOCKET}
+        DEPENDS ${RELEASE_PACK} ${RELEASE_DLL} ${RELEASE_LUA_EXE} ${RELEASE_LUAC_EXE} ${RELEASE_LUA_DLL} ${RELEASE_LUASOCKET_DLL} ${RELEASE_LUASOCKET_LUA_SOCKET} ${RELEASE_DOCS_STAMP}
 )
 
 add_custom_command(
@@ -204,6 +205,26 @@ add_custom_command(
         OUTPUT ${RELEASE_LUASOCKET_LUA_SOCKET}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${LUASOCKET_SRC_DIR}/socket.lua ${RELEASE_LUASOCKET_LUA_SOCKET}
         COMMENT "Copying socket.lua to release directory"
+)
+
+add_custom_command(
+        OUTPUT ${RELEASE_DOCS_STAMP}
+
+        # The command to copy the directory.
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/luadoc" # Source
+        ${DOCS_RELEASE_DIR} # Destination
+
+        # After copying, create the stamp file in the release dir.
+        COMMAND ${CMAKE_COMMAND} -E touch ${RELEASE_DOCS_STAMP}
+
+        # CRUCIAL: This copy command depends on the 'docs' target.
+        # This ensures 'docs' runs first and generates the luadoc directory
+        # before this command tries to copy it.
+        DEPENDS docs
+
+        COMMENT "Copying documentation to release directory"
+        VERBATIM
 )
 
 # ===========================================
@@ -314,4 +335,51 @@ add_custom_target(copy_lfs_for_docs ALL
         DEPENDS lfs
 
         COMMENT "Kopiowanie lfs.dll do tools/bin..."
+)
+
+# ===========================================
+# Documentation Generation (ldoc)
+# ===========================================
+
+# Gather the source files that LDoc will scan.
+file(GLOB_RECURSE DOC_SOURCES
+        CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
+)
+
+# Define the path to the main file that LDoc creates. This is the real output.
+set(DOCS_MAIN_OUTPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/luadoc/index.html")
+
+# Construct the paths for LUA_PATH and LUA_CPATH.
+set(LUA_MODULE_PATH
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/ldoc/?.lua;"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/penlight/lua/?.lua;"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/penlight/lua/?/init.lua"
+)
+set(LUA_CMODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tools/bin/?.dll")
+
+# This command's OUTPUT is the actual file it creates, which fixes the error.
+add_custom_command(
+        OUTPUT ${DOCS_MAIN_OUTPUT_FILE}
+
+        COMMAND ${CMAKE_COMMAND} -E env
+        "LUA_PATH=${LUA_MODULE_PATH}"
+        "LUA_CPATH=${LUA_CMODULE_PATH}"
+        $<TARGET_FILE:lua.exe>
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/ldoc/ldoc.lua" .
+
+        DEPENDS
+        lua.exe
+        copy_lfs_for_docs
+        ${DOC_SOURCES}
+
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Generating Lua documentation with LDoc..."
+        VERBATIM
+)
+
+# The 'docs' target now depends on the real output file.
+add_custom_target(docs
+        DEPENDS ${DOCS_MAIN_OUTPUT_FILE}
 )
