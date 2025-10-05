@@ -12,14 +12,19 @@ def generate_version_list(versions, repo_slug):
 
     for version in sorted_versions:
         docs_link = f'<li><a href="./{version}/">{version}</a>'
-        release_link = ""
-        if version != 'latest':
-            # Assumes tags are like 'v1.2.3'
+
+        release_html = ""
+        if version == 'latest':
+            # Link to the special 'nightly' release tag
+            release_url = f"https://github.com/{repo_slug}/releases/tag/nightly"
+            release_html = f'<a href="{release_url}" class="release-link" target="_blank">Download Nightly Build</a>'
+        else:
+            # Assumes Git tags are like 'v1.2.3' for a version '1.2.3'
             release_tag = f"v{version}"
             release_url = f"https://github.com/{repo_slug}/releases/tag/{release_tag}"
-            release_link = f'<a href="{release_url}" class="release-link" target="_blank">View GitHub Release</a>'
+            release_html = f'<a href="{release_url}" class="release-link" target="_blank">Download Release</a>'
 
-        html += f'{docs_link}{release_link}</li>\n'
+        html += f'{docs_link}{release_html}</li>\n'
     return html
 
 def main():
@@ -28,6 +33,10 @@ def main():
     versions_dir = Path(sys.argv[3])
     new_version = sys.argv[4]
     repo_slug = os.getenv("GITHUB_REPOSITORY")
+
+    if not repo_slug:
+        print("Error: GITHUB_REPOSITORY environment variable not set.")
+        sys.exit(1)
 
     # Find existing versions by listing directories
     existing_versions = set()
