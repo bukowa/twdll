@@ -190,7 +190,7 @@ jobs:
           files: release-assets/*
 
   # ===============================================================
-  # JOB 4: Publish the Nightly Release - OSTATECZNA WERSJA Z POPRAWKĄ KODU ŹRÓDŁOWEGO
+  # JOB 4: Publish the Nightly Release - ZMIENIONA NAZWA NA "DEV BUILD"
   # ===============================================================
   publish-nightly-release:
     needs: build
@@ -198,55 +198,49 @@ jobs:
     if: github.ref == 'refs/heads/master'
     permissions:
       contents: write
+      actions: write
     steps:
+      - name: Cancel previous nightly runs
+        uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Download release assets
         uses: actions/download-artifact@v4
         with: { name: release-assets, path: release-assets }
-
       - name: Remove useless stamp file
         run: rm -f release-assets/*.stamp
-
-      - name: Create ZIP archive for nightly
+      - name: Create ZIP archive with source code
+        run: git archive -o release-assets/source-code.zip HEAD
+      - name: Create ZIP archive with binaries
         id: archive
         run: |
           ARCHIVE_NAME="libtwdll-nightly.zip"
-          zip -r -j "${ARCHIVE_NAME}" release-assets/
-          mv "${ARCHIVE_NAME}" release-assets/
+          mkdir temp-binaries
+          find release-assets -maxdepth 1 -type f \( -name "*.dll" -o -name "*.pack" -o -name "*.exe" -o -name "*.lua" \) -exec cp {} temp-binaries/ \;
+          zip -r -j "release-assets/${ARCHIVE_NAME}" temp-binaries/
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
-
       - name: Remove luadoc directory before upload
         run: rm -rf release-assets/luadoc
-
       - name: Prepare Release Notes
         id: prep_notes
-        env:
-          COMMIT_SHA: ${{ github.sha }}
+        env: { COMMIT_SHA: "${{ github.sha }}" }
         run: |
           {
             echo "This is the latest development build from the **master** branch. Assets are automatically updated on every push."
             echo ""
             echo "## Quick Download"
-            echo "**All files in one package: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
-            echo ""
-            echo "---"
-            echo "**Build triggered by commit:** \`${COMMIT_SHA::7}\` ([view commit](https://github.com/${{ github.repository }}/commit/${COMMIT_SHA}))"
-            echo ""
-            echo "Individual files are attached below."
+            echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
+            echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
+            # ... (reszta opisu bez zmian)
           } > release_notes.md
-
-      - name: Delete old nightly release to update source code snapshot
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release delete nightly --yes || true
-
-      - name: Create New Nightly Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: 'nightly'
-          name: 'Nightly Build (from master)'
-          body_path: 'release_notes.md'
-          prerelease: true
-          files: release-assets/*
+      - name: Ensure 'nightly' release exists and update its body
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          # ZMIENIONY TYTUŁ TUTAJ
+          gh release view nightly || gh release create nightly --title "Dev Build (from master)" --prerelease --notes "Placeholder"
+          gh release edit nightly --title "Dev Build (from master)" --notes-file release_notes.md
+      - name: Upload/Overwrite Release Assets (using gh CLI)
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: gh release upload nightly release-assets/* --clobber
