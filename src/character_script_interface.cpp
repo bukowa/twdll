@@ -64,6 +64,9 @@ static int read_int_property(lua_State* L, size_t property_offset) {
 /***
 Writes a 32-bit integer at the given memory offset.
 @function SetIntAtOffset
+@tparam userdata character the character object (first argument)
+@tparam integer offset
+@tparam integer value
 */
 static int script_SetIntAtOffset(lua_State* L) {
     void* character = get_character_from_indirect_wrapper(L);
@@ -77,6 +80,7 @@ static int script_SetIntAtOffset(lua_State* L) {
 /**
  * Reads a 32-bit integer at the given memory offset.
  * @function GetIntAtOffset
+ * @tparam userdata character the character object (first argument)
  * @tparam integer offset
  * @treturn integer value
  */
@@ -92,6 +96,7 @@ static int script_GetIntAtOffset(lua_State* L) {
 /**
  * Returns the memory address of the real character object.
  * @function GetMemoryAddress
+ * @tparam userdata character the character object (first argument)
  * @treturn string memory address (e.g. "0x12345678")
  */
 static int script_GetMemoryAddress(lua_State* L) {

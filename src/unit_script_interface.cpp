@@ -77,6 +77,7 @@ static int read_int_property(lua_State *L, size_t property_offset) {
 /***
 Sets the current unit strength (soldier count).
 @function SetStrength
+@tparam userdata unit the unit object (first argument)
 @tparam integer value new current strength
 */
 static int script_SetStrength(lua_State *L) {
@@ -86,6 +87,7 @@ static int script_SetStrength(lua_State *L) {
 /***
 Sets the maximum unit strength (soldier capacity).
 @function SetMaxStrength
+@tparam userdata unit the unit object (first argument)
 @tparam integer value new maximum strength
 */
 static int script_SetMaxStrength(lua_State *L) {
@@ -95,6 +97,7 @@ static int script_SetMaxStrength(lua_State *L) {
 /***
 Sets the remaining movement points for the unit.
 @function SetMovementPoints
+@tparam userdata unit the unit object (first argument)
 @tparam integer value new movement points
 */
 static int script_SetMovementPoints(lua_State *L) {
@@ -104,6 +107,7 @@ static int script_SetMovementPoints(lua_State *L) {
 /***
 Gets the current unit strength (soldier count).
 @function GetStrength
+@tparam userdata unit the unit object (first argument)
 @treturn integer current strength
 */
 static int script_GetStrength(lua_State *L) {
@@ -113,6 +117,7 @@ static int script_GetStrength(lua_State *L) {
 /***
 Gets the maximum unit strength (soldier capacity).
 @function GetMaxStrength
+@tparam userdata unit the unit object (first argument)
 @treturn integer maximum strength
 */
 static int script_GetMaxStrength(lua_State *L) {
@@ -122,6 +127,7 @@ static int script_GetMaxStrength(lua_State *L) {
 /***
 Gets the remaining movement points for the unit.
 @function GetMovementPoints
+@tparam userdata unit the unit object (first argument)
 @treturn integer movement points
 */
 static int script_GetMovementPoints(lua_State *L) {
@@ -131,6 +137,7 @@ static int script_GetMovementPoints(lua_State *L) {
 /**
  * Returns the memory address of the real unit object as a hexadecimal string.
  * @function GetMemoryAddress
+ * @tparam userdata unit the unit object (first argument)
  * @treturn string memory address (e.g. "0x12345678")
  */
 static int script_GetMemoryAddress(lua_State* L) {
