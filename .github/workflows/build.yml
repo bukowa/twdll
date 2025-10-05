@@ -122,7 +122,7 @@ jobs:
           user_email: 'github-actions[bot]@users.noreply.github.com'
 
   # ===============================================================
-  # JOB 3: Create an official GitHub Release (for tags) - WERSJA ODPORNA NA BŁĘDY
+  # JOB 3: Create an official GitHub Release (for tags) - OSTATECZNA POPRAWKA AWK
   # ===============================================================
   create-official-release:
     needs: build
@@ -157,22 +157,16 @@ jobs:
         id: changelog
         run: |
           VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          
-          # ===============================================================
-          # KLUCZOWA POPRAWKA JEST TUTAJ
-          # Konwertujemy znaki końca linii z Windows (CRLF) na Unix (LF)
-          # To sprawia, że 'awk' zawsze zadziała poprawnie.
-          # ===============================================================
           sed -i 's/\r$//' CHANGELOG.md
           
-          # Ten krok pozostaje bez zmian, ale teraz zadziała
-          CHANGELOG_BODY=$(awk -v ver="$VERSION" '/^## \['ver'\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
+          # ===============================================================
+          # KLUCZOWA POPRAWKA JEST TUTAJ:
+          # Poprawiamy sposób przekazywania zmiennej do 'awk'
+          # ===============================================================
+          CHANGELOG_BODY=$(awk '/^## \['"$VERSION"'\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
           
           if [ -z "$CHANGELOG_BODY" ]; then
-            echo "::error::Po sanityzacji nadal nie znaleziono wpisu dla wersji '$VERSION' w pliku CHANGELOG.md! Sprawdź format nagłówka '## [$VERSION]'."
-            # Dodatkowy krok diagnostyczny, aby zobaczyć, co widzi maszyna
-            echo "::debug::Zawartość pliku CHANGELOG.md po konwersji:"
-            cat CHANGELOG.md
+            echo "::error::Nie znaleziono wpisu dla wersji '$VERSION' w pliku CHANGELOG.md! Sprawdź format nagłówka '## [$VERSION]'."
             exit 1
           fi
           
