@@ -1,0 +1,252 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
+  <li><a href="../modules/twdll_character.html">twdll_character</a></li>
+  <li><a href="../modules/libtwdll.html">libtwdll</a></li>
+  <li><strong>twdll_unit</strong></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>twdll_unit</code></h1>
+<p>
+
+</p>
+<p> Functions for interacting with campaign units.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#SetStrength">SetStrength (value)</a></td>
+	<td class="summary">Sets the current unit strength (soldier count).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxStrength">SetMaxStrength (value)</a></td>
+	<td class="summary">Sets the maximum unit strength (soldier capacity).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (value)</a></td>
+	<td class="summary">Sets the remaining movement points for the unit.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetStrength">GetStrength ()</a></td>
+	<td class="summary">Gets the current unit strength (soldier count).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxStrength">GetMaxStrength ()</a></td>
+	<td class="summary">Gets the maximum unit strength (soldier capacity).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints ()</a></td>
+	<td class="summary">Gets the remaining movement points for the unit.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Returns the memory address of the real unit object as a hexadecimal string.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "SetStrength"></a>
+    <strong>SetStrength (value)</strong>
+    </dt>
+    <dd>
+    Sets the current unit strength (soldier count).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new current strength
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMaxStrength"></a>
+    <strong>SetMaxStrength (value)</strong>
+    </dt>
+    <dd>
+    Sets the maximum unit strength (soldier capacity).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum strength
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMovementPoints"></a>
+    <strong>SetMovementPoints (value)</strong>
+    </dt>
+    <dd>
+    Sets the remaining movement points for the unit.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new movement points
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetStrength"></a>
+    <strong>GetStrength ()</strong>
+    </dt>
+    <dd>
+    Gets the current unit strength (soldier count).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        current strength
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMaxStrength"></a>
+    <strong>GetMaxStrength ()</strong>
+    </dt>
+    <dd>
+    Gets the maximum unit strength (soldier capacity).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum strength
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMovementPoints"></a>
+    <strong>GetMovementPoints ()</strong>
+    </dt>
+    <dd>
+    Gets the remaining movement points for the unit.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        movement points
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the real unit object as a hexadecimal string.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+<i style="float:right;">Last updated 2025-10-05 16:07:51 </i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>
