@@ -1,83 +1,47 @@
-import os
-import sys
-import re
-from pathlib import Path
-from packaging.version import parse as parse_version
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>libtwdll Documentation</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        header { border-bottom: 1px solid #ddd; padding-bottom: 20px; margin-bottom: 30px; }
+        h1 { color: #111; }
+        h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        ul { list-style-type: none; padding-left: 0; }
+        li { background-color: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 5px; }
+        a { text-decoration: none; color: #0366d6; }
+        a:hover { text-decoration: underline; }
 
-def get_changelog_for_version(version, changelog_text):
-"""Parses CHANGELOG.md and extracts changes for a specific version."""
-pattern = re.compile(f"## \\[{version}\\](.*?)(?=\\n## \\[|$)", re.DOTALL)
-match = pattern.search(changelog_text)
-if not match: return "<p>No changelog entry found.</p>"
-content = match.group(1).strip()
-html_content = "<ul>\n"
-    for line in content.splitlines():
-    line = line.strip()
-    if line.startswith(('-', '*')): html_content += f"  <li>{line[1:].strip()}</li>\n"
-    elif line.startswith(('###', '##')): html_content += f"</ul><h4>{line.lstrip('#').strip()}</h4><ul>\n"
-    html_content += "</ul>"
-return html_content
+        /* Style dla nagłówka w każdym elemencie listy */
+        .version-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .version-link { font-weight: bold; }
+        .release-link { font-size: 0.9em; font-weight: normal; background-color: #eef; padding: 5px 10px; border-radius: 5px; }
 
-def generate_version_list(versions, repo_slug, changelog_text, repo_path):
-"""Generates HTML list items with new sorting and naming."""
-html = ""
+        /* Style dla rozwijanego changeloga */
+        .changelog-details { margin-top: 15px; font-size: 0.9em; background-color: #fff; border-top: 1px solid #eee; padding-top: 15px; }
+        .changelog-details summary { cursor: pointer; font-weight: bold; color: #555; }
+        .changelog-details ul { margin-left: 20px; padding-top: 5px; list-style-type: disc; }
+        .changelog-details h4 { margin-top: 10px; margin-bottom: 5px; color: #333; }
 
-# NOWA LOGIKA SORTOWANIA:
-# 1. Oddziel 'nightly' od reszty.
-tagged_versions = [v for v in versions if v != 'nightly']
-# 2. Posortuj wersje tagowane od najnowszej do najstarszej.
-# Używamy parse_version, aby poprawnie sortować np. 1.10.0 vs 1.2.0
-tagged_versions.sort(key=lambda v: parse_version(v), reverse=True)
-# 3. Dodaj 'nightly' na samym końcu listy.
-sorted_list = tagged_versions
-if 'nightly' in versions:
-sorted_list.append('nightly')
+        /* Specjalny styl dla Dev Build, aby nadać mu niższy priorytet wizualny */
+        .dev-build {
+            background-color: #fff9e6; /* Lekko żółtawe tło */
+            border-color: #ffecb3;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>libtwdll Documentation</h1>
+    <p>This page lists all available documentation versions for the project.</p>
+</header>
 
-for version in sorted_list:
-is_nightly = (version == 'nightly')
-
-# NOWA LOGIKA NAZEWNICTWA:
-display_name = "Dev Build" if is_nightly else version
-css_class = ' class="dev-build"' if is_nightly else ''
-
-html += f"<li{css_class}>"
-html += f'<div class="version-header"><a href="./{version}/" class="version-link">{display_name}</a>'
-
-    if is_nightly:
-    release_url = f"https://github.com/{repo_slug}/releases/tag/nightly"
-    html += f'<a href="{release_url}" class="release-link" target="_blank">Download Dev Build</a>'
-    else:
-    release_tag = f"v{version}"
-    release_url = f"https://github.com/{repo_slug}/releases/tag/{release_tag}"
-    html += f'<a href="{release_url}" class="release-link" target="_blank">Download Release</a>'
-    html += "</div>"
-
-if not is_nightly:
-html += '<details class="changelog-details">'
-    html += '<summary>View Changes</summary>'
-    html += get_changelog_for_version(version, changelog_text)
-    html += "</details>"
-
-html += "</li>\n"
-
-return html
-
-def main():
-# ... (reszta funkcji main bez zmian, skopiuj ją z poprzedniej wersji)
-template_path = Path(sys.argv[1])
-output_path = Path(sys.argv[2])
-versions_dir = Path(sys.argv[3])
-new_version = sys.argv[4]
-repo_path = Path(sys.argv[5])
-repo_slug = os.getenv("GITHUB_REPOSITORY")
-if not repo_slug: sys.exit("Error: GITHUB_REPOSITORY not set.")
-changelog_path = repo_path / "CHANGELOG.md"
-changelog_text = changelog_path.read_text() if changelog_path.exists() else ""
-existing_versions = {item.name for item in versions_dir.iterdir() if item.is_dir() and not item.name.startswith('.')}
-existing_versions.add(new_version)
-template_content = template_path.read_text()
-version_list_html = generate_version_list(existing_versions, repo_slug, changelog_text, repo_path)
-final_html = template_content.replace("<li><div class="version-header"><a href="./0.1.0-alpha.2/" class="version-link">0.1.0-alpha.2</a><a href="https://github.com/bukowa/twdll/releases/tag/v0.1.0-alpha.2" class="release-link" target="_blank">Download Release</a></div><details class="changelog-details"><summary>View Changes</summary><ul>
+<main>
+    <h2>Available Versions</h2>
+    <ul id="version-list">
+        <li><div class="version-header"><a href="./0.1.0-alpha.2/" class="version-link">0.1.0-alpha.2</a><a href="https://github.com/bukowa/twdll/releases/tag/v0.1.0-alpha.2" class="release-link" target="_blank">Download Release</a></div><details class="changelog-details"><summary>View Changes</summary><ul>
   <li>2025-10-05</li>
 </ul><h4>Fixed</h4><ul>
   <li>Documentation now takes into account first arguments.</li>
@@ -90,10 +54,9 @@ final_html = template_content.replace("<li><div class="version-header"><a href="
   <li>Various bugs</li>
 </ul></details></li>
 <li class="dev-build"><div class="version-header"><a href="./nightly/" class="version-link">Dev Build</a><a href="https://github.com/bukowa/twdll/releases/tag/nightly" class="release-link" target="_blank">Download Dev Build</a></div></li>
-", version_list_html)
-output_path.parent.mkdir(parents=True, exist_ok=True)
-output_path.write_text(final_html)
-print(f"Successfully generated index.html at {output_path}")
 
-if __name__ == "__main__":
-main()
+    </ul>
+</main>
+
+</body>
+</html>
