@@ -295,3 +295,23 @@ if (MSVC)
     set(CMAKE_C_FLAGS_RELEASE "/O2 /Z7 /DNDEBUG /W4")
     set(CMAKE_C_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
 endif()
+
+# ========================
+# LuaFileSystem Setup (lfs.dll)
+# ========================
+add_subdirectory(include/luafilesystem)
+
+# Tworzymy nowy, własny target, którego zadaniem jest skopiowanie lfs.dll.
+# Słowo kluczowe 'ALL' sprawia, że ten target będzie częścią domyślnego builda.
+add_custom_target(copy_lfs_for_docs ALL
+        # Komenda do wykonania: kopiowanie pliku
+        COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:lfs>
+        ${CMAKE_SOURCE_DIR}/tools/bin/lfs.dll
+
+        # KLUCZOWY MOMENT: Ten target zależy od 'lfs'. CMake zapewni, że 'lfs'
+        # zostanie zbudowany ZANIM ta komenda kopiowania się uruchomi.
+        DEPENDS lfs
+
+        COMMENT "Kopiowanie lfs.dll do tools/bin..."
+)
