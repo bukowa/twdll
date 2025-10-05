@@ -1,8 +1,10 @@
-name: MSVC x86
+name: Build, Release, and Deploy Docs
 
 on:
   push:
     branches: [ "master" ]
+    tags:
+      - 'v*' # Trigger on tags like v1.0, v2.3.4
   pull_request:
     branches: [ "master" ]
 
@@ -10,15 +12,20 @@ env:
   BUILD_TYPE: Release
 
 jobs:
+  # ===============================================================
+  # JOB 1: Build the project on Windows
+  # This job runs for all triggers and produces the artifacts.
+  # ===============================================================
   build:
     runs-on: windows-latest
-
     steps:
-      - uses: actions/checkout@v4
-      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: 'x86'
-#          toolset: 14.42.34433
 
       - name: Configure RPFM
         run: |
@@ -28,26 +35,97 @@ jobs:
           echo $rpfmPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Configure CMake
-        run: cmake \
-          -B ${{github.workspace}}/build \
-          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
-          -DLUA_VERSION="5.1.2" \
-          -G Ninja \
-          .
+        run: >
+          cmake 
+          -B ${{github.workspace}}/build 
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} 
+          -DLUA_VERSION="5.1.2" 
+          -G Ninja
 
-      - name: Build
+      - name: Build Project (including Docs)
+        # Your CMake setup is excellent. The `build_release` target is an `ALL` target,
+        # and it depends on `docs`. So a single build command does everything.
+        # The `generate_docs.sh` is no longer needed.
         run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
 
-      - name: Upload Artifact
+      - name: Archive Release Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release
-          path: |
-            ${{github.workspace}}/build/release
+          name: release-assets
+          path: ${{github.workspace}}/build/release/*
 
-#      - name: Test
-#        working-directory: ${{github.workspace}}/build
-#        # Execute tests defined by the CMake configuration.
-#        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-#        run: ctest -C ${{env.BUILD_TYPE}}
-#
+      - name: Archive Documentation Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: ${{github.workspace}}/luadoc # LDoc generates docs in the source tree
+
+  # ===============================================================
+  # JOB 2: Deploy documentation to GitHub Pages
+  # This job only runs on pushes to master or tags, not on PRs.
+  # ===============================================================
+  deploy-docs:
+    needs: build
+    runs-on: ubuntu-latest
+    # Condition: Only run on a push event (not a pull_request)
+    if: github.event_name == 'push'
+    permissions:
+      contents: write # Required to push to the gh-pages branch
+
+    steps:
+      - name: Download documentation artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-html
+          path: docs-html
+
+      - name: Determine Documentation Directory
+        id: docs_dir
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            # For a tag like 'v1.2.3', use directory '1.2.3'
+            VERSION=$(echo $GITHUB_REF | sed 's/refs\/tags\/v//')
+            echo "dir=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # For master branch, use directory 'latest'
+            echo "dir=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs-html
+          # Deploy to a subdirectory based on the previous step's output
+          destination_dir: ${{ steps.docs_dir.outputs.dir }}
+          # The user deploying the docs
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          # Optional: Create a CNAME file if you have a custom domain
+          # cname: docs.example.com
+
+  # ===============================================================
+  # JOB 3: Create a GitHub Release
+  # This job only runs when a tag is pushed.
+  # ===============================================================
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    # Condition: Only run when a tag starting with 'v' is pushed
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write # Required to create a release and upload assets
+
+    steps:
+      - name: Download release assets artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          # This uses the downloaded files as release assets
+          files: |
+            release-assets/*
