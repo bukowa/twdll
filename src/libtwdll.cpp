@@ -39,7 +39,7 @@ static const struct luaL_Reg twdll_main_functions[] = {
 /// Initializes all twdll submodules and registers them in Lua.
 /// @tparam lua_State L
 /// @treturn integer always 1 (returns the main twdll table)
-extern "C" __declspec(dllexport) int luaopen_libtwdll(lua_State *L) {
+extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     static bool hooks_are_initialized = false;
 
     // Register the main 'twdll' table with core functions like Log
