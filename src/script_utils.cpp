@@ -33,6 +33,14 @@ int write_int_property(lua_State *L, size_t pointer_offset, size_t property_offs
     return write_property_lua<int, lua_Integer>(L, pointer_offset, property_offset, object_type_name, lua_tointeger);
 }
 
+int read_float_property(lua_State *L, size_t pointer_offset, size_t property_offset, const char *object_type_name) {
+    return read_property_lua<float, lua_Number>(L, pointer_offset, property_offset, object_type_name, lua_pushnumber);
+}
+
+int write_float_property(lua_State *L, size_t pointer_offset, size_t property_offset, const char *object_type_name) {
+    return write_property_lua<float, lua_Number>(L, pointer_offset, property_offset, object_type_name, lua_tonumber);
+}
+
 int read_nested_int_property(lua_State* L, size_t pointer_offset, size_t nested_obj_ptr_offset, size_t final_property_offset, const char* object_type_name) {
     return read_nested_property_lua<int, lua_Integer>(L, pointer_offset, nested_obj_ptr_offset, final_property_offset, object_type_name, lua_pushinteger);
 }

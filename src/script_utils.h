@@ -70,8 +70,10 @@ int read_nested_property_lua(lua_State *L, size_t pointer_offset, size_t nested_
 // --- Common Lua-facing Implementations (Declarations) ---
 
 int read_int_property(lua_State *L, size_t pointer_offset, size_t property_offset, const char *object_type_name);
-
 int write_int_property(lua_State *L, size_t pointer_offset, size_t property_offset, const char *object_type_name);
+
+int read_float_property(lua_State *L, size_t pointer_offset, size_t property_offset, const char *object_type_name);
+int write_float_property(lua_State *L, size_t pointer_offset, size_t property_offset, const char *object_type_name);
 
 int read_nested_int_property(lua_State *L, size_t pointer_offset, size_t nested_obj_ptr_offset,
                              size_t final_property_offset, const char *object_type_name);
