@@ -18,12 +18,10 @@ local function get_test_subject()
     error("get_test_subject() is not implemented for the Character suite.")
 end
 
---- Tests the Get/Set IntAtOffset functions.
--- WARNING: This test is powerful but dangerous. Ensure the offset is correct.
+--- Tests the Get/Set IntAtOffset functions using the gravitas offset.
 function CharacterSuite:test_offset_read_write(Assert, character)
-    -- TODO: Replace with a known, safe 32-bit integer offset.
-    local test_offset = 0xABC
-    
+    local test_offset = 0x55C -- Gravitas offset
+
     local initial_value = twdll_character.GetIntAtOffset(character, test_offset)
     local new_value = 99 -- An arbitrary integer
 
@@ -35,6 +33,49 @@ function CharacterSuite:test_offset_read_write(Assert, character)
     -- Cleanup: Restore the original value
     twdll_character.SetIntAtOffset(character, test_offset, initial_value)
 end
+
+--- Tests the Get/Set MovementPoints functions.
+function CharacterSuite:test_get_set_movement_points(Assert, character)
+    local initial_value = twdll_character.GetMovementPoints(character)
+    local new_value = 1234
+
+    twdll_character.SetMovementPoints(character, new_value)
+    local updated_value = twdll_character.GetMovementPoints(character)
+
+    Assert(updated_value == new_value, "SetMovementPoints should correctly change the character's movement points.")
+
+    -- Cleanup: Restore the original value
+    twdll_character.SetMovementPoints(character, initial_value)
+end
+
+--- Tests the Get/Set Ambition functions.
+function CharacterSuite:test_get_set_ambition(Assert, character)
+    local initial_value = twdll_character.GetAmbition(character)
+    local new_value = 50
+
+    twdll_character.SetAmbition(character, new_value)
+    local updated_value = twdll_character.GetAmbition(character)
+
+    Assert(updated_value == new_value, "SetAmbition should correctly change the character's ambition.")
+
+    -- Cleanup: Restore the original value
+    twdll_character.SetAmbition(character, initial_value)
+end
+
+--- Tests the Get/Set Gravitas functions.
+function CharacterSuite:test_get_set_gravitas(Assert, character)
+    local initial_value = twdll_character.GetGravitas(character)
+    local new_value = 75
+
+    twdll_character.SetGravitas(character, new_value)
+    local updated_value = twdll_character.GetGravitas(character)
+
+    Assert(updated_value == new_value, "SetGravitas should correctly change the character's gravitas.")
+
+    -- Cleanup: Restore the original value
+    twdll_character.SetGravitas(character, initial_value)
+end
+
 
 -- Run all tests in this suite
 TestUtils.run_tests(CharacterSuite, get_test_subject)

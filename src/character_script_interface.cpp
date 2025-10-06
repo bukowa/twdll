@@ -5,6 +5,10 @@
 
 #define REAL_CHARACTER_POINTER_OFFSET 0x8
 
+#define MOVEMENT_POINTS_OFFSET 0x14
+#define AMBITION_OFFSET 0x558
+#define GRAVITAS_OFFSET 0x55C
+
 /***
 Writes a 32-bit integer at the given memory offset.
 @function SetIntAtOffset
@@ -54,10 +58,116 @@ static int script_GetMemoryAddress(lua_State* L) {
     return get_memory_address_lua(L, "character", REAL_CHARACTER_POINTER_OFFSET);
 }
 
+/**
+ * Sets the movement points of a character.
+ * @function SetMovementPoints
+ * @tparam userdata character The character object.
+ * @tparam integer value The new movement points value.
+ */
+static int script_SetMovementPoints(lua_State* L) {
+    void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
+    if (!character) return 0;
+
+    int value = (int)lua_tointeger(L, 2);
+    write_to<int>(character, MOVEMENT_POINTS_OFFSET, value);
+    return 0;
+}
+
+/**
+ * Gets the movement points of a character.
+ * @function GetMovementPoints
+ * @tparam userdata character The character object.
+ * @treturn integer The movement points of the character.
+ */
+static int script_GetMovementPoints(lua_State* L) {
+    void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
+    if (!character) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    int v = read_from<int>(character, MOVEMENT_POINTS_OFFSET);
+    lua_pushinteger(L, v);
+    return 1;
+}
+
+/**
+ * Sets the ambition of a character.
+ * @function SetAmbition
+ * @tparam userdata character The character object.
+ * @tparam integer value The new ambition value.
+ */
+static int script_SetAmbition(lua_State* L) {
+    void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
+    if (!character) return 0;
+
+    int value = (int)lua_tointeger(L, 2);
+    write_to<int>(character, AMBITION_OFFSET, value);
+    return 0;
+}
+
+/**
+ * Gets the ambition of a character.
+ * @function GetAmbition
+ * @tparam userdata character The character object.
+ * @treturn integer The ambition of the character.
+ */
+static int script_GetAmbition(lua_State* L) {
+    void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
+    if (!character) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    int v = read_from<int>(character, AMBITION_OFFSET);
+    lua_pushinteger(L, v);
+    return 1;
+}
+
+/**
+ * Sets the gravitas of a character.
+ * @function SetGravitas
+ * @tparam userdata character The character object.
+ * @tparam integer value The new gravitas value.
+ */
+static int script_SetGravitas(lua_State* L) {
+    void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
+    if (!character) return 0;
+
+    int value = (int)lua_tointeger(L, 2);
+    write_to<int>(character, GRAVITAS_OFFSET, value);
+    return 0;
+}
+
+/**
+ * Gets the gravitas of a character.
+ * @function GetGravitas
+ * @tparam userdata character The character object.
+ * @treturn integer The gravitas of the character.
+ */
+static int script_GetGravitas(lua_State* L) {
+    void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
+    if (!character) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    int v = read_from<int>(character, GRAVITAS_OFFSET);
+    lua_pushinteger(L, v);
+    return 1;
+}
+
+
 // Public registration table
 const luaL_Reg character_functions[] = {
     {"GetMemoryAddress", script_GetMemoryAddress},
     {"GetIntAtOffset",   script_GetIntAtOffset},
     {"SetIntAtOffset",   script_SetIntAtOffset},
+    {"GetMovementPoints", script_GetMovementPoints},
+    {"SetMovementPoints", script_SetMovementPoints},
+    {"GetAmbition", script_GetAmbition},
+    {"SetAmbition", script_SetAmbition},
+    {"GetGravitas", script_GetGravitas},
+    {"SetGravitas", script_SetGravitas},
     {NULL, NULL}
 };
