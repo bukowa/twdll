@@ -54,7 +54,7 @@ function TestUtils.run_tests(test_suite, get_subject_factory)
             else
                 -- FIX #3: Call the test correctly and check both crash status AND assertion results.
                 -- `pcall(func, test_suite, Assert, subject)`
-                --   - `func`: The test function (e.g., UnitSuite:test_strength_property)
+                --   - `func`: The test function (e.g., UnitSuite:test_number_of_man_property)
                 --   - `test_suite`: This becomes `self` inside the function because of the ':' syntax. CORRECT!
                 --   - `Assert`: This is our custom assert function. CORRECT!
                 --   - `subject`: This is the test subject (the unit). CORRECT!

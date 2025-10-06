@@ -18,26 +18,26 @@ local function get_test_subject()
     return nil
 end
 
---- Tests the Get/Set Strength functions.
-function UnitSuite:test_strength_property(Assert, unit)
-    local initial_value = twdll_unit.GetStrength(unit)
+--- Tests the Get/Set NumberOfMan functions.
+function UnitSuite:test_number_of_man_property(Assert, unit)
+    local initial_value = twdll_unit.GetNumberOfMan(unit)
     local new_value = initial_value + 10
 
-    twdll_unit.SetStrength(unit, new_value)
-    local updated_value = twdll_unit.GetStrength(unit)
+    twdll_unit.SetNumberOfMan(unit, new_value)
+    local updated_value = twdll_unit.GetNumberOfMan(unit)
 
-    Assert(updated_value == new_value, "SetStrength should update the unit\'s strength.")
+    Assert(updated_value == new_value, "SetNumberOfMan should update the unit's number of man.")
 end
 
---- Tests the Get/Set Max Strength functions.
-function UnitSuite:test_max_strength_property(Assert, unit)
-    local initial_value = twdll_unit.GetMaxStrength(unit)
+--- Tests the Get/Set Max NumberOfMan functions.
+function UnitSuite:test_max_number_of_man_property(Assert, unit)
+    local initial_value = twdll_unit.GetMaxNumberOfMan(unit)
     local new_value = initial_value + 10
 
-    twdll_unit.SetMaxStrength(unit, new_value)
-    local updated_value = twdll_unit.GetMaxStrength(unit)
+    twdll_unit.SetMaxNumberOfMan(unit, new_value)
+    local updated_value = twdll_unit.GetMaxNumberOfMan(unit)
 
-    Assert(updated_value == new_value, "SetMaxStrength should update the unit\'s max strength.")
+    Assert(updated_value == new_value, "SetMaxNumberOfMan should update the unit's max number of man.")
 end
 
 --- Tests the Get/Set Movement Points functions.
@@ -48,7 +48,7 @@ function UnitSuite:test_movement_points_property(Assert, unit)
     twdll_unit.SetMovementPoints(unit, new_value)
     local updated_value = twdll_unit.GetMovementPoints(unit)
 
-    Assert(updated_value == new_value, "SetMovementPoints should update the unit\'s movement points.")
+    Assert(updated_value == new_value, "SetMovementPoints should update the unit's movement points.")
 end
 
 -- Run all tests in this suite

@@ -7,28 +7,28 @@
 #define REAL_UNIT_POINTER_OFFSET 0x8
 
 // Define property offsets for units
-#define UNIT_CURRENT_STRENGTH_OFFSET 0x44
-#define UNIT_MAX_STRENGTH_OFFSET     0x48
+#define UNIT_CURRENT_NUMBER_OF_MAN_OFFSET 0x44
+#define UNIT_MAX_NUMBER_OF_MAN_OFFSET     0x48
 #define UNIT_MOVEMENT_POINTS_OFFSET  0x64
 
 /***
-Sets the current unit strength (soldier count).
-@function SetStrength
+Sets the current number of man in the unit.
+@function SetNumberOfMan
 @tparam userdata unit the unit object (first argument)
-@tparam integer value new current strength
+@tparam integer value new number of man
 */
-static int script_SetStrength(lua_State *L) {
-    return write_int_property(L, REAL_UNIT_POINTER_OFFSET, UNIT_CURRENT_STRENGTH_OFFSET, "unit");
+static int script_SetNumberOfMan(lua_State *L) {
+    return write_int_property(L, REAL_UNIT_POINTER_OFFSET, UNIT_CURRENT_NUMBER_OF_MAN_OFFSET, "unit");
 }
 
 /***
-Sets the maximum unit strength (soldier capacity).
-@function SetMaxStrength
+Sets the maximum number of man in the unit.
+@function SetMaxNumberOfMan
 @tparam userdata unit the unit object (first argument)
-@tparam integer value new maximum strength
+@tparam integer value new maximum number of man
 */
-static int script_SetMaxStrength(lua_State *L) {
-    return write_int_property(L, REAL_UNIT_POINTER_OFFSET, UNIT_MAX_STRENGTH_OFFSET, "unit");
+static int script_SetMaxNumberOfMan(lua_State *L) {
+    return write_int_property(L, REAL_UNIT_POINTER_OFFSET, UNIT_MAX_NUMBER_OF_MAN_OFFSET, "unit");
 }
 
 /***
@@ -42,23 +42,23 @@ static int script_SetMovementPoints(lua_State *L) {
 }
 
 /***
-Gets the current unit strength (soldier count).
-@function GetStrength
+Gets the current number of man in the unit.
+@function GetNumberOfMan
 @tparam userdata unit the unit object (first argument)
-@treturn integer current strength
+@treturn integer current number of man
 */
-static int script_GetStrength(lua_State *L) {
-    return read_int_property(L, REAL_UNIT_POINTER_OFFSET, UNIT_CURRENT_STRENGTH_OFFSET, "unit");
+static int script_GetNumberOfMan(lua_State *L) {
+    return read_int_property(L, REAL_UNIT_POINTER_OFFSET, UNIT_CURRENT_NUMBER_OF_MAN_OFFSET, "unit");
 }
 
 /***
-Gets the maximum unit strength (soldier capacity).
-@function GetMaxStrength
+Gets the maximum number of man in the unit.
+@function GetMaxNumberOfMan
 @tparam userdata unit the unit object (first argument)
-@treturn integer maximum strength
+@treturn integer maximum number of man
 */
-static int script_GetMaxStrength(lua_State *L) {
-    return read_int_property(L, REAL_UNIT_POINTER_OFFSET, UNIT_MAX_STRENGTH_OFFSET, "unit");
+static int script_GetMaxNumberOfMan(lua_State *L) {
+    return read_int_property(L, REAL_UNIT_POINTER_OFFSET, UNIT_MAX_NUMBER_OF_MAN_OFFSET, "unit");
 }
 
 /***
@@ -87,12 +87,12 @@ static int script_GetMemoryAddress(lua_State* L) {
 
 const struct luaL_Reg unit_functions[] = {
     // Setters
-    {"SetStrength", script_SetStrength},
-    {"SetMaxStrength", script_SetMaxStrength},
+    {"SetNumberOfMan", script_SetNumberOfMan},
+    {"SetMaxNumberOfMan", script_SetMaxNumberOfMan},
     {"SetMovementPoints", script_SetMovementPoints},
     // Getters
-    {"GetStrength", script_GetStrength},
-    {"GetMaxStrength", script_GetMaxStrength},
+    {"GetNumberOfMan", script_GetNumberOfMan},
+    {"GetMaxNumberOfMan", script_GetMaxNumberOfMan},
     {"GetMovementPoints", script_GetMovementPoints},
     // Diagnostic Functions
     {"GetMemoryAddress",   script_GetMemoryAddress},
