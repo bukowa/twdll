@@ -42,3 +42,9 @@ This project was built against a specific version of Lua used by the game.
 
 - Requires **Lua 5.1.2** for proper functionality. Using other versions might lead to instability or crashes.
 - The game's method for table insertion in Lua (`events[event][#events[event]+1] = func`) is not compatible with standard Lua VMs. This project works around this by using `table.insert`.
+
+## Reverse Engineering with ReClass.NET
+
+The memory offsets and structures used in this project were identified using [ReClass.NET](https://github.com/ReClassNET/ReClass.NET). The ReClass files containing the structure definitions can be found in the `tools/` directory of this repository.
+
+You can download a compatible version of ReClass.NET from [here](https://github.com/bukowa/ReClass.NET/releases/tag/1.0.0). This tool is essential for anyone looking to contribute to the project by finding new offsets or understanding the existing ones.
