@@ -3,7 +3,9 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+## [0.2.1] - 2025-10-07
 
+### Added
 - Added `GetMovementPoints`, `SetMovementPoints`, `GetAmbition`, `SetAmbition`, `GetGravitas`, and `SetGravitas` to the character interface.
 
 ## [0.2.0-alpha.1] - 2025-10-06
