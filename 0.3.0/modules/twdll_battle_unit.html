@@ -1,0 +1,267 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><strong>twdll_battle_unit</strong></li>
+  <li><a href="../modules/twdll_character.html">twdll_character</a></li>
+  <li><a href="../modules/libtwdll.html">libtwdll</a></li>
+  <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>twdll_battle_unit</code></h1>
+<p>
+
+</p>
+<p> Functions for interacting with battle units.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (unit)</a></td>
+	<td class="summary">Returns the memory address of the real battle unit object.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetChargeBonus">GetChargeBonus (unit)</a></td>
+	<td class="summary">Gets the unit's charge bonus from the nested stats object.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMeleeAttack">GetMeleeAttack (unit)</a></td>
+	<td class="summary">Gets the unit's melee attack from the nested stats object.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetBaseMorale">GetBaseMorale (unit)</a></td>
+	<td class="summary">Gets the unit's base morale from the nested stats object.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetSomeFloatValue">GetSomeFloatValue (unit)</a></td>
+	<td class="summary">Reads an example float stat from the nested stats object at offset 0x110.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFatigue">GetFatigue (unit)</a></td>
+	<td class="summary">Gets the unit's fatigue level.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress (unit)</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the real battle unit object.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the battle unit object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetChargeBonus"></a>
+    <strong>GetChargeBonus (unit)</strong>
+    </dt>
+    <dd>
+    Gets the unit's charge bonus from the nested stats object.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the battle unit object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        charge bonus
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMeleeAttack"></a>
+    <strong>GetMeleeAttack (unit)</strong>
+    </dt>
+    <dd>
+    Gets the unit's melee attack from the nested stats object.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the battle unit object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        melee attack
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetBaseMorale"></a>
+    <strong>GetBaseMorale (unit)</strong>
+    </dt>
+    <dd>
+    Gets the unit's base morale from the nested stats object.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the battle unit object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        base morale
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetSomeFloatValue"></a>
+    <strong>GetSomeFloatValue (unit)</strong>
+    </dt>
+    <dd>
+    Reads an example float stat from the nested stats object at offset 0x110.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the battle unit object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        value
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetFatigue"></a>
+    <strong>GetFatigue (unit)</strong>
+    </dt>
+    <dd>
+    Gets the unit's fatigue level.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the battle unit object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        fatigue
+    </ol>
+
+
+
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+<i style="float:right;">Last updated 2025-10-06 17:03:27 </i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

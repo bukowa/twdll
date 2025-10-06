@@ -1,0 +1,366 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
+  <li><strong>twdll_character</strong></li>
+  <li><a href="../modules/libtwdll.html">libtwdll</a></li>
+  <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>twdll_character</code></h1>
+<p>
+
+</p>
+<p> Functions for interacting with game characters.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#SetIntAtOffset">SetIntAtOffset (character, offset, value)</a></td>
+	<td class="summary">Writes a 32-bit integer at the given memory offset.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetIntAtOffset">GetIntAtOffset (character, offset)</a></td>
+	<td class="summary">Reads a 32-bit integer at the given memory offset.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (character)</a></td>
+	<td class="summary">Returns the memory address of the real character object.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (character, value)</a></td>
+	<td class="summary">Sets the movement points of a character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints (character)</a></td>
+	<td class="summary">Gets the movement points of a character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetAmbition">SetAmbition (character, value)</a></td>
+	<td class="summary">Sets the ambition of a character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetAmbition">GetAmbition (character)</a></td>
+	<td class="summary">Gets the ambition of a character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetGravitas">SetGravitas (character, value)</a></td>
+	<td class="summary">Sets the gravitas of a character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetGravitas">GetGravitas (character)</a></td>
+	<td class="summary">Gets the gravitas of a character.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "SetIntAtOffset"></a>
+    <strong>SetIntAtOffset (character, offset, value)</strong>
+    </dt>
+    <dd>
+    Writes a 32-bit integer at the given memory offset.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the character object (first argument)
+        </li>
+        <li><span class="parameter">offset</span>
+            <span class="types"><span class="type">integer</span></span>
+
+
+
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+
+
+
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetIntAtOffset"></a>
+    <strong>GetIntAtOffset (character, offset)</strong>
+    </dt>
+    <dd>
+    Reads a 32-bit integer at the given memory offset.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the character object (first argument)
+        </li>
+        <li><span class="parameter">offset</span>
+            <span class="types"><span class="type">integer</span></span>
+
+
+
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        value
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress (character)</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the real character object.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the character object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMovementPoints"></a>
+    <strong>SetMovementPoints (character, value)</strong>
+    </dt>
+    <dd>
+    Sets the movement points of a character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         The character object.
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         The new movement points value.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMovementPoints"></a>
+    <strong>GetMovementPoints (character)</strong>
+    </dt>
+    <dd>
+    Gets the movement points of a character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         The character object.
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        The movement points of the character.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetAmbition"></a>
+    <strong>SetAmbition (character, value)</strong>
+    </dt>
+    <dd>
+    Sets the ambition of a character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         The character object.
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         The new ambition value.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetAmbition"></a>
+    <strong>GetAmbition (character)</strong>
+    </dt>
+    <dd>
+    Gets the ambition of a character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         The character object.
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        The ambition of the character.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetGravitas"></a>
+    <strong>SetGravitas (character, value)</strong>
+    </dt>
+    <dd>
+    Sets the gravitas of a character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         The character object.
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         The new gravitas value.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetGravitas"></a>
+    <strong>GetGravitas (character)</strong>
+    </dt>
+    <dd>
+    Gets the gravitas of a character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         The character object.
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        The gravitas of the character.
+    </ol>
+
+
+
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+<i style="float:right;">Last updated 2025-10-06 17:03:27 </i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>
