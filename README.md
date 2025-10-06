@@ -8,9 +8,17 @@ This project provides a framework for modders to add new functionality to the ga
 
 1.  Download the latest release from the releases page.
 2.  Copy `twdll.dll` and `lua.dll` to your *Total War: Rome II* installation directory (e.g., `C:/Program Files (x86)/Steam/steamapps/common/Total War Rome II`).
-3.  The mod will be active the next time you launch the game.
 
 ## Usage for Modding
+
+To use the script extender in your own mods, you need to load the `twdll.dll` library from your Lua script. Add the following code to your script:
+
+```lua
+-- Load the script extender library
+package.loadlib("twdll.dll", "luaopen_twdll")()
+```
+
+After loading the library, you will have access to the new functions provided by the script extender.
 
 ### Scripting Documentation
 
