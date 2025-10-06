@@ -5,51 +5,77 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>libtwdll Documentation</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; background-color: #fff; }
-        header { border-bottom: 1px solid #ddd; padding-bottom: 20px; margin-bottom: 30px; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background-color: #f6f8fa; /* Light gray background for contrast */
+        }
+        header {
+            border-bottom: 1px solid #e1e4e8;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
         h1 { color: #111; }
-        h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        h2 {
+            border-bottom: 1px solid #e1e4e8;
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }
         ul { list-style-type: none; padding-left: 0; }
-        li { background-color: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 6px; }
 
-        /* MODIFICATION: General link styling */
-        a { text-decoration: none; }
-        a:hover { text-decoration: none; }
-
-        /* Style for the header of each version item */
-        .version-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-
-        /* MODIFICATION: Style for the version number text */
-        .version-label {
-            font-weight: bold;
-            font-size: 1.1em;
-            color: #111;
+        /* MODIFICATION: Card-based design for each version */
+        li {
+            background-color: #ffffff;
+            border: 1px solid #d1d5da;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
 
-        /* MODIFICATION: Container for the action buttons */
+        a { text-decoration: none; }
+
+        .version-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .version-label {
+            font-weight: 600;
+            font-size: 1.2em;
+            color: #24292e;
+        }
+
         .version-actions {
             display: flex;
-            gap: 10px; /* Adds space between buttons */
+            gap: 10px;
         }
 
-        /* MODIFICATION: Button styles */
+        /* MODIFICATION: Clear, styled buttons */
         .button {
             padding: 8px 16px;
-            border-radius: 5px;
+            border-radius: 6px;
             font-size: 0.9em;
             font-weight: 600;
-            border: 1px solid transparent;
+            text-align: center;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: all 0.2s ease-in-out;
+            border: 1px solid transparent;
         }
 
-        /* Primary button for documentation */
+        /* Primary button for docs, using purple from the screenshot */
         .doc-link {
-            background-color: #0366d6;
+            background-color: #6f42c1; /* GitHub's purple */
             color: white;
         }
         .doc-link:hover {
-            background-color: #005cc5;
+            background-color: #5833a5;
         }
 
         /* Secondary button for downloads */
@@ -63,16 +89,24 @@
             border-color: rgba(27, 31, 35, 0.2);
         }
 
-        /* Styles for the expandable changelog */
-        .changelog-details { margin-top: 15px; font-size: 0.9em; background-color: #fff; border-top: 1px solid #eee; padding-top: 15px; }
-        .changelog-details summary { cursor: pointer; font-weight: bold; color: #555; }
+        .changelog-details {
+            margin-top: 20px;
+            padding-top: 15px;
+            font-size: 0.9em;
+            border-top: 1px solid #e1e4e8;
+        }
+        .changelog-details summary {
+            cursor: pointer;
+            font-weight: bold;
+            color: #586069;
+        }
         .changelog-details ul { margin-left: 20px; padding-top: 5px; list-style-type: disc; }
         .changelog-details h4 { margin-top: 10px; margin-bottom: 5px; color: #333; }
 
         /* Special style for Dev Build */
         .dev-build {
-            background-color: #fff9e6;
-            border-color: #ffecb3;
+            background-color: #fffbdd; /* More noticeable yellow */
+            border-color: #ffea7f;
         }
     </style>
 </head>
@@ -85,19 +119,51 @@
 <main>
     <h2>Available Versions</h2>
     <ul id="version-list">
-        <li><div class="version-header"><a href="./0.1.0-alpha.2/" class="version-link">0.1.0-alpha.2</a><a href="https://github.com/bukowa/twdll/releases/tag/v0.1.0-alpha.2" class="release-link" target="_blank">Download Release</a></div><details class="changelog-details"><summary>View Changes</summary><ul>
+        <li>
+    <div class="version-header">
+        <span class="version-label">0.1.0-alpha.2</span>
+        <div class="version-actions">
+            <a href="./0.1.0-alpha.2/" class="button doc-link">View Documentation</a>
+            <a href="https://github.com/bukowa/twdll/releases/tag/v0.1.0-alpha.2" class="button release-link" target="_blank">Download Release</a>
+        </div>
+    </div>
+    <details class="changelog-details">
+        <summary>View Changes</summary>
+        <ul>
   <li>2025-10-05</li>
 </ul><h4>Fixed</h4><ul>
   <li>Documentation now takes into account first arguments.</li>
-</ul></details></li>
-<li><div class="version-header"><a href="./0.1.0-alpha.1/" class="version-link">0.1.0-alpha.1</a><a href="https://github.com/bukowa/twdll/releases/tag/v0.1.0-alpha.1" class="release-link" target="_blank">Download Release</a></div><details class="changelog-details"><summary>View Changes</summary><ul>
+</ul>
+    </details>
+</li>
+<li>
+    <div class="version-header">
+        <span class="version-label">0.1.0-alpha.1</span>
+        <div class="version-actions">
+            <a href="./0.1.0-alpha.1/" class="button doc-link">View Documentation</a>
+            <a href="https://github.com/bukowa/twdll/releases/tag/v0.1.0-alpha.1" class="button release-link" target="_blank">Download Release</a>
+        </div>
+    </div>
+    <details class="changelog-details">
+        <summary>View Changes</summary>
+        <ul>
   <li>2025-10-05</li>
 </ul><h4>Added</h4><ul>
   <li>Merged battle_unit_stats_functions into battle_unit_functions; stats are now accessible via twdll_battle_unit, and the separate twdll_battle_unit_stats module has been removed.</li>
 </ul><h4>Fixed</h4><ul>
   <li>Various bugs</li>
-</ul></details></li>
-<li class="dev-build"><div class="version-header"><a href="./nightly/" class="version-link">Dev Build</a><a href="https://github.com/bukowa/twdll/releases/tag/nightly" class="release-link" target="_blank">Download Dev Build</a></div></li>
+</ul>
+    </details>
+</li>
+<li class="dev-build">
+    <div class="version-header">
+        <span class="version-label">Dev Build</span>
+        <div class="version-actions">
+            <a href="./nightly/" class="button doc-link">View Documentation</a>
+            <a href="https://github.com/bukowa/twdll/releases/tag/nightly" class="button release-link" target="_blank">Download Dev Build</a>
+        </div>
+    </div>
+</li>
 
     </ul>
 </main>
