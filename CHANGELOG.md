@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [0.3.0] - 2025-10-07
+
+### Fixed
+- Fixed building for win32 lol
+
 ## [0.2.1] - 2025-10-07
 
 ### Added
