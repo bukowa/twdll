@@ -5,29 +5,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>libtwdll Documentation</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 0 20px; background-color: #fff; }
         header { border-bottom: 1px solid #ddd; padding-bottom: 20px; margin-bottom: 30px; }
         h1 { color: #111; }
         h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 40px; }
         ul { list-style-type: none; padding-left: 0; }
-        li { background-color: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 5px; }
-        a { text-decoration: none; color: #0366d6; }
-        a:hover { text-decoration: underline; }
+        li { background-color: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 6px; }
 
-        /* Style dla nagłówka w każdym elemencie listy */
+        /* MODIFICATION: General link styling */
+        a { text-decoration: none; }
+        a:hover { text-decoration: none; }
+
+        /* Style for the header of each version item */
         .version-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-        .version-link { font-weight: bold; }
-        .release-link { font-size: 0.9em; font-weight: normal; background-color: #eef; padding: 5px 10px; border-radius: 5px; }
 
-        /* Style dla rozwijanego changeloga */
+        /* MODIFICATION: Style for the version number text */
+        .version-label {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #111;
+        }
+
+        /* MODIFICATION: Container for the action buttons */
+        .version-actions {
+            display: flex;
+            gap: 10px; /* Adds space between buttons */
+        }
+
+        /* MODIFICATION: Button styles */
+        .button {
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            font-weight: 600;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        /* Primary button for documentation */
+        .doc-link {
+            background-color: #0366d6;
+            color: white;
+        }
+        .doc-link:hover {
+            background-color: #005cc5;
+        }
+
+        /* Secondary button for downloads */
+        .release-link {
+            background-color: #f6f8fa;
+            color: #24292e;
+            border-color: rgba(27, 31, 35, 0.15);
+        }
+        .release-link:hover {
+            background-color: #f3f4f6;
+            border-color: rgba(27, 31, 35, 0.2);
+        }
+
+        /* Styles for the expandable changelog */
         .changelog-details { margin-top: 15px; font-size: 0.9em; background-color: #fff; border-top: 1px solid #eee; padding-top: 15px; }
         .changelog-details summary { cursor: pointer; font-weight: bold; color: #555; }
         .changelog-details ul { margin-left: 20px; padding-top: 5px; list-style-type: disc; }
         .changelog-details h4 { margin-top: 10px; margin-bottom: 5px; color: #333; }
 
-        /* Specjalny styl dla Dev Build, aby nadać mu niższy priorytet wizualny */
+        /* Special style for Dev Build */
         .dev-build {
-            background-color: #fff9e6; /* Lekko żółtawe tło */
+            background-color: #fff9e6;
             border-color: #ffecb3;
         }
     </style>
