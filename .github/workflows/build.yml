@@ -165,7 +165,7 @@ jobs:
           # KLUCZOWA POPRAWKA JEST TUTAJ:
           # Poprawiamy sposób przekazywania zmiennej do 'awk'
           # ===============================================================
-          CHANGELOG_BODY=$(awk '/^## \[''"$VERSION"''\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
+          CHANGELOG_BODY=$(awk 'BEGIN{hdr="## [" "'"$VERSION"'" "]"} index($0, hdr) == 1 {f=1;next} f && /^## \[/{f=0} f' CHANGELOG.md)
           
           if [ -z "$CHANGELOG_BODY" ]; then
             echo "::error::Nie znaleziono wpisu dla wersji '$VERSION' w pliku CHANGELOG.md! Sprawdź format nagłówka '## [$VERSION]'."
