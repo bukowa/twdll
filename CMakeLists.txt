@@ -83,7 +83,9 @@ add_library(twdll SHARED
         src/unit_script_interface.cpp
         src/battle_unit_script_interface.cpp
         src/character_script_interface.cpp
+        src/faction_script_interface.cpp
         src/character_script_interface.h
+        src/faction_script_interface.h
         src/log.h
         src/unit_script_interface.h
         src/script_utils.cpp

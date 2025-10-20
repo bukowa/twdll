@@ -4,6 +4,7 @@
 #include "unit_script_interface.h"
 #include "character_script_interface.h"
 #include "battle_unit_script_interface.h"
+#include "faction_script_interface.h"
 
 // We still need the extern "C" block for the Lua headers
 extern "C" {
@@ -49,6 +50,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     luaL_register(L, "twdll_unit", unit_functions);
     luaL_register(L, "twdll_character", character_functions);
     luaL_register(L, "twdll_battle_unit", battle_unit_functions);
+    luaL_register(L, "twdll_faction", faction_functions);
 
     if (hooks_are_initialized) {
         Log("--- libtwdll modules re-registered. ---");
