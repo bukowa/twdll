@@ -1,0 +1,51 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "architecture": {
+        "value": "Win32",
+        "strategy": "set"
+      },
+      "cacheVariables": {
+        "LUA_VERSION": "5.1.2",
+        "INSTALL_MOD": "ON",
+        "CMAKE_VERBOSE_MAKEFILE": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
+      "name": "windows-x86-debug",
+      "displayName": "Windows x86 Debug",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-x86-release",
+      "displayName": "Windows x86 Release",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "displayName": "Build (Debug)",
+      "configurePreset": "windows-x86-debug"
+    },
+    {
+      "name": "release",
+      "displayName": "Build (Release)",
+      "configurePreset": "windows-x86-release"
+    }
+  ]
+}
