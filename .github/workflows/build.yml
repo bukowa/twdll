@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-assets
-          path: ${{github.workspace}}/build/release/*
+          path: ${{github.workspace}}/build/windows-x86-release/release/*
       - name: Archive Documentation Artifact
         uses: actions/upload-artifact@v4
         with:
