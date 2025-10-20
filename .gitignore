@@ -20,3 +20,4 @@ out
 !.idea/cmake.xml
 research
 cmakeenv
+build

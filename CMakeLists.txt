@@ -295,7 +295,6 @@ endif()
 # LuaFileSystem Setup (lfs.dll)
 # ========================
 add_subdirectory(include/luafilesystem)
-
 # ===========================================
 # Documentation Generation (ldoc)
 # ===========================================
@@ -314,12 +313,10 @@ set(LUA_CMODULE_PATH
         "$<TARGET_FILE_DIR:lfs>/?.dll;"
         "$<TARGET_FILE_DIR:luasocket>/?.dll"
 )
+
 add_custom_command(
         OUTPUT ${DOCS_MAIN_OUTPUT_FILE}
-        COMMAND ${CMAKE_COMMAND} -E env
-        "PATH=$<TARGET_FILE_DIR:luadll>;$<TARGET_FILE_DIR:lfs>;$ENV{PATH}"
-        "LUA_PATH=${LUA_MODULE_PATH}"
-        "LUA_CPATH=${LUA_CMODULE_PATH}"
+        COMMAND ${CMAKE_COMMAND} -E env "LUA_PATH=${LUA_MODULE_PATH}" "LUA_CPATH=${LUA_CMODULE_PATH}"
         $<TARGET_FILE:lua_for_docs>
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/ldoc/ldoc.lua" .
         DEPENDS
@@ -331,6 +328,7 @@ add_custom_command(
         COMMENT "Generating Lua documentation with LDoc..."
         VERBATIM
 )
+
 add_custom_target(docs
         DEPENDS ${DOCS_MAIN_OUTPUT_FILE}
 )
