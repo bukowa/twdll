@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-10-20
+
+### Added
+- Added a new faction script interface (`twdll_faction`) with `GetMemoryAddress`, `GetGold`, and `SetGold` functions.
+
+### Fixed
+- Corrected documentation generation issues.
+
+### Changed
+- The build process now utilizes `CMakePresets` for a more streamlined configuration.
+
 ## [0.3.0] - 2025-10-07
 
 ### Fixed
