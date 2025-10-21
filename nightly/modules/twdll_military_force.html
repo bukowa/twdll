@@ -42,8 +42,8 @@
   <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
   <li><a href="../modules/twdll_character.html">twdll_character</a></li>
   <li><a href="../modules/twdll_faction.html">twdll_faction</a></li>
-  <li><strong>libtwdll</strong></li>
-  <li><a href="../modules/twdll_military_force.html">twdll_military_force</a></li>
+  <li><a href="../modules/libtwdll.html">libtwdll</a></li>
+  <li><strong>twdll_military_force</strong></li>
   <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
 </ul>
 
@@ -51,24 +51,22 @@
 
 <div id="content">
 
-<h1>Module <code>libtwdll</code></h1>
+<h1>Module <code>twdll_military_force</code></h1>
 <p>
 
 </p>
-<p> The main entry point for the twdll Lua extension library.</p>
+<p> Functions for interacting with military forces.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#Log">Log (message)</a></td>
-	<td class="summary">Logs a message to the libtwdll.log file.</td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (military_force)</a></td>
+	<td class="summary">Returns the memory address of the real military force object.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#luaopen_libtwdll">luaopen_libtwdll (L)</a></td>
-	<td class="summary">
-
-</td>
+	<td class="name" nowrap><a href="#GetRecruitmentQueueSize">GetRecruitmentQueueSize (military_force)</a></td>
+	<td class="summary">Returns the number of units in the recruitment queue.</td>
 	</tr>
 </table>
 
@@ -80,41 +78,45 @@
 
     <dl class="function">
     <dt>
-    <a name = "Log"></a>
-    <strong>Log (message)</strong>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress (military_force)</strong>
     </dt>
     <dd>
-    Logs a message to the libtwdll.log file.
+    Returns the memory address of the real military force object.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">message</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The message to write to the log.
+        <li><span class="parameter">military_force</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the military force object (first argument)
         </li>
     </ul>
 
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
 
 
 
 
 </dd>
     <dt>
-    <a name = "luaopen_libtwdll"></a>
-    <strong>luaopen_libtwdll (L)</strong>
+    <a name = "GetRecruitmentQueueSize"></a>
+    <strong>GetRecruitmentQueueSize (military_force)</strong>
     </dt>
     <dd>
-     Initializes all twdll submodules and registers them in Lua.
+    Returns the number of units in the recruitment queue.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">L</span>
-            <span class="types"><span class="type">lua_State</span></span>
-
-
-
+        <li><span class="parameter">military_force</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the military force object (first argument)
         </li>
     </ul>
 
@@ -122,7 +124,7 @@
     <ol>
 
            <span class="types"><span class="type">integer</span></span>
-        always 1 (returns the main twdll table)
+        number of units
     </ol>
 
 
