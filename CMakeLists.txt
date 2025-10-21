@@ -84,6 +84,7 @@ add_library(twdll SHARED
         src/battle_unit_script_interface.cpp
         src/character_script_interface.cpp
         src/faction_script_interface.cpp
+        src/military_force_script_interface.cpp
         src/character_script_interface.h
         src/faction_script_interface.h
         src/log.h
@@ -91,6 +92,7 @@ add_library(twdll SHARED
         src/script_utils.cpp
         src/script_utils.h
         src/battle_unit_script_interface.h
+        src/military_force_script_interface.h
 )
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "twdll")
 
@@ -168,6 +170,7 @@ add_custom_target(
         ${RELEASE_DLL}
         ${RELEASE_LUA_DLL}
         ${RELEASE_DOCS_STAMP}
+        docs
 )
 add_custom_command(
         DEPENDS ${MOD_PACK}

@@ -12,11 +12,7 @@
       },
       "cacheVariables": {
         "LUA_VERSION": "5.1.2",
-        "INSTALL_MOD": "ON",
-        "CMAKE_VERBOSE_MAKEFILE": {
-          "type": "BOOL",
-          "value": "ON"
-        }
+        "INSTALL_MOD": "ON"
       }
     },
     {
