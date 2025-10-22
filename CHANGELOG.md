@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Added `GetRecruitmentQueueSize` to the military force script interface (`twdll_military_force`).
+- Added a new unit list script interface (`twdll_unit_list`) with a `GetMemoryAddress` function.
+
 ## [0.4.0] - 2025-10-20
 
 ### Added
