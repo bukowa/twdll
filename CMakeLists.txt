@@ -93,12 +93,24 @@ add_library(twdll SHARED
         src/script_utils.h
         src/battle_unit_script_interface.h
         src/military_force_script_interface.h
+        src/dx_finder.cpp
+        src/dx_finder.h
+        include/imgui/imgui.cpp
+        include/imgui/imgui_draw.cpp
+        include/imgui/imgui_tables.cpp
+        include/imgui/imgui_widgets.cpp
+        include/imgui/backends/imgui_impl_win32.cpp
+        include/imgui/backends/imgui_impl_dx11.cpp
+        include/imgui/imgui_demo.cpp
 )
+
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "twdll")
 
 target_include_directories(twdll
         PUBLIC
         src
+        include/imgui
+        include/imgui/backends
         PRIVATE
         ${MINHOOK_INCLUDE_DIR}
 )
