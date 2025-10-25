@@ -19,7 +19,6 @@
 LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 bool FindAndHookD3D();
 HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
-HRESULT __stdcall h_ResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -28,10 +27,8 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 // --- GLOBAL VARIABLES ---
 typedef HRESULT(__stdcall* D3D11Present_t)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
-typedef HRESULT(__stdcall* D3D11ResizeBuffers_t)(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
 
 D3D11Present_t o_pPresent = nullptr;
-D3D11ResizeBuffers_t o_pResizeBuffers = nullptr;
 
 WNDPROC o_wndProc = nullptr;
 HWND g_hGameWindow = NULL; // <<< ADDED THIS LINE to store the hooked window handle
@@ -57,36 +54,6 @@ LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         }
     }
     return CallWindowProc(o_wndProc, hWnd, uMsg, wParam, lParam);
-}
-
-// --- MODIFIED ResizeBuffers Hook ---
-HRESULT __stdcall h_ResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
-    Log("h_ResizeBuffers called. Renderer is resetting. Performing FULL cleanup.");
-
-    if (g_pRenderTargetView) {
-        g_pRenderTargetView->Release();
-        g_pRenderTargetView = nullptr;
-    }
-
-    // --- CRITICAL FIX: Restore the original WndProc BEFORE destroying the ImGui context ---
-    if (o_wndProc) {
-        SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
-        o_wndProc = nullptr; // Null out to signify it's unhooked.
-        Log("Original WndProc restored to prevent crash.");
-    }
-
-    if (g_isImGuiInitialized) {
-        ImGui_ImplDX11_Shutdown();
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
-    }
-
-    g_pDevice = nullptr;
-    g_pContext = nullptr;
-    g_isImGuiInitialized = false;
-
-    Log("Cleanup complete. Calling original ResizeBuffers...");
-    return o_pResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 }
 
 // --- MODIFIED Present Hook ---
@@ -177,7 +144,6 @@ bool FindAndHookD3D() {
 
     if (MH_Initialize() != MH_OK) { return false; }
     if (MH_CreateHook(pPresentAddress, &h_pPresent, (void**)&o_pPresent) != MH_OK) { return false; }
-    if (MH_CreateHook(pResizeBuffersAddress, &h_ResizeBuffers, (void**)&o_pResizeBuffers) != MH_OK) { return false; }
     if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) { return false; }
     Log("SUCCESS: All hooks are active!");
     g_isHookInitialized = true;
