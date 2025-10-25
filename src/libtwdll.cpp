@@ -9,29 +9,6 @@
 #include "dx_finder.h"
 #include "MinHook.h" // <<< ADDED THIS LINE
 
-// --- DllMain ---
-// This function is the entry point for the DLL.
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-    switch (ul_reason_for_call) {
-        case DLL_PROCESS_ATTACH:
-            // This is called when the DLL is first loaded into the process.
-            // We don't need to do anything here, as hooks are initialized via Lua.
-            break;
-        case DLL_PROCESS_DETACH:
-            // This is called when the DLL is being unloaded.
-            // THIS IS THE FIX: We must disable our hooks to prevent a crash.
-            Log("--- DllMain: DETACH received, calling CleanupHooks... ---");
-            CleanupHooks(); // <<< MODIFIED THIS LINE
-            Log("--- DllMain: Cleanup complete. ---");
-            break;
-        case DLL_THREAD_ATTACH:
-        case DLL_THREAD_DETACH:
-            // These are called for thread creation/destruction, not relevant for us.
-            break;
-    }
-    return TRUE;
-}
-
 
 // We still need the extern "C" block for the Lua headers
 extern "C"
