@@ -3,6 +3,7 @@
 
 
 
-bool FindAndHookD3D(); 
+bool FindAndHookD3D();
+void CleanupHooks(); // <<< ADDED THIS LINE
 
 #endif 

@@ -19,6 +19,7 @@
 LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 bool FindAndHookD3D();
 HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
+HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags); // <<< ADDED THIS
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -27,8 +28,10 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 // --- GLOBAL VARIABLES ---
 typedef HRESULT(__stdcall* D3D11Present_t)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
+typedef HRESULT(__stdcall* D3D11ResizeBuffers_t)(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags); // <<< ADDED THIS
 
 D3D11Present_t o_pPresent = nullptr;
+D3D11ResizeBuffers_t o_pResizeBuffers = nullptr; // <<< ADDED THIS
 
 WNDPROC o_wndProc = nullptr;
 HWND g_hGameWindow = NULL; // <<< ADDED THIS LINE to store the hooked window handle
@@ -74,10 +77,19 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
             ImGui_ImplWin32_Init(g_hGameWindow);
             ImGui_ImplDX11_Init(g_pDevice, g_pContext);
             
-            // Re-hook the WndProc if it was unhooked by ResizeBuffers
-            if (o_wndProc == nullptr) {
-                 o_wndProc = (WNDPROC)SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)h_wndProc);
-                 Log("WndProc has been hooked.");
+            // --- STABLE WndProc Hooking for Steam Overlay ---
+            // If the window handle has changed (common in scene transitions), we must
+            // unhook the old window's WndProc before hooking the new one.
+            // This prevents our hook from being called on a destroyed window.
+            static HWND lastHookedWindow = NULL;
+            if (lastHookedWindow != g_hGameWindow) {
+                if (lastHookedWindow != NULL && o_wndProc != NULL) {
+                    SetWindowLongPtr(lastHookedWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
+                    Log("Un-hooked WndProc from old window.");
+                }
+                o_wndProc = (WNDPROC)SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)h_wndProc);
+                lastHookedWindow = g_hGameWindow;
+                Log("WndProc has been hooked on new window.");
             }
 
             g_isImGuiInitialized = true;
@@ -85,13 +97,23 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
         }
     }
 
-    if (g_pRenderTargetView == nullptr) {
-        ID3D11Texture2D* pBackBuffer;
-        // Check for success before using the back buffer
-        if (SUCCEEDED(pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuffer))) {
-            g_pDevice->CreateRenderTargetView(pBackBuffer, NULL, &g_pRenderTargetView);
-            pBackBuffer->Release();
-        }
+    // --- ROBUST RENDER TARGET HANDLING ---
+    // This is the critical fix for crashes during scene transitions.
+    // The game engine can resize the swap chain, which invalidates our old Render Target View.
+    // By releasing and recreating it every frame, we ensure we always have a valid one.
+    if (g_pRenderTargetView) {
+        g_pRenderTargetView->Release();
+        g_pRenderTargetView = nullptr;
+    }
+
+    ID3D11Texture2D* pBackBuffer;
+    if (SUCCEEDED(pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuffer))) {
+        g_pDevice->CreateRenderTargetView(pBackBuffer, NULL, &g_pRenderTargetView);
+        pBackBuffer->Release();
+    } else {
+        // If we can't get the back buffer, we can't render. Log and return.
+        Log("ERROR: Failed to get back buffer from swap chain in h_pPresent.");
+        return o_pPresent(pSwapChain, SyncInterval, Flags);
     }
 
     ImGui_ImplDX11_NewFrame();
@@ -105,6 +127,32 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
 
     return o_pPresent(pSwapChain, SyncInterval, Flags);
 }
+
+// --- NEW ResizeBuffers Hook ---
+// This is the key to stability. It's called by the game engine right before
+// the DirectX device is reset. We use it to clean up our resources gracefully.
+HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
+    Log("--- h_pResizeBuffers called. Cleaning up ImGui resources. ---");
+
+    // Release our render target view
+    if (g_pRenderTargetView) {
+        g_pRenderTargetView->Release();
+        g_pRenderTargetView = nullptr;
+    }
+
+    // Shutdown ImGui
+    if (g_isImGuiInitialized) {
+        ImGui_ImplDX11_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+        g_isImGuiInitialized = false;
+        Log("ImGui has been shut down.");
+    }
+
+    // Call the original ResizeBuffers function to let the game do its thing.
+    return o_pResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
+}
+
 
 // --- SETUP FUNCTIONS (Unchanged from your file) ---
 
@@ -136,16 +184,36 @@ bool FindAndHookD3D() {
     HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &sd, &pDummySwapChain, &pDummyDevice, NULL, NULL);
     if (FAILED(hr)) { DestroyWindow(hDummyWnd); UnregisterClass(wc.lpszClassName, wc.hInstance); return false; }
 
-    void** pVTable = *(void***)pDummySwapChain;
-    void* pPresentAddress = pVTable[8];
-    void* pResizeBuffersAddress = pVTable[13];
+    // --- SAFER VTABLE ACCESS ---
+    // To prevent potential function pointer corruption that leads to a DEP fault,
+    // we use uintptr_t for pointer arithmetic. This is a more robust way to
+    // access the vtable addresses and can avoid subtle memory corruption bugs.
+    uintptr_t* pVTable = *reinterpret_cast<uintptr_t**>(pDummySwapChain);
+    void* pPresentAddress = reinterpret_cast<void*>(pVTable[8]);
+    void* pResizeBuffersAddress = reinterpret_cast<void*>(pVTable[13]);
     pDummySwapChain->Release(); pDummyDevice->Release();
     DestroyWindow(hDummyWnd); UnregisterClass(wc.lpszClassName, wc.hInstance);
 
     if (MH_Initialize() != MH_OK) { return false; }
     if (MH_CreateHook(pPresentAddress, &h_pPresent, (void**)&o_pPresent) != MH_OK) { return false; }
+    // Add the hook for ResizeBuffers
+    if (MH_CreateHook(pResizeBuffersAddress, &h_pResizeBuffers, (void**)&o_pResizeBuffers) != MH_OK) { return false; }
     if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) { return false; }
     Log("SUCCESS: All hooks are active!");
     g_isHookInitialized = true;
     return true;
+}
+
+// --- NEW CLEANUP FUNCTION ---
+// This is called from DllMain during DLL_PROCESS_DETACH to ensure
+// all hooks, especially the WndProc, are removed safely.
+void CleanupHooks() {
+    if (g_hGameWindow && o_wndProc) {
+        Log("--- Restoring original WndProc... ---");
+        SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
+    }
+    Log("--- Disabling and uninitializing MinHook... ---");
+    MH_DisableHook(MH_ALL_HOOKS);
+    MH_Uninitialize();
+    Log("--- All hooks cleaned up. ---");
 }
