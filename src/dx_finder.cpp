@@ -132,23 +132,8 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
 // This is the key to stability. It's called by the game engine right before
 // the DirectX device is reset. We use it to clean up our resources gracefully.
 HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
-    Log("--- h_pResizeBuffers called. Cleaning up ImGui resources. ---");
-
-    // Release our render target view
-    if (g_pRenderTargetView) {
-        g_pRenderTargetView->Release();
-        g_pRenderTargetView = nullptr;
-    }
-
-    // Shutdown ImGui
-    if (g_isImGuiInitialized) {
-        ImGui_ImplDX11_Shutdown();
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
-        g_isImGuiInitialized = false;
-        Log("ImGui has been shut down.");
-    }
-
+    Log("--- h_pResizeBuffers called. Triggering full cleanup. ---");
+    CleanupHooks(); // <<< MODIFIED THIS LINE
     // Call the original ResizeBuffers function to let the game do its thing.
     return o_pResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 }
@@ -208,12 +193,38 @@ bool FindAndHookD3D() {
 // This is called from DllMain during DLL_PROCESS_DETACH to ensure
 // all hooks, especially the WndProc, are removed safely.
 void CleanupHooks() {
-    if (g_hGameWindow && o_wndProc) {
-        Log("--- Restoring original WndProc... ---");
-        SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
+    Log("--- Starting full cleanup... ---");
+
+    // 1. Shutdown ImGui and release its resources
+    if (g_isImGuiInitialized) {
+        ImGui_ImplDX11_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+        g_isImGuiInitialized = false;
+        Log("ImGui has been shut down.");
     }
-    Log("--- Disabling and uninitializing MinHook... ---");
-    MH_DisableHook(MH_ALL_HOOKS);
-    MH_Uninitialize();
-    Log("--- All hooks cleaned up. ---");
+
+    // 2. Release our render target view
+    if (g_pRenderTargetView) {
+        g_pRenderTargetView->Release();
+        g_pRenderTargetView = nullptr;
+        Log("Render target view released.");
+    }
+
+    // 3. Restore the original window procedure
+    if (g_hGameWindow && o_wndProc) {
+        Log("Restoring original WndProc...");
+        SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
+        o_wndProc = nullptr; // Avoid trying to restore it again
+    }
+
+    // 4. Disable and uninitialize MinHook
+    if (g_isHookInitialized) {
+        Log("Disabling and uninitializing MinHook...");
+        MH_DisableHook(MH_ALL_HOOKS);
+        MH_Uninitialize();
+        g_isHookInitialized = false;
+    }
+    
+    Log("--- Full cleanup complete. ---");
 }
