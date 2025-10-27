@@ -82,7 +82,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "luaL_checklstring", // Changed from checkstring
         (void**)&g_game_luaL_checklstring,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 53 57 FF 75 ? 8B 7D ? FF 75"},
             {"empire.retail.dll", ""}
         }
     },
