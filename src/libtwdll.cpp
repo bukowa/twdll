@@ -1,5 +1,6 @@
 #include <windows.h>
-
+#include "MinHook.h" // <<< ADDED THIS LINE
+#include "game_lua_api.h"
 #include "log.h"
 #include "unit_script_interface.h"
 #include "character_script_interface.h"
@@ -7,7 +8,6 @@
 #include "faction_script_interface.h"
 #include "military_force_script_interface.h"
 #include "dx_finder.h"
-#include "MinHook.h" // <<< ADDED THIS LINE
 
 // --- DllMain ---
 // This function is the entry point for the DLL.
@@ -15,7 +15,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call) {
         case DLL_PROCESS_ATTACH:
             // This is called when the DLL is first loaded into the process.
-            // We don't need to do anything here, as hooks are initialized via Lua.
+            initialize_game_lua_api(); // Initialize our game Lua API function pointers
             break;
         case DLL_PROCESS_DETACH:
             // This is called when the DLL is being unloaded.
@@ -31,7 +31,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     }
     return TRUE;
 }
-
 
 // We still need the extern "C" block for the Lua headers
 extern "C"
@@ -58,7 +57,13 @@ static void CreateCleanupObject(lua_State* L) {
     luaL_newmetatable(L, "twdll_cleanup_metatable");
 
     // Set the __gc field of the metatable to our C cleanup function.
-    lua_pushstring(L, "__gc");
+    if (g_game_lua_pushstring) {
+        g_game_lua_pushstring(L, "__gc");
+    } else {
+        Log("ERROR: g_game_lua_pushstring is not initialized. Cannot set __gc metamethod.");
+        // Fallback to original if not initialized, though this indicates a problem
+        lua_pushstring(L, "__gc");
+    }
     lua_pushcfunction(L, script_Cleanup);
     lua_settable(L, -3);
 

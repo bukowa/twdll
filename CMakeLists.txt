@@ -95,6 +95,8 @@ add_library(twdll SHARED
         src/military_force_script_interface.h
         src/dx_finder.cpp
         src/dx_finder.h
+        src/signature_scanner.cpp
+        src/game_lua_api.cpp
         include/imgui/imgui.cpp
         include/imgui/imgui_draw.cpp
         include/imgui/imgui_tables.cpp
