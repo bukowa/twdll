@@ -54,7 +54,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_pushcclosure",
         (void**)&g_game_lua_pushcclosure,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 56 8B 75 ? 57 8B 4E ? 8B 41"},
             {"empire.retail.dll", ""}
         }
     },
