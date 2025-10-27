@@ -43,7 +43,10 @@ include_directories(${LUA_SRC_DIR})
 # Lua Setup (luadll)
 # ========================
 add_library(luadll SHARED ${LUA_SOURCES})
-set_target_properties(luadll PROPERTIES OUTPUT_NAME "lua")
+set_target_properties(luadll PROPERTIES
+    OUTPUT_NAME "lua"
+    PDB_NAME "lua_dll"
+)
 
 add_executable(lua_for_docs "${LUA_SRC_DIR}/lua.c")
 target_link_libraries(lua_for_docs PRIVATE luadll)
@@ -62,7 +65,10 @@ target_compile_definitions(luadll
 # ========================
 add_executable(lua.exe "${LUA_SRC_DIR}/lua.c" ${LUA_SOURCES})
 target_compile_definitions(lua.exe PRIVATE LUA_CORE LUA_WIN)
-set_target_properties(lua.exe PROPERTIES OUTPUT_NAME "lua")
+set_target_properties(lua.exe PROPERTIES
+    OUTPUT_NAME "lua"
+    PDB_NAME "lua_exe"
+)
 
 # ========================
 # Lua Setup (luac.exe)

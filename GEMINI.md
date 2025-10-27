@@ -35,3 +35,10 @@ These fundamental operations introduce specific and significant challenges:
     *   **Access Violations:** If the game attempts to execute code at an address where a hook was partially removed or corrupted.
     *   **System Instability:** If the game's execution flow remains altered in an invalid state after `twdll` is gone.
 *   **General C++ Memory Management:** Beyond the specific interactions with Lua and hooking, `twdll` is a C++ application. All raw memory allocations (`new`/`malloc`) and deallocations (`delete`/`free`) within our C++ code must be perfectly balanced and correctly managed to prevent conventional memory leaks or heap corruption over the game's runtime.
+
+## Build Commands
+
+```sh
+cmake --preset vs2022-win32-ninja
+cmake --build --preset vs2022-win32-ninja
+```
