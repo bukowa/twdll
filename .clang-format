@@ -9,3 +9,137 @@ AllowShortIfStatementsOnASingleLine: false
 ColumnLimit: 100
 IncludeBlocks: Preserve
 SortIncludes: Never
+
+# Other useful clang-format settings (uncomment and adjust as needed):
+
+# AlignConsecutiveAssignments:
+#   Enabled: false # Whether to align consecutive assignments.
+# AlignConsecutiveDeclarations:
+#   Enabled: false # Whether to align consecutive declarations.
+# AlignOperands:   # Controls how operands are aligned in binary expressions.
+#   Align: DontAlign # Can be DontAlign, AlignConsecutive, or AlignEachOperand.
+#   PreserveExtraSpaces: false
+# AllowShortBlocksOnASingleLine: false # If true, allows short blocks to be put on a single line.
+# AllowShortCaseLabelsOnASingleLine: false # If true, allows short case labels to be put on a single line.
+# AllowShortFunctionsOnASingleLine: None # Can be None, Empty, Inline, or All.
+# AllowShortIfStatementsOnASingleLine: false # If true, allows short if statements to be put on a single line.
+# AllowShortLoopsOnASingleLine: false # If true, allows short loops to be put on a single line.
+# AlwaysBreakAfterReturnType: None # Can be None, All, TopLevel, or AllDefinitions.
+# AlwaysBreakBeforeMultilineStrings: false # If true, always break before multiline string literals.
+# AlwaysBreakTemplateDeclarations: No # Can be No, Yes, or TopLevel.
+# BinPackArguments: true # If true, pack arguments into as few lines as possible.
+# BinPackParameters: true # If true, pack parameters into as few lines as possible.
+# BraceWrapping:
+#   AfterClass: false
+#   AfterControlStatement: false
+#   AfterEnum: false
+#   AfterFunction: false
+#   AfterNamespace: false
+#   AfterObjCBlock: false
+#   AfterStruct: false
+#   AfterUnion: false
+#   AfterExternBlock: false
+#   BeforeCatch: false
+#   BeforeElse: false
+#   BeforeWhile: false
+#   IndentBraces: false
+# BreakAfterBinaryOperators: None # Can be None, NonAssignment, or All.
+# BreakBeforeBraces: Attach # Controls the brace wrapping style. Can be Attach, Linux, Mozilla, or Stroustrup.
+# BreakBeforeTernaryOperators: true # If true, break before ternary operators.
+# BreakConstructorInitializers: BeforeColon # Can be BeforeColon or AfterColon.
+# CompactNamespaces: false # If true, compact nested namespaces.
+# ConstructorInitializerIndentWidth: 4 # Indent width for constructor initializers.
+# ContinuationIndentWidth: 4 # Indent width for continuation lines.
+# Cpp11BracedListStyle: false # If true, use C++11 braced list style.
+# DerivePointerAlignment: false # If true, derive pointer alignment from the first pointer in the file.
+# DisableFormat: false # If true, disable formatting.
+# ExperimentalAutoDetectBinPacking: false # If true, enable experimental auto-detection of bin-packing.
+# ForEachMacros: # Macros that are for-each loops.
+#   - foreach
+#   - Q_FOREACH
+#   - BOOST_FOREACH
+# IncludeCategories: # Categories for sorting includes.
+#   - Regex: '^"(llvm|llvm-c|clang|clang-c)/'
+#     Priority: 2
+#   - Regex: '^(<|")(gtest|gmock)/'
+#     Priority: 3
+#   - Regex: '.*'
+#     Priority: 1
+# IndentAccessModifiers: false # If true, indent access modifiers.
+# IndentCaseLabels: false # If true, indent case labels.
+# IndentPPDirectives: None # Can be None, AfterHash, or BeforeHash.
+# IndentWidth: 4 # The number of spaces to use for indentation.
+# KeepEmptyLinesAtTheStartOfBlocks: false # If true, keep empty lines at the start of blocks.
+# MaxEmptyLinesToKeep: 1 # The maximum number of empty lines to keep.
+# NamespaceIndentation: None # Can be None, Inner, or All.
+# ObjCBlockIndentWidth: 4 # Indent width for Objective-C blocks.
+# ObjCSpaceAfterProperty: false # If true, add a space after Objective-C property.
+# ObjCSpaceBeforeProtocolList: true # If true, add a space before Objective-C protocol list.
+# PointerAlignment: Left # Can be Left, Right, or Middle.
+# ReflowComments: true # If true, reflow comments.
+# SpaceAfterCStyleCast: false # If true, add a space after C-style casts.
+# SpaceBeforeAssignmentOperators: true # If true, add a space before assignment operators.
+# SpaceBeforeCpp11BracedList: false # If true, add a space before C++11 braced lists.
+# SpaceBeforeParens: ControlStatements # Can be Never, ControlStatements, or Always.
+# SpaceBeforeRangeBasedForLoopColon: true # If true, add a space before the colon in range-based for loops.
+# SpaceInEmptyParentheses: false # If true, add a space in empty parentheses.
+# SpacesBeforeTrailingComments: 1 # The number of spaces before trailing comments.
+# Standard: Cpp11 # The C++ standard to use. Can be Cpp03, Cpp11, Cpp14, Cpp17, Cpp20, or Latest.
+# TabWidth: 4 # The number of spaces to use for a tab.
+# UseTab: Never # Can be Never, ForIndentation, or Always.
+# WhitespaceSensitiveProperties: false # If true, treat whitespace sensitive properties.
+# AllowShortIfStatementsOnASingleLine: false # If true, allows short if statements to be put on a single line.
+# AllowShortLoopsOnASingleLine: false # If true, allows short loops to be put on a single line.
+# AllowShortFunctionsOnASingleLine: None # Can be None, Empty, Inline, or All.
+# AllowShortCaseLabelsOnASingleLine: false # If true, allows short case labels to be put on a single line.
+# AllowShortBlocksOnASingleLine: false # If true, allows short blocks to be put on a single line.
+# AlwaysBreakAfterReturnType: None # Can be None, All, TopLevel, or AllDefinitions.
+# AlwaysBreakBeforeMultilineStrings: false # If true, always break before multiline string literals.
+# AlwaysBreakTemplateDeclarations: No # Can be No, Yes, or TopLevel.
+# BinPackArguments: true # If true, pack arguments into as few lines as possible.
+# BinPackParameters: true # If true, pack parameters into as few lines as possible.
+# BreakAfterBinaryOperators: None # Can be None, NonAssignment, or All.
+# BreakBeforeBraces: Attach # Controls the brace wrapping style. Can be Attach, Linux, Mozilla, or Stroustrup.
+# BreakBeforeTernaryOperators: true # If true, break before ternary operators.
+# BreakConstructorInitializers: BeforeColon # Can be BeforeColon or AfterColon.
+# CompactNamespaces: false # If true, compact nested namespaces.
+# ConstructorInitializerIndentWidth: 4 # Indent width for constructor initializers.
+# ContinuationIndentWidth: 4 # Indent width for continuation lines.
+# Cpp11BracedListStyle: false # If true, use C++11 braced list style.
+# DerivePointerAlignment: false # If true, derive pointer alignment from the first pointer in the file.
+# DisableFormat: false # If true, disable formatting.
+# ExperimentalAutoDetectBinPacking: false # If true, enable experimental auto-detection of bin-packing.
+# ForEachMacros: # Macros that are for-each loops.
+#   - foreach
+#   - Q_FOREACH
+#   - BOOST_FOREACH
+# IncludeCategories: # Categories for sorting includes.
+#   - Regex: '^"(llvm|llvm-c|clang|clang-c)/'
+#     Priority: 2
+#   - Regex: '^(<|")(gtest|gmock)/'
+#     Priority: 3
+#   - Regex: '.*'
+#     Priority: 1
+# IndentAccessModifiers: false # If true, indent access modifiers.
+# IndentCaseLabels: false # If true, indent case labels.
+# IndentPPDirectives: None # Can be None, AfterHash, or BeforeHash.
+# IndentWidth: 4 # The number of spaces to use for indentation.
+# KeepEmptyLinesAtTheStartOfBlocks: false # If true, keep empty lines at the start of blocks.
+# MaxEmptyLinesToKeep: 1 # The maximum number of empty lines to keep.
+# NamespaceIndentation: None # Can be None, Inner, or All.
+# ObjCBlockIndentWidth: 4 # Indent width for Objective-C blocks.
+# ObjCSpaceAfterProperty: false # If true, add a space after Objective-C property.
+# ObjCSpaceBeforeProtocolList: true # If true, add a space before Objective-C protocol list.
+# PointerAlignment: Left # Can be Left, Right, or Middle.
+# ReflowComments: true # If true, reflow comments.
+# SpaceAfterCStyleCast: false # If true, add a space after C-style casts.
+# SpaceBeforeAssignmentOperators: true # If true, add a space before assignment operators.
+# SpaceBeforeCpp11BracedList: false # If true, add a space before C++11 braced lists.
+# SpaceBeforeParens: ControlStatements # Can be Never, ControlStatements, or Always.
+# SpaceBeforeRangeBasedForLoopColon: true # If true, add a space before the colon in range-based for loops.
+# SpaceInEmptyParentheses: false # If true, add a space in empty parentheses.
+# SpacesBeforeTrailingComments: 1 # The number of spaces before trailing comments.
+# Standard: Cpp11 # The C++ standard to use. Can be Cpp03, Cpp11, Cpp14, Cpp17, Cpp20, or Latest.
+# TabWidth: 4 # The number of spaces to use for a tab.
+# UseTab: Never # Can be Never, ForIndentation, or Always.
+# WhitespaceSensitiveProperties: false # If true, treat whitespace sensitive properties.
