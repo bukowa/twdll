@@ -1,0 +1,7 @@
+CompileFlags:
+  CompilationDatabase: "build/vs2022-win32-ninja"
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  TypeHints: true
+  

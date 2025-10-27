@@ -2,46 +2,45 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "base",
+      "name": "base-ninja",
       "hidden": true,
-      "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/build/${presetName}",
-      "architecture": {
-        "value": "Win32",
-        "strategy": "set"
-      },
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+      "name": "clangd-ninja",
+      "displayName": "Clangd Ninja (Generates compile_commands.json)",
+      "inherits": "base-ninja",
+      "generator": "Ninja",
+      "architecture": {},
       "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "LUA_VERSION": "5.1.2",
         "INSTALL_MOD": "ON"
       }
     },
     {
-      "name": "windows-x86-debug",
-      "displayName": "Windows x86 Debug",
-      "inherits": "base",
+      "name": "vs2022-win32-ninja",
+      "displayName": "Visual Studio 2022 (32-bit Ninja)",
+      "inherits": "clangd-ninja",
+      "environment": {
+        "PATH": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX86\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x86;C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE;$penv{PATH}",
+        "LIB": "C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x86;C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x86",
+        "LIBPATH": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\UnionMetadata\\10.0.26100.0;C:\\Program Files (x86)\\Windows Kits\\10\\References\\10.0.26100.0",
+        "INCLUDE": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\include;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\ucrt;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\shared;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\um"
+      },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "windows-x86-release",
-      "displayName": "Windows x86 Release",
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_C_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/HostX86/x86/cl.exe",
+        "CMAKE_CXX_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/HostX86/x86/cl.exe",
+        "CMAKE_MAKE_PROGRAM": "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "debug",
-      "displayName": "Build (Debug)",
-      "configurePreset": "windows-x86-debug"
-    },
-    {
-      "name": "release",
-      "displayName": "Build (Release)",
-      "configurePreset": "windows-x86-release"
+      "name": "vs2022-win32-ninja",
+      "displayName": "Build (VS 2022 32-bit Ninja)",
+      "configurePreset": "vs2022-win32-ninja"
     }
   ]
 }

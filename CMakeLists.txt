@@ -7,8 +7,8 @@ project(libtwdll)
 
 enable_language(C CXX)
 
-set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
 # ========================
 # CLion Environment Setup
@@ -93,12 +93,24 @@ add_library(twdll SHARED
         src/script_utils.h
         src/battle_unit_script_interface.h
         src/military_force_script_interface.h
+        src/dx_finder.cpp
+        src/dx_finder.h
+        include/imgui/imgui.cpp
+        include/imgui/imgui_draw.cpp
+        include/imgui/imgui_tables.cpp
+        include/imgui/imgui_widgets.cpp
+        include/imgui/backends/imgui_impl_win32.cpp
+        include/imgui/backends/imgui_impl_dx11.cpp
+        include/imgui/imgui_demo.cpp
 )
+
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "twdll")
 
 target_include_directories(twdll
         PUBLIC
         src
+        include/imgui
+        include/imgui/backends
         PRIVATE
         ${MINHOOK_INCLUDE_DIR}
 )
@@ -294,6 +306,7 @@ target_compile_options(luadll PRIVATE "/wd4005")
 if (MSVC)
     set(CMAKE_C_FLAGS_RELEASE "/O2 /Z7 /DNDEBUG /W4")
     set(CMAKE_C_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
 # ========================
@@ -337,3 +350,46 @@ add_custom_command(
 add_custom_target(docs
         DEPENDS ${DOCS_MAIN_OUTPUT_FILE}
 )
+
+# ===========================================
+# Run Target (mimics make run-alone)
+# ===========================================
+
+
+# This section is only active if the mod installation is enabled.
+if (INSTALL_MOD)
+
+    # 1. Define the "kill_rome2" target.
+    # This now simply calls our dedicated PowerShell script.
+    add_custom_target(kill_rome2
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/kill_rome2.ps1"
+        COMMENT "Terminating existing Rome2.exe process via script..."
+        VERBATIM
+    )
+
+    # 2. Define the directory to launch the game from. (This part is unchanged)
+    if(INSTALL_DIRS)
+        list(GET INSTALL_DIRS 0 GAME_LAUNCH_DIR)
+        message(STATUS "Run target will launch game from: ${GAME_LAUNCH_DIR}")
+    else()
+        message(FATAL_ERROR "INSTALL_DIRS is not set. Cannot define 'run_alone' target.")
+    endif()
+
+    # 3. Define the main "run_alone" target.
+    # This target now orchestrates by calling the run_game.ps1 script.
+    add_custom_target(run_alone
+        # Dependencies remain the same, ensuring the correct order of operations.
+        DEPENDS
+            kill_rome2
+            twdll
+            install_mod
+
+        # The single command calls our script and passes the required paths as named arguments.
+        # This is clean, readable, and robust.
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_game.ps1" -PopupScriptPath "${CMAKE_CURRENT_SOURCE_DIR}/scripts/disable_outdated_mods_popup.bat" -GameLaunchDir "${GAME_LAUNCH_DIR}"
+
+        COMMENT "Running kill_rome2, installing mod, and launching the game via scripts..."
+        VERBATIM
+    )
+
+endif()
