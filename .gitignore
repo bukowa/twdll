@@ -23,3 +23,7 @@ cmakeenv
 build
 rome2.do.ser
 c_cpp_properties.json
+*.vcxproj
+*.vcxproj.filters
+libtwdll.sln
+.other
