@@ -32,12 +32,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     return TRUE;
 }
 
-// We still need the extern "C" block for the Lua headers
-extern "C"
-{
-#include <lua.h>
-#include <lauxlib.h>
-}
 
 // --- Lua GC Hook for Standalone Game ---
 // This is the C function that Lua's garbage collector will call.
@@ -51,27 +45,26 @@ static int script_Cleanup(lua_State* L) {
 // This function creates the special 'cleanup' object in Lua.
 static void CreateCleanupObject(lua_State* L) {
     // Create a new userdata object. It's just a placeholder.
-    lua_newuserdata(L, 1);
+    g_game_lua_newuserdata(L, 1);
 
     // Create a metatable for our userdata.
-    luaL_newmetatable(L, "twdll_cleanup_metatable");
+    g_game_luaL_newmetatable(L, "twdll_cleanup_metatable");
 
     // Set the __gc field of the metatable to our C cleanup function.
-    if (g_game_lua_pushstring) {
-        g_game_lua_pushstring(L, "__gc");
-    } else {
-        Log("ERROR: g_game_lua_pushstring is not initialized. Cannot set __gc metamethod.");
-        // Fallback to original if not initialized, though this indicates a problem
-        lua_pushstring(L, "__gc");
-    }
-    lua_pushcfunction(L, script_Cleanup);
-    lua_settable(L, -3);
+        if (g_game_lua_pushstring) {
+            g_game_lua_pushstring(L, "__gc");
+        } else {
+            Log("ERROR: g_game_lua_pushstring is not initialized. Cannot set __gc metamethod.");
+            g_game_lua_pushstring(L, "__gc");
+        }
+    g_game_lua_pushcclosure(L, script_Cleanup, 0);
+    g_game_lua_settable(L, -3);
 
     // Assign the metatable to our userdata object.
-    lua_setmetatable(L, -2);
+    g_game_lua_setmetatable(L, -2);
 
     // Store the userdata in a global variable so it doesn't get collected early.
-    lua_setglobal(L, "_twdll_cleanup_trigger");
+    g_game_lua_setfield(L, LUA_GLOBALSINDEX, "_twdll_cleanup_trigger");
     Log("--- Lua GC: Cleanup object created and registered. ---");
 }
  
@@ -87,7 +80,7 @@ static void CreateCleanupObject(lua_State* L) {
  */
 static int script_Log(lua_State *L)
 {
-    const char *message = luaL_checkstring(L, 1);
+    const char *message = g_game_luaL_checklstring(L, 1, NULL);
     Log(message); // Call the existing C++ Log function
     return 0;
 }
@@ -112,14 +105,14 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L)
     static bool hooks_are_initialized = false;
 
     // Register the main 'twdll' table with core functions like Log
-    luaL_register(L, "twdll", twdll_main_functions);
+    g_game_luaL_register(L, "twdll", twdll_main_functions);
 
     // Register the specific interface modules
-    luaL_register(L, "twdll_unit", unit_functions);
-    luaL_register(L, "twdll_character", character_functions);
-    luaL_register(L, "twdll_battle_unit", battle_unit_functions);
-    luaL_register(L, "twdll_faction", faction_functions);
-    luaL_register(L, "twdll_military_force", military_force_functions);
+    g_game_luaL_register(L, "twdll_unit", unit_functions);
+    g_game_luaL_register(L, "twdll_character", character_functions);
+    g_game_luaL_register(L, "twdll_battle_unit", battle_unit_functions);
+    g_game_luaL_register(L, "twdll_faction", faction_functions);
+    g_game_luaL_register(L, "twdll_military_force", military_force_functions);
 
     if (hooks_are_initialized)
     {
