@@ -37,18 +37,29 @@ set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-${LUA_VERSION}/src"
 file(GLOB LUA_SOURCES "${LUA_SRC_DIR}/*.c")
 list(REMOVE_ITEM LUA_SOURCES "${LUA_SRC_DIR}/lua.c" "${LUA_SRC_DIR}/luac.c")
 list(SORT LUA_SOURCES)
-include_directories(${LUA_SRC_DIR})
 
 # ========================
 # Lua Setup (luadll)
 # ========================
 add_library(luadll SHARED ${LUA_SOURCES})
+
+target_include_directories(luadll
+        PRIVATE
+        ${LUA_SRC_DIR}
+)
+
 set_target_properties(luadll PROPERTIES
     OUTPUT_NAME "lua"
     PDB_NAME "lua_dll"
 )
 
 add_executable(lua_for_docs "${LUA_SRC_DIR}/lua.c")
+
+target_include_directories(lua_for_docs
+        PRIVATE
+        ${LUA_SRC_DIR}
+)
+
 target_link_libraries(lua_for_docs PRIVATE luadll)
 
 target_compile_definitions(luadll
@@ -64,6 +75,12 @@ target_compile_definitions(luadll
 # Lua Setup (lua.exe)
 # ========================
 add_executable(lua.exe "${LUA_SRC_DIR}/lua.c" ${LUA_SOURCES})
+
+target_include_directories(lua.exe
+        PRIVATE
+        ${LUA_SRC_DIR}
+)
+
 target_compile_definitions(lua.exe PRIVATE LUA_CORE LUA_WIN)
 set_target_properties(lua.exe PROPERTIES
     OUTPUT_NAME "lua"
@@ -74,6 +91,12 @@ set_target_properties(lua.exe PROPERTIES
 # Lua Setup (luac.exe)
 # ========================
 add_executable(luac.exe "${LUA_SRC_DIR}/luac.c" ${LUA_SOURCES})
+
+target_include_directories(luac.exe
+        PRIVATE
+        ${LUA_SRC_DIR}
+)
+
 target_compile_definitions(luac.exe PRIVATE LUA_CORE LUA_WIN)
 set_target_properties(luac.exe PROPERTIES OUTPUT_NAME "luac")
 
@@ -103,6 +126,7 @@ add_library(twdll SHARED
         src/dx_finder.h
         src/signature_scanner.cpp
         src/game_lua_api.cpp
+        src/lua_forward_declarations.h
         include/imgui/imgui.cpp
         include/imgui/imgui_draw.cpp
         include/imgui/imgui_tables.cpp
@@ -139,6 +163,12 @@ set(LUASOCKET_SOURCES
 list(TRANSFORM LUASOCKET_SOURCES PREPEND "${LUASOCKET_SRC_DIR}/")
 
 add_library(luasocket SHARED ${LUASOCKET_SOURCES})
+
+target_include_directories(luasocket
+        PRIVATE
+        ${LUA_SRC_DIR}
+)
+
 target_link_libraries(luasocket PRIVATE luadll)
 target_link_libraries(luasocket PRIVATE ws2_32.lib)
 set_target_properties(luasocket PROPERTIES OUTPUT_NAME "socket")

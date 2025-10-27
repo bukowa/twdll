@@ -1,7 +1,7 @@
 #pragma once
-extern "C" {
-#include <lua.h>
-}
+
+#include "lua_forward_declarations.h"
+#include "game_lua_api.h" // Include game_lua_api.h for g_game_lua_pushnil
 
 // --- Generic Memory Access (Templates stay in header) ---
 
@@ -10,10 +10,12 @@ T read_from(void *base_address, const size_t offset) {
     return *reinterpret_cast<T *>(static_cast<char *>(base_address) + offset);
 }
 
+
 template<typename T>
 void write_to(void *base_address, const size_t offset, T value) {
     *reinterpret_cast<T *>(static_cast<char *>(base_address) + offset) = value;
 }
+
 
 // --- Generic Lua Scripting Helpers (Declarations and Templates) ---
 
@@ -26,13 +28,14 @@ int read_property_lua(lua_State *L, size_t pointer_offset, size_t property_offse
                       void (*push_function)(lua_State *, U)) {
     void *object = get_object_from_indirect_wrapper(L, object_type_name, pointer_offset);
     if (!object) {
-        lua_pushnil(L);
+        g_game_lua_pushnil(L);
         return 1;
     }
     T current_value = read_from<T>(object, property_offset);
     push_function(L, static_cast<U>(current_value));
     return 1;
 }
+
 
 template<typename T, typename U>
 int write_property_lua(lua_State *L, size_t pointer_offset, size_t property_offset, const char *object_type_name,
@@ -46,19 +49,20 @@ int write_property_lua(lua_State *L, size_t pointer_offset, size_t property_offs
     return 0;
 }
 
+
 template<typename T, typename U>
 int read_nested_property_lua(lua_State *L, size_t pointer_offset, size_t nested_obj_ptr_offset,
                              size_t final_property_offset, const char *object_type_name,
                              void (*push_function)(lua_State *, U)) {
     void *base_object = get_object_from_indirect_wrapper(L, object_type_name, pointer_offset);
     if (!base_object) {
-        lua_pushnil(L);
+        g_game_lua_pushnil(L);
         return 1;
     }
 
     void *nested_obj = read_from<void *>(base_object, nested_obj_ptr_offset);
     if (!nested_obj) {
-        lua_pushnil(L); // Nested object pointer is null, return nil.
+        g_game_lua_pushnil(L); // Nested object pointer is null, return nil.
         return 1;
     }
 
@@ -66,6 +70,7 @@ int read_nested_property_lua(lua_State *L, size_t pointer_offset, size_t nested_
     push_function(L, static_cast<U>(final_value));
     return 1;
 }
+
 
 // --- Common Lua-facing Implementations (Declarations) ---
 
@@ -82,3 +87,4 @@ int read_nested_float_property(lua_State *L, size_t pointer_offset, size_t neste
                                size_t final_property_offset, const char *object_type_name);
 
 int get_memory_address_lua(lua_State *L, const char *object_type_name, size_t pointer_offset);
+

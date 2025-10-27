@@ -2,6 +2,7 @@
 /// Functions for interacting with factions.
 #include "script_utils.h"
 #include "faction_script_interface.h"
+#include <cstddef> // For NULL
 
 #define REAL_FACTION_POINTER_OFFSET 0x8
 #define FACTION_GOLD_OFFSET 0x6C4

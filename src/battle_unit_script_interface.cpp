@@ -2,6 +2,7 @@
 /// Functions for interacting with battle units.
 #include "script_utils.h"
 #include "battle_unit_script_interface.h"
+#include <cstddef> // For NULL
 
 #define REAL_BATTLE_UNIT_POINTER_OFFSET 0x4
 

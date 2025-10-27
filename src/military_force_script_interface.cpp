@@ -2,6 +2,7 @@
 /// Functions for interacting with military forces.
 #include "script_utils.h"
 #include "military_force_script_interface.h"
+#include <cstddef> // For NULL
 
 #define REAL_MILITARY_FORCE_POINTER_OFFSET 0x8
 #define RECRUITMENT_QUEUE_SIZE_OFFSET 0x45C

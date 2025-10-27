@@ -5,6 +5,7 @@ static bool byte_matches(const unsigned char byte, const unsigned char pattern_b
     return (byte & mask_byte) == (pattern_byte & mask_byte);
 }
 
+
 // Signature scanning function
 uintptr_t find_signature(uintptr_t base_address, size_t size, const char* signature_str) {
     // Convert signature string to byte array and generate mask

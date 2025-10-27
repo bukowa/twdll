@@ -2,6 +2,7 @@
 /// Functions for interacting with campaign units.
 #include "script_utils.h"
 #include "unit_script_interface.h"
+#include <cstddef> // For NULL
 
 // The offset to get the real pointer from the wrapper object.
 #define REAL_UNIT_POINTER_OFFSET 0x8

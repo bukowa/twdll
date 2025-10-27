@@ -3,11 +3,7 @@
 #include <cstdint>
 #include "signature_scanner.h"
 #include <vector>
-
-extern "C" {
-#include <lua.h>
-#include <lauxlib.h>
-}
+#include "lua_forward_declarations.h"
 
 // Define function pointer types for Lua functions
 typedef void (*lua_pushstring_t)(lua_State* L, const char* s);
@@ -20,6 +16,12 @@ typedef void (*lua_setfield_t)(lua_State* L, int idx, const char* k);
 typedef const char* (*luaL_checklstring_t)(lua_State* L, int arg, size_t *l);
 typedef void (*luaL_register_t)(lua_State* L, const char* libname, const luaL_Reg* l);
 typedef void (*lua_createtable_t)(lua_State* L, int narr, int nrec);
+typedef void* (*lua_touserdata_t)(lua_State* L, int idx);
+typedef void (*lua_pushinteger_t)(lua_State* L, lua_Integer n);
+typedef lua_Integer (*lua_tointeger_t)(lua_State* L, int idx);
+typedef void (*lua_pushnumber_t)(lua_State* L, lua_Number n);
+typedef lua_Number (*lua_tonumber_t)(lua_State* L, int idx);
+typedef void (*lua_pushnil_t)(lua_State* L);
 
 // Global variables to hold game's Lua function addresses
 extern lua_pushstring_t g_game_lua_pushstring;
@@ -32,6 +34,12 @@ extern lua_setfield_t g_game_lua_setfield;
 extern luaL_checklstring_t g_game_luaL_checklstring;
 extern luaL_register_t g_game_luaL_register;
 extern lua_createtable_t g_game_lua_createtable;
+extern lua_touserdata_t g_game_lua_touserdata;
+extern lua_pushinteger_t g_game_lua_pushinteger;
+extern lua_tointeger_t g_game_lua_tointeger;
+extern lua_pushnumber_t g_game_lua_pushnumber;
+extern lua_tonumber_t g_game_lua_tonumber;
+extern lua_pushnil_t g_game_lua_pushnil;
 
 // Placeholder for the game's base address (to be filled by the user)
 // For demonstration, we'll use a dummy value. In a real scenario, you'd get this

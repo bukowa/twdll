@@ -15,6 +15,12 @@ lua_setfield_t g_game_lua_setfield = nullptr;
 luaL_checklstring_t g_game_luaL_checklstring = nullptr; // Changed from checkstring
 luaL_register_t g_game_luaL_register = nullptr;
 lua_createtable_t g_game_lua_createtable = nullptr;
+lua_touserdata_t g_game_lua_touserdata = nullptr;
+lua_pushinteger_t g_game_lua_pushinteger = nullptr;
+lua_tointeger_t g_game_lua_tointeger = nullptr;
+lua_pushnumber_t g_game_lua_pushnumber = nullptr;
+lua_tonumber_t g_game_lua_tonumber = nullptr;
+lua_pushnil_t g_game_lua_pushnil = nullptr;
 uintptr_t g_game_base_address = 0; // Definition for g_game_base_address
 uintptr_t LUA_PUSHSTRING_OFFSET =
     0x0; // This is now unused, but kept for consistency if needed elsewhere
@@ -99,6 +105,54 @@ static SignatureInfo g_signatures_to_find[] = {
         (void**)&g_game_lua_createtable,
         {
             {"Rome2.dll", "55 8B EC 56 57 8B 7D ? 8B 4F ? 8B 41 ? 3B 41 ? 72 ? 57 E8 ? ? ? ? 83 C4 ? FF 75 ? 8B 77 ? FF 75 ? 57 E8 ? ? ? ? 83 C4 ? ? ? C7 46 ? ? ? ? ? 83 47 ? ? 5F 5E 5D C3 ? 55 8B EC 8B 4D ? 8B 41 ? 83 78"},
+            {"empire.retail.dll", ""}
+        }
+    },
+    {
+        "lua_touserdata",
+        (void**)&g_game_lua_touserdata,
+        {
+            {"Rome2.dll", ""},
+            {"empire.retail.dll", ""}
+        }
+    },
+    {
+        "lua_pushinteger",
+        (void**)&g_game_lua_pushinteger,
+        {
+            {"Rome2.dll", ""},
+            {"empire.retail.dll", ""}
+        }
+    },
+    {
+        "lua_tointeger",
+        (void**)&g_game_lua_tointeger,
+        {
+            {"Rome2.dll", ""},
+            {"empire.retail.dll", ""}
+        }
+    },
+    {
+        "lua_pushnumber",
+        (void**)&g_game_lua_pushnumber,
+        {
+            {"Rome2.dll", ""},
+            {"empire.retail.dll", ""}
+        }
+    },
+    {
+        "lua_tonumber",
+        (void**)&g_game_lua_tonumber,
+        {
+            {"Rome2.dll", ""},
+            {"empire.retail.dll", ""}
+        }
+    },
+    {
+        "lua_pushnil",
+        (void**)&g_game_lua_pushnil,
+        {
+            {"Rome2.dll", ""},
             {"empire.retail.dll", ""}
         }
     }
