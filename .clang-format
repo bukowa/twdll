@@ -7,3 +7,5 @@ UseTab: Never
 BreakBeforeBraces: Attach
 AllowShortIfStatementsOnASingleLine: false
 ColumnLimit: 100
+IncludeBlocks: Preserve
+SortIncludes: Never

@@ -1,6 +1,6 @@
 #include "game_lua_api.h"
-#include "log.h"
 #include <windows.h>
+#include "log.h"
 #include <Psapi.h> // For GetModuleInformation and MODULEINFO
 #include <cstring> // For strcmp
 
@@ -20,9 +20,11 @@ lua_createtable_t g_game_lua_createtable = nullptr;
 lua_objlen_t g_game_lua_objlen = nullptr;
 lua_tolstring_t g_game_lua_tolstring = nullptr;
 uintptr_t g_game_base_address = 0; // Definition for g_game_base_address
-uintptr_t LUA_PUSHSTRING_OFFSET = 0x0; // This is now unused, but kept for consistency if needed elsewhere
+uintptr_t LUA_PUSHSTRING_OFFSET =
+    0x0; // This is now unused, but kept for consistency if needed elsewhere
 
 // Array of signatures to find
+// clang-format off
 static SignatureInfo g_signatures_to_find[] = {
     {
         "lua_pushstring",
@@ -137,6 +139,7 @@ static SignatureInfo g_signatures_to_find[] = {
         }
     }
 };
+//clang-format on
 
 // Function to initialize the game_lua_api function pointers
 void initialize_game_lua_api() {
