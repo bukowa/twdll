@@ -13,29 +13,30 @@
 // This function is the entry point for the DLL.
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     switch (ul_reason_for_call) {
-        case DLL_PROCESS_ATTACH:
-            // This is called when the DLL is first loaded into the process.
-            initialize_game_lua_api(); // Initialize our game Lua API function pointers
-            break;
-        case DLL_PROCESS_DETACH:
-            // This is called when the DLL is being unloaded.
-            // THIS IS THE FIX: We must disable our hooks to prevent a crash.
-            Log("--- DllMain: DETACH received, calling CleanupHooks... ---");
-            CleanupHooks(); // <<< MODIFIED THIS LINE
-            Log("--- DllMain: Cleanup complete. ---");
-            break;
-        case DLL_THREAD_ATTACH:
-        case DLL_THREAD_DETACH:
-            // These are called for thread creation/destruction, not relevant for us.
-            break;
+    case DLL_PROCESS_ATTACH:
+        Log("DLL process attach START");
+        // This is called when the DLL is first loaded into the process.
+        initialize_game_lua_api(); // Initialize our game Lua API function pointers
+        Log("DLL process attach FINISH");
+        break;
+    case DLL_PROCESS_DETACH:
+        // This is called when the DLL is being unloaded.
+        // THIS IS THE FIX: We must disable our hooks to prevent a crash.
+        Log("--- DllMain: DETACH received, calling CleanupHooks... ---");
+        CleanupHooks(); // <<< MODIFIED THIS LINE
+        Log("--- DllMain: Cleanup complete. ---");
+        break;
+    case DLL_THREAD_ATTACH:
+    case DLL_THREAD_DETACH:
+        // These are called for thread creation/destruction, not relevant for us.
+        break;
     }
     return TRUE;
 }
 
-
 // --- Lua GC Hook for Standalone Game ---
 // This is the C function that Lua's garbage collector will call.
-static int script_Cleanup(lua_State* L) {
+static int script_Cleanup(lua_State *L) {
     Log("--- Lua GC: __gc metamethod called. Cleaning up hooks... ---");
     CleanupHooks();
     Log("--- Lua GC: Cleanup complete. ---");
@@ -43,7 +44,7 @@ static int script_Cleanup(lua_State* L) {
 }
 
 // This function creates the special 'cleanup' object in Lua.
-static void CreateCleanupObject(lua_State* L) {
+static void CreateCleanupObject(lua_State *L) {
     // Create a new userdata object. It's just a placeholder.
     g_game_lua_newuserdata(L, 1);
 
@@ -51,12 +52,12 @@ static void CreateCleanupObject(lua_State* L) {
     g_game_luaL_newmetatable(L, "twdll_cleanup_metatable");
 
     // Set the __gc field of the metatable to our C cleanup function.
-        if (g_game_lua_pushstring) {
-            g_game_lua_pushstring(L, "__gc");
-        } else {
-            Log("ERROR: g_game_lua_pushstring is not initialized. Cannot set __gc metamethod.");
-            g_game_lua_pushstring(L, "__gc");
-        }
+    if (g_game_lua_pushstring) {
+        g_game_lua_pushstring(L, "__gc");
+    } else {
+        Log("ERROR: g_game_lua_pushstring is not initialized. Cannot set __gc metamethod.");
+        g_game_lua_pushstring(L, "__gc");
+    }
     g_game_lua_pushcclosure(L, script_Cleanup, 0);
     g_game_lua_settable(L, -3);
 
@@ -67,9 +68,9 @@ static void CreateCleanupObject(lua_State* L) {
     g_game_lua_setfield(L, LUA_GLOBALSINDEX, "_twdll_cleanup_trigger");
     Log("--- Lua GC: Cleanup object created and registered. ---");
 }
- 
- /// @module libtwdll
- /// The main entry point for the twdll Lua extension library.
+
+/// @module libtwdll
+/// The main entry point for the twdll Lua extension library.
 
 // --- Core Functions Exposed to Lua ---
 
@@ -78,30 +79,27 @@ static void CreateCleanupObject(lua_State* L) {
  * @function Log
  * @tparam string message The message to write to the log.
  */
-static int script_Log(lua_State *L)
-{
+static int script_Log(lua_State *L) {
     const char *message = g_game_luaL_checklstring(L, 1, NULL);
     Log(message); // Call the existing C++ Log function
     return 0;
 }
 
-static int findandhook(lua_State *L){
+static int findandhook(lua_State *L) {
     FindAndHookD3D();
     return 0;
 };
 
 // Registration table for the main 'twdll' module
 static const struct luaL_Reg twdll_main_functions[] = {
-    {"Log", script_Log},
-    {"FindSwapChain", findandhook},
-    {NULL, NULL}};
+    {"Log", script_Log}, {"FindSwapChain", findandhook}, {NULL, NULL}};
 
 /// @function luaopen_libtwdll
 /// Initializes all twdll submodules and registers them in Lua.
 /// @tparam lua_State L
 /// @treturn integer always 1 (returns the main twdll table)
-extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L)
-{
+extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
+    Log("luaopen_twdll START");
     static bool hooks_are_initialized = false;
 
     // Register the main 'twdll' table with core functions like Log
@@ -114,18 +112,15 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L)
     g_game_luaL_register(L, "twdll_faction", faction_functions);
     g_game_luaL_register(L, "twdll_military_force", military_force_functions);
 
-    if (hooks_are_initialized)
-    {
+    if (hooks_are_initialized) {
         Log("--- libtwdll modules re-registered. ---");
-    }
-    else
-    {
+    } else {
         Log("--- libtwdll first-time initialization. Placing hooks... ---");
         // TODO: Add any hook initialization here
         CreateCleanupObject(L); // <<< ADDED THIS LINE
         hooks_are_initialized = true;
         Log("--- libtwdll modules registered and hooks placed. ---");
     }
-
+    Log("luaopen_twdll FINISH");
     return 1; // <<< MODIFIED THIS LINE: Return the 'twdll' table
 }
