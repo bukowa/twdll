@@ -34,7 +34,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_newuserdata",
         (void**)&g_game_lua_newuserdata,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 56 8B 75 ? 8B 4E ? 8B 41 ? 3B 41 ? 72 ? 56 E8 ? ? ? ? 83 C4 ? 8B 46"},
             {"empire.retail.dll", ""}
         }
     },
