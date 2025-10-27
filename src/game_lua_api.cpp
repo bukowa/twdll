@@ -14,11 +14,7 @@ lua_setmetatable_t g_game_lua_setmetatable = nullptr;
 lua_setfield_t g_game_lua_setfield = nullptr;
 luaL_checklstring_t g_game_luaL_checklstring = nullptr; // Changed from checkstring
 luaL_register_t g_game_luaL_register = nullptr;
-lua_getfield_t g_game_lua_getfield = nullptr;
-lua_settop_t g_game_lua_settop = nullptr;
 lua_createtable_t g_game_lua_createtable = nullptr;
-lua_objlen_t g_game_lua_objlen = nullptr;
-lua_tolstring_t g_game_lua_tolstring = nullptr;
 uintptr_t g_game_base_address = 0; // Definition for g_game_base_address
 uintptr_t LUA_PUSHSTRING_OFFSET =
     0x0; // This is now unused, but kept for consistency if needed elsewhere
@@ -62,7 +58,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_settable",
         (void**)&g_game_lua_settable,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 56 FF 75 ? 8B 75 ? 56 E8 ? ? ? ? 8B 56 ? 8D 4A"},
             {"empire.retail.dll", ""}
         }
     },
@@ -70,7 +66,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_setmetatable",
         (void**)&g_game_lua_setmetatable,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 56 8B 75 ? 57 FF 75 ? 56 E8 ? ? ? ? 8B 4E"},
             {"empire.retail.dll", ""}
         }
     },
@@ -78,7 +74,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_setfield",
         (void**)&g_game_lua_setfield,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 83 EC ? 53 56 8B 75 ? 57 FF 75 ? 56 E8 ? ? ? ? 8B 55 ? 83 C4 ? 8B CA 8B F8 8D 59 ? ? ? 41 84 C0 75 ? 2B CB 51 52 56 E8 ? ? ? ? 89 45"},
             {"empire.retail.dll", ""}
         }
     },
@@ -99,42 +95,10 @@ static SignatureInfo g_signatures_to_find[] = {
         }
     },
     {
-        "lua_getfield",
-        (void**)&g_game_lua_getfield,
-        {
-            {"Rome2.dll", ""},
-            {"empire.retail.dll", ""}
-        }
-    },
-    {
-        "lua_settop",
-        (void**)&g_game_lua_settop,
-        {
-            {"Rome2.dll", ""},
-            {"empire.retail.dll", ""}
-        }
-    },
-    {
         "lua_createtable",
         (void**)&g_game_lua_createtable,
         {
             {"Rome2.dll", "55 8B EC 56 57 8B 7D ? 8B 4F ? 8B 41 ? 3B 41 ? 72 ? 57 E8 ? ? ? ? 83 C4 ? FF 75 ? 8B 77 ? FF 75 ? 57 E8 ? ? ? ? 83 C4 ? ? ? C7 46 ? ? ? ? ? 83 47 ? ? 5F 5E 5D C3 ? 55 8B EC 8B 4D ? 8B 41 ? 83 78"},
-            {"empire.retail.dll", ""}
-        }
-    },
-    {
-        "lua_objlen",
-        (void**)&g_game_lua_objlen,
-        {
-            {"Rome2.dll", ""},
-            {"empire.retail.dll", ""}
-        }
-    },
-    {
-        "lua_tolstring",
-        (void**)&g_game_lua_tolstring,
-        {
-            {"Rome2.dll", ""},
             {"empire.retail.dll", ""}
         }
     }

@@ -19,11 +19,7 @@ typedef int (*lua_setmetatable_t)(lua_State* L, int objindex);
 typedef void (*lua_setfield_t)(lua_State* L, int idx, const char* k);
 typedef const char* (*luaL_checklstring_t)(lua_State* L, int arg, size_t *l);
 typedef void (*luaL_register_t)(lua_State* L, const char* libname, const luaL_Reg* l);
-typedef void (*lua_getfield_t)(lua_State* L, int idx, const char* k);
-typedef void (*lua_settop_t)(lua_State* L, int idx);
 typedef void (*lua_createtable_t)(lua_State* L, int narr, int nrec);
-typedef size_t (*lua_objlen_t)(lua_State* L, int idx);
-typedef const char* (*lua_tolstring_t)(lua_State* L, int idx, size_t *len);
 
 // Global variables to hold game's Lua function addresses
 extern lua_pushstring_t g_game_lua_pushstring;
@@ -35,11 +31,7 @@ extern lua_setmetatable_t g_game_lua_setmetatable;
 extern lua_setfield_t g_game_lua_setfield;
 extern luaL_checklstring_t g_game_luaL_checklstring;
 extern luaL_register_t g_game_luaL_register;
-extern lua_getfield_t g_game_lua_getfield;
-extern lua_settop_t g_game_lua_settop;
 extern lua_createtable_t g_game_lua_createtable;
-extern lua_objlen_t g_game_lua_objlen;
-extern lua_tolstring_t g_game_lua_tolstring;
 
 // Placeholder for the game's base address (to be filled by the user)
 // For demonstration, we'll use a dummy value. In a real scenario, you'd get this
