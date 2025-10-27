@@ -1,0 +1,9 @@
+# .clang-format
+# This configuration uses the LLVM style as a base and customizes a few options.
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: false
+ColumnLimit: 100
