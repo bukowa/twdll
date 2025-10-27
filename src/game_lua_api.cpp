@@ -136,30 +136,76 @@ void initialize_game_lua_api() {
     }
     size_t module_size = mi.SizeOfImage;
 
-    // Iterate through the function signatures
-    for (const auto& func_sig_info : g_signatures_to_find) {
-        // Find the signature for the detected module
-        for (const auto& mod_sig : func_sig_info.signatures) {
-            if (strcmp(mod_sig.module_name, detected_module_name) == 0) {
-                if (strlen(mod_sig.signature_str) == 0) {
-                    Log("INFO: Signature is empty, skipping.");
-                    continue;
-                }
-                uintptr_t found_address = find_signature(g_game_base_address, module_size, mod_sig.signature_str);
-                if (found_address) {
-                    *func_sig_info.target_function_ptr = (void*)found_address;
-                    Log("Found function via signature.");
-                } else {
-                    Log("ERROR: Signature not found for function.");
-                }
-                break; // Found the right module, no need to check others for this function
-            }
-        }
-    }
+        // Iterate through the function signatures
 
-    if (g_game_lua_pushstring) {
-        Log("lua_pushstring successfully initialized.");
-    } else {
-        Log("ERROR: lua_pushstring could not be initialized.");
+        for (const auto& func_sig_info : g_signatures_to_find) {
+
+            Log("Scanning for function: %s", func_sig_info.function_name);
+
+            Log("DEBUG: Signature vector size for %s: %zu", func_sig_info.function_name, func_sig_info.signatures.size());
+
+            try {
+
+                // Find the signature for the detected module
+
+                for (const auto& mod_sig : func_sig_info.signatures) {
+
+                    if (strcmp(mod_sig.module_name, detected_module_name) == 0) {
+
+                        if (mod_sig.signature_str == nullptr) {
+
+                            Log("ERROR: Signature for %s in %s is NULL, skipping scan.", func_sig_info.function_name, mod_sig.module_name);
+
+                            break; 
+
+                        }
+
+                        if (strlen(mod_sig.signature_str) == 0) {
+
+                            Log("INFO: Signature for %s in %s is empty, skipping scan.", func_sig_info.function_name, mod_sig.module_name);
+
+                            break; 
+
+                        }
+
+                        uintptr_t found_address = find_signature(g_game_base_address, module_size, mod_sig.signature_str);
+
+                        if (found_address) {
+
+                            *func_sig_info.target_function_ptr = (void*)found_address;
+
+                            Log("Found function %s via signature.", func_sig_info.function_name);
+
+                        } else {
+
+                            Log("ERROR: Signature not found for function %s.", func_sig_info.function_name);
+
+                        }
+
+                        break; // Found the right module, no need to check others for this function
+
+                    }
+
+                }
+
+            } catch (const std::exception& e) {
+
+                Log("CRITICAL ERROR: Exception caught during signature scan for %s: %s", func_sig_info.function_name, e.what());
+
+            } catch (...) {
+
+                Log("CRITICAL ERROR: Unknown exception caught during signature scan for %s.", func_sig_info.function_name);
+
+            }
+
+        }
+
+    // Verify that all functions were found
+    for (const auto& func_sig_info : g_signatures_to_find) {
+        if (*func_sig_info.target_function_ptr == nullptr) {
+            Log("ERROR: Function '%s' was not found.", func_sig_info.function_name);
+        } else {
+            Log("Function '%s' successfully initialized.", func_sig_info.function_name);
+        }
     }
 }

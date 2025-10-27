@@ -14,7 +14,7 @@ uintptr_t find_signature(uintptr_t base_address, size_t size, const char* signat
     std::stringstream ss_sig(signature_str);
     std::string byte_hex;
     while (ss_sig >> byte_hex) {
-        if (byte_hex == "??") {
+        if (byte_hex == "??" || byte_hex == "?") {
             signature_bytes.push_back(0x00); // Wildcard, actual value doesn't matter
             mask_bytes.push_back(0x00);     // Mask out this byte
         } else {
