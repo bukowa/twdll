@@ -34,6 +34,12 @@
         "CMAKE_CXX_COMPILER": "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/HostX86/x86/cl.exe",
         "CMAKE_MAKE_PROGRAM": "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
       }
+    },
+    {
+      "name": "ci-vs2022-win32-ninja",
+      "displayName": "CI Build (VS 2022 32-bit Ninja)",
+      "inherits": "clangd-ninja",
+      "generator": "Ninja"
     }
   ],
   "buildPresets": [
@@ -41,6 +47,11 @@
       "name": "vs2022-win32-ninja",
       "displayName": "Build (VS 2022 32-bit Ninja)",
       "configurePreset": "vs2022-win32-ninja"
+    },
+    {
+      "name": "ci-vs2022-win32-ninja",
+      "displayName": "CI Build (VS 2022 32-bit Ninja)",
+      "configurePreset": "ci-vs2022-win32-ninja"
     }
   ]
 }
