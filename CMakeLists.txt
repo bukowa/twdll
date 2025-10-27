@@ -393,41 +393,26 @@ add_custom_target(docs
 # Run Target (mimics make run-alone)
 # ===========================================
 
-
-# This section is only active if the mod installation is enabled.
-if (INSTALL_MOD)
-
-    # 1. Define the "kill_rome2" target.
-    # This now simply calls our dedicated PowerShell script.
-    add_custom_target(kill_rome2
-        COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/kill_rome2.ps1"
-        COMMENT "Terminating existing Rome2.exe process via script..."
-        VERBATIM
-    )
-
-    # 2. Define the directory to launch the game from. (This part is unchanged)
-    if(INSTALL_DIRS)
-        list(GET INSTALL_DIRS 0 GAME_LAUNCH_DIR)
-        message(STATUS "Run target will launch game from: ${GAME_LAUNCH_DIR}")
-    else()
-        message(FATAL_ERROR "INSTALL_DIRS is not set. Cannot define 'run_alone' target.")
-    endif()
-
-    # 3. Define the main "run_alone" target.
-    # This target now orchestrates by calling the run_game.ps1 script.
-    add_custom_target(run_alone
-        # Dependencies remain the same, ensuring the correct order of operations.
-        DEPENDS
-            kill_rome2
-            twdll
-            install_mod
-
-        # The single command calls our script and passes the required paths as named arguments.
-        # This is clean, readable, and robust.
-        COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_game.ps1" -PopupScriptPath "${CMAKE_CURRENT_SOURCE_DIR}/scripts/disable_outdated_mods_popup.bat" -GameLaunchDir "${GAME_LAUNCH_DIR}"
-
-        COMMENT "Running kill_rome2, installing mod, and launching the game via scripts..."
-        VERBATIM
-    )
-
+# Define the directory to launch the game from.
+if(INSTALL_DIRS)
+    list(GET INSTALL_DIRS 0 GAME_LAUNCH_DIR)
+    message(STATUS "Run target will launch game from: ${GAME_LAUNCH_DIR}")
+else()
+    message(FATAL_ERROR "INSTALL_DIRS is not set. Cannot define 'run_alone' target.")
 endif()
+
+# Define the main "run_alone" target.
+# This target now orchestrates by calling the kill_and_run_game.ps1 script.
+add_custom_target(run_alone
+    # Dependencies remain the same, ensuring the correct order of operations.
+    DEPENDS
+        twdll
+        install_mod
+
+    # The single command calls our script and passes the required paths as named arguments.
+    # This is clean, readable, and robust.
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/kill_and_run_game.ps1" -GameLaunchDir "${GAME_LAUNCH_DIR}"
+
+    COMMENT "Running kill_rome2, installing mod, and launching the game via scripts..."
+    VERBATIM
+)
