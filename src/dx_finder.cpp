@@ -31,6 +31,7 @@ WNDPROC o_wndProc = nullptr;
 HWND g_hGameWindow = NULL;
 std::atomic<bool> g_isHookInitialized = false;
 std::atomic<bool> g_isImGuiInitialized = false;
+static HWND g_lastHookedWindow = NULL; // Moved to global static scope
 
 ID3D11Device* g_pDevice = nullptr;
 ID3D11DeviceContext* g_pContext = nullptr;
@@ -69,14 +70,13 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
             ImGui_ImplWin32_Init(g_hGameWindow);
             ImGui_ImplDX11_Init(g_pDevice, g_pContext);
             
-            static HWND lastHookedWindow = NULL;
-            if (lastHookedWindow != g_hGameWindow) {
-                if (lastHookedWindow != NULL && o_wndProc != NULL) {
-                    SetWindowLongPtr(lastHookedWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
+            if (g_lastHookedWindow != g_hGameWindow) { // Use global static variable
+                if (g_lastHookedWindow != NULL && o_wndProc != NULL) {
+                    SetWindowLongPtr(g_lastHookedWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
                     Log("Un-hooked WndProc from old window.");
                 }
                 o_wndProc = (WNDPROC)SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)h_wndProc);
-                lastHookedWindow = g_hGameWindow;
+                g_lastHookedWindow = g_hGameWindow; // Update global static variable
                 Log("WndProc has been hooked on new window.");
             }
 
@@ -118,7 +118,11 @@ HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount,
 }
 
 bool FindAndHookD3D() {
-    if (g_isHookInitialized) return true;
+    Log("FindAndHookD3D: Entry. g_isHookInitialized before: %d", g_isHookInitialized.load());
+    if (g_isHookInitialized) {
+        Log("FindAndHookD3D: Hooks already initialized, returning.");
+        return true;
+    }
     Log("--- Starting Reliable D3D Hook Setup ---");
     
     WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, DefWindowProc, 0, 0, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, "DummyWindowClass", NULL };
@@ -129,24 +133,26 @@ bool FindAndHookD3D() {
     sd.OutputWindow = hDummyWnd; sd.SampleDesc.Count = 1; sd.Windowed = TRUE; sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
     IDXGISwapChain* pDummySwapChain; ID3D11Device* pDummyDevice;
     HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &sd, &pDummySwapChain, &pDummyDevice, NULL, NULL);
-    if (FAILED(hr)) { DestroyWindow(hDummyWnd); UnregisterClass(wc.lpszClassName, wc.hInstance); return false; }
+    if (FAILED(hr)) { Log("FindAndHookD3D: D3D11CreateDeviceAndSwapChain FAILED. Error: %lx", hr); DestroyWindow(hDummyWnd); UnregisterClass(wc.lpszClassName, wc.hInstance); return false; }
 
     uintptr_t* pVTable = *reinterpret_cast<uintptr_t**>(pDummySwapChain);
     void* pPresentAddress = reinterpret_cast<void*>(pVTable[8]);
     void* pResizeBuffersAddress = reinterpret_cast<void*>(pVTable[13]);
     pDummySwapChain->Release(); pDummyDevice->Release();
-    DestroyWindow(hDummyWnd); UnregisterClass(wc.lpszClassName, wc.hInstance);
+    DestroyWindow(hDummyWnd); UnregisterClass(wc.lpszClassName, wc.hInstance); 
 
-    if (MH_Initialize() != MH_OK) { return false; }
-    if (MH_CreateHook(pPresentAddress, &h_pPresent, (void**)&o_pPresent) != MH_OK) { return false; }
-    if (MH_CreateHook(pResizeBuffersAddress, &h_pResizeBuffers, (void**)&o_pResizeBuffers) != MH_OK) { return false; }
-    if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) { return false; }
+    if (MH_Initialize() != MH_OK) { Log("FindAndHookD3D: MH_Initialize FAILED."); return false; }
+    if (MH_CreateHook(pPresentAddress, &h_pPresent, (void**)&o_pPresent) != MH_OK) { Log("FindAndHookD3D: MH_CreateHook pPresentAddress FAILED."); return false; }
+    if (MH_CreateHook(pResizeBuffersAddress, &h_pResizeBuffers, (void**)&o_pResizeBuffers) != MH_OK) { Log("FindAndHookD3D: MH_CreateHook pResizeBuffersAddress FAILED."); return false; }
+    if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) { Log("FindAndHookD3D: MH_EnableHook FAILED."); return false; }
     Log("SUCCESS: All hooks are active!");
     g_isHookInitialized = true;
+    Log("FindAndHookD3D: Exit. g_isHookInitialized after: %d", g_isHookInitialized.load());
     return true;
 }
 
 void CleanupHooks() {
+    Log("CleanupHooks: Entry. g_isHookInitialized before: %d", g_isHookInitialized.load());
     Log("--- Starting full cleanup... ---");
 
     // 1. Shutdown ImGui and release its resources
@@ -170,6 +176,7 @@ void CleanupHooks() {
         Log("Restoring original WndProc...");
         SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
         o_wndProc = nullptr; // Avoid trying to restore it again
+        g_lastHookedWindow = NULL; // Correctly reset the global static variable
     }
 
     // 4. Disable and uninitialize MinHook
@@ -181,4 +188,5 @@ void CleanupHooks() {
     }
     
     Log("--- Full cleanup complete. ---");
+    Log("CleanupHooks: Exit. g_isHookInitialized after: %d", g_isHookInitialized.load());
 }

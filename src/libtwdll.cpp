@@ -52,12 +52,7 @@ static void CreateCleanupObject(lua_State *L) {
     g_game_luaL_newmetatable(L, "twdll_cleanup_metatable");
 
     // Set the __gc field of the metatable to our C cleanup function.
-    if (g_game_lua_pushstring) {
-        g_game_lua_pushstring(L, "__gc");
-    } else {
-        Log("ERROR: g_game_lua_pushstring is not initialized. Cannot set __gc metamethod.");
-        g_game_lua_pushstring(L, "__gc");
-    }
+    g_game_lua_pushstring(L, "__gc");
     g_game_lua_pushcclosure(L, script_Cleanup, 0);
     g_game_lua_settable(L, -3);
 
@@ -85,8 +80,14 @@ static int script_Log(lua_State *L) {
     return 0;
 }
 
+extern std::atomic<bool> g_isHookInitialized;
+
 static int findandhook(lua_State *L) {
-    FindAndHookD3D();
+    if (!g_isHookInitialized) {
+        FindAndHookD3D();
+    } else {
+        Log("D3D hooks already active, skipping re-initialization.");
+    }
     return 0;
 };
 
@@ -106,11 +107,11 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     g_game_luaL_register(L, "twdll", twdll_main_functions);
 
     // Register the specific interface modules
-    g_game_luaL_register(L, "twdll_unit", unit_functions);
-    g_game_luaL_register(L, "twdll_character", character_functions);
-    g_game_luaL_register(L, "twdll_battle_unit", battle_unit_functions);
-    g_game_luaL_register(L, "twdll_faction", faction_functions);
-    g_game_luaL_register(L, "twdll_military_force", military_force_functions);
+    // g_game_luaL_register(L, "twdll_unit", unit_functions);
+    // g_game_luaL_register(L, "twdll_character", character_functions);
+    // g_game_luaL_register(L, "twdll_battle_unit", battle_unit_functions);
+    // g_game_luaL_register(L, "twdll_faction", faction_functions);
+    // g_game_luaL_register(L, "twdll_military_force", military_force_functions);
 
     if (hooks_are_initialized) {
         Log("--- libtwdll modules re-registered. ---");
