@@ -101,8 +101,6 @@ static const struct luaL_Reg twdll_main_functions[] = {
 /// @treturn integer always 1 (returns the main twdll table)
 extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     Log("luaopen_twdll START");
-    static bool hooks_are_initialized = false;
-
     // Register the main 'twdll' table with core functions like Log
     g_game_luaL_register(L, "twdll", twdll_main_functions);
 
@@ -113,15 +111,8 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     // g_game_luaL_register(L, "twdll_faction", faction_functions);
     // g_game_luaL_register(L, "twdll_military_force", military_force_functions);
 
-    if (hooks_are_initialized) {
-        Log("--- libtwdll modules re-registered. ---");
-    } else {
-        Log("--- libtwdll first-time initialization. Placing hooks... ---");
-        // TODO: Add any hook initialization here
-        CreateCleanupObject(L); // <<< ADDED THIS LINE
-        hooks_are_initialized = true;
-        Log("--- libtwdll modules registered and hooks placed. ---");
-    }
+    Log("--- libtwdll modules registered. ---");
+    CreateCleanupObject(L); // Always create cleanup object for the current Lua state
     Log("luaopen_twdll FINISH");
     return 1; // <<< MODIFIED THIS LINE: Return the 'twdll' table
 }
