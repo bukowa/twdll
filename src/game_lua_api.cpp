@@ -21,6 +21,7 @@ lua_tointeger_t g_game_lua_tointeger = nullptr;
 lua_pushnumber_t g_game_lua_pushnumber = nullptr;
 lua_tonumber_t g_game_lua_tonumber = nullptr;
 lua_pushnil_t g_game_lua_pushnil = nullptr;
+lua_pcall_t g_game_lua_pcall = nullptr;
 uintptr_t g_game_base_address = 0; // Definition for g_game_base_address
 uintptr_t LUA_PUSHSTRING_OFFSET =
     0x0; // This is now unused, but kept for consistency if needed elsewhere
@@ -153,6 +154,14 @@ static SignatureInfo g_signatures_to_find[] = {
         (void**)&g_game_lua_pushnil,
         {
             {"Rome2.dll", ""},
+            {"empire.retail.dll", ""}
+        }
+    },
+    {
+        "lua_pcall",
+        (void**)&g_game_lua_pcall,
+        {
+            {"Rome2.dll", "55 8B EC 8B 45 ? 83 EC ? 57 8B 7D ? 85 C0 75"},
             {"empire.retail.dll", ""}
         }
     }

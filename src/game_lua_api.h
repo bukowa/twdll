@@ -22,6 +22,7 @@ typedef lua_Integer (*lua_tointeger_t)(lua_State* L, int idx);
 typedef void (*lua_pushnumber_t)(lua_State* L, lua_Number n);
 typedef lua_Number (*lua_tonumber_t)(lua_State* L, int idx);
 typedef void (*lua_pushnil_t)(lua_State* L);
+typedef int (*lua_pcall_t)(lua_State* L, int nargs, int nresults, int errfunc);
 
 // Global variables to hold game's Lua function addresses
 extern lua_pushstring_t g_game_lua_pushstring;
@@ -40,6 +41,7 @@ extern lua_tointeger_t g_game_lua_tointeger;
 extern lua_pushnumber_t g_game_lua_pushnumber;
 extern lua_tonumber_t g_game_lua_tonumber;
 extern lua_pushnil_t g_game_lua_pushnil;
+extern lua_pcall_t g_game_lua_pcall;
 
 // Placeholder for the game's base address (to be filled by the user)
 // For demonstration, we'll use a dummy value. In a real scenario, you'd get this
