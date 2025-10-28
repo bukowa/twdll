@@ -39,17 +39,21 @@ ID3D11RenderTargetView* g_pRenderTargetView = nullptr;
 
 
 LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    if (g_isImGuiInitialized && ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam)) return true;
     if (g_isImGuiInitialized) {
+        // Let ImGui process the message first to update its internal state.
+        // We will decide whether to consume the message based on io.WantCaptureMouse/Keyboard.
+        ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam);
+
         ImGuiIO& io = ImGui::GetIO();
-        if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
-            switch (uMsg) {
-                case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_RBUTTONDOWN: case WM_RBUTTONUP: case WM_MBUTTONDOWN:
-                case WM_MBUTTONUP: case WM_MOUSEWHEEL: case WM_MOUSEMOVE: case WM_KEYDOWN: case WM_KEYUP: case WM_CHAR:
-                    return 1;
-            }
+        // If ImGui wants to capture mouse or keyboard, and it's a relevant message, consume it.
+        // This covers a broader range of mouse and keyboard messages.
+        if ((io.WantCaptureMouse && (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST)) ||
+            (io.WantCaptureKeyboard && (uMsg >= WM_KEYFIRST && uMsg <= WM_KEYLAST))) {
+            return 1; // Consume the message, preventing the game from receiving it.
         }
     }
+    // If ImGui is not initialized, or it doesn't want to capture the input,
+    // pass the message to the original window procedure.
     return CallWindowProc(o_wndProc, hWnd, uMsg, wParam, lParam);
 }
 
