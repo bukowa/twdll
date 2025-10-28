@@ -272,6 +272,7 @@ option(SHOULD_INSTALL_DLL "Install dll into game dir" ON)
 message("INSTALL_MOD is set to: ${INSTALL_MOD}")
 if (INSTALL_MOD)
     add_custom_target(install_mod ALL)
+    add_dependencies(install_mod kill_game)
 
     message("SHOULD_INSTALL_DLL is set to: ${SHOULD_INSTALL_DLL}")
 
@@ -393,6 +394,13 @@ add_custom_target(docs
 # Run Target (mimics make run-alone)
 # ===========================================
 
+# Add a custom target to kill the game process
+add_custom_target(kill_game
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/kill_game.ps1"
+    COMMENT "Killing Rome2.exe process before build..."
+    VERBATIM
+)
+
 # Define the directory to launch the game from.
 if(INSTALL_DIRS)
     list(GET INSTALL_DIRS 0 GAME_LAUNCH_DIR)
@@ -402,7 +410,7 @@ else()
 endif()
 
 # Define the main "run_alone" target.
-# This target now orchestrates by calling the kill_and_run_game.ps1 script.
+# This target now orchestrates by calling the run_game.ps1 script.
 add_custom_target(run_alone
     # Dependencies remain the same, ensuring the correct order of operations.
     DEPENDS
@@ -411,8 +419,8 @@ add_custom_target(run_alone
 
     # The single command calls our script and passes the required paths as named arguments.
     # This is clean, readable, and robust.
-    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/kill_and_run_game.ps1" -GameLaunchDir "${GAME_LAUNCH_DIR}"
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_game.ps1" -GameLaunchDir "${GAME_LAUNCH_DIR}"
 
-    COMMENT "Running kill_rome2, installing mod, and launching the game via scripts..."
+    COMMENT "Installing mod, and launching the game via scripts..."
     VERBATIM
 )
