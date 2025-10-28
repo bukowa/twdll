@@ -1,13 +1,12 @@
+#include <filesystem>
 #include <windows.h>
-#include "MinHook.h" // <<< ADDED THIS LINE
+#include <string>
+#include <libloaderapi.h>
+#include "MinHook.h"
 #include "game_lua_api.h"
 #include "log.h"
-#include "unit_script_interface.h"
-#include "character_script_interface.h"
-#include "battle_unit_script_interface.h"
-#include "faction_script_interface.h"
-#include "military_force_script_interface.h"
 #include "dx_finder.h"
+#include "module.h"
 
 // --- DllMain ---
 // This function is the entry point for the DLL.
@@ -15,6 +14,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call) {
     case DLL_PROCESS_ATTACH:
         Log("DLL process attach START");
+        module_initialize(hModule); // Calling the snake_case version of the function
         // This is called when the DLL is first loaded into the process.
         initialize_game_lua_api(); // Initialize our game Lua API function pointers
         Log("DLL process attach FINISH");

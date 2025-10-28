@@ -4,6 +4,7 @@
 
 
 bool FindAndHookD3D();
-void CleanupHooks(); // <<< ADDED THIS LINE
+void CleanupHooks();
+void SetupPythonPath();
 
 #endif 

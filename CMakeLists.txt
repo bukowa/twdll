@@ -25,6 +25,13 @@ file(APPEND cmakeenv "alias cmake='\"${CMAKE_COMMAND}\"'\n")
 get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
 
 # ========================
+# Python Config
+# ========================
+set(PYTHON_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/python)
+set(PYTHON_LIBRARY_RELEASE ${CMAKE_CURRENT_SOURCE_DIR}/include/python/libs/python313.lib)
+set(PYTHON_LIBRARY_DEBUG ${CMAKE_CURRENT_SOURCE_DIR}/include/python/libs/python313_d.lib)
+
+# ========================
 # Lua Config
 # ========================
 set(LUA_VERSION "5.1.2")
@@ -127,6 +134,8 @@ add_library(twdll SHARED
         src/signature_scanner.cpp
         src/game_lua_api.cpp
         src/lua_forward_declarations.h
+        src/module.h
+        src/module.cpp
         include/imgui/imgui.cpp
         include/imgui/imgui_draw.cpp
         include/imgui/imgui_tables.cpp
@@ -137,20 +146,45 @@ add_library(twdll SHARED
 )
 
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "twdll")
+set_target_properties(twdll PROPERTIES DEBUG_INFORMATION_RELEASE TRUE)
 
 target_include_directories(twdll
         PUBLIC
         src
         include/imgui
         include/imgui/backends
+        ${PYTHON_INCLUDE_DIR}
         PRIVATE
         ${MINHOOK_INCLUDE_DIR}
 )
 
 target_link_libraries(twdll PRIVATE
-        luadll
         ${MINHOOK_LIBRARY}
+        optimized ${PYTHON_LIBRARY_RELEASE}
+        debug ${PYTHON_LIBRARY_DEBUG}
+        delayimp
 )
+
+if(MSVC)
+    # Get the base names of both release and debug libraries
+    get_filename_component(PYTHON_LIB_NAME_RELEASE ${PYTHON_LIBRARY_RELEASE} NAME_WE)
+    get_filename_component(PYTHON_LIB_NAME_DEBUG   ${PYTHON_LIBRARY_DEBUG}   NAME_WE)
+
+    # Construct the corresponding DLL filenames
+    set(PYTHON_DLL_FILENAME_RELEASE "${PYTHON_LIB_NAME_RELEASE}.dll") # e.g., "python313.dll"
+    set(PYTHON_DLL_FILENAME_DEBUG   "${PYTHON_LIB_NAME_DEBUG}.dll")   # e.g., "python313_d.dll"
+
+    message(STATUS "Configuring delay-load for Release: ${PYTHON_DLL_FILENAME_RELEASE}")
+    message(STATUS "Configuring delay-load for Debug:   ${PYTHON_DLL_FILENAME_DEBUG}")
+    
+    # Use a generator expression to select the correct DLL at build time
+    # For a "Debug" build, it becomes "/DELAYLOAD:python313_d.dll"
+    # For a "Release" build, it becomes "/DELAYLOAD:python313.dll"
+    target_link_options(twdll PRIVATE 
+        "$<$<CONFIG:Debug>:/DELAYLOAD:${PYTHON_DLL_FILENAME_DEBUG}>"
+        "$<$<NOT:$<CONFIG:Debug>>:/DELAYLOAD:${PYTHON_DLL_FILENAME_RELEASE}>"
+    )
+endif()
 
 # ========================
 # LuaSocket Setup (luasocket.dll)
@@ -240,6 +274,13 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:luadll> ${RELEASE_LUA_DLL}
         COMMENT "Copying lua.dll to release directory"
 )
+
+add_custom_command(
+        TARGET build_release POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed ${RELEASE_DIR}
+        COMMENT "Copying Python distribution to release directory"
+)
+
 add_custom_command(
         OUTPUT ${RELEASE_DOCS_STAMP}
         COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -301,6 +342,12 @@ if (INSTALL_MOD)
             )
             add_custom_target(copy_lua_dll_${DIR_ID} ALL DEPENDS ${INSTALL_LUA_DLL})
             add_dependencies(install_mod copy_lua_dll_${DIR_ID})
+
+            add_custom_command(
+                    TARGET install_mod POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed ${CURRENT_DIR}/python
+                    COMMENT "Copying Python distribution to game directory"
+            )
         endif ()
 
         set(INSTALL_PACK "${CURRENT_DIR}/data/${PACK_NAME}")

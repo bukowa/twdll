@@ -9,12 +9,19 @@
 #include "imgui_impl_dx11.h"
 #include "log.h"
 #include "MinHook.h"
+#include "module.h"
+#include <Python.h>
+#include <string>
+#include <libloaderapi.h>
 
 // Forward declarations
 LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 bool FindAndHookD3D();
 HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
 HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
+void ShowPythonEditorWindow();
+void InitializePython();
+void ShutdownPython();
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -57,6 +64,68 @@ LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
     return CallWindowProc(o_wndProc, hWnd, uMsg, wParam, lParam);
 }
 
+void ShowPythonEditorWindow() {
+    ImGui::Begin("Python Editor");
+
+    static char text[1024 * 16] = "import sys\nprint(sys.version)";
+    static char output[1024 * 16] = "";
+
+    ImGui::InputTextMultiline("##source", text, IM_ARRAYSIZE(text), ImVec2(-1.0f, ImGui::GetTextLineHeight() * 10));
+
+    if (ImGui::Button("Execute")) {
+        output[0] = '\0'; // Clear previous output
+
+        PyObject* sys = PyImport_ImportModule("sys");
+        PyObject* old_stdout = PyObject_GetAttrString(sys, "stdout");
+        PyObject* old_stderr = PyObject_GetAttrString(sys, "stderr");
+        PyObject* io = PyImport_ImportModule("io");
+        PyObject* string_io = PyObject_CallMethod(io, "StringIO", nullptr);
+
+        if (string_io) {
+            PyObject_SetAttrString(sys, "stdout", string_io);
+            PyObject_SetAttrString(sys, "stderr", string_io);
+        }
+
+        PyRun_SimpleString(text);
+
+        if (string_io) {
+            PyObject* output_value = PyObject_CallMethod(string_io, "getvalue", nullptr);
+            if (output_value) {
+                const char* output_str = PyUnicode_AsUTF8(output_value);
+                if (output_str) {
+                    strncpy(output, output_str, sizeof(output) - 1);
+                    output[sizeof(output) - 1] = '\0';
+                }
+                Py_XDECREF(output_value);
+            }
+
+            PyObject_SetAttrString(sys, "stdout", old_stdout);
+            PyObject_SetAttrString(sys, "stderr", old_stderr);
+        }
+
+        Py_XDECREF(sys);
+        Py_XDECREF(old_stdout);
+        Py_XDECREF(old_stderr);
+        Py_XDECREF(io);
+        Py_XDECREF(string_io);
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Output:");
+    ImGui::InputTextMultiline("##output", output, IM_ARRAYSIZE(output), ImVec2(-1.0f, ImGui::GetTextLineHeight() * 10), ImGuiInputTextFlags_ReadOnly);
+
+    ImGui::End();
+}
+
+void InitializePython() {
+    _putenv_s("PYTHONHOME", g_PythonRootPath.c_str());
+    Py_Initialize();
+}
+
+void ShutdownPython() {
+    Py_FinalizeEx();
+}
+
 HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags) {
     if (!g_isImGuiInitialized) {
         Log("h_pPresent: ImGui not initialized. Setting up...");
@@ -69,7 +138,7 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
             
             ImGui::CreateContext();
             ImGuiIO& io = ImGui::GetIO();
-            io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NoMouseCursorChange;
+            io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
             
             ImGui_ImplWin32_Init(g_hGameWindow);
             ImGui_ImplDX11_Init(g_pDevice, g_pContext);
@@ -107,6 +176,7 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
     ImGui::ShowDemoWindow();
+    ShowPythonEditorWindow();
 
     ImGui::Render();
     if (g_pRenderTargetView) g_pContext->OMSetRenderTargets(1, &g_pRenderTargetView, NULL);
@@ -149,6 +219,9 @@ bool FindAndHookD3D() {
     if (MH_CreateHook(pPresentAddress, &h_pPresent, (void**)&o_pPresent) != MH_OK) { Log("FindAndHookD3D: MH_CreateHook pPresentAddress FAILED."); return false; }
     if (MH_CreateHook(pResizeBuffersAddress, &h_pResizeBuffers, (void**)&o_pResizeBuffers) != MH_OK) { Log("FindAndHookD3D: MH_CreateHook pResizeBuffersAddress FAILED."); return false; }
     if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) { Log("FindAndHookD3D: MH_EnableHook FAILED."); return false; }
+
+    InitializePython();
+
     Log("SUCCESS: All hooks are active!");
     g_isHookInitialized = true;
     Log("FindAndHookD3D: Exit. g_isHookInitialized after: %d", g_isHookInitialized.load());
@@ -185,6 +258,7 @@ void CleanupHooks() {
 
     // 4. Disable and uninitialize MinHook
     if (g_isHookInitialized) {
+        ShutdownPython();
         Log("Disabling and uninitializing MinHook...");
         MH_DisableHook(MH_ALL_HOOKS);
         MH_Uninitialize();
