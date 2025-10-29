@@ -164,7 +164,15 @@ static SignatureInfo g_signatures_to_find[] = {
             {"Rome2.dll", "55 8B EC 8B 45 ? 83 EC ? 57 8B 7D ? 85 C0 75"},
             {"empire.retail.dll", ""}
         }
-    }
+    },
+    {
+        "luaB_loadstring",
+        (void**)&g_game_luaB_loadstring,
+        {
+            {"Rome2.dll", "55 8B EC 51 56 57 8B 7D ? 8D 45 ? 50 6A ? 57"}, // THIS IS AN EXAMPLE! FIND THE REAL ONE!
+            {"empire.retail.dll", ""}
+        }
+    },
 };
 //clang-format on
 
