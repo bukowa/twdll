@@ -85,6 +85,7 @@ static int script_Log(lua_State *L) {
     return 0;
 }
 
+extern std::atomic<bool> g_isHookInitialized;
 
 static int findandhook(lua_State *L) {
     if (!g_isHookInitialized) {
