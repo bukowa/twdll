@@ -51,7 +51,8 @@
       "inherits": "clangd-ninja",
       "generator": "Ninja",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "INSTALL_MOD": "OFF" 
       }
     }
   ],
