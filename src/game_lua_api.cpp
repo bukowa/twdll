@@ -113,7 +113,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_touserdata",
         (void**)&g_game_lua_touserdata,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC FF 75 ? FF 75 ? E8 ? ? ? ? 83 C4 ? 8B 48 ? 83 E9"},
             {"empire.retail.dll", ""}
         }
     },
@@ -121,7 +121,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_pushinteger",
         (void**)&g_game_lua_pushinteger,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 8B 4D ? 66 0F 6E 45"},
             {"empire.retail.dll", ""}
         }
     },
@@ -129,7 +129,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_tointeger",
         (void**)&g_game_lua_tointeger,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 83 EC ? FF 75 ? FF 75 ? E8 ? ? ? ? 83 C4 ? 83 78 ? ? 74 ? 8D 4D ? 51 50 E8 ? ? ? ? 83 C4 ? 85 C0 75 ? 8B E5 5D C3 ? ? ? ? 8B E5"},
             {"empire.retail.dll", ""}
         }
     },
@@ -137,7 +137,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_pushnumber",
         (void**)&g_game_lua_pushnumber,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 8B 4D ? F3 0F 10 45 ? 8B 41"},
             {"empire.retail.dll", ""}
         }
     },
@@ -145,7 +145,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_tonumber",
         (void**)&g_game_lua_tonumber,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 83 EC ? FF 75 ? FF 75 ? E8 ? ? ? ? 83 C4 ? 83 78 ? ? 74 ? 8D 4D ? 51 50 E8 ? ? ? ? 83 C4 ? 85 C0 75 ? ? ? 8B E5"},
             {"empire.retail.dll", ""}
         }
     },
@@ -153,7 +153,7 @@ static SignatureInfo g_signatures_to_find[] = {
         "lua_pushnil",
         (void**)&g_game_lua_pushnil,
         {
-            {"Rome2.dll", ""},
+            {"Rome2.dll", "55 8B EC 8B 4D ? 8B 41 ? C7 40"},
             {"empire.retail.dll", ""}
         }
     },
