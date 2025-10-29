@@ -7,6 +7,11 @@
 #include "log.h"
 #include "dx_finder.h"
 #include "module.h"
+#include "unit_script_interface.h"
+#include "character_script_interface.h"
+#include "battle_unit_script_interface.h"
+#include "faction_script_interface.h"
+#include "military_force_script_interface.h"
 
 // --- DllMain ---
 // This function is the entry point for the DLL.
@@ -80,7 +85,6 @@ static int script_Log(lua_State *L) {
     return 0;
 }
 
-extern std::atomic<bool> g_isHookInitialized;
 
 static int findandhook(lua_State *L) {
     if (!g_isHookInitialized) {
@@ -105,11 +109,11 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     g_game_luaL_register(L, "twdll", twdll_main_functions);
 
     // Register the specific interface modules
-    // g_game_luaL_register(L, "twdll_unit", unit_functions);
-    // g_game_luaL_register(L, "twdll_character", character_functions);
-    // g_game_luaL_register(L, "twdll_battle_unit", battle_unit_functions);
-    // g_game_luaL_register(L, "twdll_faction", faction_functions);
-    // g_game_luaL_register(L, "twdll_military_force", military_force_functions);
+    g_game_luaL_register(L, "twdll_unit", unit_functions);
+    g_game_luaL_register(L, "twdll_character", character_functions);
+    g_game_luaL_register(L, "twdll_battle_unit", battle_unit_functions);
+    g_game_luaL_register(L, "twdll_faction", faction_functions);
+    g_game_luaL_register(L, "twdll_military_force", military_force_functions);
 
     Log("--- libtwdll modules registered. ---");
     CreateCleanupObject(L); // Always create cleanup object for the current Lua state
