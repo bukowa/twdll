@@ -80,53 +80,135 @@ void RunGameLuaString(lua_State* L, const char* script) {
         return;
     }
 }
-
 // =================================================================================
-// The Benchmark Runner
+// 4. The Benchmark Runner (UPDATED with Game Logic Simulation)
 // =================================================================================
 
 void RunPerformanceTests(lua_State* L, char* results_buffer, size_t buffer_size) {
     std::stringstream ss;
     ss << "Running benchmarks...\n\n";
 
-    // --- Test 1: PI Calculation (CPU & Math Intensive) ---
-    const int pi_iterations = 5000000;
-    ss << "--- Test 1: PI Calculation (" << pi_iterations << " iterations) ---\n";
-    ss << "Measures raw CPU and floating-point math performance.\n";
+    // --- Test 1: Game Logic Simulation ---
+    // This test simulates a more realistic workload than a simple PI calculation.
+    // It creates 100 "cities", each with 5 "buildings".
+    // It then iterates through all of them, calculating a "score" based on
+    // population, building types, and levels.
+    // This measures data creation, iteration, dictionary/table lookups,
+    // string comparisons, and conditional logic.
+    const int num_sim_runs = 500; // Run the simulation this many times to get a measurable duration.
+    ss << "--- Test 1: Game Logic Simulation (" << num_sim_runs << " runs) ---\n";
+    ss << "Simulates iterating over 100 cities with 5 buildings each.\n";
+    
+    // The Python version of the simulation script
+    const char* python_logic_script = R"(
+def simulate_game_turn():
+    cities = []
+    building_types = ['market', 'barracks', 'library', 'granary', 'walls']
+    for i in range(100):
+        city = {
+            'name': f'City_{i}',
+            'population': 10000 + (i * 150) % 7500,
+            'is_capital': (i == 0),
+            'buildings': []
+        }
+        for j in range(5):
+            building = {
+                'type': building_types[j % 5],
+                'level': 1 + (i + j) % 4
+            }
+            city['buildings'].append(building)
+        cities.append(city)
 
-    const char* python_pi_calc =
-        "pi = 0.0\n"
-        "sign = 1.0\n"
-        "for i in range(5000000):\n"
-        "    term = 1.0 / (2.0 * i + 1.0)\n"
-        "    pi += sign * term\n"
-        "    sign = -sign\n"
-        "pi *= 4.0\n";
+    total_score = 0
+    for city in cities:
+        score = city['population'] // 100
+        if city['is_capital']:
+            score += 500
+        
+        for building in city['buildings']:
+            if building['type'] == 'market':
+                score += building['level'] * 50
+            elif building['type'] == 'barracks':
+                score += building['level'] * 20
+            elif building['type'] == 'library':
+                score += building['level'] * 30
+            else:
+                score += building['level'] * 10
+        total_score += score
+    return total_score
+
+for _ in range(500):
+    simulate_game_turn()
+)";
+
     auto start = std::chrono::high_resolution_clock::now();
-    PyRun_SimpleString(python_pi_calc);
+    PyRun_SimpleString(python_logic_script);
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> python_duration = end - start;
     ss << "Python (Embedded):  " << python_duration.count() << " ms\n";
 
-    const char* lua_pi_calc =
-        "local pi = 0.0\n"
-        "local sign = 1.0\n"
-        "for i = 0, 4999999 do\n"
-        "    local term = 1.0 / (2.0 * i + 1.0)\n"
-        "    pi = pi + sign * term\n"
-        "    sign = -sign\n"
-        "end\n"
-        "pi = pi * 4.0\n";
+    // The Lua version of the simulation script
+    const char* lua_logic_script = R"(
+local function simulate_game_turn()
+    local cities = {}
+    local building_types = {'market', 'barracks', 'library', 'granary', 'walls'}
+    for i = 0, 99 do
+        local city = {
+            name = "City_" .. i,
+            population = 10000 + (i * 150) % 7500,
+            is_capital = (i == 0),
+            buildings = {}
+        }
+        for j = 1, 5 do
+            local building = {
+                type = building_types[j],
+                level = 1 + (i + j) % 4
+            }
+            table.insert(city.buildings, building)
+        end
+        table.insert(cities, city)
+    end
+
+    local total_score = 0
+    for _, city in ipairs(cities) do
+        local score = math.floor(city.population / 100)
+        if city.is_capital then
+            score = score + 500
+        end
+
+        for _, building in ipairs(city.buildings) do
+            if building.type == 'market' then
+                score = score + building.level * 50
+            elseif building.type == 'barracks' then
+                score = score + building.level * 20
+            elseif building.type == 'library' then
+                score = score + building.level * 30
+            else
+                score = score + building.level * 10
+            end
+        end
+        total_score = total_score + score
+    end
+    return total_score
+end
+
+for i = 1, 500 do
+    simulate_game_turn()
+end
+)";
+
     start = std::chrono::high_resolution_clock::now();
-    RunGameLuaString(L, lua_pi_calc);
+    RunGameLuaString(L, lua_logic_script);
     end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::milli> lua_duration = end - start;
     ss << "Lua (Game's Internal): " << lua_duration.count() << " ms\n\n";
 
+
     // --- Test 2: C++ Function Calls (FFI Overhead) ---
-    const int ffi_call_iterations = 2000000;
+    // This test remains vital as it measures raw communication speed.
+    const int ffi_call_iterations = 2'000'000;
     ss << "--- Test 2: C++ Function Calls (" << ffi_call_iterations << " iterations) ---\n";
-    ss << "Measures the cost of calling C++ from the script.\n";
+    ss << "Measures the raw cost of calling C++ from the script.\n";
 
     const char* python_ffi_calls = "import engine\nfor i in range(2000000): engine.do_nothing()";
     start = std::chrono::high_resolution_clock::now();
@@ -134,9 +216,8 @@ void RunPerformanceTests(lua_State* L, char* results_buffer, size_t buffer_size)
     end = std::chrono::high_resolution_clock::now();
     python_duration = end - start;
     ss << "Python (Embedded):  " << python_duration.count() << " ms\n";
-
+    
     const char* lua_ffi_calls = "for i = 1, 2000000 do do_nothing_fast() end";
-
     start = std::chrono::high_resolution_clock::now();
     RunGameLuaString(L, lua_ffi_calls);
     end = std::chrono::high_resolution_clock::now();
@@ -145,7 +226,6 @@ void RunPerformanceTests(lua_State* L, char* results_buffer, size_t buffer_size)
 
     strncpy_s(results_buffer, buffer_size, ss.str().c_str(), _TRUNCATE);
 }
-
 // =================================================================================
 // The ImGui Window
 // =================================================================================
