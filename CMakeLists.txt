@@ -11,15 +11,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 # ========================
-# CLion Environment Setup
-# ========================
-string(REPLACE ";" ":" CMAKE_PATH_MODIFIED "$ENV{PATH}")
-string(REPLACE "C:\\" "/c/" CMAKE_PATH_MODIFIED "${CMAKE_PATH_MODIFIED}")
-string(REPLACE "c:\\" "/c/" CMAKE_PATH_MODIFIED "${CMAKE_PATH_MODIFIED}")
-file(WRITE cmakeenv "export PATH=\"${CMAKE_PATH_MODIFIED}:$PATH\"\n")
-file(APPEND cmakeenv "alias cmake='\"${CMAKE_COMMAND}\"'\n")
-
-# ========================
 # Project Variables
 # ========================
 get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
@@ -186,26 +177,7 @@ if(MSVC)
     )
 endif()
 
-# ========================
-# LuaSocket Setup (luasocket.dll)
-# ========================
-set(LUASOCKET_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/luasocket/src")
-set(LUASOCKET_SOURCES
-        luasocket.c timeout.c buffer.c io.c auxiliar.c options.c
-        compat.c inet.c except.c select.c tcp.c udp.c compat.c wsocket.c
-)
-list(TRANSFORM LUASOCKET_SOURCES PREPEND "${LUASOCKET_SRC_DIR}/")
 
-add_library(luasocket SHARED ${LUASOCKET_SOURCES})
-
-target_include_directories(luasocket
-        PRIVATE
-        ${LUA_SRC_DIR}
-)
-
-target_link_libraries(luasocket PRIVATE luadll)
-target_link_libraries(luasocket PRIVATE ws2_32.lib)
-set_target_properties(luasocket PROPERTIES OUTPUT_NAME "socket")
 
 # ================================
 # Mod Files
@@ -238,8 +210,6 @@ file(MAKE_DIRECTORY ${RELEASE_DIR})
 set(RELEASE_LUA_EXE "${RELEASE_DIR}/lua.exe")
 set(RELEASE_LUAC_EXE "${RELEASE_DIR}/luac.exe")
 set(RELEASE_LUA_DLL "${RELEASE_DIR}/lua.dll")
-set(RELEASE_LUASOCKET_DLL "${RELEASE_DIR}/socket.dll")
-set(RELEASE_LUASOCKET_LUA_SOCKET "${RELEASE_DIR}/socket.lua")
 set(DOCS_RELEASE_DIR "${RELEASE_DIR}/luadoc")
 set(RELEASE_DOCS_STAMP "${RELEASE_DIR}/luadoc.stamp")
 set(RELEASE_DLL "${RELEASE_DIR}/twdll.dll")
@@ -277,7 +247,7 @@ add_custom_command(
 
 add_custom_command(
         TARGET build_release POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed ${RELEASE_DIR}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed ${RELEASE_DIR}/python
         COMMENT "Copying Python distribution to release directory"
 )
 
@@ -414,8 +384,7 @@ set(LUA_MODULE_PATH
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/penlight/lua/?/init.lua"
 )
 set(LUA_CMODULE_PATH
-        "$<TARGET_FILE_DIR:lfs>/?.dll;"
-        "$<TARGET_FILE_DIR:luasocket>/?.dll"
+        "$<TARGET_FILE_DIR:lfs>/?.dll"
 )
 
 add_custom_command(
@@ -426,7 +395,6 @@ add_custom_command(
         DEPENDS
         lua_for_docs
         lfs
-        luasocket
         ${DOC_SOURCES}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Generating Lua documentation with LDoc..."
