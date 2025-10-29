@@ -115,7 +115,8 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     g_game_luaL_register(L, "twdll_battle_unit", battle_unit_functions);
     g_game_luaL_register(L, "twdll_faction", faction_functions);
     g_game_luaL_register(L, "twdll_military_force", military_force_functions);
-
+    
+    g_game_luaL_register(L, "battle_unit", battle_unit_functions);
     Log("--- libtwdll modules registered. ---");
     CreateCleanupObject(L); // Always create cleanup object for the current Lua state
     Log("luaopen_twdll FINISH");
