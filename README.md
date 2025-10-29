@@ -71,8 +71,8 @@ This project is built with CMake and primarily targets Visual Studio tools for a
 
 -   **Visual Studio 2022 Community Edition:** With the "Desktop development with C++" workload installed.
 -   **Windows 10/11 SDK:** A recent version compatible with Visual Studio 2022.
--   **CMake:** (version 3.29 or higher).
--   **Ninja:** (optional, but recommended for faster builds).
+-   **CMake:**
+-   **Ninja:**
 -   **RPFM CLI:** You can download it from the [RPFM releases page](https://github.com/Frodo45127/rpfm/releases).
 
 #### Steps
@@ -87,13 +87,13 @@ This project is built with CMake and primarily targets Visual Studio tools for a
 2.  **Configure the project with CMake:**
 
     ```sh
-    cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --preset vs2022-win32-ninja
     ```
 
 3.  **Build the project:**
 
     ```sh
-    cmake --build build
+    cmake --build --preset vs2022-win32-ninja
     ```
 
     The build process will generate `twdll.dll` and other release files in the `build/release` directory.
