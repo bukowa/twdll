@@ -6,8 +6,29 @@ This project provides a framework for modders to add new functionality to the ga
 
 ## Installation
 
-1.  Download the latest release from the releases page.
-2.  Copy `twdll.dll` and `lua.dll` to your *Total War: Rome II* installation directory (e.g., `C:/Program Files (x86)/Steam/steamapps/common/Total War Rome II`).
+## Compatibility Note
+
+**Important:** This mod is currently built against game version **2.4.0.19534** and is **not compatible with the Steam version** of *Total War: Rome II*. Attempting to use it with an incompatible version may lead to crashes or unexpected behavior.
+
+Development primarily focuses on the standalone (non-Steam) version of the game due to easier mod loading and overall development workflow. To make the mod compatible with the Steam version, primarily updating signatures would be required.
+
+There are two ways to install `twdll`:
+
+### Stable Release (Recommended)
+
+1.  Go to the [**releases page**](https://github.com/bukowa/twdll/releases).
+2.  Download the latest `libtwdll-vX.X.X.zip` file.
+3.  Extract the contents of the zip file directly into your *Total War: Rome II* game directory (e.g., `C:/Program Files (x86)/Steam/steamapps/common/Total War Rome II`).
+
+### Nightly Build (Development Version)
+
+For the latest features and bugfixes, you can use the nightly build.
+
+1.  Go to the [**nightly release page**](https://github.com/bukowa/twdll/releases/tag/nightly).
+2.  Download the `libtwdll-nightly.zip` file.
+3.  Extract the contents of the zip file directly into your *Total War: Rome II* game directory.
+
+This will place `twdll.dll` in the game's root directory and the `twdll.pack` file in the `data` subdirectory.
 
 ## Usage for Modding
 
@@ -44,23 +65,15 @@ This project is configured to work with Visual Studio Code. For the best develop
 
 ### Building from Source
 
-This project is built with CMake and requires a 32-bit build environment. The provided `vs2022-win32-ninja` preset is configured for a specific development environment.
+This project is built with CMake and primarily targets Visual Studio tools for a 32-bit build environment. For a detailed reference on how to build the project, including specific tool versions, please refer to the `.github/workflows/build.yml` file.
 
 #### Prerequisites
 
-This project is configured to be built with a specific environment, as defined in `CMakePresets.json`. To build it, you will need:
-
--   **Visual Studio 2022 Community Edition:** The presets hardcode paths to this specific version.
-    -   You must have the "Desktop development with C++" workload installed.
-    -   The required MSVC toolset version is **14.44.35207**.
--   **Windows 10/11 SDK:** The presets point to SDK version **10.0.26100.0**.
--   **CMake:** The build system used by the project.
--   **Ninja:** A high-speed build system. The preset expects it at `C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe`.
-
-**Important:** If your setup differs (e.g., different VS edition, different installation paths, or different toolset/SDK versions), you will need to either:
-
-1.  Modify `CMakePresets.json` to match your environment.
-2.  Configure CMake manually without using the presets.
+-   **Visual Studio 2022 Community Edition:** With the "Desktop development with C++" workload installed.
+-   **Windows 10/11 SDK:** A recent version compatible with Visual Studio 2022.
+-   **CMake:** (version 3.29 or higher).
+-   **Ninja:** (optional, but recommended for faster builds).
+-   **RPFM CLI:** You can download it from the [RPFM releases page](https://github.com/Frodo45127/rpfm/releases).
 
 #### Steps
 
@@ -73,21 +86,17 @@ This project is configured to be built with a specific environment, as defined i
 
 2.  **Configure the project with CMake:**
 
-    If your environment matches the prerequisites, you can use the `vs2022-win32-ninja` preset.
-
     ```sh
-    cmake --preset vs2022-win32-ninja
+    cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
     ```
 
 3.  **Build the project:**
 
-    Run the following command to build the `twdll` target.
-
     ```sh
-    cmake --build --preset vs2022-win32-ninja
+    cmake --build build
     ```
 
-    The build process will generate `twdll.dll` in the `build/vs2022-win32-ninja/` directory.
+    The build process will generate `twdll.dll` and other release files in the `build/release` directory.
 
 ### Technical Notes
 
