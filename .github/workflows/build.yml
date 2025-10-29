@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "master" ]
     tags:
-      - 'v*' # Trigger on tags like v1.0, v2.3.4
+      - 'v*'
   pull_request:
     branches: [ "master" ]
 
@@ -13,7 +13,7 @@ env:
 
 jobs:
   # ===============================================================
-  # JOB 0: Filtruj zmiany w plikach
+  # JOB 0: Filter changes
   # ===============================================================
   changes:
     runs-on: ubuntu-latest
@@ -34,11 +34,10 @@ jobs:
               - '.github/workflows/**'
 
   # ===============================================================
-  # JOB 1: Build - z poprawionym warunkiem 'if'
+  # JOB 1: Build and Package
   # ===============================================================
   build:
     needs: changes
-    # OSTATECZNA POPRAWKA: Dodajemy warunek sprawdzający, czy to jest push taga
     if: >
       needs.changes.outputs.src_files == 'true' ||
       github.event_name == 'pull_request' ||
@@ -47,9 +46,11 @@ jobs:
     env:
       BUILD_OUTPUT_DIR: build/ci-vs2022-win32-ninja
       PRESET: ci-vs2022-win32-ninja
+      RELEASE_DIR_PATH: ${{github.workspace}}/build/ci-vs2022-win32-ninja/release
+      ARCHIVE_NAME: release-package.zip
     steps:
       - uses: actions/checkout@v4
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x86
           toolset: 14.44.35207
@@ -63,11 +64,27 @@ jobs:
         run: cmake --preset ${{env.PRESET}}
       - name: Build Project
         run: cmake --build --preset ${{env.PRESET}}
-      - name: Archive Release Artifacts
+
+      # ===============================================================
+      # Create a single ZIP file from the release directory
+      # ===============================================================
+      - name: Create Release ZIP Archive
+        run: |
+          cd "${{env.RELEASE_DIR_PATH}}"
+          powershell Compress-Archive -Path * -DestinationPath ..\${{env.ARCHIVE_NAME}}
+          cd "${{github.workspace}}"
+        shell: pwsh
+
+      # ===============================================================
+      # Upload the single ZIP as the release artifact
+      # ===============================================================
+      - name: Archive Release Package
         uses: actions/upload-artifact@v4
         with:
-          name: release-assets
-          path: ${{github.workspace}}/${{env.BUILD_OUTPUT_DIR}}/release/*
+          name: release-package # The name of the artifact bundle
+          path: ${{env.BUILD_OUTPUT_DIR}}/${{env.ARCHIVE_NAME}} # Path to the single zip file
+          retention-days: 7
+
       - name: Archive Documentation Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -129,7 +146,7 @@ jobs:
           user_email: 'github-actions[bot]@users.noreply.github.com'
 
   # ===============================================================
-  # JOB 3: Create an official GitHub Release (for tags) - OSTATECZNA POPRAWKA AWK
+  # JOB 3: Create an official GitHub Release (for tags)
   # ===============================================================
   create-official-release:
     needs: build
@@ -141,63 +158,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download release assets
+      # Download the pre-packaged zip file
+      - name: Download release package
         uses: actions/download-artifact@v4
-        with: { name: release-assets, path: release-assets }
+        with: { name: release-package } # Downloads release-package.zip
 
-      - name: Remove useless stamp file
-        run: rm -f release-assets/*.stamp
-
-      - name: Create ZIP archive for the release
+      # Rename the file to include the version number
+      - name: Prepare Release Archive
         id: archive
         run: |
           VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           ARCHIVE_NAME="libtwdll-${VERSION}.zip"
-          zip -r -j "${ARCHIVE_NAME}" release-assets/
-          mv "${ARCHIVE_NAME}" release-assets/
+          mv release-package.zip "${ARCHIVE_NAME}"
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
-
-      - name: Remove luadoc directory before upload
-        run: rm -rf release-assets/luadoc
 
       - name: Extract Changelog Entry
         id: changelog
         run: |
           VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           sed -i 's/\r$//' CHANGELOG.md
-          
-          # ===============================================================
-          # KLUCZOWA POPRAWKA JEST TUTAJ:
-          # Poprawiamy sposób przekazywania zmiennej do 'awk'
-          # ===============================================================
           CHANGELOG_BODY=$(awk 'BEGIN{hdr="## [" "'"$VERSION"'" "]"} index($0, hdr) == 1 {f=1;next} f && /^## \[/{f=0} f' CHANGELOG.md)
-          
           if [ -z "$CHANGELOG_BODY" ]; then
-            echo "::error::Nie znaleziono wpisu dla wersji '$VERSION' w pliku CHANGELOG.md! Sprawdź format nagłówka '## [$VERSION]'."
+            echo "::error::Changelog entry for version '$VERSION' not found!"
             exit 1
           fi
-          
           echo "body<<EOF" >> $GITHUB_ENV
           echo "## Quick Download" >> $GITHUB_ENV
           echo "**All files in one package: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           echo "---" >> $GITHUB_ENV
-          echo "" >> $GITHUB_ENV
           echo "## Changelog" >> $GITHUB_ENV
           echo "$CHANGELOG_BODY" >> $GITHUB_ENV
-          echo "" >> $GITHUB_ENV
-          echo "---" >> $GITHUB_ENV
-          echo "Individual files are attached below." >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Create GitHub Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
           body: ${{ env.body }}
-          files: release-assets/*
+          files: ${{ steps.archive.outputs.name }}
 
   # ===============================================================
-  # JOB 4: Publish the Nightly Release - ZMIENIONA NAZWA NA "DEV BUILD"
+  # JOB 4: Publish the Dev Build (Nightly)
   # ===============================================================
   publish-nightly-release:
     needs: build
@@ -213,26 +214,24 @@ jobs:
           access_token: ${{ github.token }}
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Download release assets
+
+      # Download the pre-packaged zip file
+      - name: Download release package
         uses: actions/download-artifact@v4
-        with: { name: release-assets, path: release-assets }
-      - name: Remove useless stamp file
-        run: rm -f release-assets/*.stamp
-      - name: Create ZIP archive with source code
-        run: git archive -o release-assets/source-code.zip HEAD
-      - name: Create ZIP archive with binaries
+        with: { name: release-package } # Downloads release-package.zip
+
+      # Rename the file to the nightly name
+      - name: Prepare Release Archive
         id: archive
         run: |
           ARCHIVE_NAME="libtwdll-nightly.zip"
-          mkdir temp-binaries
-          find release-assets -maxdepth 1 -type f \( -name "*.dll" -o -name "*.pack" -o -name "*.exe" -o -name "*.lua" \) -exec cp {} temp-binaries/ \;
-          zip -r -j "release-assets/${ARCHIVE_NAME}" temp-binaries/
+          mv release-package.zip "${ARCHIVE_NAME}"
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
-      - name: Remove luadoc directory before upload
-        run: rm -rf release-assets/luadoc
+      - name: Create ZIP archive with source code
+        run: git archive -o source-code.zip HEAD
+
       - name: Prepare Release Notes
         id: prep_notes
-        env: { COMMIT_SHA: "${{ github.sha }}" }
         run: |
           {
             echo "This is the latest development build from the **master** branch. Assets are automatically updated on every push."
@@ -240,14 +239,12 @@ jobs:
             echo "## Quick Download"
             echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
             echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
-            # ... (reszta opisu bez zmian)
           } > release_notes.md
       - name: Ensure 'nightly' release exists and update its body
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          # ZMIENIONY TYTUŁ TUTAJ
           gh release view nightly || gh release create nightly --title "Dev Build (from master)" --prerelease --notes "Placeholder"
           gh release edit nightly --title "Dev Build (from master)" --notes-file release_notes.md
       - name: Upload/Overwrite Release Assets (using gh CLI)
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release upload nightly release-assets/* --clobber
+        run: gh release upload nightly ${{ steps.archive.outputs.name }} source-code.zip --clobber
