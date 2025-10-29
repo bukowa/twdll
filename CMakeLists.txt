@@ -207,52 +207,45 @@ add_custom_command(
 set(RELEASE_DIR "${CMAKE_BINARY_DIR}/release")
 file(MAKE_DIRECTORY ${RELEASE_DIR})
 
-set(RELEASE_LUA_EXE "${RELEASE_DIR}/lua.exe")
-set(RELEASE_LUAC_EXE "${RELEASE_DIR}/luac.exe")
-set(RELEASE_LUA_DLL "${RELEASE_DIR}/lua.dll")
-set(DOCS_RELEASE_DIR "${RELEASE_DIR}/twdlldocs")
-set(RELEASE_DOCS_STAMP "${RELEASE_DIR}/luadoc.stamp")
-set(RELEASE_DLL "${RELEASE_DIR}/twdll.dll")
-set(RELEASE_PACK "${RELEASE_DIR}/twdll.pack")
-
 # ======================================
 # Release Setup
 # ======================================
+
+# This single target defines all the steps for creating the release layout.
 add_custom_target(
-        build_release ALL
-        DEPENDS
-        ${RELEASE_DLL}
-        ${RELEASE_DOCS_STAMP}
+    build_release ALL
+    
+    # These COMMANDS are executed when you build this target.
+    # We use generator expressions to get the path to the output file at build time.
+    COMMAND ${CMAKE_COMMAND} -E copy 
+            ${MOD_PACK} 
+            ${RELEASE_DIR}/data/twdll.pack
+
+    COMMAND ${CMAKE_COMMAND} -E copy 
+            $<TARGET_FILE:twdll> 
+            ${RELEASE_DIR}/twdll.dll
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/luadoc"
+            ${RELEASE_DIR}/twdlldocs
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory 
+            ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed 
+            ${RELEASE_DIR}/python
+
+    # These are the things that must be built *before* the commands above can run.
+    # It's better to depend on the TARGET `twdll` rather than just the file.
+    DEPENDS
+        twdll
         docs
-)
-add_custom_command(
-        DEPENDS ${MOD_PACK}
-        OUTPUT ${RELEASE_PACK}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${MOD_PACK} ${RELEASE_PACK}
-        COMMENT "Copying pack to release directory"
-)
-add_custom_command(
-        DEPENDS $<TARGET_FILE:twdll>
-        OUTPUT ${RELEASE_DLL}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:twdll> ${RELEASE_DLL}
-        COMMENT "Copying dll to release directory"
-)
+        ${MOD_PACK}
 
-add_custom_command(
-        TARGET build_release POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed ${RELEASE_DIR}/python
-        COMMENT "Copying Python distribution to release directory"
-)
-
-add_custom_command(
-        OUTPUT ${RELEASE_DOCS_STAMP}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/luadoc"
-        ${DOCS_RELEASE_DIR}
-        COMMAND ${CMAKE_COMMAND} -E touch ${RELEASE_DOCS_STAMP}
-        DEPENDS docs
-        COMMENT "Copying documentation to release directory"
-        VERBATIM
+    # A descriptive comment that will show up during the build.
+    COMMENT "Assembling release package in ${RELEASE_DIR}"
+    
+    # This is good practice for custom commands to ensure they are executed correctly
+    # by the shell, especially if they contain special characters.
+    VERBATIM
 )
 
 # ===========================================
@@ -264,79 +257,67 @@ set(INSTALL_DIRS
         "C:/Program Files (x86)/Steam/steamapps/common/Total War Rome II"
 )
 
-get_filename_component(DLL_NAME ${RELEASE_DLL} NAME)
-get_filename_component(PACK_NAME ${RELEASE_PACK} NAME)
-get_filename_component(LUA_DLL_NAME ${RELEASE_LUA_DLL} NAME)
-
 option(SHOULD_INSTALL_DLL "Install dll into game dir" ON)
-
 # ===========================================
-# Install Files Setup
+# Installation / Deployment Setup
 # ===========================================
-message("INSTALL_MOD is set to: ${INSTALL_MOD}")
-if (INSTALL_MOD)
-    add_custom_target(install_mod ALL)
-    add_dependencies(install_mod kill_game)
 
-    message("SHOULD_INSTALL_DLL is set to: ${SHOULD_INSTALL_DLL}")
+option(INSTALL_MOD "Install/deploy mod directly into the game directory" OFF)
 
-    set(DIR_COUNTER 0)
+if(INSTALL_MOD)
+    # --- 1. Define the game directory location ---
+    # We use a CACHE variable so the user can easily override it with -DGAME_INSTALL_DIR=...
+    set(GAME_INSTALL_DIR "" CACHE PATH "Path to the Total War: Rome II game directory.")
 
-    foreach(CURRENT_DIR IN LISTS INSTALL_DIRS)
-        message("Setting up install for directory: ${CURRENT_DIR}")
-
-        set(DIR_ID ${DIR_COUNTER})
-
-        if (SHOULD_INSTALL_DLL)
-            set(INSTALL_DLL "${CURRENT_DIR}/${DLL_NAME}")
-            add_custom_command(
-                    DEPENDS ${RELEASE_DLL} OUTPUT ${INSTALL_DLL}
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RELEASE_DLL} ${INSTALL_DLL}
-                    COMMENT "Copying dll to: ${INSTALL_DLL}"
-            )
-            add_custom_target(copy_dll_${DIR_ID} ALL DEPENDS ${INSTALL_DLL})
-            add_dependencies(install_mod copy_dll_${DIR_ID})
-
-            add_custom_command(
-                    TARGET install_mod POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed ${CURRENT_DIR}/python
-                    COMMENT "Copying Python distribution to game directory"
-            )
-        endif ()
-
-        set(INSTALL_PACK "${CURRENT_DIR}/data/${PACK_NAME}")
-        add_custom_command(
-                DEPENDS ${RELEASE_PACK} OUTPUT ${INSTALL_PACK}
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RELEASE_PACK} ${INSTALL_PACK}
-                COMMENT "Copying pack to: ${INSTALL_PACK}"
+    # --- 2. Auto-detect the game directory if the user hasn't specified one ---
+    if(NOT GAME_INSTALL_DIR)
+        message(STATUS "GAME_INSTALL_DIR not set. Searching for game directory...")
+        set(SEARCH_DIRS
+                "C:/Games/Total War - Rome 2"
+                "C:/Program Files (x86)/Steam/steamapps/common/Total War Rome II"
+                # Add any other common paths here
         )
-        add_custom_target(copy_pack_${DIR_ID} ALL DEPENDS ${INSTALL_PACK})
-        add_dependencies(install_mod copy_pack_${DIR_ID})
+        foreach(DIR IN LISTS SEARCH_DIRS)
+            if(EXISTS "${DIR}/Rome2.exe") # A good way to verify it's the right folder
+                message(STATUS "Found game at: ${DIR}")
+                set(GAME_INSTALL_DIR ${DIR} CACHE PATH "Path to the Total War: Rome II game directory." FORCE)
+                break()
+            endif()
+        endforeach()
+    endif()
 
-        set(TESTS_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests")
-        if(EXISTS "${TESTS_SRC_DIR}")
-            set(INSTALL_TESTS_DIR "${CURRENT_DIR}/tests")
-            set(INSTALL_TESTS_STAMP "${INSTALL_TESTS_DIR}/.cmake_stamp")
-            file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "${TESTS_SRC_DIR}/*")
+    # --- 3. Create the simplified install_mod target ---
+    # Abort if we still couldn't find the game directory.
+    if(NOT GAME_INSTALL_DIR OR NOT EXISTS "${GAME_INSTALL_DIR}")
+        message(FATAL_ERROR "INSTALL_MOD is ON, but the game directory could not be found or specified. "
+                            "Please configure it with -DGAME_INSTALL_DIR=\"C:/path/to/game\"")
+    else()
+        message(STATUS "Mod will be installed to: ${GAME_INSTALL_DIR}")
 
-            add_custom_command(
-                    OUTPUT ${INSTALL_TESTS_STAMP}
-                    COMMAND ${CMAKE_COMMAND} -E remove_directory "${INSTALL_TESTS_DIR}"
-                    COMMAND ${CMAKE_COMMAND} -E copy_directory "${TESTS_SRC_DIR}" "${INSTALL_TESTS_DIR}"
-                    COMMAND ${CMAKE_COMMAND} -E touch ${INSTALL_TESTS_STAMP}
-                    DEPENDS ${TEST_FILES}
-                    COMMENT "Checking/copying tests to: ${INSTALL_TESTS_DIR}"
-                    VERBATIM
-            )
+        # This single target does all the work.
+        add_custom_target(install_mod ALL
+            # CRITICAL: This target must run *after* the entire release package is assembled.
+            DEPENDS
+                build_release
+                kill_game
 
-            add_custom_target(copy_tests_${DIR_ID} ALL DEPENDS ${INSTALL_TESTS_STAMP})
+            # Command 1: Copy the entire assembled release directory.
+            # The trailing slash is important: it copies the *contents* of release/ into the game dir.
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${RELEASE_DIR}/"
+                    "${GAME_INSTALL_DIR}/"
 
-            add_dependencies(install_mod copy_tests_${DIR_ID})
-        endif()
+            # Command 2: Copy the tests directory, if it exists.
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+                    "${GAME_INSTALL_DIR}/tests"
 
-        math(EXPR DIR_COUNTER "${DIR_COUNTER} + 1")
-    endforeach()
-endif ()
+            COMMENT "Deploying assembled mod from '${RELEASE_DIR}' to '${GAME_INSTALL_DIR}'"
+            VERBATIM
+        )
+    endif()
+endif()
+
 # ========================
 # Compiler Settings
 # ========================
