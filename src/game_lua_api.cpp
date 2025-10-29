@@ -22,6 +22,7 @@ lua_pushnumber_t g_game_lua_pushnumber = nullptr;
 lua_tonumber_t g_game_lua_tonumber = nullptr;
 lua_pushnil_t g_game_lua_pushnil = nullptr;
 lua_pcall_t g_game_lua_pcall = nullptr;
+luaB_loadstring g_game_luaB_loadstring = nullptr;
 uintptr_t g_game_base_address = 0; // Definition for g_game_base_address
 uintptr_t LUA_PUSHSTRING_OFFSET =
     0x0; // This is now unused, but kept for consistency if needed elsewhere
