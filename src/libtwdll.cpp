@@ -12,6 +12,7 @@
 #include "battle_unit_script_interface.h"
 #include "faction_script_interface.h"
 #include "military_force_script_interface.h"
+#include "performance_test.h"
 
 // --- DllMain ---
 // This function is the entry point for the DLL.
@@ -105,6 +106,8 @@ static const struct luaL_Reg twdll_main_functions[] = {
 /// @tparam lua_State L
 /// @treturn integer always 1 (returns the main twdll table)
 extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
+    g_game_LuaState = L;
+    register_performance_test_functions(g_game_LuaState);
     Log("luaopen_twdll START");
     // Register the main 'twdll' table with core functions like Log
     g_game_luaL_register(L, "twdll", twdll_main_functions);

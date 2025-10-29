@@ -17,19 +17,24 @@
 // Forward declarations
 LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 bool FindAndHookD3D();
-HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
-HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
+HRESULT __stdcall h_pPresent(IDXGISwapChain *pSwapChain, UINT SyncInterval, UINT Flags);
+HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain *pSwapChain, UINT BufferCount, UINT Width,
+                                   UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
 void ShowPythonEditorWindow();
 void InitializePython();
 void ShutdownPython();
 
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam,
+                                                             LPARAM lParam);
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 
-typedef HRESULT(__stdcall* D3D11Present_t)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
-typedef HRESULT(__stdcall* D3D11ResizeBuffers_t)(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
+typedef HRESULT(__stdcall *D3D11Present_t)(IDXGISwapChain *pSwapChain, UINT SyncInterval,
+                                           UINT Flags);
+typedef HRESULT(__stdcall *D3D11ResizeBuffers_t)(IDXGISwapChain *pSwapChain, UINT BufferCount,
+                                                 UINT Width, UINT Height, DXGI_FORMAT NewFormat,
+                                                 UINT SwapChainFlags);
 
 D3D11Present_t o_pPresent = nullptr;
 D3D11ResizeBuffers_t o_pResizeBuffers = nullptr;
@@ -40,10 +45,9 @@ std::atomic<bool> g_isHookInitialized = false;
 std::atomic<bool> g_isImGuiInitialized = false;
 static HWND g_lastHookedWindow = NULL; // Moved to global static scope
 
-ID3D11Device* g_pDevice = nullptr;
-ID3D11DeviceContext* g_pContext = nullptr;
-ID3D11RenderTargetView* g_pRenderTargetView = nullptr;
-
+ID3D11Device *g_pDevice = nullptr;
+ID3D11DeviceContext *g_pContext = nullptr;
+ID3D11RenderTargetView *g_pRenderTargetView = nullptr;
 
 LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if (g_isImGuiInitialized) {
@@ -51,7 +55,7 @@ LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
         // We will decide whether to consume the message based on io.WantCaptureMouse/Keyboard.
         ImGui_ImplWin32_WndProcHandler(hWnd, uMsg, wParam, lParam);
 
-        ImGuiIO& io = ImGui::GetIO();
+        ImGuiIO &io = ImGui::GetIO();
         // If ImGui wants to capture mouse or keyboard, and it's a relevant message, consume it.
         // This covers a broader range of mouse and keyboard messages.
         if ((io.WantCaptureMouse && (uMsg >= WM_MOUSEFIRST && uMsg <= WM_MOUSELAST)) ||
@@ -70,16 +74,17 @@ void ShowPythonEditorWindow() {
     static char text[1024 * 16] = "import sys\nprint(sys.version)";
     static char output[1024 * 16] = "";
 
-    ImGui::InputTextMultiline("##source", text, IM_ARRAYSIZE(text), ImVec2(-1.0f, ImGui::GetTextLineHeight() * 10));
+    ImGui::InputTextMultiline("##source", text, IM_ARRAYSIZE(text),
+                              ImVec2(-1.0f, ImGui::GetTextLineHeight() * 10));
 
     if (ImGui::Button("Execute")) {
         output[0] = '\0'; // Clear previous output
 
-        PyObject* sys = PyImport_ImportModule("sys");
-        PyObject* old_stdout = PyObject_GetAttrString(sys, "stdout");
-        PyObject* old_stderr = PyObject_GetAttrString(sys, "stderr");
-        PyObject* io = PyImport_ImportModule("io");
-        PyObject* string_io = PyObject_CallMethod(io, "StringIO", nullptr);
+        PyObject *sys = PyImport_ImportModule("sys");
+        PyObject *old_stdout = PyObject_GetAttrString(sys, "stdout");
+        PyObject *old_stderr = PyObject_GetAttrString(sys, "stderr");
+        PyObject *io = PyImport_ImportModule("io");
+        PyObject *string_io = PyObject_CallMethod(io, "StringIO", nullptr);
 
         if (string_io) {
             PyObject_SetAttrString(sys, "stdout", string_io);
@@ -89,9 +94,9 @@ void ShowPythonEditorWindow() {
         PyRun_SimpleString(text);
 
         if (string_io) {
-            PyObject* output_value = PyObject_CallMethod(string_io, "getvalue", nullptr);
+            PyObject *output_value = PyObject_CallMethod(string_io, "getvalue", nullptr);
             if (output_value) {
-                const char* output_str = PyUnicode_AsUTF8(output_value);
+                const char *output_str = PyUnicode_AsUTF8(output_value);
                 if (output_str) {
                     strncpy(output, output_str, sizeof(output) - 1);
                     output[sizeof(output) - 1] = '\0';
@@ -112,7 +117,9 @@ void ShowPythonEditorWindow() {
 
     ImGui::Separator();
     ImGui::Text("Output:");
-    ImGui::InputTextMultiline("##output", output, IM_ARRAYSIZE(output), ImVec2(-1.0f, ImGui::GetTextLineHeight() * 10), ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputTextMultiline("##output", output, IM_ARRAYSIZE(output),
+                              ImVec2(-1.0f, ImGui::GetTextLineHeight() * 10),
+                              ImGuiInputTextFlags_ReadOnly);
 
     ImGui::End();
 }
@@ -122,33 +129,36 @@ void InitializePython() {
     Py_Initialize();
 }
 
-void ShutdownPython() {
-    Py_FinalizeEx();
-}
+void ShutdownPython() { Py_FinalizeEx(); }
 
-HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags) {
+#include <game_lua_api.h>
+#include <performance_test.h>
+
+
+HRESULT __stdcall h_pPresent(IDXGISwapChain *pSwapChain, UINT SyncInterval, UINT Flags) {
     if (!g_isImGuiInitialized) {
         Log("h_pPresent: ImGui not initialized. Setting up...");
-        if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&g_pDevice))) {
+        if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void **)&g_pDevice))) {
             g_pDevice->GetImmediateContext(&g_pContext);
-            
+
             DXGI_SWAP_CHAIN_DESC desc;
             pSwapChain->GetDesc(&desc);
             g_hGameWindow = desc.OutputWindow; // Store the new/current window handle
-            
+
             ImGui::CreateContext();
-            ImGuiIO& io = ImGui::GetIO();
+            ImGuiIO &io = ImGui::GetIO();
             io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-            
+
             ImGui_ImplWin32_Init(g_hGameWindow);
             ImGui_ImplDX11_Init(g_pDevice, g_pContext);
-            
+
             if (g_lastHookedWindow != g_hGameWindow) { // Use global static variable
                 if (g_lastHookedWindow != NULL && o_wndProc != NULL) {
                     SetWindowLongPtr(g_lastHookedWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
                     Log("Un-hooked WndProc from old window.");
                 }
-                o_wndProc = (WNDPROC)SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)h_wndProc);
+                o_wndProc =
+                    (WNDPROC)SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)h_wndProc);
                 g_lastHookedWindow = g_hGameWindow; // Update global static variable
                 Log("WndProc has been hooked on new window.");
             }
@@ -163,8 +173,8 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
         g_pRenderTargetView = nullptr;
     }
 
-    ID3D11Texture2D* pBackBuffer;
-    if (SUCCEEDED(pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuffer))) {
+    ID3D11Texture2D *pBackBuffer;
+    if (SUCCEEDED(pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&pBackBuffer))) {
         g_pDevice->CreateRenderTargetView(pBackBuffer, NULL, &g_pRenderTargetView);
         pBackBuffer->Release();
     } else {
@@ -177,15 +187,18 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT
     ImGui::NewFrame();
     ImGui::ShowDemoWindow();
     ShowPythonEditorWindow();
+    ShowBenchmarkWindow(g_game_LuaState);
 
     ImGui::Render();
-    if (g_pRenderTargetView) g_pContext->OMSetRenderTargets(1, &g_pRenderTargetView, NULL);
+    if (g_pRenderTargetView)
+        g_pContext->OMSetRenderTargets(1, &g_pRenderTargetView, NULL);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
     return o_pPresent(pSwapChain, SyncInterval, Flags);
 }
 
-HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain* pSwapChain, UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
+HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain *pSwapChain, UINT BufferCount, UINT Width,
+                                   UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
     Log("--- h_pResizeBuffers called. Triggering full cleanup. ---");
     CleanupHooks();
     return o_pResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
@@ -198,30 +211,62 @@ bool FindAndHookD3D() {
         return true;
     }
     Log("--- Starting Reliable D3D Hook Setup ---");
-    
-    WNDCLASSEX wc = { sizeof(WNDCLASSEX), CS_CLASSDC, DefWindowProc, 0, 0, GetModuleHandle(NULL), NULL, NULL, NULL, NULL, "DummyWindowClass", NULL };
+
+    WNDCLASSEX wc = {sizeof(WNDCLASSEX),    CS_CLASSDC, DefWindowProc, 0,    0,
+                     GetModuleHandle(NULL), NULL,       NULL,          NULL, NULL,
+                     "DummyWindowClass",    NULL};
     RegisterClassEx(&wc);
-    HWND hDummyWnd = CreateWindow(wc.lpszClassName, NULL, WS_OVERLAPPEDWINDOW, 0, 0, 1, 1, NULL, NULL, wc.hInstance, NULL);
-    DXGI_SWAP_CHAIN_DESC sd; ZeroMemory(&sd, sizeof(sd));
-    sd.BufferCount = 1; sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.OutputWindow = hDummyWnd; sd.SampleDesc.Count = 1; sd.Windowed = TRUE; sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-    IDXGISwapChain* pDummySwapChain; ID3D11Device* pDummyDevice;
-    HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &sd, &pDummySwapChain, &pDummyDevice, NULL, NULL);
-    if (FAILED(hr)) { Log("FindAndHookD3D: D3D11CreateDeviceAndSwapChain FAILED. Error: %lx", hr); DestroyWindow(hDummyWnd); UnregisterClass(wc.lpszClassName, wc.hInstance); return false; }
+    HWND hDummyWnd = CreateWindow(wc.lpszClassName, NULL, WS_OVERLAPPEDWINDOW, 0, 0, 1, 1, NULL,
+                                  NULL, wc.hInstance, NULL);
+    DXGI_SWAP_CHAIN_DESC sd;
+    ZeroMemory(&sd, sizeof(sd));
+    sd.BufferCount = 1;
+    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.OutputWindow = hDummyWnd;
+    sd.SampleDesc.Count = 1;
+    sd.Windowed = TRUE;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    IDXGISwapChain *pDummySwapChain;
+    ID3D11Device *pDummyDevice;
+    HRESULT hr = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0,
+                                               D3D11_SDK_VERSION, &sd, &pDummySwapChain,
+                                               &pDummyDevice, NULL, NULL);
+    if (FAILED(hr)) {
+        Log("FindAndHookD3D: D3D11CreateDeviceAndSwapChain FAILED. Error: %lx", hr);
+        DestroyWindow(hDummyWnd);
+        UnregisterClass(wc.lpszClassName, wc.hInstance);
+        return false;
+    }
 
-    uintptr_t* pVTable = *reinterpret_cast<uintptr_t**>(pDummySwapChain);
-    void* pPresentAddress = reinterpret_cast<void*>(pVTable[8]);
-    void* pResizeBuffersAddress = reinterpret_cast<void*>(pVTable[13]);
-    pDummySwapChain->Release(); pDummyDevice->Release();
-    DestroyWindow(hDummyWnd); UnregisterClass(wc.lpszClassName, wc.hInstance); 
+    uintptr_t *pVTable = *reinterpret_cast<uintptr_t **>(pDummySwapChain);
+    void *pPresentAddress = reinterpret_cast<void *>(pVTable[8]);
+    void *pResizeBuffersAddress = reinterpret_cast<void *>(pVTable[13]);
+    pDummySwapChain->Release();
+    pDummyDevice->Release();
+    DestroyWindow(hDummyWnd);
+    UnregisterClass(wc.lpszClassName, wc.hInstance);
 
-    if (MH_Initialize() != MH_OK) { Log("FindAndHookD3D: MH_Initialize FAILED."); return false; }
-    if (MH_CreateHook(pPresentAddress, &h_pPresent, (void**)&o_pPresent) != MH_OK) { Log("FindAndHookD3D: MH_CreateHook pPresentAddress FAILED."); return false; }
-    if (MH_CreateHook(pResizeBuffersAddress, &h_pResizeBuffers, (void**)&o_pResizeBuffers) != MH_OK) { Log("FindAndHookD3D: MH_CreateHook pResizeBuffersAddress FAILED."); return false; }
-    if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) { Log("FindAndHookD3D: MH_EnableHook FAILED."); return false; }
+    if (MH_Initialize() != MH_OK) {
+        Log("FindAndHookD3D: MH_Initialize FAILED.");
+        return false;
+    }
+    if (MH_CreateHook(pPresentAddress, &h_pPresent, (void **)&o_pPresent) != MH_OK) {
+        Log("FindAndHookD3D: MH_CreateHook pPresentAddress FAILED.");
+        return false;
+    }
+    if (MH_CreateHook(pResizeBuffersAddress, &h_pResizeBuffers, (void **)&o_pResizeBuffers) !=
+        MH_OK) {
+        Log("FindAndHookD3D: MH_CreateHook pResizeBuffersAddress FAILED.");
+        return false;
+    }
+    if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) {
+        Log("FindAndHookD3D: MH_EnableHook FAILED.");
+        return false;
+    }
 
+    PyImport_AppendInittab("engine", PyInit_engine); // <-- Add this line
     InitializePython();
-
     Log("SUCCESS: All hooks are active!");
     g_isHookInitialized = true;
     Log("FindAndHookD3D: Exit. g_isHookInitialized after: %d", g_isHookInitialized.load());
@@ -252,7 +297,7 @@ void CleanupHooks() {
     if (g_hGameWindow && o_wndProc) {
         Log("Restoring original WndProc...");
         SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
-        o_wndProc = nullptr; // Avoid trying to restore it again
+        o_wndProc = nullptr;       // Avoid trying to restore it again
         g_lastHookedWindow = NULL; // Correctly reset the global static variable
     }
 
@@ -264,7 +309,7 @@ void CleanupHooks() {
         MH_Uninitialize();
         g_isHookInitialized = false;
     }
-    
+
     Log("--- Full cleanup complete. ---");
     Log("CleanupHooks: Exit. g_isHookInitialized after: %d", g_isHookInitialized.load());
 }

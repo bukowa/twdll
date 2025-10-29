@@ -134,6 +134,8 @@ add_library(twdll SHARED
         include/imgui/backends/imgui_impl_win32.cpp
         include/imgui/backends/imgui_impl_dx11.cpp
         include/imgui/imgui_demo.cpp
+        src/performance_test.h
+        src/performance_test.cpp
 )
 
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "twdll")

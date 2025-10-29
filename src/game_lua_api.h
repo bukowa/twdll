@@ -5,6 +5,8 @@
 #include <vector>
 #include "lua_forward_declarations.h"
 
+extern lua_State *g_game_LuaState;
+
 // Define function pointer types for Lua functions
 typedef void (*lua_pushstring_t)(lua_State* L, const char* s);
 typedef void* (*lua_newuserdata_t)(lua_State* L, size_t size);

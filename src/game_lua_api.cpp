@@ -27,6 +27,8 @@ uintptr_t g_game_base_address = 0; // Definition for g_game_base_address
 uintptr_t LUA_PUSHSTRING_OFFSET =
     0x0; // This is now unused, but kept for consistency if needed elsewhere
 
+lua_State *g_game_LuaState;
+
 // Array of signatures to find
 // clang-format off
 static SignatureInfo g_signatures_to_find[] = {
