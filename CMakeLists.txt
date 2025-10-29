@@ -210,7 +210,7 @@ file(MAKE_DIRECTORY ${RELEASE_DIR})
 set(RELEASE_LUA_EXE "${RELEASE_DIR}/lua.exe")
 set(RELEASE_LUAC_EXE "${RELEASE_DIR}/luac.exe")
 set(RELEASE_LUA_DLL "${RELEASE_DIR}/lua.dll")
-set(DOCS_RELEASE_DIR "${RELEASE_DIR}/luadoc")
+set(DOCS_RELEASE_DIR "${RELEASE_DIR}/twdlldocs")
 set(RELEASE_DOCS_STAMP "${RELEASE_DIR}/luadoc.stamp")
 set(RELEASE_DLL "${RELEASE_DIR}/twdll.dll")
 set(RELEASE_PACK "${RELEASE_DIR}/twdll.pack")
@@ -222,7 +222,6 @@ add_custom_target(
         build_release ALL
         DEPENDS
         ${RELEASE_DLL}
-        ${RELEASE_LUA_DLL}
         ${RELEASE_DOCS_STAMP}
         docs
 )
@@ -237,12 +236,6 @@ add_custom_command(
         OUTPUT ${RELEASE_DLL}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:twdll> ${RELEASE_DLL}
         COMMENT "Copying dll to release directory"
-)
-add_custom_command(
-        DEPENDS $<TARGET_FILE:luadll>
-        OUTPUT ${RELEASE_LUA_DLL}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:luadll> ${RELEASE_LUA_DLL}
-        COMMENT "Copying lua.dll to release directory"
 )
 
 add_custom_command(
@@ -303,15 +296,6 @@ if (INSTALL_MOD)
             )
             add_custom_target(copy_dll_${DIR_ID} ALL DEPENDS ${INSTALL_DLL})
             add_dependencies(install_mod copy_dll_${DIR_ID})
-
-            set(INSTALL_LUA_DLL "${CURRENT_DIR}/${LUA_DLL_NAME}")
-            add_custom_command(
-                    DEPENDS ${RELEASE_LUA_DLL} OUTPUT ${INSTALL_LUA_DLL}
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${RELEASE_LUA_DLL} ${INSTALL_LUA_DLL}
-                    COMMENT "Copying lua.dll to: ${INSTALL_LUA_DLL}"
-            )
-            add_custom_target(copy_lua_dll_${DIR_ID} ALL DEPENDS ${INSTALL_LUA_DLL})
-            add_dependencies(install_mod copy_lua_dll_${DIR_ID})
 
             add_custom_command(
                     TARGET install_mod POST_BUILD
