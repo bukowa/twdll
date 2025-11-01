@@ -27,3 +27,7 @@ c_cpp_properties.json
 *.vcxproj.filters
 libtwdll.sln
 .other
+idasdk
+errors
+log
+prompt
