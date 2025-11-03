@@ -29,250 +29,160 @@ uintptr_t LUA_PUSHSTRING_OFFSET =
 
 lua_State *g_game_LuaState;
 
+// Since we only target one module, we can use a simpler structure for signatures.
+struct EmpireSignatureInfo {
+    const char* function_name;
+    void** target_function_ptr;
+    const char* signature;
+};
+
 // Array of signatures to find
 // clang-format off
-static SignatureInfo g_signatures_to_find[] = {
+static EmpireSignatureInfo g_signatures_to_find[] = {
     {
         "lua_pushstring",
         (void**)&g_game_lua_pushstring,
-        {
-            {"Rome2.dll", "55 8B EC 8B 45 ?? 85 C0 75 ?? 8B 4D"},
-            {"empire.retail.dll", "55 8b 6c 24 0c 85 ed 75 10 8b 4c 24 08 8b 41 08 89 68 04 83 41 08 08"}
-        }
+        "55 8B 6C 24 ? 85 ED 75 ? 8B 4C 24"
     },
     {
         "lua_newuserdata",
         (void**)&g_game_lua_newuserdata,
-        {
-            {"Rome2.dll", "55 8B EC 56 8B 75 ? 8B 4E ? 8B 41 ? 3B 41 ? 72 ? 56 E8 ? ? ? ? 83 C4 ? 8B 46"},
-            {"empire.retail.dll", ""}
-        }
+        "56 8B 74 24 ? 8B 4E ? 8B 41 ? 3B 41 ? 72 ? 56 E8 ? ? ? ? 83 C4 ? 8B 46"
     },
     {
         "luaL_newmetatable",
         (void**)&g_game_luaL_newmetatable,
-        {
-            {"Rome2.dll", "55 8B EC 56 FF 75 ?? 8B 75 ?? 68"},
-            {"empire.retail.dll", ""}
-        }
+        "56 FF 74 24 ? 8B 74 24 ? 68"
     },
     {
         "lua_pushcclosure",
         (void**)&g_game_lua_pushcclosure,
-        {
-            {"Rome2.dll", "55 8B EC 56 8B 75 ? 57 8B 4E ? 8B 41"},
-            {"empire.retail.dll", ""}
-        }
+        "55 56 8B 74 24 ? 57 8B 4E ? 8B 41"
     },
     {
         "lua_settable",
         (void**)&g_game_lua_settable,
-        {
-            {"Rome2.dll", "55 8B EC 56 FF 75 ? 8B 75 ? 56 E8 ? ? ? ? 8B 56 ? 8D 4A"},
-            {"empire.retail.dll", ""}
-        }
+        "56 FF 74 24 ? 8B 74 24 ? 56 E8 ? ? ? ? 8B 56 ? 8D 4A"
     },
     {
         "lua_setmetatable",
         (void**)&g_game_lua_setmetatable,
-        {
-            {"Rome2.dll", "55 8B EC 56 8B 75 ? 57 FF 75 ? 56 E8 ? ? ? ? 8B 4E"},
-            {"empire.retail.dll", ""}
-        }
+        "56 8B 74 24 ? 57 FF 74 24 ? 56 E8 ? ? ? ? 8B 4E ? 83 C4"
     },
     {
         "lua_setfield",
         (void**)&g_game_lua_setfield,
-        {
-            {"Rome2.dll", "55 8B EC 83 EC ? 53 56 8B 75 ? 57 FF 75 ? 56 E8 ? ? ? ? 8B 55 ? 83 C4 ? 8B CA 8B F8 8D 59 ? ? ? 41 84 C0 75 ? 2B CB 51 52 56 E8 ? ? ? ? 89 45"},
-            {"empire.retail.dll", ""}
-        }
+        "83 EC ? 53 56 8B 74 24 ? 57 FF 74 24 ? 56 E8 ? ? ? ? 8B 54 24 ? 83 C4 ? 8B CA 8B F8 8D 59 ? ? ? 41 84 C0 75 ? 2B CB 51 52 56 E8 ? ? ? ? 89 44 24"
     },
     {
         "luaL_checklstring", // Changed from checkstring
         (void**)&g_game_luaL_checklstring,
-        {
-            {"Rome2.dll", "55 8B EC 53 57 FF 75 ? 8B 7D ? FF 75"},
-            {"empire.retail.dll", ""}
-        }
+        "53 55 8B 6C 24 ? 57 FF 74 24"
     },
     {
         "luaL_register",
         (void**)&g_game_luaL_register,
-        {
-            {"Rome2.dll", "55 8B EC 6A ? FF 75 ? FF 75 ? FF 75 ? E8 ? ? ? ? 83 C4 ? 5D C3 ? ? ? ? ? ? ? ? 55"},
-            {"empire.retail.dll", ""}
-        }
+        "55 8B 6C 24 ? 56 8B 74 24 ? 57 8B 7C 24 ? 85 ED"
     },
     {
         "lua_createtable",
         (void**)&g_game_lua_createtable,
-        {
-            {"Rome2.dll", "55 8B EC 56 57 8B 7D ? 8B 4F ? 8B 41 ? 3B 41 ? 72 ? 57 E8 ? ? ? ? 83 C4 ? FF 75 ? 8B 77 ? FF 75 ? 57 E8 ? ? ? ? 83 C4 ? ? ? C7 46 ? ? ? ? ? 83 47 ? ? 5F 5E 5D C3 ? 55 8B EC 8B 4D ? 8B 41 ? 83 78"},
-            {"empire.retail.dll", ""}
-        }
+        "56 57 8B 7C 24 ? 8B 4F ? 8B 41 ? 3B 41 ? 72 ? 57 E8 ? ? ? ? 83 C4 ? FF 74 24 ? 8B 77 ? FF 74 24 ? 57 E8 ? ? ? ? 83 C4 ? ? ? C7 46 ? ? ? ? ? 83 47 ? ? 5F 5E C3 ? ? 8B 4C 24 ? 8B 41 ? 83 78"
     },
     {
         "lua_touserdata",
         (void**)&g_game_lua_touserdata,
-        {
-            {"Rome2.dll", "55 8B EC FF 75 ? FF 75 ? E8 ? ? ? ? 83 C4 ? 8B 48 ? 83 E9"},
-            {"empire.retail.dll", ""}
-        }
+        "FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 83 C4 ? 8B 48 ? 83 E9 ? 74 ? 83 E9 ? 74"
     },
     {
         "lua_pushinteger",
         (void**)&g_game_lua_pushinteger,
-        {
-            {"Rome2.dll", "55 8B EC 8B 4D ? 66 0F 6E 45"},
-            {"empire.retail.dll", ""}
-        }
+        "8B 4C 24 ? 66 0F 6E 44 24"
     },
     {
         "lua_tointeger",
         (void**)&g_game_lua_tointeger,
-        {
-            {"Rome2.dll", "55 8B EC 83 EC ? FF 75 ? FF 75 ? E8 ? ? ? ? 83 C4 ? 83 78 ? ? 74 ? 8D 4D ? 51 50 E8 ? ? ? ? 83 C4 ? 85 C0 75 ? 8B E5 5D C3 ? ? ? ? 8B E5"},
-            {"empire.retail.dll", ""}
-        }
+        "83 EC ? FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 83 C4 ? 83 78 ? ? 74 ? ? ? ? 51 50 E8 ? ? ? ? 83 C4 ? 85 C0 75 ? 83 C4 ? C3 ? ? ? ? 83 C4"
     },
     {
         "lua_pushnumber",
         (void**)&g_game_lua_pushnumber,
-        {
-            {"Rome2.dll", "55 8B EC 8B 4D ? F3 0F 10 45 ? 8B 41"},
-            {"empire.retail.dll", ""}
-        }
+        "8B 4C 24 ? F3 0F 10 44 24 ? 8B 41"
     },
     {
         "lua_tonumber",
         (void**)&g_game_lua_tonumber,
-        {
-            {"Rome2.dll", "55 8B EC 83 EC ? FF 75 ? FF 75 ? E8 ? ? ? ? 83 C4 ? 83 78 ? ? 74 ? 8D 4D ? 51 50 E8 ? ? ? ? 83 C4 ? 85 C0 75 ? ? ? 8B E5"},
-            {"empire.retail.dll", ""}
-        }
+        "83 EC ? FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 83 C4 ? 83 78 ? ? 74 ? ? ? ? 51 50 E8 ? ? ? ? 83 C4 ? 85 C0 75 ? ? ? 83 C4"
     },
     {
         "lua_pushnil",
         (void**)&g_game_lua_pushnil,
-        {
-            {"Rome2.dll", "55 8B EC 8B 4D ? 8B 41 ? C7 40"},
-            {"empire.retail.dll", ""}
-        }
+        "8B 4C 24 ? 8B 41 ? C7 40"
     },
     {
         "lua_pcall",
         (void**)&g_game_lua_pcall,
-        {
-            {"Rome2.dll", "55 8B EC 8B 45 ? 83 EC ? 57 8B 7D ? 85 C0 75"},
-            {"empire.retail.dll", ""}
-        }
+        "8B 44 24 ? 83 EC ? 53 56 57 8B 7C 24"
     },
     {
         "luaB_loadstring",
         (void**)&g_game_luaB_loadstring,
-        {
-            {"Rome2.dll", "55 8B EC 51 56 57 8B 7D ? 8D 45 ? 50 6A ? 57"}, // THIS IS AN EXAMPLE! FIND THE REAL ONE!
-            {"empire.retail.dll", ""}
-        }
+        "51 56 57 8B 7C 24 ? 8D 44 24 ? 50 6A"
     },
 };
 //clang-format on
 
 // Function to initialize the game_lua_api function pointers
 void initialize_game_lua_api() {
-    const char* game_modules[] = {"Rome2.dll", "empire.retail.dll"};
-    HMODULE hGameModule = NULL;
-    const char* detected_module_name = "Unknown";
+    const char* module_name = "empire.retail.dll";
+    HMODULE hGameModule = GetModuleHandle(module_name);
 
-    for (const char* module_name : game_modules) {
-        hGameModule = GetModuleHandle(module_name);
-        if (hGameModule != NULL) {
-            detected_module_name = module_name;
-            break;
-        }
+    if (hGameModule == NULL) {
+        Log("ERROR: %s not found. Cannot initialize game Lua API.", module_name);
+        return;
     }
 
     g_game_base_address = (uintptr_t)hGameModule;
-
-    if (g_game_base_address == 0) {
-        Log("ERROR: Neither Rome2.dll nor empire.retail.dll found. Cannot initialize game Lua API.");
-        return;
-    }
     
-    Log("Detected game module.");
+    Log("Game module found: %s", module_name);
 
     // Get module information to determine its size for signature scanning
     MODULEINFO mi = { 0 };
     if (!GetModuleInformation(GetCurrentProcess(), (HMODULE)g_game_base_address, &mi, sizeof(mi))) {
-        Log("ERROR: Could not get module information for detected game module.");
+        Log("ERROR: Could not get module information for %s.", module_name);
         return;
     }
     size_t module_size = mi.SizeOfImage;
 
-        // Iterate through the function signatures
+    // Iterate through the function signatures
+    for (const auto& func_sig_info : g_signatures_to_find) {
+        Log("Scanning for function: %s", func_sig_info.function_name);
 
-        for (const auto& func_sig_info : g_signatures_to_find) {
-
-            Log("Scanning for function: %s", func_sig_info.function_name);
-
-            Log("DEBUG: Signature vector size for %s: %zu", func_sig_info.function_name, func_sig_info.signatures.size());
-
-            try {
-
-                // Find the signature for the detected module
-
-                for (const auto& mod_sig : func_sig_info.signatures) {
-
-                    if (strcmp(mod_sig.module_name, detected_module_name) == 0) {
-
-                        if (mod_sig.signature_str == nullptr) {
-
-                            Log("ERROR: Signature for %s in %s is NULL, skipping scan.", func_sig_info.function_name, mod_sig.module_name);
-
-                            break; 
-
-                        }
-
-                        if (strlen(mod_sig.signature_str) == 0) {
-
-                            Log("INFO: Signature for %s in %s is empty, skipping scan.", func_sig_info.function_name, mod_sig.module_name);
-
-                            break; 
-
-                        }
-
-                        uintptr_t found_address = find_signature(g_game_base_address, module_size, mod_sig.signature_str);
-
-                        if (found_address) {
-
-                            *func_sig_info.target_function_ptr = (void*)found_address;
-
-                            Log("Found function %s via signature.", func_sig_info.function_name);
-
-                        } else {
-
-                            Log("ERROR: Signature not found for function %s.", func_sig_info.function_name);
-
-                        }
-
-                        break; // Found the right module, no need to check others for this function
-
-                    }
-
-                }
-
-            } catch (const std::exception& e) {
-
-                Log("CRITICAL ERROR: Exception caught during signature scan for %s: %s", func_sig_info.function_name, e.what());
-
-            } catch (...) {
-
-                Log("CRITICAL ERROR: Unknown exception caught during signature scan for %s.", func_sig_info.function_name);
-
+        try {
+            if (func_sig_info.signature == nullptr) {
+                Log("ERROR: Signature for %s is NULL, skipping scan.", func_sig_info.function_name);
+                continue;
             }
 
+            if (strlen(func_sig_info.signature) == 0) {
+                Log("INFO: Signature for %s is empty, skipping scan.", func_sig_info.function_name);
+                continue;
+            }
+
+            uintptr_t found_address = find_signature(g_game_base_address, module_size, func_sig_info.signature);
+
+            if (found_address) {
+                *func_sig_info.target_function_ptr = (void*)found_address;
+                Log("Found function %s via signature.", func_sig_info.function_name);
+            } else {
+                Log("ERROR: Signature not found for function %s.", func_sig_info.function_name);
+            }
+        } catch (const std::exception& e) {
+            Log("CRITICAL ERROR: Exception caught during signature scan for %s: %s", func_sig_info.function_name, e.what());
+        } catch (...) {
+            Log("CRITICAL ERROR: Unknown exception caught during signature scan for %s.", func_sig_info.function_name);
         }
+    }
 
     // Verify that all functions were found
     for (const auto& func_sig_info : g_signatures_to_find) {

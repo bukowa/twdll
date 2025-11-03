@@ -2,15 +2,13 @@
 
 `twdll` is a mod for *Total War: Rome II* that extends the game's scripting capabilities, allowing for more complex and powerful mods. What started as a proof-of-concept for calling the game's Lua functions from a C++ DLL has evolved into a foundational script extender.
 
-This project provides a framework for modders to add new functionality to the game by exposing more of the game's internal workings to the Lua scripting environment.
+This project provides a framework for modders to add new functionality to the game by exposing more of the game's internal workings to the Lua scripting environment, as well as integrating ImGui UI and Python into the game's event loop.
 
 ## Installation
 
 ## Compatibility Note
 
-**Important:** This mod is currently built against game version **2.4.0.19534** and is **not compatible with the Steam version** of *Total War: Rome II*. Attempting to use it with an incompatible version may lead to crashes or unexpected behavior.
-
-Development primarily focuses on the standalone (non-Steam) version of the game due to easier mod loading and overall development workflow. To make the mod compatible with the Steam version, primarily updating signatures would be required.
+**Important:** This mod is currently built against game version **2.4.0.20027** and is compatible with the Steam version of *Total War: Rome II*.
 
 There are two ways to install `twdll`:
 
