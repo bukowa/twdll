@@ -142,6 +142,15 @@ add_library(twdll SHARED
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "twdll")
 set_target_properties(twdll PROPERTIES DEBUG_INFORMATION_RELEASE TRUE)
 
+# Force PDB generation for all configurations
+target_compile_options(twdll PRIVATE "/Zi")
+target_link_options(twdll PRIVATE "/DEBUG")
+
+set_target_properties(twdll PROPERTIES
+    PDB_NAME "twdll"
+    PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
 target_include_directories(twdll
         PUBLIC
         src
@@ -315,8 +324,8 @@ add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 target_compile_options(luadll PRIVATE "/wd4005")
 
 if (MSVC)
-    set(CMAKE_C_FLAGS_RELEASE "/O2 /Z7 /DNDEBUG /W4")
-    set(CMAKE_C_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Zi /DNDEBUG /W4")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
 
