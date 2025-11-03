@@ -2,7 +2,7 @@
 /// Functions for interacting with game characters.
 #include "script_utils.h"
 #include "character_script_interface.h"
-#include "game_lua_api.h" // Include game_lua_api.h for function pointers
+#include "lua/lua_api.h" // Include game_lua_api.h for function pointers
 #include <cstddef> // For NULL
 
 #define REAL_CHARACTER_POINTER_OFFSET 0x8

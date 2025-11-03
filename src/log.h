@@ -1,4 +1,5 @@
-#pragma once // Or use include guards
+#pragma once
 
-// This is a DECLARATION. It tells other files "this function exists somewhere".
-void Log(const char* format, ...);
+#include <spdlog/spdlog.h>
+
+void init_logger();

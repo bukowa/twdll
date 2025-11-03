@@ -1,4 +1,3 @@
-
 #include "dx_finder.h"
 #include <windows.h>
 #include <d3d11.h>
@@ -9,10 +8,8 @@
 #include "imgui_impl_dx11.h"
 #include "log.h"
 #include "MinHook.h"
-#include "module.h"
-#include <Python.h>
-#include <string>
 #include <libloaderapi.h>
+
 
 // Forward declarations
 LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -20,9 +17,6 @@ bool FindAndHookD3D();
 HRESULT __stdcall h_pPresent(IDXGISwapChain *pSwapChain, UINT SyncInterval, UINT Flags);
 HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain *pSwapChain, UINT BufferCount, UINT Width,
                                    UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags);
-void ShowPythonEditorWindow();
-void InitializePython();
-void ShutdownPython();
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam,
                                                              LPARAM lParam);
@@ -66,78 +60,11 @@ LRESULT __stdcall h_wndProc(const HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
     // If ImGui is not initialized, or it doesn't want to capture the input,
     // pass the message to the original window procedure.
     return CallWindowProc(o_wndProc, hWnd, uMsg, wParam, lParam);
-}
-
-void ShowPythonEditorWindow() {
-    ImGui::Begin("Python Editor");
-
-    static char text[1024 * 16] = "import sys\nprint(sys.version)";
-    static char output[1024 * 16] = "";
-
-    ImGui::InputTextMultiline("##source", text, IM_ARRAYSIZE(text),
-                              ImVec2(-1.0f, ImGui::GetTextLineHeight() * 10));
-
-    if (ImGui::Button("Execute")) {
-        output[0] = '\0'; // Clear previous output
-
-        PyObject *sys = PyImport_ImportModule("sys");
-        PyObject *old_stdout = PyObject_GetAttrString(sys, "stdout");
-        PyObject *old_stderr = PyObject_GetAttrString(sys, "stderr");
-        PyObject *io = PyImport_ImportModule("io");
-        PyObject *string_io = PyObject_CallMethod(io, "StringIO", nullptr);
-
-        if (string_io) {
-            PyObject_SetAttrString(sys, "stdout", string_io);
-            PyObject_SetAttrString(sys, "stderr", string_io);
-        }
-
-        PyRun_SimpleString(text);
-
-        if (string_io) {
-            PyObject *output_value = PyObject_CallMethod(string_io, "getvalue", nullptr);
-            if (output_value) {
-                const char *output_str = PyUnicode_AsUTF8(output_value);
-                if (output_str) {
-                    strncpy(output, output_str, sizeof(output) - 1);
-                    output[sizeof(output) - 1] = '\0';
-                }
-                Py_XDECREF(output_value);
-            }
-
-            PyObject_SetAttrString(sys, "stdout", old_stdout);
-            PyObject_SetAttrString(sys, "stderr", old_stderr);
-        }
-
-        Py_XDECREF(sys);
-        Py_XDECREF(old_stdout);
-        Py_XDECREF(old_stderr);
-        Py_XDECREF(io);
-        Py_XDECREF(string_io);
-    }
-
-    ImGui::Separator();
-    ImGui::Text("Output:");
-    ImGui::InputTextMultiline("##output", output, IM_ARRAYSIZE(output),
-                              ImVec2(-1.0f, ImGui::GetTextLineHeight() * 10),
-                              ImGuiInputTextFlags_ReadOnly);
-
-    ImGui::End();
-}
-
-void InitializePython() {
-    _putenv_s("PYTHONHOME", g_PythonRootPath.c_str());
-    Py_Initialize();
-}
-
-void ShutdownPython() { Py_FinalizeEx(); }
-
-#include <game_lua_api.h>
-#include <performance_test.h>
-
+};
 
 HRESULT __stdcall h_pPresent(IDXGISwapChain *pSwapChain, UINT SyncInterval, UINT Flags) {
     if (!g_isImGuiInitialized) {
-        Log("h_pPresent: ImGui not initialized. Setting up...");
+        spdlog::info("h_pPresent: ImGui not initialized. Setting up...");
         if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void **)&g_pDevice))) {
             g_pDevice->GetImmediateContext(&g_pContext);
 
@@ -155,16 +82,16 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain *pSwapChain, UINT SyncInterval, UINT
             if (g_lastHookedWindow != g_hGameWindow) { // Use global static variable
                 if (g_lastHookedWindow != NULL && o_wndProc != NULL) {
                     SetWindowLongPtr(g_lastHookedWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
-                    Log("Un-hooked WndProc from old window.");
+                    spdlog::info("Un-hooked WndProc from old window.");
                 }
                 o_wndProc =
                     (WNDPROC)SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)h_wndProc);
                 g_lastHookedWindow = g_hGameWindow; // Update global static variable
-                Log("WndProc has been hooked on new window.");
+                spdlog::info("WndProc has been hooked on new window.");
             }
 
             g_isImGuiInitialized = true;
-            Log("SUCCESS: ImGui re-initialized.");
+            spdlog::info("SUCCESS: ImGui re-initialized.");
         }
     }
 
@@ -178,7 +105,7 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain *pSwapChain, UINT SyncInterval, UINT
         g_pDevice->CreateRenderTargetView(pBackBuffer, NULL, &g_pRenderTargetView);
         pBackBuffer->Release();
     } else {
-        Log("ERROR: Failed to get back buffer from swap chain in h_pPresent.");
+        spdlog::error("ERROR: Failed to get back buffer from swap chain in h_pPresent.");
         return o_pPresent(pSwapChain, SyncInterval, Flags);
     }
 
@@ -186,8 +113,6 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain *pSwapChain, UINT SyncInterval, UINT
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
     ImGui::ShowDemoWindow();
-    ShowPythonEditorWindow();
-    ShowBenchmarkWindow(g_game_LuaState);
 
     ImGui::Render();
     if (g_pRenderTargetView)
@@ -199,18 +124,18 @@ HRESULT __stdcall h_pPresent(IDXGISwapChain *pSwapChain, UINT SyncInterval, UINT
 
 HRESULT __stdcall h_pResizeBuffers(IDXGISwapChain *pSwapChain, UINT BufferCount, UINT Width,
                                    UINT Height, DXGI_FORMAT NewFormat, UINT SwapChainFlags) {
-    Log("--- h_pResizeBuffers called. Triggering full cleanup. ---");
+    spdlog::info("--- h_pResizeBuffers called. Triggering full cleanup. ---");
     CleanupHooks();
     return o_pResizeBuffers(pSwapChain, BufferCount, Width, Height, NewFormat, SwapChainFlags);
 }
 
 bool FindAndHookD3D() {
-    Log("FindAndHookD3D: Entry. g_isHookInitialized before: %d", g_isHookInitialized.load());
+    spdlog::info("FindAndHookD3D: Entry. g_isHookInitialized before: {}", g_isHookInitialized.load());
     if (g_isHookInitialized) {
-        Log("FindAndHookD3D: Hooks already initialized, returning.");
+        spdlog::info("FindAndHookD3D: Hooks already initialized, returning.");
         return true;
     }
-    Log("--- Starting Reliable D3D Hook Setup ---");
+    spdlog::info("--- Starting Reliable D3D Hook Setup ---");
 
     WNDCLASSEX wc = {sizeof(WNDCLASSEX),    CS_CLASSDC, DefWindowProc, 0,    0,
                      GetModuleHandle(NULL), NULL,       NULL,          NULL, NULL,
@@ -233,7 +158,7 @@ bool FindAndHookD3D() {
                                                D3D11_SDK_VERSION, &sd, &pDummySwapChain,
                                                &pDummyDevice, NULL, NULL);
     if (FAILED(hr)) {
-        Log("FindAndHookD3D: D3D11CreateDeviceAndSwapChain FAILED. Error: %lx", hr);
+        spdlog::error("FindAndHookD3D: D3D11CreateDeviceAndSwapChain FAILED. Error: {:#x}", hr);
         DestroyWindow(hDummyWnd);
         UnregisterClass(wc.lpszClassName, wc.hInstance);
         return false;
@@ -248,34 +173,32 @@ bool FindAndHookD3D() {
     UnregisterClass(wc.lpszClassName, wc.hInstance);
 
     if (MH_Initialize() != MH_OK) {
-        Log("FindAndHookD3D: MH_Initialize FAILED.");
+        spdlog::error("FindAndHookD3D: MH_Initialize FAILED.");
         return false;
     }
     if (MH_CreateHook(pPresentAddress, &h_pPresent, (void **)&o_pPresent) != MH_OK) {
-        Log("FindAndHookD3D: MH_CreateHook pPresentAddress FAILED.");
+        spdlog::error("FindAndHookD3D: MH_CreateHook pPresentAddress FAILED.");
         return false;
     }
     if (MH_CreateHook(pResizeBuffersAddress, &h_pResizeBuffers, (void **)&o_pResizeBuffers) !=
         MH_OK) {
-        Log("FindAndHookD3D: MH_CreateHook pResizeBuffersAddress FAILED.");
+        spdlog::error("FindAndHookD3D: MH_CreateHook pResizeBuffersAddress FAILED.");
         return false;
     }
     if (MH_EnableHook(MH_ALL_HOOKS) != MH_OK) {
-        Log("FindAndHookD3D: MH_EnableHook FAILED.");
+        spdlog::error("FindAndHookD3D: MH_EnableHook FAILED.");
         return false;
     }
 
-    PyImport_AppendInittab("engine", PyInit_engine); // <-- Add this line
-    InitializePython();
-    Log("SUCCESS: All hooks are active!");
+    spdlog::info("SUCCESS: All hooks are active!");
     g_isHookInitialized = true;
-    Log("FindAndHookD3D: Exit. g_isHookInitialized after: %d", g_isHookInitialized.load());
+    spdlog::info("FindAndHookD3D: Exit. g_isHookInitialized after: {}", g_isHookInitialized.load());
     return true;
 }
 
 void CleanupHooks() {
-    Log("CleanupHooks: Entry. g_isHookInitialized before: %d", g_isHookInitialized.load());
-    Log("--- Starting full cleanup... ---");
+    spdlog::info("CleanupHooks: Entry. g_isHookInitialized before: {}", g_isHookInitialized.load());
+    spdlog::info("--- Starting full cleanup... ---");
 
     // 1. Shutdown ImGui and release its resources
     if (g_isImGuiInitialized) {
@@ -283,19 +206,19 @@ void CleanupHooks() {
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
         g_isImGuiInitialized = false;
-        Log("ImGui has been shut down.");
+        spdlog::info("ImGui has been shut down.");
     }
 
     // 2. Release our render target view
     if (g_pRenderTargetView) {
         g_pRenderTargetView->Release();
         g_pRenderTargetView = nullptr;
-        Log("Render target view released.");
+        spdlog::info("Render target view released.");
     }
 
     // 3. Restore the original window procedure
     if (g_hGameWindow && o_wndProc) {
-        Log("Restoring original WndProc...");
+        spdlog::info("Restoring original WndProc...");
         SetWindowLongPtr(g_hGameWindow, GWLP_WNDPROC, (LONG_PTR)o_wndProc);
         o_wndProc = nullptr;       // Avoid trying to restore it again
         g_lastHookedWindow = NULL; // Correctly reset the global static variable
@@ -303,13 +226,12 @@ void CleanupHooks() {
 
     // 4. Disable and uninitialize MinHook
     if (g_isHookInitialized) {
-        ShutdownPython();
-        Log("Disabling and uninitializing MinHook...");
+        spdlog::info("Disabling and uninitializing MinHook...");
         MH_DisableHook(MH_ALL_HOOKS);
         MH_Uninitialize();
         g_isHookInitialized = false;
     }
 
-    Log("--- Full cleanup complete. ---");
-    Log("CleanupHooks: Exit. g_isHookInitialized after: %d", g_isHookInitialized.load());
+    spdlog::info("--- Full cleanup complete. ---");
+    spdlog::info("CleanupHooks: Exit. g_isHookInitialized after: {}", g_isHookInitialized.load());
 }

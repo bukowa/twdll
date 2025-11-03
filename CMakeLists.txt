@@ -3,108 +3,29 @@ cmake_minimum_required(VERSION 3.29)
 # ========================
 # Project Config
 # ========================
-project(libtwdll)
-
-enable_language(C CXX)
+project(libtwdll LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ========================
-# Project Variables
+# Compiler Settings
 # ========================
-get_filename_component(CURRENT_DIR ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
+add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
-# ========================
-# Python Config
-# ========================
-set(PYTHON_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/python)
-set(PYTHON_LIBRARY_RELEASE ${CMAKE_CURRENT_SOURCE_DIR}/include/python/libs/python313.lib)
-set(PYTHON_LIBRARY_DEBUG ${CMAKE_CURRENT_SOURCE_DIR}/include/python/libs/python313_d.lib)
-
-# ========================
-# Lua Config
-# ========================
-set(LUA_VERSION "5.1.2")
-message("LUA_VERSION is set to: ${LUA_VERSION}")
-set(LUA_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/lua-ver-${LUA_VERSION}/src")
-
-# ========================
-# Lua Files
-# ========================
-file(GLOB LUA_SOURCES "${LUA_SRC_DIR}/*.c")
-list(REMOVE_ITEM LUA_SOURCES "${LUA_SRC_DIR}/lua.c" "${LUA_SRC_DIR}/luac.c")
-list(SORT LUA_SOURCES)
-
-# ========================
-# Lua Setup (luadll)
-# ========================
-add_library(luadll SHARED ${LUA_SOURCES})
-
-target_include_directories(luadll
-        PRIVATE
-        ${LUA_SRC_DIR}
-)
-
-set_target_properties(luadll PROPERTIES
-    OUTPUT_NAME "lua"
-    PDB_NAME "lua_dll"
-)
-
-add_executable(lua_for_docs "${LUA_SRC_DIR}/lua.c")
-
-target_include_directories(lua_for_docs
-        PRIVATE
-        ${LUA_SRC_DIR}
-)
-
-target_link_libraries(lua_for_docs PRIVATE luadll)
-
-target_compile_definitions(luadll
-        PRIVATE
-        LUA_BUILD_AS_DLL
-        LUA_CORE
-        LUA_WIN
-        PUBLIC
-        LUA_LIB
-)
-
-# ========================
-# Lua Setup (lua.exe)
-# ========================
-add_executable(lua.exe "${LUA_SRC_DIR}/lua.c" ${LUA_SOURCES})
-
-target_include_directories(lua.exe
-        PRIVATE
-        ${LUA_SRC_DIR}
-)
-
-target_compile_definitions(lua.exe PRIVATE LUA_CORE LUA_WIN)
-set_target_properties(lua.exe PROPERTIES
-    OUTPUT_NAME "lua"
-    PDB_NAME "lua_exe"
-)
-
-# ========================
-# Lua Setup (luac.exe)
-# ========================
-add_executable(luac.exe "${LUA_SRC_DIR}/luac.c" ${LUA_SOURCES})
-
-target_include_directories(luac.exe
-        PRIVATE
-        ${LUA_SRC_DIR}
-)
-
-target_compile_definitions(luac.exe PRIVATE LUA_CORE LUA_WIN)
-set_target_properties(luac.exe PROPERTIES OUTPUT_NAME "luac")
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Zi /DNDEBUG /W4")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
+endif()
 
 # ========================
 # Lib Setup (twdll.dll)
 # ========================
-set(MINHOOK_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/include)
-set(MINHOOK_LIBRARY ${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib)
-
 add_library(twdll SHARED
+        src/lua/lua_api.cpp
         src/libtwdll.cpp
         src/log.cpp
         src/unit_script_interface.cpp
@@ -112,20 +33,9 @@ add_library(twdll SHARED
         src/character_script_interface.cpp
         src/faction_script_interface.cpp
         src/military_force_script_interface.cpp
-        src/character_script_interface.h
-        src/faction_script_interface.h
-        src/log.h
-        src/unit_script_interface.h
         src/script_utils.cpp
-        src/script_utils.h
-        src/battle_unit_script_interface.h
-        src/military_force_script_interface.h
         src/dx_finder.cpp
-        src/dx_finder.h
         src/signature_scanner.cpp
-        src/game_lua_api.cpp
-        src/lua_forward_declarations.h
-        src/module.h
         src/module.cpp
         include/imgui/imgui.cpp
         include/imgui/imgui_draw.cpp
@@ -134,16 +44,29 @@ add_library(twdll SHARED
         include/imgui/backends/imgui_impl_win32.cpp
         include/imgui/backends/imgui_impl_dx11.cpp
         include/imgui/imgui_demo.cpp
-        src/performance_test.h
-        src/performance_test.cpp
 )
 
+target_include_directories(twdll
+        PRIVATE
+        src
+        PUBLIC
+        include/
+        include/spdlog
+        include/imgui
+        include/imgui/backends
+        include/minhook/include
+)
+
+target_link_libraries(twdll PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib"
+)
 
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "twdll")
 set_target_properties(twdll PROPERTIES DEBUG_INFORMATION_RELEASE TRUE)
 
 # Force PDB generation for all configurations
 target_compile_options(twdll PRIVATE "/Zi")
+target_compile_options(twdll PRIVATE "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 target_link_options(twdll PRIVATE "/DEBUG")
 
 set_target_properties(twdll PROPERTIES
@@ -151,33 +74,10 @@ set_target_properties(twdll PROPERTIES
     PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
-target_include_directories(twdll
-        PUBLIC
-        src
-        include/imgui
-        include/imgui/backends
-        ${PYTHON_INCLUDE_DIR}
-        PRIVATE
-        ${MINHOOK_INCLUDE_DIR}
-)
-
-target_link_libraries(twdll PRIVATE
-        ${MINHOOK_LIBRARY}
-        optimized ${PYTHON_LIBRARY_RELEASE}
-        debug ${PYTHON_LIBRARY_DEBUG}
-)
-
-# ========================
-# Compiler Settings
-# ========================
-if(MSVC)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-endif()
-
 # ================================
 # Mod Files
 # ================================
-set(MOD_DIR "${CURRENT_DIR}/pack")
+set(MOD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pack")
 set(MOD_PACK "${CMAKE_BINARY_DIR}/twdll.pack")
 file(GLOB_RECURSE MOD_FILES CONFIGURE_DEPENDS "${MOD_DIR}/*.*")
 
@@ -220,17 +120,9 @@ add_custom_target(
             $<TARGET_FILE:twdll> 
             ${RELEASE_DIR}/twdll.dll
 
-    COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed/python313.dll
-            ${RELEASE_DIR}/python313.dll
-
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/luadoc"
+            "${CMAKE_CURRENT_SOURCE_DIR}/docs/lua/html"
             ${RELEASE_DIR}/twdlldocs
-
-    COMMAND ${CMAKE_COMMAND} -E copy_directory 
-            ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed 
-            ${RELEASE_DIR}/python
 
     # These are the things that must be built *before* the commands above can run.
     # It's better to depend on the TARGET `twdll` rather than just the file.
@@ -317,57 +209,10 @@ if(INSTALL_MOD)
     endif()
 endif()
 
-# ========================
-# Compiler Settings
-# ========================
-add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-target_compile_options(luadll PRIVATE "/wd4005")
-
-if (MSVC)
-    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Zi /DNDEBUG /W4")
-    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-endif()
-
-# ========================
-# LuaFileSystem Setup (lfs.dll)
-# ========================
-add_subdirectory(include/luafilesystem)
 # ===========================================
 # Documentation Generation (ldoc)
 # ===========================================
-file(GLOB_RECURSE DOC_SOURCES
-        CONFIGURE_DEPENDS
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
-)
-set(DOCS_MAIN_OUTPUT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/luadoc/index.html")
-set(LUA_MODULE_PATH
-        "${CMAKE_CURRENT_SOURCE_DIR}/tools/ldoc/?.lua;"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tools/penlight/lua/?.lua;"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tools/penlight/lua/?/init.lua"
-)
-set(LUA_CMODULE_PATH
-        "$<TARGET_FILE_DIR:lfs>/?.dll"
-)
-
-add_custom_command(
-        OUTPUT ${DOCS_MAIN_OUTPUT_FILE}
-        COMMAND ${CMAKE_COMMAND} -E env "LUA_PATH=${LUA_MODULE_PATH}" "LUA_CPATH=${LUA_CMODULE_PATH}"
-        $<TARGET_FILE:lua_for_docs>
-        "${CMAKE_CURRENT_SOURCE_DIR}/tools/ldoc/ldoc.lua" .
-        DEPENDS
-        lua_for_docs
-        lfs
-        ${DOC_SOURCES}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Generating Lua documentation with LDoc..."
-        VERBATIM
-)
-
-add_custom_target(docs
-        DEPENDS ${DOCS_MAIN_OUTPUT_FILE}
-)
+add_subdirectory(docs/lua)
 
 # ===========================================
 # Run Target (mimics make run-alone)

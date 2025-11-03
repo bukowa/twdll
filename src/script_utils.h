@@ -1,7 +1,8 @@
 #pragma once
 
+#include "log.h"
 #include "lua_forward_declarations.h"
-#include "game_lua_api.h" // Include game_lua_api.h for g_game_lua_pushnil
+#include "lua/lua_api.h" // Include game_lua_api.h for g_game_lua_pushnil
 
 // --- Generic Memory Access (Templates stay in header) ---
 
