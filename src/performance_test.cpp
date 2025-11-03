@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "log.h"
 #include "game_lua_api.h"
+#include "object.h"
 
 // =================================================================================
 // Lua Performance Test Functions
@@ -44,7 +45,7 @@ static void api_do_nothing() {}
 
 static PyObject* py_api_do_nothing(PyObject* self, PyObject* args) {
     api_do_nothing();
-    return Py_BuildValue("");
+    return Py_None;
 }
 
 static PyMethodDef EngineMethods[] = {

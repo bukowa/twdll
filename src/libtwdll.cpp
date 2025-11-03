@@ -20,7 +20,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     switch (ul_reason_for_call) {
     case DLL_PROCESS_ATTACH:
         Log("DLL process attach START");
-        module_initialize(hModule); // Calling the snake_case version of the function
+        // module_initialize(hModule); // Calling the snake_case version of the function
         // This is called when the DLL is first loaded into the process.
         initialize_game_lua_api(); // Initialize our game Lua API function pointers
         Log("DLL process attach FINISH");

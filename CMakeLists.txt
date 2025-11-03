@@ -138,6 +138,7 @@ add_library(twdll SHARED
         src/performance_test.cpp
 )
 
+
 set_target_properties(twdll PROPERTIES OUTPUT_NAME "twdll")
 set_target_properties(twdll PROPERTIES DEBUG_INFORMATION_RELEASE TRUE)
 
@@ -155,31 +156,14 @@ target_link_libraries(twdll PRIVATE
         ${MINHOOK_LIBRARY}
         optimized ${PYTHON_LIBRARY_RELEASE}
         debug ${PYTHON_LIBRARY_DEBUG}
-        delayimp
 )
 
+# ========================
+# Compiler Settings
+# ========================
 if(MSVC)
-    # Get the base names of both release and debug libraries
-    get_filename_component(PYTHON_LIB_NAME_RELEASE ${PYTHON_LIBRARY_RELEASE} NAME_WE)
-    get_filename_component(PYTHON_LIB_NAME_DEBUG   ${PYTHON_LIBRARY_DEBUG}   NAME_WE)
-
-    # Construct the corresponding DLL filenames
-    set(PYTHON_DLL_FILENAME_RELEASE "${PYTHON_LIB_NAME_RELEASE}.dll") # e.g., "python313.dll"
-    set(PYTHON_DLL_FILENAME_DEBUG   "${PYTHON_LIB_NAME_DEBUG}.dll")   # e.g., "python313_d.dll"
-
-    message(STATUS "Configuring delay-load for Release: ${PYTHON_DLL_FILENAME_RELEASE}")
-    message(STATUS "Configuring delay-load for Debug:   ${PYTHON_DLL_FILENAME_DEBUG}")
-    
-    # Use a generator expression to select the correct DLL at build time
-    # For a "Debug" build, it becomes "/DELAYLOAD:python313_d.dll"
-    # For a "Release" build, it becomes "/DELAYLOAD:python313.dll"
-    target_link_options(twdll PRIVATE 
-        "$<$<CONFIG:Debug>:/DELAYLOAD:${PYTHON_DLL_FILENAME_DEBUG}>"
-        "$<$<NOT:$<CONFIG:Debug>>:/DELAYLOAD:${PYTHON_DLL_FILENAME_RELEASE}>"
-    )
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 endif()
-
-
 
 # ================================
 # Mod Files
@@ -226,6 +210,10 @@ add_custom_target(
     COMMAND ${CMAKE_COMMAND} -E copy 
             $<TARGET_FILE:twdll> 
             ${RELEASE_DIR}/twdll.dll
+
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_SOURCE_DIR}/include/python/embed/python313.dll
+            ${RELEASE_DIR}/python313.dll
 
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/luadoc"
