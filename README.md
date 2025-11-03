@@ -49,6 +49,24 @@ For a complete list of available functions and how to use them in your own Lua s
 
 Practical examples of how to use the script extender's functions can be found in the `examples/` directory. The `example.lua` file provides a starting point for understanding how to integrate these functions into your own mods.
 
+## Features
+
+*   **Lua Scripting:** Extends the game's Lua scripting capabilities, allowing for more complex and powerful mods.
+*   **ImGui Integration:** Provides an ImGui backend for creating in-game user interfaces.
+*   **Python Integration:** Allows running Python scripts in the game's context.
+*   **C++ Framework:** Offers a C++ framework for adding new functionality to the game.
+*   **Memory Patching:** Includes MinHook for function hooking and memory patching.
+
+## Project Structure
+
+*   `src/`: Contains the C++ source code for the script extender.
+*   `include/`: Contains the header files for the project, including dependencies like ImGui, MinHook, and Python.
+*   `scripts/`: Contains various scripts for building, running, and managing the project.
+*   `tools/`: Contains tools used for development, such as `ldoc` for documentation generation and `ReClass.NET` for reverse engineering.
+*   `examples/`: Contains example Lua scripts demonstrating how to use the script extender.
+*   `pack/`: Contains the files that are packed into the `twdll.pack` file.
+*   `luadoc/`: Contains the generated Lua documentation.
+
 ## Development
 
 This section is for those who wish to contribute to the development of `twdll` itself or build it from the source code.
@@ -67,11 +85,10 @@ This project is built with CMake and primarily targets Visual Studio tools for a
 
 #### Prerequisites
 
--   **Visual Studio 2022 Community Edition:** With the "Desktop development with C++" workload installed.
--   **Windows 10/11 SDK:** A recent version compatible with Visual Studio 2022.
--   **CMake:**
--   **Ninja:**
--   **RPFM CLI:** You can download it from the [RPFM releases page](https://github.com/Frodo45127/rpfm/releases).
+-   **Visual Studio 2022 Community Edition:** With the "Desktop development with C++" workload installed. The continuous integration build uses MSVC toolset version `14.44.35207` and Windows SDK version `10.0.26100.0`.
+-   **CMake:** Version 3.29 or higher.
+-   **Ninja:** A recent version.
+-   **RPFM CLI:** Version `v4.3.14` is used in the build workflow. You can download it from the [RPFM releases page](https://github.com/Frodo45127/rpfm/releases).
 
 #### Steps
 
@@ -84,6 +101,8 @@ This project is built with CMake and primarily targets Visual Studio tools for a
 
 2.  **Configure the project with CMake:**
 
+    The recommended preset for local development is `vs2022-win32-ninja`.
+
     ```sh
     cmake --preset vs2022-win32-ninja
     ```
@@ -94,14 +113,7 @@ This project is built with CMake and primarily targets Visual Studio tools for a
     cmake --build --preset vs2022-win32-ninja
     ```
 
-    The build process will generate `twdll.dll` and other release files in the `build/release` directory.
-
-### Technical Notes
-
-This project was built against a specific version of Lua used by the game.
-
-- Requires **Lua 5.1.2** for proper functionality. Using other versions might lead to instability or crashes.
-- The game's method for table insertion in Lua (`events[event][#events[event]+1] = func`) is not compatible with standard Lua VMs. This project works around this by using `table.insert`.
+    The build process will generate `twdll.dll` and other release files in the `build/vs2022-win32-ninja/release` directory.
 
 ### Reverse Engineering with ReClass.NET
 
