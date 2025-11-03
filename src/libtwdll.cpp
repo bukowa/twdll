@@ -3,10 +3,13 @@
 #include <string>
 #include <libloaderapi.h>
 #include <winnt.h>
+
 #include "MinHook.h"
+#include "imgui.h" // --- ADDED: Needed for our render function ---
+#include "dx_finder.h" // --- ADDED: The new hook class ---
 #include "lua/lua_api.h"
 #include "log.h"
-#include "dx_finder.h"
+// #include "dx_finder.h" // --- REMOVED: Old global functions are gone ---
 #include "module.h"
 #include "unit_script_interface.h"
 #include "character_script_interface.h"
@@ -14,23 +17,27 @@
 #include "faction_script_interface.h"
 #include "military_force_script_interface.h"
 
-#include <filesystem>
-#include <windows.h>
-#include <string>
-#include <libloaderapi.h>
-#include <winnt.h>
-#include "MinHook.h"
-#include "lua/lua_api.h"
-#include "log.h"
-#include "dx_finder.h"
-#include "module.h"
-#include "unit_script_interface.h"
-#include "character_script_interface.h"
-#include "battle_unit_script_interface.h"
-#include "faction_script_interface.h"
-#include "military_force_script_interface.h"
+// --- ADDED: Define the rendering callback function for ImGui ---
+// A global flag for the demo window, used by our UI function
+bool g_ShowDemoWindow = true;
+
+void RenderMyUI() {
+    // You can put any ImGui code here.
+    ImGui::Begin("TWDLL Control Panel");
+    ImGui::Text("Hook is active!");
+    ImGui::Checkbox("Show ImGui Demo Window", &g_ShowDemoWindow);
+    ImGui::End();
+
+    if (g_ShowDemoWindow) {
+        ImGui::ShowDemoWindow(&g_ShowDemoWindow);
+    }
+}
+// --- END ADDED SECTION ---
+
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    DisableThreadLibraryCalls(hModule);
+
     if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
         init_logger();
     }
@@ -43,9 +50,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         spdlog::info("DLL process attach FINISH");
         break;
     case DLL_PROCESS_DETACH:
-        spdlog::info("--- DllMain: DETACH received, calling CleanupHooks... ---");
-        CleanupHooks();
-        spdlog::info("--- DllMain: Cleanup complete. ---");
+        spdlog::info("--- DllMain: DETACH received, calling Uninstall... ---");
+        ImGuiD3D11Hook::Uninstall(); // --- CHANGED: Use the new class method ---
+        spdlog::info("--- DllMain: Uninstall complete. ---");
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
@@ -58,28 +65,19 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 // This is the C function that Lua's garbage collector will call.
 static int script_Cleanup(lua_State *L) {
     spdlog::info("--- Lua GC: __gc metamethod called. Cleaning up hooks... ---");
-    CleanupHooks();
+    ImGuiD3D11Hook::Uninstall(); // --- CHANGED: Use the new class method ---
     spdlog::info("--- Lua GC: Cleanup complete. ---");
     return 0;
 }
 
-// This function creates the special 'cleanup' object in Lua.
+// This function creates the special 'cleanup' object in Lua. No changes needed here.
 static void CreateCleanupObject(lua_State *L) {
-    // Create a new userdata object. It's just a placeholder.
     g_game_lua_newuserdata(L, 1);
-
-    // Create a metatable for our userdata.
     g_game_luaL_newmetatable(L, "twdll_cleanup_metatable");
-
-    // Set the __gc field of the metatable to our C cleanup function.
     g_game_lua_pushstring(L, "__gc");
     g_game_lua_pushcclosure(L, script_Cleanup, 0);
     g_game_lua_settable(L, -3);
-
-    // Assign the metatable to our userdata object.
     g_game_lua_setmetatable(L, -2);
-
-    // Store the userdata in a global variable so it doesn't get collected early.
     g_game_lua_setfield(L, LUA_GLOBALSINDEX, "_twdll_cleanup_trigger");
     spdlog::info("--- Lua GC: Cleanup object created and registered. ---");
 }
@@ -89,20 +87,17 @@ static void CreateCleanupObject(lua_State *L) {
 
 // --- Core Functions Exposed to Lua ---
 
-extern std::atomic<bool> g_isHookInitialized;
-
+// --- CHANGED: This function is now much simpler ---
 static int findandhook(lua_State *L) {
-    if (!g_isHookInitialized) {
-        FindAndHookD3D();
-    } else {
-        spdlog::info("D3D hooks already active, skipping re-initialization.");
-    }
+    // The class handles checking if it's already initialized.
+    // We just need to call Install and give it our render function.
+    ImGuiD3D11Hook::Install(RenderMyUI);
     return 0;
 };
 
 // Registration table for the main 'twdll' module
-static const struct luaL_Reg twdll_main_functions[] = {
-    {"FindSwapChain", findandhook}, {NULL, NULL}};
+static const struct luaL_Reg twdll_main_functions[] = {{"FindSwapChain", findandhook},
+                                                       {NULL, NULL}};
 
 /// @function luaopen_libtwdll
 /// Initializes all twdll submodules and registers them in Lua.
@@ -111,7 +106,6 @@ static const struct luaL_Reg twdll_main_functions[] = {
 extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     spdlog::info("luaopen_twdll START");
     g_game_LuaState = L;
-    // Register the main 'twdll' table with core functions like Log
     g_game_luaL_register(L, "twdll", twdll_main_functions);
 
     // Register the specific interface modules
@@ -120,10 +114,10 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     g_game_luaL_register(L, "twdll_battle_unit", battle_unit_functions);
     g_game_luaL_register(L, "twdll_faction", faction_functions);
     g_game_luaL_register(L, "twdll_military_force", military_force_functions);
-    
+
     g_game_luaL_register(L, "battle_unit", battle_unit_functions);
     spdlog::info("--- libtwdll modules registered. ---");
-    CreateCleanupObject(L); // Always create cleanup object for the current Lua state
+    CreateCleanupObject(L);
     spdlog::info("luaopen_twdll FINISH");
-    return 1; // <<< MODIFIED THIS LINE: Return the 'twdll' table
+    return 1;
 }

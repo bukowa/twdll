@@ -24,26 +24,35 @@ endif()
 # ========================
 # Lib Setup (twdll.dll)
 # ========================
+
+set(TWDLL_DOC_SOURCES
+    src/unit_script_interface.cpp
+    src/battle_unit_script_interface.cpp
+    src/character_script_interface.cpp
+    src/faction_script_interface.cpp
+    src/military_force_script_interface.cpp
+)
+
+set(TWDLL_NON_DOC_SOURCES
+    src/lua/lua_api.cpp
+    src/libtwdll.cpp
+    src/log.cpp
+    include/imgui/imgui.cpp
+    include/imgui/imgui_draw.cpp
+    include/imgui/imgui_tables.cpp
+    include/imgui/imgui_widgets.cpp
+    include/imgui/backends/imgui_impl_win32.cpp
+    include/imgui/backends/imgui_impl_dx11.cpp
+    include/imgui/imgui_demo.cpp
+    src/script_utils.cpp
+    src/dx_finder.cpp
+    src/signature_scanner.cpp
+    src/module.cpp
+)
+
 add_library(twdll SHARED
-        src/lua/lua_api.cpp
-        src/libtwdll.cpp
-        src/log.cpp
-        src/unit_script_interface.cpp
-        src/battle_unit_script_interface.cpp
-        src/character_script_interface.cpp
-        src/faction_script_interface.cpp
-        src/military_force_script_interface.cpp
-        src/script_utils.cpp
-        src/dx_finder.cpp
-        src/signature_scanner.cpp
-        src/module.cpp
-        include/imgui/imgui.cpp
-        include/imgui/imgui_draw.cpp
-        include/imgui/imgui_tables.cpp
-        include/imgui/imgui_widgets.cpp
-        include/imgui/backends/imgui_impl_win32.cpp
-        include/imgui/backends/imgui_impl_dx11.cpp
-        include/imgui/imgui_demo.cpp
+    ${TWDLL_DOC_SOURCES}
+    ${TWDLL_NON_DOC_SOURCES}
 )
 
 target_include_directories(twdll
@@ -121,7 +130,7 @@ add_custom_target(
             ${RELEASE_DIR}/twdll.dll
 
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_CURRENT_SOURCE_DIR}/docs/lua/html"
+            "${CMAKE_CURRENT_SOURCE_DIR}/docs/lua/doc"
             ${RELEASE_DIR}/twdlldocs
 
     # These are the things that must be built *before* the commands above can run.

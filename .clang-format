@@ -6,7 +6,7 @@ TabWidth: 4
 UseTab: Never
 BreakBeforeBraces: Attach
 AllowShortIfStatementsOnASingleLine: false
-ColumnLimit: 100
+ColumnLimit: 0
 IncludeBlocks: Preserve
 SortIncludes: Never
 
