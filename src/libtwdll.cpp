@@ -16,23 +16,9 @@
 #include "battle_unit_script_interface.h"
 #include "faction_script_interface.h"
 #include "military_force_script_interface.h"
+#include "game/g_campaign.h" // --- ADDED: For campaign global addresses ---
 
-// --- ADDED: Define the rendering callback function for ImGui ---
-// A global flag for the demo window, used by our UI function
-bool g_ShowDemoWindow = true;
-
-void RenderMyUI() {
-    // You can put any ImGui code here.
-    ImGui::Begin("TWDLL Control Panel");
-    ImGui::Text("Hook is active!");
-    ImGui::Checkbox("Show ImGui Demo Window", &g_ShowDemoWindow);
-    ImGui::End();
-
-    if (g_ShowDemoWindow) {
-        ImGui::ShowDemoWindow(&g_ShowDemoWindow);
-    }
-}
-// --- END ADDED SECTION ---
+#include "ui.h" // --- ADDED: Include the new UI header ---
 
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
@@ -59,7 +45,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         break;
     }
     return TRUE;
-}
+};
 
 // --- Lua GC Hook for Standalone Game ---
 // This is the C function that Lua's garbage collector will call.

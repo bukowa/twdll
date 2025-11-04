@@ -1,5 +1,6 @@
 #include "module.h"
 #include <filesystem>
+#include "game/g_campaign.h"
 
 std::string g_ModuleRootPath;
 std::string g_PythonRootPath;
@@ -13,4 +14,6 @@ void module_initialize(HMODULE hModule) {
         g_ModuleRootPath = modulePath.parent_path().string();
         g_PythonRootPath = (modulePath.parent_path() / "python").string();
     }
+
+    Game::RegisterCampaignGlobalAddresses();
 }

@@ -37,6 +37,7 @@ set(TWDLL_NON_DOC_SOURCES
     src/lua/lua_api.cpp
     src/libtwdll.cpp
     src/log.cpp
+    src/ui.cpp # --- ADDED: UI rendering logic ---
     include/imgui/imgui.cpp
     include/imgui/imgui_draw.cpp
     include/imgui/imgui_tables.cpp
@@ -48,6 +49,7 @@ set(TWDLL_NON_DOC_SOURCES
     src/dx_finder.cpp
     src/signature_scanner.cpp
     src/module.cpp
+    src/game/g_campaign.cpp
 )
 
 add_library(twdll SHARED
