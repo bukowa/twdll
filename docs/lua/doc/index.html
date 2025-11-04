@@ -28,252 +28,57 @@
 
 
 
-<h2>Contents</h2>
-<ul>
-<li><a href="#Functions">Functions</a></li>
-</ul>
 
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><strong>twdll_unit</strong></li>
+  <li><a href="modules/twdll_unit.html">twdll_unit</a></li>
+  <li><a href="modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
+  <li><a href="modules/twdll_character.html">twdll_character</a></li>
+  <li><a href="modules/twdll_faction.html">twdll_faction</a></li>
+  <li><a href="modules/twdll_military_force.html">twdll_military_force</a></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>twdll_unit</code></h1>
-<p>
 
-</p>
-<p> Functions for interacting with campaign units.</p>
+  <h2>Lua bindings for Total War: Rome II</h2>
 
+<h2>Modules</h2>
+<table class="module_list">
+	<tr>
+		<td class="name" nowrap><a href="modules/twdll_unit.html">twdll_unit</a></td>
+		<td class="summary">
 
-<h2><a href="#Functions">Functions</a></h2>
-<table class="function_list">
-	<tr>
-	<td class="name" nowrap><a href="#SetNumberOfMan">SetNumberOfMan (unit, value)</a></td>
-	<td class="summary">Sets the current number of man in the unit.</td>
+</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetMaxNumberOfMan">SetMaxNumberOfMan (unit, value)</a></td>
-	<td class="summary">Sets the maximum number of man in the unit.</td>
+		<td class="name" nowrap><a href="modules/twdll_battle_unit.html">twdll_battle_unit</a></td>
+		<td class="summary">
+
+</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (unit, value)</a></td>
-	<td class="summary">Sets the remaining movement points for the unit.</td>
+		<td class="name" nowrap><a href="modules/twdll_character.html">twdll_character</a></td>
+		<td class="summary">
+
+</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetNumberOfMan">GetNumberOfMan (unit)</a></td>
-	<td class="summary">Gets the current number of man in the unit.</td>
+		<td class="name" nowrap><a href="modules/twdll_faction.html">twdll_faction</a></td>
+		<td class="summary">
+
+</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMaxNumberOfMan">GetMaxNumberOfMan (unit)</a></td>
-	<td class="summary">Gets the maximum number of man in the unit.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints (unit)</a></td>
-	<td class="summary">Gets the remaining movement points for the unit.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (unit)</a></td>
-	<td class="summary">Returns the memory address of the real unit object as a hexadecimal string.</td>
+		<td class="name" nowrap><a href="modules/twdll_military_force.html">twdll_military_force</a></td>
+		<td class="summary">
+
+</td>
 	</tr>
 </table>
-
-<br/>
-<br/>
-
-
-    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
-
-    <dl class="function">
-    <dt>
-    <a name = "SetNumberOfMan"></a>
-    <strong>SetNumberOfMan (unit, value)</strong>
-    </dt>
-    <dd>
-    Sets the current number of man in the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object (first argument)
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new number of man
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMaxNumberOfMan"></a>
-    <strong>SetMaxNumberOfMan (unit, value)</strong>
-    </dt>
-    <dd>
-    Sets the maximum number of man in the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object (first argument)
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new maximum number of man
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMovementPoints"></a>
-    <strong>SetMovementPoints (unit, value)</strong>
-    </dt>
-    <dd>
-    Sets the remaining movement points for the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object (first argument)
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new movement points
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetNumberOfMan"></a>
-    <strong>GetNumberOfMan (unit)</strong>
-    </dt>
-    <dd>
-    Gets the current number of man in the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object (first argument)
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        current number of man
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMaxNumberOfMan"></a>
-    <strong>GetMaxNumberOfMan (unit)</strong>
-    </dt>
-    <dd>
-    Gets the maximum number of man in the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object (first argument)
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        maximum number of man
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMovementPoints"></a>
-    <strong>GetMovementPoints (unit)</strong>
-    </dt>
-    <dd>
-    Gets the remaining movement points for the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object (first argument)
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        movement points
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress (unit)</strong>
-    </dt>
-    <dd>
-    Returns the memory address of the real unit object as a hexadecimal string.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object (first argument)
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
-    </ol>
-
-
-
-
-</dd>
-</dl>
-
 
 </div> <!-- id="content" -->
 </div> <!-- id="main" -->
