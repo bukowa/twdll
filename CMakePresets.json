@@ -2,26 +2,24 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "base-ninja",
+      "name": "_",
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}"
     },
     {
-      "name": "clangd-ninja",
-      "displayName": "Clangd Ninja (Generates compile_commands.json)",
-      "inherits": "base-ninja",
-      "generator": "Ninja",
+      "name": "base",
+      "hidden": true,
+      "inherits": "_",
       "architecture": {},
       "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "INSTALL_MOD": "ON"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
-      "name": "vs2022-win32-ninja-base",
+      "name": "vs2022-base",
       "hidden": true,
-      "inherits": "clangd-ninja",
+      "inherits": "base",
       "environment": {
         "PATH": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX86\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x86;C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE;$penv{PATH}",
         "LIB": "C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x86;C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x86",
@@ -34,57 +32,68 @@
       }
     },
     {
-      "name": "vs2022-win32-ninja",
-      "displayName": "Visual Studio 2022 (32-bit Ninja) - Release",
-      "inherits": "vs2022-win32-ninja-base",
+      "name": "vs2022-install",
+      "inherits": "vs2022-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "INSTALL_MOD": "ON",
+        "GAME_INSTALL_DIR": "C:/Games/Total War - Rome 2"
+      }
+    },
+    {
+      "name": "vs2022-test",
+      "inherits": "vs2022-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "INSTALL_MOD": "OFF",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "vs2022-release",
+      "inherits": "vs2022-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
-      "name": "vs2022-win32-ninja-debug",
-      "displayName": "Visual Studio 2022 (32-bit Ninja) - Debug",
-      "inherits": "vs2022-win32-ninja-base",
+      "name": "vs2022-debug",
+      "inherits": "vs2022-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
-      "name": "vs2008-win32-ninja",
-      "displayName": "Visual Studio 2008 (32-bit Ninja)",
-      "inherits": "base-ninja",
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "C:/Program Files (x86)/Microsoft Visual Studio 9.0/VC/bin/cl.exe",
-        "CMAKE_CXX_COMPILER": "C:/Program Files (x86)/Microsoft Visual Studio 9.0/VC/bin/cl.exe",
-        "CMAKE_MAKE_PROGRAM": "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
-      }
-    },
-    {
-      "name": "ci-vs2022-win32-ninja",
-      "displayName": "CI Build (VS 2022 32-bit Ninja)",
-      "inherits": "clangd-ninja",
-      "generator": "Ninja",
+      "name": "vs2022-release-ci",
+      "inherits": "_",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "INSTALL_MOD": "OFF" 
+        "INSTALL_MOD": "OFF"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "vs2022-win32-ninja",
-      "displayName": "Build (VS 2022 32-bit Ninja)",
-      "configurePreset": "vs2022-win32-ninja"
+      "name": "vs2022-install",
+      "configurePreset": "vs2022-install"
     },
     {
-      "name": "vs2008-win32-ninja",
-      "displayName": "Build (VS 2022 32-bit Ninja)",
-      "configurePreset": "vs2008-win32-ninja"
+      "name": "vs2022-release",
+      "configurePreset": "vs2022-release"
     },
     {
-      "name": "ci-vs2022-win32-ninja",
-      "displayName": "CI Build (VS 2022 32-bit Ninja)",
-      "configurePreset": "ci-vs2022-win32-ninja"
+      "name": "vs2022-debug",
+      "configurePreset": "vs2022-debug"
+    },
+    {
+      "name": "vs2022-release-ci",
+      "configurePreset": "vs2022-release-ci"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "vs2022-test",
+      "configurePreset": "vs2022-install"
     }
   ]
 }
