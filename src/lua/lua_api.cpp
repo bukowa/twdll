@@ -4,6 +4,9 @@
 #include <Psapi.h>
 #include <cstring>
 #include "log.h"
+#include "signature_scanner.h"
+
+#ifndef BUILD_TESTING_LUA // Start of production-only block
 
 lua_pushstring_t g_game_lua_pushstring = nullptr;
 lua_newuserdata_t g_game_lua_newuserdata = nullptr;
@@ -23,8 +26,6 @@ lua_tonumber_t g_game_lua_tonumber = nullptr;
 lua_pushnil_t g_game_lua_pushnil = nullptr;
 lua_pcall_t g_game_lua_pcall = nullptr;
 luaB_loadstring g_game_luaB_loadstring = nullptr;
-
-lua_State *g_game_LuaState;
 
 struct EmpireSignatureInfo {
     const char* function_name;
@@ -227,3 +228,5 @@ void initialize_lua_api() {
         }
     }
 }
+
+#endif // BUILD_TESTING_LUA // End of production-only block

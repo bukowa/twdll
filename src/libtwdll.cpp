@@ -17,7 +17,6 @@
 #include "faction_script_interface.h"
 #include "military_force_script_interface.h"
 #include "game/g_campaign.h" // --- ADDED: For campaign global addresses ---
-
 #include "ui.h" // --- ADDED: Include the new UI header ---
 
 
@@ -32,7 +31,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     case DLL_PROCESS_ATTACH:
         spdlog::info("DLL process attach START");
         module_initialize(hModule);
+#ifndef BUILD_TESTING_LUA
         initialize_lua_api();
+#endif
         spdlog::info("DLL process attach FINISH");
         break;
     case DLL_PROCESS_DETACH:
@@ -58,13 +59,13 @@ static int script_Cleanup(lua_State *L) {
 
 // This function creates the special 'cleanup' object in Lua. No changes needed here.
 static void CreateCleanupObject(lua_State *L) {
-    g_game_lua_newuserdata(L, 1);
-    g_game_luaL_newmetatable(L, "twdll_cleanup_metatable");
-    g_game_lua_pushstring(L, "__gc");
-    g_game_lua_pushcclosure(L, script_Cleanup, 0);
-    g_game_lua_settable(L, -3);
-    g_game_lua_setmetatable(L, -2);
-    g_game_lua_setfield(L, LUA_GLOBALSINDEX, "_twdll_cleanup_trigger");
+    l_newuserdata(L, 1);
+    l_newmetatable(L, "twdll_cleanup_metatable");
+    l_pushstring(L, "__gc");
+    l_pushcclosure(L, script_Cleanup, 0);
+    l_settable(L, -3);
+    l_setmetatable(L, -2);
+    l_setfield(L, LUA_GLOBALSINDEX, "_twdll_cleanup_trigger");
     spdlog::info("--- Lua GC: Cleanup object created and registered. ---");
 }
 
@@ -91,17 +92,16 @@ static const struct luaL_Reg twdll_main_functions[] = {{"FindSwapChain", findand
 /// @treturn integer always 1 (returns the main twdll table)
 extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     spdlog::info("luaopen_twdll START");
-    g_game_LuaState = L;
-    g_game_luaL_register(L, "twdll", twdll_main_functions);
+    l_register(L, "twdll", twdll_main_functions);
 
     // Register the specific interface modules
-    g_game_luaL_register(L, "twdll_unit", unit_functions);
-    g_game_luaL_register(L, "twdll_character", character_functions);
-    g_game_luaL_register(L, "twdll_battle_unit", battle_unit_functions);
-    g_game_luaL_register(L, "twdll_faction", faction_functions);
-    g_game_luaL_register(L, "twdll_military_force", military_force_functions);
+    l_register(L, "twdll_unit", unit_functions);
+    l_register(L, "twdll_character", character_functions);
+    l_register(L, "twdll_battle_unit", battle_unit_functions);
+    l_register(L, "twdll_faction", faction_functions);
+    l_register(L, "twdll_military_force", military_force_functions);
 
-    g_game_luaL_register(L, "battle_unit", battle_unit_functions);
+    l_register(L, "battle_unit", battle_unit_functions);
     spdlog::info("--- libtwdll modules registered. ---");
     CreateCleanupObject(L);
     spdlog::info("luaopen_twdll FINISH");

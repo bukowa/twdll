@@ -1,6 +1,6 @@
 #pragma once
 
-#include "lua_forward_declarations.h"
+#include "lua/lua_api.h"
 #include <Python.h>
 
 void register_performance_test_functions(lua_State* L);

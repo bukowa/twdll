@@ -6,7 +6,7 @@
 
 void *get_object_from_indirect_wrapper(lua_State *L, const char *object_type_name,
                                        size_t pointer_offset) {
-    void **p_wrapper = static_cast<void **>(g_game_lua_touserdata(L, 1));
+    void **p_wrapper = static_cast<void **>(l_touserdata(L, 1));
     if (!p_wrapper || !*p_wrapper) {
         spdlog::error("ERROR (get_{}_indirect): Argument is not a valid pointer to a wrapper.", object_type_name);
         return nullptr;
@@ -28,49 +28,49 @@ void *get_object_from_indirect_wrapper(lua_State *L, const char *object_type_nam
 int read_int_property(lua_State *L, size_t pointer_offset, size_t property_offset,
                       const char *object_type_name) {
     return read_property_lua<int, lua_Integer>(L, pointer_offset, property_offset, object_type_name,
-                                               g_game_lua_pushinteger);
+                                               l_pushinteger);
 }
 
 int write_int_property(lua_State *L, size_t pointer_offset, size_t property_offset,
                        const char *object_type_name) {
     return write_property_lua<int, lua_Integer>(L, pointer_offset, property_offset,
-                                                object_type_name, g_game_lua_tointeger);
+                                                object_type_name, l_tointeger);
 }
 
 int read_float_property(lua_State *L, size_t pointer_offset, size_t property_offset,
                         const char *object_type_name) {
     return read_property_lua<float, lua_Number>(L, pointer_offset, property_offset,
-                                                object_type_name, g_game_lua_pushnumber);
+                                                object_type_name, l_pushnumber);
 }
 
 int write_float_property(lua_State *L, size_t pointer_offset, size_t property_offset,
                          const char *object_type_name) {
     return write_property_lua<float, lua_Number>(L, pointer_offset, property_offset,
-                                                 object_type_name, g_game_lua_tonumber);
+                                                 object_type_name, l_tonumber);
 }
 
 int read_nested_int_property(lua_State *L, size_t pointer_offset, size_t nested_obj_ptr_offset,
                              size_t final_property_offset, const char *object_type_name) {
     return read_nested_property_lua<int, lua_Integer>(L, pointer_offset, nested_obj_ptr_offset,
                                                       final_property_offset, object_type_name,
-                                                      g_game_lua_pushinteger);
+                                                      l_pushinteger);
 }
 
 int read_nested_float_property(lua_State *L, size_t pointer_offset, size_t nested_obj_ptr_offset,
                                size_t final_property_offset, const char *object_type_name) {
     return read_nested_property_lua<float, lua_Number>(L, pointer_offset, nested_obj_ptr_offset,
                                                        final_property_offset, object_type_name,
-                                                       g_game_lua_pushnumber);
+                                                       l_pushnumber);
 }
 
 int get_memory_address_lua(lua_State *L, const char *object_type_name, size_t pointer_offset) {
     void *object = get_object_from_indirect_wrapper(L, object_type_name, pointer_offset);
     if (!object) {
-        g_game_lua_pushnil(L);
+        l_pushnil(L);
         return 1;
     }
     char address_buffer[64];
     sprintf_s(address_buffer, sizeof(address_buffer), "0x%p", object);
-    g_game_lua_pushstring(L, address_buffer);
+    l_pushstring(L, address_buffer);
     return 1;
 }

@@ -1,5 +1,5 @@
 #include "money.h"
-#include "lua_forward_declarations.h"
+#include "lua/lua_api.h"
 
 // This function follows the pointer chain to find the real address
 uintptr_t GetMoneyAddress() {

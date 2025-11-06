@@ -22,8 +22,8 @@ static int script_SetIntAtOffset(lua_State* L) {
     void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
     if (!character) return 0;
 
-    size_t offset = (size_t)g_game_lua_tointeger(L, 2);
-    int value = (int)g_game_lua_tointeger(L, 3);
+    size_t offset = (size_t)l_tointeger(L, 2);
+    int value = (int)l_tointeger(L, 3);
 
     write_to<int>(character, offset, value);
     return 0;
@@ -39,14 +39,14 @@ static int script_SetIntAtOffset(lua_State* L) {
 static int script_GetIntAtOffset(lua_State* L) {
     void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
     if (!character) {
-        g_game_lua_pushnil(L);
+        l_pushnil(L);
         return 1;
     }
 
-    size_t offset = (size_t)g_game_lua_tointeger(L, 2);
+    size_t offset = (size_t)l_tointeger(L, 2);
     int v = read_from<int>(character, offset);
 
-    g_game_lua_pushinteger(L, v);
+    l_pushinteger(L, v);
     return 1;
 }
 
@@ -70,7 +70,7 @@ static int script_SetMovementPoints(lua_State* L) {
     void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
     if (!character) return 0;
 
-    int value = (int)g_game_lua_tointeger(L, 2);
+    int value = (int)l_tointeger(L, 2);
     write_to<int>(character, MOVEMENT_POINTS_OFFSET, value);
     return 0;
 }
@@ -84,12 +84,12 @@ static int script_SetMovementPoints(lua_State* L) {
 static int script_GetMovementPoints(lua_State* L) {
     void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
     if (!character) {
-        g_game_lua_pushnil(L);
+        l_pushnil(L);
         return 1;
     }
 
     int v = read_from<int>(character, MOVEMENT_POINTS_OFFSET);
-    g_game_lua_pushinteger(L, v);
+    l_pushinteger(L, v);
     return 1;
 }
 
@@ -103,7 +103,7 @@ static int script_SetAmbition(lua_State* L) {
     void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
     if (!character) return 0;
 
-    int value = (int)g_game_lua_tointeger(L, 2);
+    int value = (int)l_tointeger(L, 2);
     write_to<int>(character, AMBITION_OFFSET, value);
     return 0;
 }
@@ -117,12 +117,12 @@ static int script_SetAmbition(lua_State* L) {
 static int script_GetAmbition(lua_State* L) {
     void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
     if (!character) {
-        g_game_lua_pushnil(L);
+        l_pushnil(L);
         return 1;
     }
 
     int v = read_from<int>(character, AMBITION_OFFSET);
-    g_game_lua_pushinteger(L, v);
+    l_pushinteger(L, v);
     return 1;
 }
 
@@ -136,7 +136,7 @@ static int script_SetGravitas(lua_State* L) {
     void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
     if (!character) return 0;
 
-    int value = (int)g_game_lua_tointeger(L, 2);
+    int value = (int)l_tointeger(L, 2);
     write_to<int>(character, GRAVITAS_OFFSET, value);
     return 0;
 }
@@ -150,12 +150,12 @@ static int script_SetGravitas(lua_State* L) {
 static int script_GetGravitas(lua_State* L) {
     void* character = get_object_from_indirect_wrapper(L, "character", REAL_CHARACTER_POINTER_OFFSET);
     if (!character) {
-        g_game_lua_pushnil(L);
+        l_pushnil(L);
         return 1;
     }
 
     int v = read_from<int>(character, GRAVITAS_OFFSET);
-    g_game_lua_pushinteger(L, v);
+    l_pushinteger(L, v);
     return 1;
 }
 

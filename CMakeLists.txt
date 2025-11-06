@@ -36,6 +36,7 @@ set(TWDLL_DOC_SOURCES
 
 set(TWDLL_NON_DOC_SOURCES
     src/lua/lua_api.cpp
+    src/lua/lua_api.h
     src/libtwdll.cpp
     src/log.cpp
     src/ui.cpp
@@ -58,14 +59,19 @@ add_library(twdll SHARED
     ${TWDLL_NON_DOC_SOURCES}
 )
 
-target_include_directories(twdll PRIVATE
-    src
-    PUBLIC
+set (TWDLL_INCLUDE_DIRS
     include/
     include/spdlog
     include/imgui
     include/imgui/backends
     include/minhook/include
+)
+
+target_include_directories(twdll 
+    PRIVATE
+    src
+    PUBLIC
+    ${TWDLL_INCLUDE_DIRS}
 )
 
 target_link_libraries(twdll PRIVATE
@@ -178,3 +184,20 @@ add_subdirectory(docs/lua)
 # ===========================================
 # Testing
 # ===========================================
+include(CTest)
+
+if(BUILD_TESTING)
+    message(STATUS "Test build enabled, configuring Google Test...")
+
+    include(FetchContent)
+    FetchContent_Declare(
+      googletest
+      GIT_REPOSITORY https://github.com/google/googletest.git
+      GIT_TAG v1.17.0
+    )
+
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
+    add_subdirectory(tests/cpp)
+endif()

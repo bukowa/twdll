@@ -1,4 +1,4 @@
-set(LUA_SRC_DIR "${PROJECT_SOURCE_DIR}/docs/lua/include/lua/src")
+set(LUA_SRC_DIR "${PROJECT_SOURCE_DIR}/include/lua/src")
 file(GLOB LUA_CORE_SOURCES "${LUA_SRC_DIR}/*.c")
 list(REMOVE_ITEM LUA_CORE_SOURCES "${LUA_SRC_DIR}/lua.c" "${LUA_SRC_DIR}/luac.c")
 

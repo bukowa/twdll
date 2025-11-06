@@ -1,8 +1,7 @@
 #pragma once
 
 #include "log.h"
-#include "lua_forward_declarations.h"
-#include "lua/lua_api.h" // Include game_lua_api.h for g_game_lua_pushnil
+#include "lua/lua_api.h"
 
 // --- Generic Memory Access (Templates stay in header) ---
 
@@ -29,7 +28,7 @@ int read_property_lua(lua_State *L, size_t pointer_offset, size_t property_offse
                       void (*push_function)(lua_State *, U)) {
     void *object = get_object_from_indirect_wrapper(L, object_type_name, pointer_offset);
     if (!object) {
-        g_game_lua_pushnil(L);
+        l_pushnil(L);
         return 1;
     }
     T current_value = read_from<T>(object, property_offset);
@@ -57,13 +56,13 @@ int read_nested_property_lua(lua_State *L, size_t pointer_offset, size_t nested_
                              void (*push_function)(lua_State *, U)) {
     void *base_object = get_object_from_indirect_wrapper(L, object_type_name, pointer_offset);
     if (!base_object) {
-        g_game_lua_pushnil(L);
+        l_pushnil(L);
         return 1;
     }
 
     void *nested_obj = read_from<void *>(base_object, nested_obj_ptr_offset);
     if (!nested_obj) {
-        g_game_lua_pushnil(L); // Nested object pointer is null, return nil.
+        l_pushnil(L); // Nested object pointer is null, return nil.
         return 1;
     }
 

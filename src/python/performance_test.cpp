@@ -4,7 +4,7 @@
 #include <sstream>
 #include "imgui.h"
 #include "log.h"
-#include "lua_api.h"
+#include "lua/lua_api.h"
 #include "object.h"
 
 // =================================================================================
@@ -24,15 +24,15 @@ void register_performance_test_functions(lua_State* L) {
         Log("ERROR: Cannot register custom Lua functions, lua_State is NULL.");
         return;
     }
-    if (!g_game_lua_pushcclosure || !g_game_lua_setfield) {
+    if (!l_pushcclosure || !l_setfield) {
         Log("ERROR: Cannot register custom Lua functions, required API functions are missing.");
         return;
     }
 
     Log("Registering custom C++ function 'do_nothing_fast' into game's Lua state...");
 
-    g_game_lua_pushcclosure(L, lua_api_do_nothing, 0);
-    g_game_lua_setfield(L, -10002, "do_nothing_fast");
+    l_pushcclosure(L, lua_api_do_nothing, 0);
+    l_setfield(L, -10002, "do_nothing_fast");
 
     Log("Custom Lua function registered successfully.");
 }
@@ -66,17 +66,17 @@ PyMODINIT_FUNC PyInit_engine(void) {
 // =================================================================================
 
 void RunGameLuaString(lua_State* L, const char* script) {
-    if (!g_game_luaB_loadstring || !g_game_lua_pushcclosure || !g_game_lua_pushstring || !g_game_lua_pcall) {
+    if (!l_loadstring || !l_pushcclosure || !l_pushstring || !l_pcall) {
         Log("ERROR: A required Lua function for RunGameLuaString is missing!");
         return;
     }
-    g_game_lua_pushcclosure(L, g_game_luaB_loadstring, 0);
-    g_game_lua_pushstring(L, script);
-    if (g_game_lua_pcall(L, 1, 1, 0) != 0) {
+    l_pushcclosure(L, l_loadstring, 0);
+    l_pushstring(L, script);
+    if (l_pcall(L, 1, 1, 0) != 0) {
         Log("ERROR: pcall failed during script compilation phase.");
         return;
     }
-    if (g_game_lua_pcall(L, 0, 0, 0) != 0) {
+    if (l_pcall(L, 0, 0, 0) != 0) {
         Log("ERROR: pcall failed during script execution phase.");
         return;
     }
