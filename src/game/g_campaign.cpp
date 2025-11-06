@@ -29,26 +29,26 @@ namespace Game {
             "Max Units in Army",
             "Maximum number of units allowed in an army.",
             std::make_unique<OffsetAddressResolver>("Empire.Retail.dll", 0x193FC68),
-            &g_max_units_in_army, 1, 40));
+            &g_max_units_in_army, 1, 9999, Context::Campaign));
 
         RegisterCampaignGlobalAddress(make_global_address(
             "Max Units in Navy",
             "Maximum number of units allowed in a navy.",
             std::make_unique<OffsetAddressResolver>("Empire.Retail.dll", 0x193FC6C),
-            &g_max_units_in_navy, 1, 40));
+            &g_max_units_in_navy, 1, 9999, Context::Campaign));
 #else
         // Non-Steam build specific definitions (e.g., Rome2.dll)
         RegisterCampaignGlobalAddress(make_global_address(
             "Max Units in Army",
             "Maximum number of units allowed in an army.",
             std::make_unique<OffsetAddressResolver>("Rome2.dll", 0x18F835C),
-            &g_max_units_in_army, 1, 40));
+            &g_max_units_in_army, 1, 9999, Context::Campaign));
 
         RegisterCampaignGlobalAddress(make_global_address(
             "Max Units in Navy",
             "Maximum number of units allowed in a navy.",
             std::make_unique<OffsetAddressResolver>("Rome2.dll", 0x18F8360),
-            &g_max_units_in_navy, 1, 40));
+            &g_max_units_in_navy, 1, 9999, Context::Campaign));
 #endif
     }
 

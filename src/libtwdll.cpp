@@ -18,6 +18,7 @@
 #include "military_force_script_interface.h"
 #include "game/g_campaign.h" // --- ADDED: For campaign global addresses ---
 #include "ui.h" // --- ADDED: Include the new UI header ---
+#include "game/game_context.h"
 
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
@@ -92,6 +93,15 @@ static const struct luaL_Reg twdll_main_functions[] = {{"FindSwapChain", findand
 /// @treturn integer always 1 (returns the main twdll table)
 extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     spdlog::info("luaopen_twdll START");
+
+    // --- CONTEXT SWITCHING PLACEHOLDER ---
+    // This is a placeholder. In the future, we will inspect the lua_State (L)
+    // to determine if we are in the frontend, campaign, or battle.
+    // For now, we'll just set it to Campaign so we can see our globals.
+    Game::SetCurrentContext(Game::Context::Campaign);
+    spdlog::info("Game context set to Campaign (placeholder)");
+    // --- END PLACEHOLDER ---
+
     l_register(L, "twdll", twdll_main_functions);
 
     // Register the specific interface modules

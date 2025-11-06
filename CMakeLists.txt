@@ -52,6 +52,7 @@ set(TWDLL_NON_DOC_SOURCES
     src/signature_scanner.cpp
     src/module.cpp
     src/game/g_campaign.cpp
+    src/game/game_context.cpp
 
     src/game/globals/game_globals.cpp
     src/game/globals/address_resolver.cpp

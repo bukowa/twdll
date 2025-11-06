@@ -2,6 +2,8 @@
 
 #include <string>
 #include <memory>
+#include "game/game_context.h"
+
 
 namespace Game {
 
@@ -19,6 +21,8 @@ public:
 
     // Gets the description of the global variable.
     virtual const std::string& GetDescription() const = 0;
+
+    virtual Context GetContext() const = 0;
 };
 
 } // namespace Game

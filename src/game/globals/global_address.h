@@ -13,18 +13,23 @@ namespace Game {
 template <typename T>
 class GlobalAddress : public IGlobalAddress {
 public:
-    GlobalAddress(std::string name, std::string description, std::unique_ptr<IAddressResolver> resolver, T* target_ptr, T min_val, T max_val)
+    GlobalAddress(std::string name, std::string description, std::unique_ptr<IAddressResolver> resolver, T* target_ptr, T min_val, T max_val, Context context)
         : name_(std::move(name)),
           description_(std::move(description)),
           resolver_(std::move(resolver)),
           target_variable_ptr_(target_ptr),
           min_value_(min_val),
-          max_value_(max_val) {}
+          max_value_(max_val),
+          context_(context) {}
 
     const std::string& GetName() const override { return name_; }
     const std::string& GetDescription() const override { return description_; }
+    Context GetContext() const override { return context_; }
 
     void RenderImGuiWidget() override {
+        if (GetContext() != GetCurrentContext()) {
+            return;
+        }
         // Resolve the address if we haven't already
         if (!resolved_address_) {
             uintptr_t address = resolver_->Resolve();
@@ -67,6 +72,7 @@ private:
     T* resolved_address_ = nullptr; // The dynamically resolved address
     T min_value_;
     T max_value_;
+    Context context_;
 };
 
 // Factory function to make creating these objects cleaner and safer.
@@ -78,8 +84,9 @@ std::unique_ptr<IGlobalAddress> make_global_address(
     std::unique_ptr<IAddressResolver> resolver,
     T* target_ptr,
     T min_val,
-    T max_val) {
-    return std::make_unique<GlobalAddress<T>>(std::move(name), std::move(description), std::move(resolver), target_ptr, min_val, max_val);
+    T max_val,
+    Context context) {
+    return std::make_unique<GlobalAddress<T>>(std::move(name), std::move(description), std::move(resolver), target_ptr, min_val, max_val, context);
 }
 
 } // namespace Game
