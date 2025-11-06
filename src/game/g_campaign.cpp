@@ -1,100 +1,55 @@
 #include "g_campaign.h"
-#include <windows.h>
+#include "globals/global_address.h"
+#include "globals/game_globals.h" // For the actual g_... variables
+#include <vector>
+#include <memory>
 
-namespace Game
-{
-    // Global variable for max units in army, will be pointed to the resolved address
-    int* g_max_units_in_army_ptr = nullptr;
-    // Global variable for max units in navy, will be pointed to the resolved address
-    int* g_max_units_in_navy_ptr = nullptr;
+namespace Game {
 
-    void GlobalAddressManager::RenderImGui()
-    {
-        for (auto& addr : m_addresses)
-        {
-            ImGui::PushID(addr.name.c_str());
+    // Global storage for our type-safe global addresses.
+    static std::vector<std::unique_ptr<IGlobalAddress>> g_campaign_global_addresses;
 
-            if (!addr.description.empty())
-            {
-                ImGui::TextDisabled("(?)");
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::BeginTooltip();
-                    ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-                    ImGui::TextUnformatted(addr.description.c_str());
-                    ImGui::PopTextWrapPos();
-                    ImGui::EndTooltip();
-                }
-                ImGui::SameLine();
-            }
-
-            switch (addr.type)
-            {
-                case GlobalAddressType::Int:
-                {
-                    int* val = std::get<int*>(addr.address);
-                    if (addr.min_int != addr.max_int)
-                    {
-                        ImGui::SliderInt(addr.name.c_str(), val, addr.min_int, addr.max_int);
-                    }
-                    else
-                    {
-                        ImGui::InputInt(addr.name.c_str(), val);
-                    }
-                    break;
-                }
-                case GlobalAddressType::Float:
-                {
-                    float* val = std::get<float*>(addr.address);
-                    if (addr.min_float != addr.max_float)
-                    {
-                        ImGui::SliderFloat(addr.name.c_str(), val, addr.min_float, addr.max_float);
-                    }
-                    else
-                    {
-                        ImGui::InputFloat(addr.name.c_str(), val);
-                    }
-                    break;
-                }
-                case GlobalAddressType::Bool:
-                {
-                    bool* val = std::get<bool*>(addr.address);
-                    ImGui::Checkbox(addr.name.c_str(), val);
-                    break;
-                }
-            }
-            ImGui::PopID();
+    // Renders the ImGui widgets for all registered globals.
+    void RenderCampaignGlobalsImGui() {
+        for (const auto& global : g_campaign_global_addresses) {
+            global->RenderImGuiWidget();
         }
     }
 
-    void RenderCampaignGlobalsImGui()
-    {
-        if (ImGui::Begin("Campaign Globals"))
-        {
-            GlobalAddressManager::GetInstance().RenderImGui();
-            ImGui::End();
-        }
+    // A clean way to register a new global.
+    void RegisterCampaignGlobalAddress(std::unique_ptr<IGlobalAddress> address) {
+        g_campaign_global_addresses.push_back(std::move(address));
     }
 
-    // Function to initialize and register campaign global addresses
-    void RegisterCampaignGlobalAddresses()
-    {
-        // Resolve and register "Max Units in Army"
-        HMODULE empireRetailModule = GetModuleHandleA("Empire.Retail.dll");
-        if (empireRetailModule != nullptr)
-        {
-            uintptr_t baseAddress = (uintptr_t)empireRetailModule;
-            uintptr_t maxUnitsArmyOffset = 0x193FC68;
-            g_max_units_in_army_ptr = (int*)(baseAddress + maxUnitsArmyOffset);
+    // Creates and registers all the global variables.
+    // This is now 100% compile-time type-safe.
+    void InitializeCampaignGlobalAddresses() {
+#ifdef STEAM_BUILD
+        RegisterCampaignGlobalAddress(make_global_address(
+            "Max Units in Army",
+            "Maximum number of units allowed in an army.",
+            std::make_unique<OffsetAddressResolver>("Empire.Retail.dll", 0x193FC68),
+            &g_max_units_in_army, 1, 40));
 
-            GlobalAddressManager::GetInstance().RegisterAddress(
-                GlobalAddress("Max Units in Army", g_max_units_in_army_ptr, "Maximum number of units allowed in an army", 1, 40));
+        RegisterCampaignGlobalAddress(make_global_address(
+            "Max Units in Navy",
+            "Maximum number of units allowed in a navy.",
+            std::make_unique<OffsetAddressResolver>("Empire.Retail.dll", 0x193FC6C),
+            &g_max_units_in_navy, 1, 40));
+#else
+        // Non-Steam build specific definitions (e.g., Rome2.dll)
+        RegisterCampaignGlobalAddress(make_global_address(
+            "Max Units in Army",
+            "Maximum number of units allowed in an army.",
+            std::make_unique<OffsetAddressResolver>("Rome2.dll", 0x18F835C),
+            &g_max_units_in_army, 1, 40));
 
-            uintptr_t maxUnitsNavyOffset = 0x193FC6C;
-            g_max_units_in_navy_ptr = (int*)(baseAddress + maxUnitsNavyOffset);
-
-            GlobalAddressManager::GetInstance().RegisterAddress(
-                GlobalAddress("Max Units in Navy", g_max_units_in_navy_ptr, "Maximum number of units allowed in a navy", 1, 40));
-        }
+        RegisterCampaignGlobalAddress(make_global_address(
+            "Max Units in Navy",
+            "Maximum number of units allowed in a navy.",
+            std::make_unique<OffsetAddressResolver>("Rome2.dll", 0x18F8360),
+            &g_max_units_in_navy, 1, 40));
+#endif
     }
+
 }

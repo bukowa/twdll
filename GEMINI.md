@@ -7,5 +7,5 @@
 
 2.  **Build the project:**
     ```sh
-    cmake --build --preset vs2022-install
+    cmake --build --preset vs2022-install --target twdll
     ```

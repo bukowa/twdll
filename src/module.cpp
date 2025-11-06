@@ -15,5 +15,5 @@ void module_initialize(HMODULE hModule) {
         g_PythonRootPath = (modulePath.parent_path() / "python").string();
     }
 
-    Game::RegisterCampaignGlobalAddresses();
+    Game::InitializeCampaignGlobalAddresses();
 }

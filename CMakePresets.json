@@ -41,6 +41,16 @@
       }
     },
     {
+      "name": "vs2022-install-steam",
+      "inherits": "vs2022-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "INSTALL_MOD": "ON",
+        "GAME_INSTALL_DIR": "D:/Total War - Rome 2",
+        "STEAM_BUILD": "ON"
+      }
+    },
+    {
       "name": "vs2022-test",
       "inherits": "vs2022-base",
       "cacheVariables": {
