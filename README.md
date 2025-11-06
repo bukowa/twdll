@@ -92,28 +92,15 @@ This project is built with CMake and primarily targets Visual Studio tools for a
 
 #### Steps
 
-1.  **Clone the repository:**
-
+1.  **Configure the project with CMake:**
     ```sh
-    git clone https://github.com/bukowa/twdll.git
-    cd twdll
+    cmake --preset vs2022-install
     ```
 
-2.  **Configure the project with CMake:**
-
-    The recommended preset for local development is `vs2022-win32-ninja`.
-
+2.  **Build the project:**
     ```sh
-    cmake --preset vs2022-win32-ninja
+    cmake --build --preset vs2022-install
     ```
-
-3.  **Build the project:**
-
-    ```sh
-    cmake --build --preset vs2022-win32-ninja
-    ```
-
-    The build process will generate `twdll.dll` and other release files in the `build/vs2022-win32-ninja/release` directory.
 
 ### Reverse Engineering with ReClass.NET
 
