@@ -74,6 +74,11 @@ target_include_directories(twdll
     ${TWDLL_INCLUDE_DIRS}
 )
 
+if(STEAM_BUILD)
+    target_compile_definitions(twdll STEAM_BUILD)
+
+endif()
+
 target_link_libraries(twdll PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib"
 )

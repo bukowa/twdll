@@ -68,7 +68,8 @@
       "inherits": "_",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "INSTALL_MOD": "OFF"
+        "INSTALL_MOD": "OFF",
+        "STEAM_BUILD": "ON"
       }
     }
   ],
