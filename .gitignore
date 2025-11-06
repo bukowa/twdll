@@ -31,3 +31,5 @@ idasdk
 errors
 log
 prompt
+compile_commands.json
+.cache
