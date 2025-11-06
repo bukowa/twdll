@@ -75,7 +75,7 @@ target_include_directories(twdll
 )
 
 if(STEAM_BUILD)
-    target_compile_definitions(twdll STEAM_BUILD)
+    target_compile_definitions(twdll PUBLIC STEAM_BUILD)
 
 endif()
 
