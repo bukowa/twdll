@@ -210,3 +210,14 @@ if(BUILD_TESTING)
 
     add_subdirectory(tests/cpp)
 endif()
+
+add_subdirectory(subprojects/memalochook)
+add_subdirectory(subprojects/injector)
+
+
+add_custom_target(injector_run
+    COMMAND ${CMAKE_BINARY_DIR}/subprojects/injector/injector.exe 
+    "C:/Games/Total War - Rome 2 Steam/Rome2.exe" ${CMAKE_BINARY_DIR}/subprojects/memalochook/memalochook.dll
+    DEPENDS injector memalochook
+    VERBATIM
+)

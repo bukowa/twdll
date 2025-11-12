@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.10)
+
+# Define the project name and language
+project(MinimalInjector CXX)
+
+# Add the executable target from our source file
+add_executable(injector main.cpp)
+
+# Specify Windows-specific settings
+if(WIN32)
+    # Ensure this is built as a console application, not a GUI one
+    set_target_properties(injector PROPERTIES WIN32_EXECUTABLE OFF)
+
+    # Link against the necessary Windows library for the API calls
+    target_link_libraries(injector PRIVATE kernel32.lib)
+endif()

@@ -1,0 +1,26 @@
+# subprojects/memalochook/CMakeLists.txt
+
+set(MI_BUILD_SHARED OFF CACHE BOOL "Buduj mimalloc jako bibliotekę statyczną")
+set(MI_BUILD_TESTS OFF CACHE BOOL "Nie buduj testów mimalloc")
+add_subdirectory(
+    ${CMAKE_SOURCE_DIR}/include/mimalloc
+    ${CMAKE_BINARY_DIR}/mimalloc_build
+)
+
+add_library(memalochook SHARED
+    main.cpp
+)
+
+target_include_directories(memalochook PRIVATE
+    "${CMAKE_SOURCE_DIR}/include/mimalloc/include"
+    "${CMAKE_SOURCE_DIR}/include/minhook/include"
+)
+
+target_link_directories(memalochook PRIVATE
+    "${CMAKE_BINARY_DIR}/mimalloc_build"
+)
+
+target_link_libraries(memalochook PRIVATE
+    mimalloc-static
+    "${CMAKE_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib"
+)
