@@ -216,8 +216,8 @@ add_subdirectory(subprojects/injector)
 
 
 add_custom_target(injector_run
-    COMMAND ${CMAKE_BINARY_DIR}/subprojects/injector/injector.exe 
-    "C:/Games/Total War - Rome 2 Steam/Rome2.exe" ${CMAKE_BINARY_DIR}/subprojects/memalochook/memalochook.dll
+    COMMAND  $<TARGET_FILE:injector>
+    "C:/Games/Total War - Rome 2 Steam/Rome2.exe" $<TARGET_FILE:memalochook>
     DEPENDS injector memalochook
     VERBATIM
 )

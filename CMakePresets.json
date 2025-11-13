@@ -91,6 +91,21 @@
         "INSTALL_MOD": "OFF",
         "STEAM_BUILD": "ON"
       }
+    },
+    {
+      "name": "mingw32-release",
+      "displayName": "MinGW 32-bit Release",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "C:/msys64/mingw32/bin/gcc.exe",
+        "CMAKE_CXX_COMPILER": "C:/msys64/mingw32/bin/g++.exe",
+        "INSTALL_MOD": "ON",
+        "GAME_INSTALL_DIR": "C:/Games/Total War - Rome 2"
+      },
+      "environment": {
+        "PATH": "C:/msys64/mingw32/bin;$penv{PATH}"
+      }
     }
   ],
   "buildPresets": [
@@ -109,6 +124,11 @@
     {
       "name": "vs2022-release-ci",
       "configurePreset": "vs2022-release-ci"
+    },
+    {
+      "name": "mingw32-release",
+      "displayName": "Build MinGW 32-bit Release",
+      "configurePreset": "mingw32-release"
     }
   ],
   "testPresets": [

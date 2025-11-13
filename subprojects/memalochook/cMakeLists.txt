@@ -1,50 +1,38 @@
-# subprojects/memalochook/CMakeLists.txt
+add_subdirectory("${CMAKE_SOURCE_DIR}/include/minhook" "${CMAKE_BINARY_DIR}/minhook")
 
-add_library(memalochook SHARED
-    main.cpp
-)
+add_library(memalochook SHARED main.cpp)
 
 target_include_directories(memalochook PRIVATE
     "${CMAKE_SOURCE_DIR}/include/minhook/include"
 )
 
-target_link_libraries(memalochook PRIVATE
-    "${CMAKE_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib"
-)
+target_link_libraries(memalochook PRIVATE minhook shlwapi)
 
 if(MSVC)
-    # Set the static runtime library for release builds
+    message(STATUS "Configuring for MSVC compiler")
+
+    set(STATIC_MSVC_RUNTIME "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
     set_target_properties(memalochook PROPERTIES
-        MSVC_RUNTIME_LIBRARY "MultiThreaded"
+        MSVC_RUNTIME_LIBRARY ${STATIC_MSVC_RUNTIME}
+    )
+    set_target_properties(minhook PROPERTIES
+        MSVC_RUNTIME_LIBRARY ${STATIC_MSVC_RUNTIME}
     )
 
-    # --- COMPILE FLAGS ---
-    # Add all your flags here, once.
-    # target_compile_options applies to both Debug and Release.
     target_compile_options(memalochook PRIVATE
         /W4          # Warning level 4
         /EHsc        # Standard exception handling
-        /arch:SSE2   # Enable SSE2 for 32-bit
-        /arch:AVX2   # Enable SSE2 for 32-bit
+        /arch:SSE2
     )
 
-    # Add flags that are specific to RELEASE builds
     target_compile_options(memalochook PRIVATE
         $<$<CONFIG:Release>:/O2 /Ot /fp:fast>
-    )
-
-    # Add flags that are specific to DEBUG builds
-    target_compile_options(memalochook PRIVATE
         $<$<CONFIG:Debug>:/Od>
     )
 
-    # --- LINKER FLAGS ---
     target_link_options(memalochook PRIVATE
-        # Always generate debug info
         /DEBUG
     )
 
-    set_target_properties(memalochook PROPERTIES
-        PDB_NAME "memalochook"
-    )
 endif()
