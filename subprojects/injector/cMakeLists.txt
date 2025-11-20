@@ -8,6 +8,11 @@ add_executable(injector main.cpp)
 
 # Specify Windows-specific settings
 if(WIN32)
+    # Enable Program Database (/Zi) for Release builds
+    add_compile_options("$<$<CONFIG:RELEASE>:/Zi>")
+    # Enable linker debug information (/DEBUG) for Release builds
+    add_link_options("$<$<CONFIG:RELEASE>:/DEBUG>")
+
     # Ensure this is built as a console application, not a GUI one
     set_target_properties(injector PROPERTIES WIN32_EXECUTABLE OFF)
 

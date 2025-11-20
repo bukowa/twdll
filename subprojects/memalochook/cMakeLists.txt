@@ -1,24 +1,40 @@
-project(memalochook LANGUAGES CXX ASM_NASM)
+cmake_minimum_required(VERSION 3.10)
+project(memalochook CXX ASM_NASM)
 set(CMAKE_ASM_NASM_OBJECT_FORMAT win32)
-# add_compile_definitions(POSITIONINDEPENDENT=0)
+add_compile_definitions(POSITIONINDEPENDENT=0)
 
 set(CMAKE_ASM_NASM_DEBUG_FORMAT "dwarf2" CACHE STRING "Debug format for NASM")
 
+
 add_subdirectory("${CMAKE_SOURCE_DIR}/include/minhook" "${CMAKE_BINARY_DIR}/minhook")
 
-add_library(memalochook SHARED 
+set(MEMALOCHOK_SOURCES
     main.cpp
+    asmlib_hooks.cpp
+    hook_manager.cpp
+    log.cpp
     "${CMAKE_SOURCE_DIR}/include/asmlib/asmlibSrc/memmove32.asm"
     "${CMAKE_SOURCE_DIR}/include/asmlib/asmlibSrc/memcpy32.asm"
+    "${CMAKE_SOURCE_DIR}/include/asmlib/asmlibSrc/memset32.asm"
+    "${CMAKE_SOURCE_DIR}/include/asmlib/asmlibSrc/memcmp32.asm"
     "${CMAKE_SOURCE_DIR}/include/asmlib/asmlibSrc/instrset32.asm"
     "${CMAKE_SOURCE_DIR}/include/asmlib/asmlibSrc/unalignedisfaster32.asm"
     "${CMAKE_SOURCE_DIR}/include/asmlib/asmlibSrc/cachesize32.asm"
     "${CMAKE_SOURCE_DIR}/include/asmlib/asmlibSrc/cputype32.asm"
 )
 
-target_include_directories(memalochook PRIVATE
+add_library(memalochook SHARED ${MEMALOCHOK_SOURCES})
+
+target_include_directories(memalochook 
+    PRIVATE
     "${CMAKE_SOURCE_DIR}/include/minhook/include"
-    "${CMAKE_SOURCE_DIR}/include/vectorclass"
+    PUBLIC
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/include/spdlog"
+)
+
+target_compile_options(memalochook PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:$<$<CXX_COMPILER_ID:MSVC>:/utf-8>>
 )
 
 target_link_libraries(memalochook PRIVATE minhook shlwapi)
@@ -38,7 +54,6 @@ if(MSVC)
     target_compile_options(memalochook PRIVATE
         $<$<COMPILE_LANGUAGE:CXX>:/W4>
         $<$<COMPILE_LANGUAGE:CXX>:/EHsc>
-        $<$<COMPILE_LANGUAGE:CXX>:/arch:AVX2>
         $<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CXX>:/O2 /Ot /fp:fast>>
         $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CXX>:/Od>>
     )
