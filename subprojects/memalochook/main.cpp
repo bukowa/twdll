@@ -32,6 +32,52 @@ HMODULE WINAPI HookedLoadLibraryA(LPCSTR lpLibFileName) {
 }
 
 // =================================================================================
+// Hooking Strategies
+// =================================================================================
+
+// Strategy 1: For launching a new process.
+// Assumes the game DLL is not loaded yet, so we hook LoadLibraryA to wait for it.
+void SetupHooksForLaunch() {
+    spdlog::info("Using LAUNCH strategy: hooking LoadLibraryA to wait for game DLL.");
+
+    LPVOID pLoadLibraryA = (LPVOID)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA");
+    if (!pLoadLibraryA) {
+        spdlog::error("Could not find LoadLibraryA address.");
+        return;
+    }
+
+    if (MH_CreateHook(pLoadLibraryA, (LPVOID)&HookedLoadLibraryA, reinterpret_cast<LPVOID*>(&o_LoadLibraryA)) != MH_OK) {
+        spdlog::error("Failed to create hook for LoadLibraryA.");
+        return;
+    }
+
+    if (MH_EnableHook(pLoadLibraryA) != MH_OK) {
+        spdlog::error("Failed to enable hook for LoadLibraryA.");
+    }
+}
+
+// Strategy 2: For attaching to a running process.
+// Checks if the game DLL is already loaded. If so, hooks it. If not, falls back to hooking LoadLibraryA.
+void SetupHooksForAttach() {
+    spdlog::info("Using ATTACH strategy: checking for existing game DLL.");
+
+    const char* gameDllName = "empire.retail.dll";
+    HMODULE hGameDll = GetModuleHandleA(gameDllName);
+
+    if (hGameDll) {
+        // Game DLL is already in memory, so we can hook it directly.
+        spdlog::info("{} is already loaded. Installing hooks immediately.", gameDllName);
+        InstallHooksForModule(gameDllName, hGameDll);
+        MH_EnableHook(MH_ALL_HOOKS); // It's safe to call this again
+    }
+    else {
+        // Game DLL not loaded yet. Fall back to the launch strategy.
+        spdlog::info("{} not yet loaded. Hooking LoadLibraryA to wait.", gameDllName);
+        SetupHooksForLaunch();
+    }
+}
+
+// =================================================================================
 // DLL Entry Point (Minimal and Safe)
 // =================================================================================
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
@@ -46,19 +92,18 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         InstallHooksForModule(nullptr, GetModuleHandle(NULL));
         MH_EnableHook(MH_ALL_HOOKS);
 
-        // Hook LoadLibraryA to catch when the game DLL is loaded
-        void *pLoadLibraryA =
-            (void *)GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryA");
-
-        MH_CreateHook(pLoadLibraryA,
-                      (void *)&HookedLoadLibraryA,
-                      reinterpret_cast<void **>(&o_LoadLibraryA));
-        MH_EnableHook(pLoadLibraryA);
+        // Select the hooking strategy based on the build flag.
+#ifdef TWDLL_INJECT_ATTACH
+        SetupHooksForAttach();
+#else
+        SetupHooksForLaunch();
+#endif
 
     } else if (ul_reason_for_call == DLL_PROCESS_DETACH) {
         spdlog::info("memalochook.dll detached.");
-        ShutdownLogging();
+        // Uninitialize MinHook before shutting down logging, as hooks might try to log.
         MH_Uninitialize();
+        ShutdownLogging();
     }
     return TRUE;
 }

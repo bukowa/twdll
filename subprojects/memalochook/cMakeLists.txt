@@ -24,20 +24,36 @@ set(MEMALOCHOK_SOURCES
 )
 
 add_library(memalochook SHARED ${MEMALOCHOK_SOURCES})
+add_library(memalochook_attach SHARED ${MEMALOCHOK_SOURCES})
 
-target_include_directories(memalochook 
+# Properties for memalochook
+target_include_directories(memalochook
     PRIVATE
     "${CMAKE_SOURCE_DIR}/include/minhook/include"
     PUBLIC
     "${CMAKE_SOURCE_DIR}/include"
     "${CMAKE_SOURCE_DIR}/include/spdlog"
 )
-
 target_compile_options(memalochook PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:$<$<CXX_COMPILER_ID:MSVC>:/utf-8>>
 )
-
 target_link_libraries(memalochook PRIVATE minhook shlwapi)
+
+# Properties for memalochook_attach
+target_include_directories(memalochook_attach
+    PRIVATE
+    "${CMAKE_SOURCE_DIR}/include/minhook/include"
+    PUBLIC
+    "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/include/spdlog"
+)
+target_compile_options(memalochook_attach PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:$<$<CXX_COMPILER_ID:MSVC>:/utf-8>>
+)
+target_link_libraries(memalochook_attach PRIVATE minhook shlwapi)
+target_compile_definitions(memalochook_attach PRIVATE TWDLL_INJECT_ATTACH)
+set_target_properties(memalochook_attach PROPERTIES OUTPUT_NAME "memalochook_attach")
+
 
 if(MSVC)
     message(STATUS "Configuring for MSVC compiler")
@@ -45,6 +61,9 @@ if(MSVC)
     set(STATIC_MSVC_RUNTIME "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
     set_target_properties(memalochook PROPERTIES
+        MSVC_RUNTIME_LIBRARY ${STATIC_MSVC_RUNTIME}
+    )
+    set_target_properties(memalochook_attach PROPERTIES
         MSVC_RUNTIME_LIBRARY ${STATIC_MSVC_RUNTIME}
     )
     set_target_properties(minhook PROPERTIES
@@ -57,8 +76,17 @@ if(MSVC)
         $<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CXX>:/O2 /Ot /fp:fast>>
         $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CXX>:/Od>>
     )
+    target_compile_options(memalochook_attach PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:/W4>
+        $<$<COMPILE_LANGUAGE:CXX>:/EHsc>
+        $<$<CONFIG:Release>:$<$<COMPILE_LANGUAGE:CXX>:/O2 /Ot /fp:fast>>
+        $<$<CONFIG:Debug>:$<$<COMPILE_LANGUAGE:CXX>:/Od>>
+    )
 
     target_link_options(memalochook PRIVATE
+        /DEBUG
+    )
+    target_link_options(memalochook_attach PRIVATE
         /DEBUG
     )
 

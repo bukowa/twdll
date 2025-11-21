@@ -213,6 +213,7 @@ endif()
 
 add_subdirectory(subprojects/memalochook)
 add_subdirectory(subprojects/injector)
+add_subdirectory(subprojects/injector_attach)
 
 
 add_custom_target(injector_run
