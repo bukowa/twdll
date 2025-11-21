@@ -10,7 +10,7 @@ static const Hook all_hooks[] = {
     {"_memmove_0", "empire.retail.dll", false, 0x116BDE50, (void*)&CustomMemmove, nullptr},
     {"_memcpy_s", "empire.retail.dll", false, 0x1168ECA0, (void*)&CustomMemcpy_s, nullptr},
     {"_memset", "empire.retail.dll", false, 0x116BE510, (void*)&CustomMemset, nullptr},
-    {"_memcmp", "empire.retail.dll", false, 0x116BF7D0, (void*)&CustomMemcmp, nullptr},
+    {"_memcmp", "empire.retail.dll", false, 0x116BF7CF, (void*)&CustomMemcmp, nullptr},
 };
 
 void InstallHooksForModule(const char* moduleName, HMODULE moduleHandle) {
