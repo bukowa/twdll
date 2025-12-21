@@ -1,3 +1,8 @@
+Hey everyone! Just a heads-up: the `master` branch here is pretty much my personal playground, where I've been trying out a ton of different things. Because of all that experimentation, it's gotten a bit messy and really needs a proper rewrite to be easily maintainable. Think of it as a learning project that got a little out of hand!
+
+Release versions are totally solid and ready to use. Those are the ones you should grab if you're looking for something stable.
+There isn't much yet.
+
 # Total War: Rome II Script Extender (twdll)
 
 `twdll` is a mod for *Total War: Rome II* that extends the game's scripting capabilities, allowing for more complex and powerful mods. What started as a proof-of-concept for calling the game's Lua functions from a C++ DLL has evolved into a foundational script extender.
