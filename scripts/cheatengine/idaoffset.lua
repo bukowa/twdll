@@ -28,34 +28,43 @@ registerFormAddNotification(function(f)
                 mi.OnClick = function()
                     if not lv.Selected then return end
                     
+                    -- Pobranie tekstu z listy (zazwyczaj zawiera Adres - Bajty - Opcode)
                     local instText = lv.Selected.SubItems[0]
                     if not instText then return end
                     
+                    -- Wyciągnięcie samego adresu HEX z początku stringa
                     local addrStr = instText:match("^(%x+)%s*%-")
                     
                     if addrStr then
-                        local address = getAddress(addrStr)
-                        local nameStr = getNameFromAddress(address)
-                        local plusPos = string.find(nameStr, "+", 1, true)
+                        local address = tonumber(addrStr, 16)
+                        if not address then address = getAddress(addrStr) end
                         
-                        if plusPos then
-                            -- Wycinamy sam offset
-                            local offsetStr = string.sub(nameStr, plusPos + 1)
-                            -- Zamieniamy offset na liczbę szesnastkową (base 16)
-                            local offsetInt = tonumber(offsetStr, 16)
-                            
-                            if offsetInt then
-                                -- DODAJEMY BAZĘ GHIDRY
-                                local finalAddr = GHIDRA_BASE + offsetInt
-                                
-                                -- Formatujemy wynik z powrotem na HEX
-                                local finalHex = string.format("%X", finalAddr)
-                                writeToClipboard(finalHex)
-                                print("Sukces: Skopiowano " .. finalHex .. " (Baza: " .. string.format("%X", GHIDRA_BASE) .. " + Offset: " .. offsetStr .. ")")
+                        -- Szukamy do jakiego modułu (.exe / .dll) należy ten adres
+                        local modules = enumModules()
+                        local rva = nil
+                        local moduleName = ""
+                        
+                        for i, mod in ipairs(modules) do
+                            -- Sprawdzamy czy adres mieści się w granicach modułu w pamięci
+                            if address >= mod.Address and address < (mod.Address + mod.Size) then
+                                -- Matematyczne wyliczenie czystego offsetu (RVA)
+                                rva = address - mod.Address
+                                moduleName = mod.Name
+                                break
                             end
+                        end
+                        
+                        if rva then
+                            -- DODAJEMY BAZĘ GHIDRY DO RVA
+                            local finalAddr = GHIDRA_BASE + rva
+                            local finalHex = string.format("%X", finalAddr)
+                            
+                            writeToClipboard(finalHex)
+                            print(string.format("Sukces: Skopiowano %s (Moduł: %s | RVA: %X | Baza: %X)", finalHex, moduleName, rva, GHIDRA_BASE))
                         else
+                            -- Fallback, jeśli adres nie jest w żadnym .exe ani .dll (np. dynamicznie alokowana pamięć / JIT)
                             writeToClipboard(addrStr)
-                            print("Skopiowano adres: " .. addrStr .. " (CE nie rozpoznał offsetu w module)")
+                            print("Skopiowano absolutny adres: " .. addrStr .. " (Adres nie należy do żadnego modułu w pamięci!)")
                         end
                     else
                         print("Błąd: Nie potrafię odczytać adresu z tekstu: " .. instText)
