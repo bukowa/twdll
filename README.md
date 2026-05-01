@@ -49,3 +49,16 @@ We use **LDoc** to generate the API reference from the C++ comments. To build it
 cmake --build --preset vs2022-release
 ```
 The documentation will be generated in the `docs/` folder.
+
+## How to Release
+Official releases are automated via GitHub Actions. To release a new version:
+
+1.  **Update `CHANGELOG.md`**: Add a new entry for the version (e.g., `## [0.5.0] - 2026-05-01`).
+    *   You can validate your changes locally using: `python .github/scripts/validate_changelog.py`
+2.  **Commit and Push**: Push your changes to the `master` branch.
+3.  **Tag the Version**: Create a git tag starting with `v` and push it:
+    ```sh
+    git tag v0.5.0
+    git push origin v0.5.0
+    ```
+4.  **Verification**: The GitHub Action will automatically build the DLL, package the mod, extract the changelog notes, and create the official GitHub Release.
