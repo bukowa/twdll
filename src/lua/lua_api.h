@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 // This is the single, unified header for the Lua abstraction layer.
 // It handles switching between the real Lua library (for testing) and
 // the game's function pointers (for production).

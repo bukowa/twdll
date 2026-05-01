@@ -8,18 +8,18 @@ void *get_object_from_indirect_wrapper(lua_State *L, const char *object_type_nam
                                        size_t pointer_offset) {
     void **p_wrapper = static_cast<void **>(l_touserdata(L, 1));
     if (!p_wrapper || !*p_wrapper) {
-        spdlog::error("ERROR (get_{}_indirect): Argument is not a valid pointer to a wrapper.", object_type_name);
+        Log("ERROR (get_%s_indirect): Argument is not a valid pointer to a wrapper.", object_type_name);
         return nullptr;
     }
-    spdlog::info("p_wrapper: {0:p}", static_cast<const void*>(p_wrapper));
+    Log("p_wrapper: %p", static_cast<const void*>(p_wrapper));
     void *wrapper = *p_wrapper;
-    spdlog::info("wrapper: {0:p}", static_cast<const void*>(wrapper));
+    Log("wrapper: %p", static_cast<const void*>(wrapper));
     void *object = read_from<void *>(wrapper, pointer_offset);
     if (!object) {
-        spdlog::error("ERROR (get_{}_indirect): Real {} pointer is null.", object_type_name, object_type_name);
+        Log("ERROR (get_%s_indirect): Real %s pointer is null.", object_type_name, object_type_name);
         return nullptr;
     }
-    spdlog::info("object: {0:p}", static_cast<const void*>(wrapper));
+    Log("object: %p", static_cast<const void*>(wrapper));
     return object;
 }
 

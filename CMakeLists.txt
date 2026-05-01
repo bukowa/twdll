@@ -12,50 +12,46 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MESSAGE_CONTEXT_SHOW ON)
 
 # ========================
+# Game Configuration
+# ========================
+set(GAME_EXE "Rome2.exe")
+set(STEAM_APP_ID "214950")
+set(INSTALL_ALONE_DIR "D:/Games/Total War - Rome 2 Steam")
+set(INSTALL_STEAM_DIR "C:/Program Files (x86)/Steam/steamapps/common/Total War Rome II")
+set(INSTALL_USER_SCRIPT "$ENV{APPDATA}/The Creative Assembly/Rome2/scripts")
+
+# ========================
 # Compiler Settings
 # ========================
+if(NOT MSVC)
+    message(FATAL_ERROR "You must use the MSVC (Visual Studio) compiler!")
+endif()
+
 add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 
-if(MSVC)
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Zi /DNDEBUG /W4")
-    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
-endif()
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Zi /DNDEBUG /W4")
+set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /D_DEBUG /W4")
 
 # ========================
 # Lib Setup (twdll.dll)
 # ========================
 
 set(TWDLL_DOC_SOURCES
-    src/unit_script_interface.cpp
-    src/battle_unit_script_interface.cpp
-    src/character_script_interface.cpp
-    src/faction_script_interface.cpp
-    src/military_force_script_interface.cpp
+    src/unit.cpp
+    src/battle_unit.cpp
+    src/character.cpp
+    src/faction.cpp
+    src/military_force.cpp
 )
 
 set(TWDLL_NON_DOC_SOURCES
     src/lua/lua_api.cpp
     src/lua/lua_api.h
-    src/libtwdll.cpp
+    src/main.cpp
     src/log.cpp
-    src/ui.cpp
-    include/imgui/imgui.cpp
-    include/imgui/imgui_draw.cpp
-    include/imgui/imgui_tables.cpp
-    include/imgui/imgui_widgets.cpp
-    include/imgui/backends/imgui_impl_win32.cpp
-    include/imgui/backends/imgui_impl_dx11.cpp
-    include/imgui/imgui_demo.cpp
     src/script_utils.cpp
-    src/dx_finder.cpp
     src/signature_scanner.cpp
-    src/module.cpp
-    src/game/g_campaign.cpp
-    src/game/game_context.cpp
-
-    src/game/globals/game_globals.cpp
-    src/game/globals/address_resolver.cpp
 )
 
 add_library(twdll SHARED
@@ -63,33 +59,31 @@ add_library(twdll SHARED
     ${TWDLL_NON_DOC_SOURCES}
 )
 
-set (TWDLL_INCLUDE_DIRS
-    include/
-    include/spdlog
-    include/imgui
-    include/imgui/backends
-    include/minhook/include
-)
+target_include_directories(twdll PRIVATE src)
 
-target_include_directories(twdll 
-    PRIVATE
-    src
-    PUBLIC
-    ${TWDLL_INCLUDE_DIRS}
-)
-
-if(STEAM_BUILD)
+# Dynamic Steam Build Detection
+# If Rome2.dll exists in the standalone directory, it's the old retail version (no steam flag).
+# Otherwise, default to STEAM_BUILD (works for both legitimate Steam and torrented Steam versions).
+if(EXISTS "${INSTALL_ALONE_DIR}/Rome2.dll")
+    message(STATUS "Rome2.dll detected in standalone dir! Building WITHOUT STEAM_BUILD flag.")
+    add_custom_command(TARGET twdll PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "=================================================="
+        COMMAND ${CMAKE_COMMAND} -E echo " BUILDING TWDLL (RETAIL BUILD - NO STEAM FLAG)"
+        COMMAND ${CMAKE_COMMAND} -E echo "=================================================="
+    )
+else()
+    message(STATUS "Rome2.dll not found in standalone dir. Defaulting to STEAM_BUILD flag.")
     target_compile_definitions(twdll PUBLIC STEAM_BUILD)
-
+    add_custom_command(TARGET twdll PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E echo "=================================================="
+        COMMAND ${CMAKE_COMMAND} -E echo " BUILDING TWDLL (STEAM_BUILD FLAG ENABLED)"
+        COMMAND ${CMAKE_COMMAND} -E echo "=================================================="
+    )
 endif()
-
-target_link_libraries(twdll PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/minhook/lib/libMinHook.x86.lib"
-)
 
 target_compile_options(twdll PRIVATE
     "/Zi"
-    "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>"
+    "/utf-8"
 )
 
 set_target_properties(twdll PROPERTIES
@@ -104,7 +98,7 @@ target_link_options(twdll PRIVATE "/DEBUG")
 # ================================
 # Mod Setup (twdll.pack)
 # ================================
-set(MOD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pack")
+set(MOD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/pack")
 set(MOD_PACK "${CMAKE_BINARY_DIR}/twdll.pack")
 file(GLOB_RECURSE MOD_FILES CONFIGURE_DEPENDS "${MOD_DIR}/*.*")
 
@@ -118,6 +112,25 @@ add_custom_command(
         COMMAND rpfm_cli --game rome_2 pack add --pack-path=${MOD_PACK} -F "${MOD_DIR};"
         DEPENDS ${MOD_FILES}
         COMMENT "Building mod .pack file"
+)
+
+# ================================
+# Test Mod Setup (twdll_test.pack)
+# ================================
+set(TEST_MOD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tests/pack")
+set(TEST_MOD_PACK "${CMAKE_BINARY_DIR}/twdll_test.pack")
+file(GLOB_RECURSE TEST_MOD_FILES CONFIGURE_DEPENDS "${TEST_MOD_DIR}/*.*")
+
+add_custom_target(
+        build_test_pack ALL
+        DEPENDS ${TEST_MOD_PACK}
+)
+add_custom_command(
+        OUTPUT ${TEST_MOD_PACK}
+        COMMAND rpfm_cli --game rome_2 pack create --pack-path=${TEST_MOD_PACK}
+        COMMAND rpfm_cli --game rome_2 pack add --pack-path=${TEST_MOD_PACK} -F "${TEST_MOD_DIR};"
+        DEPENDS ${TEST_MOD_FILES}
+        COMMENT "Building test mod .pack file"
 )
 
 # ======================================
@@ -148,77 +161,138 @@ add_custom_target(
 )
 
 # ===========================================
-# Install Files
+# Install & Run Targets
 # ===========================================
-option(INSTALL_MOD "Install mod into game dir" OFF)
-option(GAME_INSTALL_DIR "C:/Games/Total War - Rome 2")
+# Generate a PowerShell script to safely tail the log file and auto-exit when the game closes
+set(TAIL_SCRIPT "${CMAKE_BINARY_DIR}/tail_log.ps1")
+file(WRITE "${TAIL_SCRIPT}" "
+Param(\$LogFile)
+if (!(Test-Path \$LogFile)) { Start-Sleep -Seconds 1 }
+if (!(Test-Path \$LogFile)) { Write-Host 'Log file not found.'; exit }
 
+Write-Host '-- Tailing log in real-time (Event-Driven)...'
+Get-Content -Path \$LogFile -Wait -Tail 0 | ForEach-Object {
+    Write-Host \$_
+    
+    if (\$_ -match '\\[TEST\\] Final Result: SUCCESS') {
+        Write-Host 'Tests Passed! Auto-closing game...' -ForegroundColor Green
+        Stop-Process -Name 'Rome2' -Force -ErrorAction SilentlyContinue
+        exit 0
+    }
+    
+    if (\$_ -match '\\[TEST\\] Final Result: FAILED') {
+        Write-Host 'Tests Failed! Leaving game open for debugging.' -ForegroundColor Red
+        exit 1
+    }
+}
+")
+
+# Custom target to kill the game process
 add_custom_target(kill_game
-    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/kill_game.ps1"
-    COMMENT "Killing Rome2.exe process before build..."
+    COMMAND ${CMAKE_COMMAND} -E echo "-- Checking if Rome2 is running..."
+    COMMAND powershell -Command "Stop-Process -Name 'Rome2' -Force -ErrorAction SilentlyContinue; while (Get-Process -Name 'Rome2' -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 200 }"
+    COMMAND ${CMAKE_COMMAND} -E echo "-- Rome2 process killed."
+    COMMENT "Killing Game Process"
     VERBATIM
 )
 
-add_custom_target(run_alone
-    DEPENDS
-        twdll
-        install_mod
-    COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_game.ps1" -GameLaunchDir "${GAME_INSTALL_DIR}"
-    COMMENT "Installing mod, and launching the game via scripts..."
-    VERBATIM
-)
+# Macro to generate DRY targets for both Steam and Standalone
+macro(create_game_targets PREFIX TARGET_DIR IS_STEAM)
+    
+    # 1. Install Target
+    add_custom_target(install_${PREFIX}_mod
+        DEPENDS twdll build_mod_pack kill_game
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Install] Creating data directories at ${TARGET_DIR}..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${TARGET_DIR}/data"
+        
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Install] Copying twdll.pack..."
+        COMMAND ${CMAKE_COMMAND} -E copy "${MOD_PACK}" "${TARGET_DIR}/data/"
+        
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Install] Copying twdll.dll..."
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:twdll>" "${TARGET_DIR}/"
+        
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Install] Updating user.script.txt..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${INSTALL_USER_SCRIPT}"
+        COMMAND powershell -Command "Set-Content -Path '${INSTALL_USER_SCRIPT}/user.script.txt' -Value 'mod \"twdll.pack\";'"
+        COMMENT "Installing Mod (${PREFIX})"
+        VERBATIM
+    )
 
-if(INSTALL_MOD)
-        message(STATUS "Mod will be installed to: ${GAME_INSTALL_DIR}")
+    # 1.5. Test Install Target
+    add_custom_target(install_${PREFIX}_test
+        DEPENDS install_${PREFIX}_mod build_test_pack
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Install Test] Copying pack files..."
+        COMMAND ${CMAKE_COMMAND} -E copy "${TEST_MOD_PACK}" "${TARGET_DIR}/data/"
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/tests/consulscriptum.pack" "${TARGET_DIR}/data/"
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Install Test] Copying save game..."
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{APPDATA}/The Creative Assembly/Rome2/save_games"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/tests/tests.save" "$ENV{APPDATA}/The Creative Assembly/Rome2/save_games/tests.save"
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Install Test] Injecting campaign_load into user.script.txt..."
+        COMMAND powershell -Command "Set-Content -Path '${INSTALL_USER_SCRIPT}/user.script.txt' -Value 'mod \"twdll_test.pack\";'; Add-Content -Path '${INSTALL_USER_SCRIPT}/user.script.txt' -Value 'mod \"twdll.pack\";'; Add-Content -Path '${INSTALL_USER_SCRIPT}/user.script.txt' -Value 'mod \"consulscriptum.pack\";'; Add-Content -Path '${INSTALL_USER_SCRIPT}/user.script.txt' -Value 'game_startup_mode campaign_load \"tests.save\";'"
+        COMMENT "Installing Test Mod (${PREFIX})"
+        VERBATIM
+    )
 
-        add_custom_target(install_mod ALL
-            DEPENDS
-                build_release
-                kill_game
+    # 2. Run Target (Launch Game Only)
+    if(${IS_STEAM})
+        set(LAUNCH_CMD powershell -Command "start steam://rungameid/${STEAM_APP_ID}")
+    else()
+        set(LAUNCH_CMD powershell -WindowStyle Hidden -Command "Start-Process '${GAME_EXE}' -WorkingDirectory '${TARGET_DIR}'")
+    endif()
 
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    "${RELEASE_DIR}/"
-                    "${GAME_INSTALL_DIR}/"
+    add_custom_target(run_${PREFIX}
+        DEPENDS install_${PREFIX}_mod
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Run] Clearing previous log file..."
+        COMMAND powershell -Command "Set-Content -Path '${TARGET_DIR}/twdll.log' -Value ''"
+        
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Run] Bypassing outdated mod popup..."
+        COMMAND reg add "HKEY_CURRENT_USER\\SOFTWARE\\The Creative Assembly\\Rome2" /v last_game_version /t REG_DWORD /d 0x00020004 /f
+        
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Run] Launching game..."
+        COMMAND ${LAUNCH_CMD}
+        COMMENT "Running Game (${PREFIX})"
+        VERBATIM
+    )
 
-            COMMENT "Deploying assembled mod from '${RELEASE_DIR}' to '${GAME_INSTALL_DIR}'"
-            VERBATIM
-        )
-endif()
+    # 3. Tail Target (Wait and Stream Logs)
+    add_custom_target(run_${PREFIX}_tail
+        DEPENDS run_${PREFIX}
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Tail] Connected to ${TARGET_DIR}/twdll.log"
+        COMMAND powershell -ExecutionPolicy Bypass -File "${TAIL_SCRIPT}" "${TARGET_DIR}/twdll.log"
+        COMMENT "Tailing Logs (${PREFIX})"
+        VERBATIM
+        USES_TERMINAL
+    )
+
+    # 4. Run Test Target
+    add_custom_target(run_${PREFIX}_test
+        DEPENDS install_${PREFIX}_test
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Run Test] Clearing previous log file..."
+        COMMAND powershell -Command "Set-Content -Path '${TARGET_DIR}/twdll.log' -Value ''"
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Run Test] Bypassing outdated mods popup..."
+        COMMAND reg add "HKEY_CURRENT_USER\\SOFTWARE\\The Creative Assembly\\Rome2" /v last_game_version /t REG_DWORD /d 0x00020004 /f
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Run Test] Launching Rome2.exe..."
+        COMMAND ${LAUNCH_CMD}
+        COMMENT "Running Game (${PREFIX})"
+        VERBATIM
+    )
+
+    # 5. Run Test Target & Tail
+    add_custom_target(run_${PREFIX}_test_tail
+        DEPENDS run_${PREFIX}_test
+        COMMAND ${CMAKE_COMMAND} -E echo "-- [Tail] Connected to ${TARGET_DIR}/twdll.log (Test Mode)"
+        COMMAND powershell -ExecutionPolicy Bypass -File "${TAIL_SCRIPT}" "${TARGET_DIR}/twdll.log"
+        COMMENT "Tailing Logs (${PREFIX})"
+        VERBATIM
+        USES_TERMINAL
+    )
+endmacro()
+
+# Generate targets for Standalone (alone) and Steam (steam)
+create_game_targets("alone" "${INSTALL_ALONE_DIR}" FALSE)
+create_game_targets("steam" "${INSTALL_STEAM_DIR}" TRUE)
 
 # ===========================================
 # Documentation Generation (ldoc)
 # ===========================================
 add_subdirectory(docs/lua)
-
-# ===========================================
-# Testing
-# ===========================================
-include(CTest)
-
-if(BUILD_TESTING)
-    message(STATUS "Test build enabled, configuring Google Test...")
-
-    include(FetchContent)
-    FetchContent_Declare(
-      googletest
-      GIT_REPOSITORY https://github.com/google/googletest.git
-      GIT_TAG v1.17.0
-    )
-
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
-
-    add_subdirectory(tests/cpp)
-endif()
-
-add_subdirectory(subprojects/memalochook)
-add_subdirectory(subprojects/injector)
-add_subdirectory(subprojects/injector_attach)
-
-
-add_custom_target(injector_run
-    COMMAND  $<TARGET_FILE:injector>
-    "C:/Games/Total War - Rome 2 Steam/Rome2.exe" $<TARGET_FILE:memalochook>
-    DEPENDS injector memalochook
-    VERBATIM
-)

@@ -5,7 +5,12 @@
       "name": "_",
       "hidden": true,
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/${presetName}"
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "vendor": {
+        "jetbrains.com/clion": {
+          "toolchain": "Visual Studio"
+        }
+      }
     },
     {
       "name": "base",
@@ -21,7 +26,7 @@
       "hidden": true,
       "inherits": "base",
       "environment": {
-        "PATH": "C:\\Program Files (x86)\\NASM;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX86\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x86;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\Common7\\IDE;$penv{PATH}",
+        "PATH": "C:\\Program\\ Files\\ (x86)\\NASM;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX86\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x86;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\Common7\\IDE;$penv{PATH}",
         "LIB": "C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x86;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\lib\\x86",
         "LIBPATH": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\lib\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\UnionMetadata\\10.0.26100.0;C:\\Program Files (x86)\\Windows Kits\\10\\References\\10.0.26100.0",
         "INCLUDE": "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\ucrt;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\shared;C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\um"
@@ -36,37 +41,21 @@
       "name": "vs2022-install",
       "inherits": "vs2022-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "INSTALL_MOD": "ON",
-        "GAME_INSTALL_DIR": "C:/Games/Total War - Rome 2"
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
       "name": "vs2022-install-release",
       "inherits": "vs2022-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "INSTALL_MOD": "ON",
-        "GAME_INSTALL_DIR": "C:/Games/Total War - Rome 2"
+        "CMAKE_BUILD_TYPE": "Release"
       }
     },
     {
       "name": "vs2022-install-steam",
       "inherits": "vs2022-base",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "INSTALL_MOD": "ON",
-        "GAME_INSTALL_DIR": "D:/Total War - Rome 2",
-        "STEAM_BUILD": "ON"
-      }
-    },
-    {
-      "name": "vs2022-test",
-      "inherits": "vs2022-base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "INSTALL_MOD": "OFF",
-        "BUILD_TESTING": "ON"
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
@@ -87,24 +76,7 @@
       "name": "vs2022-release-ci",
       "inherits": "_",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "INSTALL_MOD": "OFF",
-        "STEAM_BUILD": "ON"
-      }
-    },
-    {
-      "name": "mingw32-release",
-      "displayName": "MinGW 32-bit Release",
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "C:/msys64/mingw32/bin/gcc.exe",
-        "CMAKE_CXX_COMPILER": "C:/msys64/mingw32/bin/g++.exe",
-        "INSTALL_MOD": "ON",
-        "GAME_INSTALL_DIR": "C:/Games/Total War - Rome 2"
-      },
-      "environment": {
-        "PATH": "C:/msys64/mingw32/bin;$penv{PATH}"
+        "CMAKE_BUILD_TYPE": "Release"
       }
     }
   ],
@@ -130,15 +102,40 @@
       "configurePreset": "vs2022-release-ci"
     },
     {
-      "name": "mingw32-release",
-      "displayName": "Build MinGW 32-bit Release",
-      "configurePreset": "mingw32-release"
-    }
-  ],
-  "testPresets": [
+      "name": "run-alone",
+      "displayName": "Run Standalone Game",
+      "configurePreset": "vs2022-install",
+      "targets": ["run_alone"]
+    },
     {
-      "name": "vs2022-test",
-      "configurePreset": "vs2022-install"
+      "name": "run-steam",
+      "displayName": "Run Steam Game",
+      "configurePreset": "vs2022-install-steam",
+      "targets": ["run_steam"]
+    },
+    {
+      "name": "run-alone-tail",
+      "displayName": "Run & Tail Standalone Game",
+      "configurePreset": "vs2022-install",
+      "targets": ["run_alone_tail"]
+    },
+    {
+      "name": "run-steam-tail",
+      "displayName": "Run & Tail Steam Game",
+      "configurePreset": "vs2022-install-steam",
+      "targets": ["run_steam_tail"]
+    },
+    {
+      "name": "run-alone-test-tail",
+      "displayName": "Run Tests (Standalone)",
+      "configurePreset": "vs2022-install",
+      "targets": ["run_alone_test_tail"]
+    },
+    {
+      "name": "run-steam-test-tail",
+      "displayName": "Run Tests (Steam)",
+      "configurePreset": "vs2022-install-steam",
+      "targets": ["run_steam_test_tail"]
     }
   ]
 }

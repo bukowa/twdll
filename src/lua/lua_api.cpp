@@ -175,7 +175,7 @@ void initialize_lua_api() {
     HMODULE hGameModule = GetModuleHandle(GAME_MODULE_NAME);
 
     if (hGameModule == NULL) {
-        spdlog::error("Failed to get module handle for {}", GAME_MODULE_NAME);
+        Log("Failed to get module handle for %s", GAME_MODULE_NAME);
         return;
     }
     
@@ -184,23 +184,23 @@ void initialize_lua_api() {
     // Get module information to determine its size for signature scanning
     MODULEINFO mi = { 0 };
     if (!GetModuleInformation(GetCurrentProcess(), (HMODULE)g_game_base_address, &mi, sizeof(mi))) {
-        spdlog::error("Failed to get module information for {}", GAME_MODULE_NAME);
+        Log("Failed to get module information for %s", GAME_MODULE_NAME);
         return;
     }
     size_t module_size = mi.SizeOfImage;
 
     // Iterate through the function signatures
     for (const auto& func_sig_info : g_signatures_to_find) {
-        spdlog::info("Scanning for function: {}", func_sig_info.function_name);
+        Log("Scanning for function: %s", func_sig_info.function_name);
 
         try {
             if (func_sig_info.signature == nullptr) {
-                spdlog::error("Signature for {} is NULL, skipping scan.", func_sig_info.function_name);
+                Log("Signature for %s is NULL, skipping scan.", func_sig_info.function_name);
                 continue;
             }
 
             if (strlen(func_sig_info.signature) == 0) {
-                spdlog::warn("Signature for {} is empty, skipping scan.", func_sig_info.function_name);
+                Log("Signature for %s is empty, skipping scan.", func_sig_info.function_name);
                 continue;
             }
 
@@ -208,23 +208,23 @@ void initialize_lua_api() {
 
             if (found_address) {
                 *func_sig_info.target_function_ptr = (void*)found_address;
-                spdlog::info("Found function {} via signature.", func_sig_info.function_name);
+                Log("Found function %s via signature.", func_sig_info.function_name);
             } else {
-                spdlog::error("Signature not found for function {}.", func_sig_info.function_name);
+                Log("Signature not found for function %s.", func_sig_info.function_name);
             }
         } catch (const std::exception& e) {
-            spdlog::critical("Exception caught during signature scan for {}: {}", func_sig_info.function_name, e.what());
+            Log("Exception caught during signature scan for %s: %s", func_sig_info.function_name, e.what());
         } catch (...) {
-            spdlog::critical("Unknown exception caught during signature scan for {}.", func_sig_info.function_name);
+            Log("Unknown exception caught during signature scan for %s.", func_sig_info.function_name);
         }
     }
 
     // Verify that all functions were found
     for (const auto& func_sig_info : g_signatures_to_find) {
         if (*func_sig_info.target_function_ptr == nullptr) {
-            spdlog::error("Function '{}' was not found.", func_sig_info.function_name);
+            Log("Function '%s' was not found.", func_sig_info.function_name);
         } else {
-            spdlog::info("Function '{}' successfully initialized.", func_sig_info.function_name);
+            Log("Function '%s' successfully initialized.", func_sig_info.function_name);
         }
     }
 }
