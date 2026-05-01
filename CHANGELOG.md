@@ -4,19 +4,47 @@ All notable changes to this project will be documented in this file.
 
 ## [0.5.0] - 2026-05-01
 
+### Fixed
+- Just a repository cleanup that removes the mess I made.
+
+## [0.4.0] - 2025-10-20
+
 ### Added
-- **Automated Integration Testing**: A zero-click integration testing pipeline using `game_startup_mode campaign_load`. Includes an automatic log tailer that parses test results and instantly terminates the game when tests pass or fail.
-- **Dynamic Build Flags**: CMake now auto-detects `Rome2.dll` to determine if it should build using Retail or Steam flags.
-- **CMake Presets**: Added `run_alone_tail`, `run_steam_tail`, and `run_alone_test_tail` presets for incredibly rapid, automated deployment and debugging.
+- Added a new faction script interface (`twdll_faction`) with `GetMemoryAddress`, `GetGold`, and `SetGold` functions.
+
+### Fixed
+- Corrected documentation generation issues.
 
 ### Changed
-- **Massive Architecture Cleanup**: Transitioned entirely to an ultra-minimalist, zero-dependency C++ framework.
-- **Static Linking**: The DLL is now compiled with `/MT` (Static MSVC Runtime), ensuring flawless injection across all player machines without requiring VC++ Redistributables.
-- **API File Renaming**: Refactored the `src/` directory to use short, professional naming conventions (e.g., `battle_unit.cpp` instead of `battle_unit_script_interface.cpp`).
-- **Log Streaming**: Converted `log.cpp` to use `_fsopen` with `_SH_DENYNO`, fixing sharing violations and allowing real-time PowerShell tailing in the IDE.
+- The build process now utilizes `CMakePresets` for a more streamlined configuration.
 
-### Removed
-- Removed dead `money.cpp` legacy logic.
-- Purged the raw Lua 5.1 C source code from the project root (`include/lua`).
-- Stripped out all unused Python, ImGui, and MinHook dependencies and documentation.
-- Removed IDE configuration clutter (`.clang-format`, `.clangd`, `.emmyrc.json`).
+## [0.3.0] - 2025-10-07
+
+### Fixed
+- Fixed building for win32 lol
+
+## [0.2.1] - 2025-10-07
+
+### Added
+- Added `GetMovementPoints`, `SetMovementPoints`, `GetAmbition`, `SetAmbition`, `GetGravitas`, and `SetGravitas` to the character interface.
+
+## [0.2.0-alpha.1] - 2025-10-06
+
+### Added
+
+### Fixed
+- fix!: rename unit str prop to number of man
+
+## [0.1.0-alpha.2] - 2025-10-05
+
+### Fixed
+- Documentation now takes into account first arguments.
+
+
+## [0.1.0-alpha.1] - 2025-10-05
+
+### Added
+- Merged battle_unit_stats_functions into battle_unit_functions; stats are now accessible via twdll_battle_unit, and the separate twdll_battle_unit_stats module has been removed.
+
+### Fixed
+- Various bugs
