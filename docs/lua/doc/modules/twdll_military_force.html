@@ -39,11 +39,11 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
   <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
   <li><a href="../modules/twdll_character.html">twdll_character</a></li>
   <li><a href="../modules/twdll_faction.html">twdll_faction</a></li>
   <li><strong>twdll_military_force</strong></li>
+  <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
 </ul>
 
 </div>
@@ -54,7 +54,7 @@
 <p>
 
 </p>
-<p> Functions for interacting with military forces.</p>
+<p> Military force properties for Rome 2.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
@@ -62,10 +62,6 @@
 	<tr>
 	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (military_force)</a></td>
 	<td class="summary">Returns the memory address of the real military force object.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetRecruitmentQueueSize">GetRecruitmentQueueSize (military_force)</a></td>
-	<td class="summary">Returns the number of units in the recruitment queue.</td>
 	</tr>
 </table>
 
@@ -97,33 +93,6 @@
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
         memory address (e.g. "0x12345678")
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetRecruitmentQueueSize"></a>
-    <strong>GetRecruitmentQueueSize (military_force)</strong>
-    </dt>
-    <dd>
-    Returns the number of units in the recruitment queue.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">military_force</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the military force object (first argument)
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        number of units
     </ol>
 
 

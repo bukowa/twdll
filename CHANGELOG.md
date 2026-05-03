@@ -2,7 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-05-06
+
+### Added
+- **Multi-Game Support**: Seamlessly build and run for both Rome 2 and Attila.
+- **Pro Architecture**: Struct-based memory mapping with `#pragma pack(1)` and compile-time `static_assert` safety guards.
+- **Zero-Boilerplate API**: Automated Lua property mapping via C++ templates/macros.
+- **Brand Neutrality**: Renamed all `CA_` prefixes to `TW_` and branding from the API.
+- **Clean Build System**: New preset-driven architecture that eliminates IDE target pollution.
+
 ## [0.5.0] - 2026-05-01
+
 
 ### Fixed
 - Just a repository cleanup that removes the mess I made.

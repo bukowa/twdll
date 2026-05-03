@@ -27,10 +27,10 @@ jobs:
           filters: |
             src_files:
               - 'src/**'
-              - 'include/**'
-              - 'luadoc/**'
-              - 'pack/**'
+              - 'docs/**'
               - 'CMakeLists.txt'
+              - 'CMakePresets.json'
+              - 'CHANGELOG.md'
               - '.github/workflows/**'
 
   # ===============================================================
@@ -44,9 +44,8 @@ jobs:
       startsWith(github.ref, 'refs/tags/')
     runs-on: windows-latest
     env:
-      BUILD_OUTPUT_DIR: build/vs2022-release-ci
-      PRESET: vs2022-release-ci
-      RELEASE_DIR_PATH: ${{github.workspace}}/build/vs2022-release-ci/release
+      PRESET: ci-release
+      STAGING_DIR: staging
       ARCHIVE_NAME: release-package.zip
     steps:
       - uses: actions/checkout@v4
@@ -55,24 +54,36 @@ jobs:
           arch: x86
           toolset: 14.44.35207
           sdk: 10.0.26100.0
-      - name: Configure RPFM
+
+      - name: Configure and Build (Rome 2)
         run: |
-          Invoke-WebRequest -Uri "https://github.com/Frodo45127/rpfm/releases/download/v4.3.14/rpfm-v4.3.14-x86_64-pc-windows-msvc.zip" -OutFile "rpfm.zip"
-          Expand-Archive -Path "rpfm.zip" -DestinationPath "rpfm"
-          $rpfmPath = Join-Path (PWD) 'rpfm'; echo $rpfmPath | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Configure CMake
-        run: cmake --preset ${{env.PRESET}}
-      - name: Build Project
-        run: cmake --build --preset ${{env.PRESET}}
+          cmake -S . -B build/ci-rome2 --preset ${{env.PRESET}} -DTW_GAME=rome2
+          cmake --build build/ci-rome2
+      - name: Configure and Build (Attila)
+        run: |
+          cmake -S . -B build/ci-attila --preset ${{env.PRESET}} -DTW_GAME=attila
+          cmake --build build/ci-attila
+      - name: Build Documentation
+        run: cmake --build build/ci-rome2 --target docs
 
       # ===============================================================
       # Create a single ZIP file from the release directory
+      # Output is always twdll.dll — renamed per-game for the release package.
       # ===============================================================
+      - name: Prepare Release Directory
+        run: |
+          New-Item -ItemType Directory -Force -Path ${{env.STAGING_DIR}}
+          Copy-Item -Path "build\ci-rome2\twdll.dll"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.dll"
+          Copy-Item -Path "build\ci-rome2\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.pdb"
+          Copy-Item -Path "build\ci-attila\twdll.dll"  -Destination "${{env.STAGING_DIR}}\twdll_attila.dll"
+          Copy-Item -Path "build\ci-attila\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_attila.pdb"
+        shell: pwsh
+
       - name: Create Release ZIP Archive
         run: |
-          cd "${{env.RELEASE_DIR_PATH}}"
+          cd ${{env.STAGING_DIR}}
           powershell Compress-Archive -Path * -DestinationPath ..\${{env.ARCHIVE_NAME}}
-          cd "${{github.workspace}}"
+          cd ..
         shell: pwsh
 
       # ===============================================================
@@ -82,7 +93,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-package # The name of the artifact bundle
-          path: ${{env.BUILD_OUTPUT_DIR}}/${{env.ARCHIVE_NAME}} # Path to the single zip file
+          path: ${{github.workspace}}/${{env.ARCHIVE_NAME}} # Path to the single zip file
           retention-days: 7
 
       - name: Archive Documentation Artifact

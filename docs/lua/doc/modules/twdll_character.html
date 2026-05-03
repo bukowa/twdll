@@ -39,11 +39,11 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
   <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
   <li><strong>twdll_character</strong></li>
   <li><a href="../modules/twdll_faction.html">twdll_faction</a></li>
   <li><a href="../modules/twdll_military_force.html">twdll_military_force</a></li>
+  <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
 </ul>
 
 </div>
@@ -54,46 +54,34 @@
 <p>
 
 </p>
-<p> Functions for interacting with game characters.</p>
+<p> Campaign character properties for Rome 2.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#SetIntAtOffset">SetIntAtOffset (character, offset, value)</a></td>
-	<td class="summary">Writes a 32-bit integer at the given memory offset.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetIntAtOffset">GetIntAtOffset (character, offset)</a></td>
-	<td class="summary">Reads a 32-bit integer at the given memory offset.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (character)</a></td>
-	<td class="summary">Returns the memory address of the real character object.</td>
-	</tr>
-	<tr>
 	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (character, value)</a></td>
-	<td class="summary">Sets the movement points of a character.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints (character)</a></td>
-	<td class="summary">Gets the movement points of a character.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetAmbition">SetAmbition (character, value)</a></td>
-	<td class="summary">Sets the ambition of a character.</td>
+	<td class="summary">Sets the remaining movement points for the character.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetAmbition">GetAmbition (character)</a></td>
-	<td class="summary">Gets the ambition of a character.</td>
+	<td class="summary">Gets the ambition level of the character.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetGravitas">SetGravitas (character, value)</a></td>
-	<td class="summary">Sets the gravitas of a character.</td>
+	<td class="name" nowrap><a href="#SetAmbition">SetAmbition (character, value)</a></td>
+	<td class="summary">Sets the ambition level of the character.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetGravitas">GetGravitas (character)</a></td>
-	<td class="summary">Gets the gravitas of a character.</td>
+	<td class="summary">Gets the gravitas of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetGravitas">SetGravitas (character, value)</a></td>
+	<td class="summary">Sets the gravitas of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (character)</a></td>
+	<td class="summary">Returns the memory address of the real character object as a hexadecimal string.</td>
 	</tr>
 </table>
 
@@ -105,11 +93,11 @@
 
     <dl class="function">
     <dt>
-    <a name = "SetIntAtOffset"></a>
-    <strong>SetIntAtOffset (character, offset, value)</strong>
+    <a name = "SetMovementPoints"></a>
+    <strong>SetMovementPoints (character, value)</strong>
     </dt>
     <dd>
-    Writes a 32-bit integer at the given memory offset.
+    Sets the remaining movement points for the character.
 
 
     <h3>Parameters:</h3>
@@ -118,17 +106,9 @@
             <span class="types"><span class="type">userdata</span></span>
          the character object (first argument)
         </li>
-        <li><span class="parameter">offset</span>
-            <span class="types"><span class="type">integer</span></span>
-
-
-
-        </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
-
-
-
+         new movement points
         </li>
     </ul>
 
@@ -138,11 +118,11 @@
 
 </dd>
     <dt>
-    <a name = "GetIntAtOffset"></a>
-    <strong>GetIntAtOffset (character, offset)</strong>
+    <a name = "GetAmbition"></a>
+    <strong>GetAmbition (character)</strong>
     </dt>
     <dd>
-    Reads a 32-bit integer at the given memory offset.
+    Gets the ambition level of the character.
 
 
     <h3>Parameters:</h3>
@@ -151,11 +131,57 @@
             <span class="types"><span class="type">userdata</span></span>
          the character object (first argument)
         </li>
-        <li><span class="parameter">offset</span>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        ambition level
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetAmbition"></a>
+    <strong>SetAmbition (character, value)</strong>
+    </dt>
+    <dd>
+    Sets the ambition level of the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the character object (first argument)
+        </li>
+        <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
+         new ambition level
+        </li>
+    </ul>
 
 
 
+
+
+</dd>
+    <dt>
+    <a name = "GetGravitas"></a>
+    <strong>GetGravitas (character)</strong>
+    </dt>
+    <dd>
+    Gets the gravitas of the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the character object (first argument)
         </li>
     </ul>
 
@@ -163,8 +189,33 @@
     <ol>
 
            <span class="types"><span class="type">integer</span></span>
-        value
+        gravitas
     </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetGravitas"></a>
+    <strong>SetGravitas (character, value)</strong>
+    </dt>
+    <dd>
+    Sets the gravitas of the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the character object (first argument)
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new gravitas
+        </li>
+    </ul>
+
 
 
 
@@ -175,7 +226,7 @@
     <strong>GetMemoryAddress (character)</strong>
     </dt>
     <dd>
-    Returns the memory address of the real character object.
+    Returns the memory address of the real character object as a hexadecimal string.
 
 
     <h3>Parameters:</h3>
@@ -191,162 +242,6 @@
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
         memory address (e.g. "0x12345678")
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMovementPoints"></a>
-    <strong>SetMovementPoints (character, value)</strong>
-    </dt>
-    <dd>
-    Sets the movement points of a character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         The character object.
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         The new movement points value.
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMovementPoints"></a>
-    <strong>GetMovementPoints (character)</strong>
-    </dt>
-    <dd>
-    Gets the movement points of a character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         The character object.
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        The movement points of the character.
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetAmbition"></a>
-    <strong>SetAmbition (character, value)</strong>
-    </dt>
-    <dd>
-    Sets the ambition of a character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         The character object.
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         The new ambition value.
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetAmbition"></a>
-    <strong>GetAmbition (character)</strong>
-    </dt>
-    <dd>
-    Gets the ambition of a character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         The character object.
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        The ambition of the character.
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetGravitas"></a>
-    <strong>SetGravitas (character, value)</strong>
-    </dt>
-    <dd>
-    Sets the gravitas of a character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         The character object.
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         The new gravitas value.
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetGravitas"></a>
-    <strong>GetGravitas (character)</strong>
-    </dt>
-    <dd>
-    Gets the gravitas of a character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         The character object.
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        The gravitas of the character.
     </ol>
 
 

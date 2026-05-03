@@ -1,0 +1,38 @@
+# tools/paths.ps1.example
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy this file to tools/paths.ps1 and fill in your local game paths.
+# tools/paths.ps1 is gitignored — never commit it.
+#
+# Usage: each key maps a game name to its installation directory.
+#   "rome2"  — used when building with -DTW_GAME=rome2
+#   "attila" — used when building with -DTW_GAME=attila
+#
+# The script supports two launch modes per game:
+#   Standalone (alone) — launch the exe directly from the install dir
+#   Steam              — launch via steam://rungameid/
+# ─────────────────────────────────────────────────────────────────────────────
+
+$GamePaths = @{
+    "rome2"  = "D:\Games\Total War - Rome 2 Steam"
+    "attila" = "C:\Games\Total War - Attila_16"
+}
+
+$SteamPaths = @{
+    "rome2"  = "C:/Program Files (x86)/Steam/steamapps/common/Total War Rome II"
+    "attila" = "C:/Program Files (x86)/Steam/steamapps/common/Total War Attila"
+}
+
+$GameExes = @{
+    "rome2"  = "Rome2.exe"
+    "attila" = "Attila.exe"
+}
+
+$SteamAppIds = @{
+    "rome2"  = "214950"
+    "attila" = "325610"
+}
+
+$RpfmGames = @{
+    "rome2"  = "rome_2"
+    "attila" = "attila"
+}

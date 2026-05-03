@@ -1,6 +1,8 @@
-# Total War: Rome II Script Extender (twdll)
+# Total War Script Extender (twdll)
 
-This project lets you run custom C++ code inside the Rome II Lua engine. It’s useful for modders who want to do things that the standard game scripts can't handle.
+
+This project lets you run custom C++ code inside the native Lua engine of **Total War: Rome II** and **Total War: Attila**.
+
 
 ## How it works
 The game engine has its own Lua state. `twdll` uses **Signature Scanning** to find the internal Lua functions in the game's memory at runtime. This allows the DLL to register a custom `twdll` table that your scripts can use.
@@ -13,12 +15,19 @@ The project already includes example functions for modifying units, characters, 
 3. Extract everything into your main game folder (where `Rome2.exe` is).
 4. The DLL is passive; it only starts working if a mod calls for it.
 
+> [!NOTE]
+> The release zip contains one DLL per game (`twdll_rome2.dll`, `twdll_attila.dll`). Place the correct one in your game root.
+
+
 ## For Modders
-To use it in your mod, make sure `twdll.dll` is in the game root directory, then load the library at the start of your script:
+Make sure the correct `twdll_<game>.dll` is in the game root directory, then load it at the start of your script:
 
 ```lua
--- Load the library
-package.loadlib("twdll.dll", "luaopen_twdll")()
+-- Rome 2
+package.loadlib("twdll_rome2.dll", "luaopen_twdll")()
+
+-- Attila
+package.loadlib("twdll_attila.dll", "luaopen_twdll")()
 
 -- Use it
 twdll.Log("Hello from C++!")
@@ -35,18 +44,40 @@ We recommend using **CLion** for development. It's built with CMake and is easy 
 - **RPFM CLI** (to build the pack files)
 
 > [!IMPORTANT]
-> You must edit `CMakePresets.json` to point to your actual game and tool paths before building.
+> On first run, `tools/twdll.ps1` will auto-create `tools/paths.ps1` from the example and open it for editing. Fill in your game install paths, then re-run.
 
-### Automated Workflow
-We have CMake presets that handle everything:
-- `run_alone_tail`: Builds everything, starts the game, and shows you the log in your IDE.
-- `run_alone_test_tail`: Runs our automated test suite and tells you if it passed.
+### Build System
+
+Configure and build for a specific game using presets:
+
+```sh
+cmake --preset rome2
+cmake --build --preset rome2
+
+cmake --preset attila
+cmake --build --preset attila
+```
+
+Outputs: `build/rome2/twdll.dll` and `build/attila/twdll.dll`.
+
+### Task Runner (`tools/twdll.ps1`)
+
+All install/run/test operations use the task script — CMake just compiles:
+
+```powershell
+.\tools\twdll.ps1 install rome2          # copy DLL + pack to game dir
+.\tools\twdll.ps1 run rome2              # install + launch
+.\tools\twdll.ps1 run rome2 -Steam       # install + launch via Steam
+.\tools\twdll.ps1 test rome2             # full automated test cycle
+.\tools\twdll.ps1 help                   # all commands
+```
+
+The IDE targets `tw-install`, `tw-run`, `tw-test` also exist as wrappers for the same script if you prefer clicking buttons in CLion/VS.
 
 ### Building Documentation
 We use **LDoc** to generate the API reference from the C++ comments. To build it manually:
 ```sh
-# This is usually part of the release build
-cmake --build --preset vs2022-release
+cmake --build --preset rome2-release --target docs
 ```
 The documentation will be generated in the `docs/` folder.
 
