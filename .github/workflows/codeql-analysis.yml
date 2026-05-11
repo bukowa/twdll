@@ -9,7 +9,7 @@ on:
 jobs:
   analyze:
     name: Analyze
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     permissions:
       actions: read
       contents: read
@@ -33,13 +33,26 @@ jobs:
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
+    - name: Set up MSVC compiler
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+      with:
+        arch: x86
+        toolset: 14.44.35207
+        sdk: 10.0.26100.0
     - name: Initialize CodeQL
       uses: github/codeql-action/init@868e2ea5641bfa2e2af1f144664178b4c5575fab
       with:
         languages: ${{ matrix.language }}
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@868e2ea5641bfa2e2af1f144664178b4c5575fab
+    - name: Configure and Build (Rome 2)
+      run: |
+        cmake -S . -B build/codeql-rome2 --preset ci-release -DTW_GAME=rome2
+        cmake --build build/codeql-rome2
+    - name: Configure and Build (Attila)
+      run: |
+        cmake -S . -B build/codeql-attila --preset ci-release -DTW_GAME=attila
+        cmake --build build/codeql-attila
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@868e2ea5641bfa2e2af1f144664178b4c5575fab
       with:
         category: "/language:${{matrix.language}}"
+
