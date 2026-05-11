@@ -1,5 +1,8 @@
 # Total War Script Extender (twdll)
 
+![Build](https://github.com/bukowa/twdll/actions/workflows/build.yml/badge.svg)
+![CodeQL](https://github.com/bukowa/twdll/actions/workflows/codeql-analysis.yml/badge.svg)
+
 Run custom C++ code inside Total War: Rome II and Attila's Lua engine.
 
 ## Installation
