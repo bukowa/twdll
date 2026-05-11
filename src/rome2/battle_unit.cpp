@@ -30,45 +30,65 @@ static_assert(offsetof(TW_BattleUnit, fatigue)      == 0x948,  "TW_BattleUnit Ro
 constexpr size_t BATTLE_UNIT_PTR = 0x4;
 
 // ── Accessors ─────────────────────────────────────────────────────────────────
+// Direct properties
 /***
 Gets the fatigue level of the battle unit.
 @function GetFatigue
 @tparam userdata battle_unit the battle unit object (first argument)
 @treturn number fatigue level
 */
-TW_GET(Fatigue, TW_BattleUnit, fatigue, BATTLE_UNIT_PTR, "battle_unit")
+static twdll::Getter<float, TW_BattleUnit> Fatigue{&TW_BattleUnit::fatigue, BATTLE_UNIT_PTR, "battle_unit"};
+static int GetFatigue(lua_State* L) { return Fatigue.get(L); }
 
-/***
-Gets the charge bonus of the battle unit.
-@function GetChargeBonus
-@tparam userdata battle_unit the battle unit object (first argument)
-@treturn number charge bonus
-*/
-TW_GET_NESTED(ChargeBonus,    TW_BattleUnit, unit_stats, TW_UnitStats, charge_bonus,  BATTLE_UNIT_PTR, "battle_unit")
+// Nested properties - UnitStats
+namespace UnitStatsProps {
+    // These are accessed through the parent's unit_stats pointer field
+    /***
+    Gets the charge bonus of the battle unit.
+    @function GetChargeBonus
+    @tparam userdata battle_unit the battle unit object (first argument)
+    @treturn number charge bonus
+    */
+    static twdll::NestedProperty<float, TW_BattleUnit, TW_UnitStats> ChargeBonus{
+        &TW_UnitStats::charge_bonus, &TW_BattleUnit::unit_stats, BATTLE_UNIT_PTR, "battle_unit"
+    };
 
-/***
-Gets the melee attack of the battle unit.
-@function GetMeleeAttack
-@tparam userdata battle_unit the battle unit object (first argument)
-@treturn number melee attack
-*/
-TW_GET_NESTED(MeleeAttack,    TW_BattleUnit, unit_stats, TW_UnitStats, melee_attack,  BATTLE_UNIT_PTR, "battle_unit")
+    /***
+    Gets the melee attack of the battle unit.
+    @function GetMeleeAttack
+    @tparam userdata battle_unit the battle unit object (first argument)
+    @treturn number melee attack
+    */
+    static twdll::NestedProperty<float, TW_BattleUnit, TW_UnitStats> MeleeAttack{
+        &TW_UnitStats::melee_attack, &TW_BattleUnit::unit_stats, BATTLE_UNIT_PTR, "battle_unit"
+    };
 
-/***
-Gets the base morale of the battle unit.
-@function GetBaseMorale
-@tparam userdata battle_unit the battle unit object (first argument)
-@treturn number base morale
-*/
-TW_GET_NESTED(BaseMorale,     TW_BattleUnit, unit_stats, TW_UnitStats, base_morale,   BATTLE_UNIT_PTR, "battle_unit")
+    /***
+    Gets the base morale of the battle unit.
+    @function GetBaseMorale
+    @tparam userdata battle_unit the battle unit object (first argument)
+    @treturn number base morale
+    */
+    static twdll::NestedProperty<float, TW_BattleUnit, TW_UnitStats> BaseMorale{
+        &TW_UnitStats::base_morale, &TW_BattleUnit::unit_stats, BATTLE_UNIT_PTR, "battle_unit"
+    };
 
-/***
-Gets a float value of the battle unit.
-@function GetSomeFloatValue
-@tparam userdata battle_unit the battle unit object (first argument)
-@treturn number float value
-*/
-TW_GET_NESTED(SomeFloatValue, TW_BattleUnit, unit_stats, TW_UnitStats, float_example, BATTLE_UNIT_PTR, "battle_unit")
+    /***
+    Gets a float value of the battle unit.
+    @function GetSomeFloatValue
+    @tparam userdata battle_unit the battle unit object (first argument)
+    @treturn number float value
+    */
+    static twdll::NestedProperty<float, TW_BattleUnit, TW_UnitStats> SomeFloatValue{
+        &TW_UnitStats::float_example, &TW_BattleUnit::unit_stats, BATTLE_UNIT_PTR, "battle_unit"
+    };
+}
+
+// Wrapper functions for Lua registration
+static int GetChargeBonus(lua_State* L) { return UnitStatsProps::ChargeBonus.get(L); }
+static int GetMeleeAttack(lua_State* L) { return UnitStatsProps::MeleeAttack.get(L); }
+static int GetBaseMorale(lua_State* L) { return UnitStatsProps::BaseMorale.get(L); }
+static int GetSomeFloatValue(lua_State* L) { return UnitStatsProps::SomeFloatValue.get(L); }
 
 /***
 Returns the memory address of the real battle unit object.

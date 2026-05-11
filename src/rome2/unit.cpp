@@ -27,13 +27,16 @@ Gets the current number of man in the unit.
 @tparam userdata unit the unit object (first argument)
 @treturn integer current number of man
 */
+static twdll::Property<int, TW_Unit> NumberOfMan{&TW_Unit::current_number_of_men, UNIT_PTR, "unit"};
+static int GetNumberOfMan(lua_State* L) { return NumberOfMan.get(L); }
+
 /***
 Sets the current number of man in the unit.
 @function SetNumberOfMan
 @tparam userdata unit the unit object (first argument)
 @tparam integer value new number of man
 */
-TW_PROP(NumberOfMan,    TW_Unit, current_number_of_men, UNIT_PTR, "unit")
+static int SetNumberOfMan(lua_State* L) { return NumberOfMan.set(L); }
 
 /***
 Gets the maximum number of man in the unit.
@@ -41,13 +44,16 @@ Gets the maximum number of man in the unit.
 @tparam userdata unit the unit object (first argument)
 @treturn integer maximum number of man
 */
+static twdll::Property<int, TW_Unit> MaxNumberOfMan{&TW_Unit::max_number_of_men, UNIT_PTR, "unit"};
+static int GetMaxNumberOfMan(lua_State* L) { return MaxNumberOfMan.get(L); }
+
 /***
 Sets the maximum number of man in the unit.
 @function SetMaxNumberOfMan
 @tparam userdata unit the unit object (first argument)
 @tparam integer value new maximum number of man
 */
-TW_PROP(MaxNumberOfMan, TW_Unit, max_number_of_men,     UNIT_PTR, "unit")
+static int SetMaxNumberOfMan(lua_State* L) { return MaxNumberOfMan.set(L); }
 
 /***
 Gets the remaining movement points for the unit.
@@ -55,13 +61,16 @@ Gets the remaining movement points for the unit.
 @tparam userdata unit the unit object (first argument)
 @treturn integer movement points
 */
+static twdll::Property<int, TW_Unit> MovementPoints{&TW_Unit::movement_points, UNIT_PTR, "unit"};
+static int GetMovementPoints(lua_State* L) { return MovementPoints.get(L); }
+
 /***
 Sets the remaining movement points for the unit.
 @function SetMovementPoints
 @tparam userdata unit the unit object (first argument)
 @tparam integer value new movement points
 */
-TW_PROP(MovementPoints, TW_Unit, movement_points,       UNIT_PTR, "unit")
+static int SetMovementPoints(lua_State* L) { return MovementPoints.set(L); }
 
 /***
 Returns the memory address of the real unit object as a hexadecimal string.

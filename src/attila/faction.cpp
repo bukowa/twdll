@@ -23,13 +23,16 @@ Gets the amount of gold for the faction.
 @tparam userdata faction the faction object (first argument)
 @treturn integer amount of gold
 */
+static twdll::Property<int, TW_Faction> Gold{&TW_Faction::gold, FACTION_PTR, "faction"};
+static int GetGold(lua_State* L) { return Gold.get(L); }
+
 /***
 Sets the amount of gold for the faction.
 @function SetGold
 @tparam userdata faction the faction object (first argument)
 @tparam integer value new gold amount
 */
-TW_PROP(Gold, TW_Faction, gold, FACTION_PTR, "faction")
+static int SetGold(lua_State* L) { return Gold.set(L); }
 
 /***
 Returns the memory address of the real faction object as a hexadecimal string.

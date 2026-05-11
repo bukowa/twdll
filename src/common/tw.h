@@ -2,7 +2,7 @@
 // tw.h — twdll internal shared machinery
 // Single header included by every game-specific translation unit.
 // Provides: memory helpers, Lua object unwrapping, typed property
-// accessor templates, and the TW_PROP registration macro.
+// accessor templates, and modern Property/Getter classes.
 
 #include "lua_api.h"
 #include "log.h"
@@ -112,19 +112,53 @@ inline int tw_mem_address(lua_State* L, const char* tag, size_t ptr_off) {
     return 1;
 }
 
-// ── Registration macros ───────────────────────────────────────────────────────
-// Usage: TW_PROP(Name, StructType, field, PTR_OFFSET, "lua_tag")
-// Generates: static int GetName(lua_State*) and static int SetName(lua_State*)
+// ── Property class ───────────────────────────────────────────────────────
+// Modern property accessor using templates instead of macros.
 
-#define TW_GET(Name, S, field, off, tag) \
-    static int Get##Name(lua_State* L) { return tw_get(L, off, &S::field, tag); }
+namespace twdll {
 
-#define TW_SET(Name, S, field, off, tag) \
-    static int Set##Name(lua_State* L) { return tw_set(L, off, &S::field, tag); }
+template <typename T, typename S>
+class Property {
+public:
+    Property(T S::* field, size_t ptr_off, const char* tag)
+        : field_(field), ptr_off_(ptr_off), tag_(tag) {}
+    int get(lua_State* L) { return tw_get(L, ptr_off_, field_, tag_); }
+    int set(lua_State* L) { return tw_set(L, ptr_off_, field_, tag_); }
+private:
+    T S::* field_;
+    size_t ptr_off_;
+    const char* tag_;
+};
 
-#define TW_PROP(Name, S, field, off, tag) \
-    TW_GET(Name, S, field, off, tag)      \
-    TW_SET(Name, S, field, off, tag)
+// ── Getter class ───────────────────────────────────────────────────────
+// For read-only properties.
 
-#define TW_GET_NESTED(Name, S, nested_ptr, N, field, off, tag) \
-    static int Get##Name(lua_State* L) { return tw_get_nested(L, off, &S::nested_ptr, &N::field, tag); }
+template <typename T, typename S>
+class Getter {
+public:
+    Getter(T S::* field, size_t ptr_off, const char* tag)
+        : field_(field), ptr_off_(ptr_off), tag_(tag) {}
+    int get(lua_State* L) { return tw_get(L, ptr_off_, field_, tag_); }
+private:
+    T S::* field_;
+    size_t ptr_off_;
+    const char* tag_;
+};
+
+// ── Nested property getter ────────────────────────────────────────────────────
+// For accessing properties within nested structures.
+
+template <typename T, typename S, typename N>
+class NestedProperty {
+public:
+    NestedProperty(T N::* field, N* S::* nested_ptr, size_t ptr_off, const char* tag)
+        : field_(field), nested_ptr_(nested_ptr), ptr_off_(ptr_off), tag_(tag) {}
+    int get(lua_State* L) { return tw_get_nested(L, ptr_off_, nested_ptr_, field_, tag_); }
+private:
+    T N::* field_;
+    N* S::* nested_ptr_;
+    size_t ptr_off_;
+    const char* tag_;
+};
+
+} // namespace twdll

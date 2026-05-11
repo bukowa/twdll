@@ -28,13 +28,16 @@ Gets the remaining movement points for the character.
 @tparam userdata character the character object (first argument)
 @treturn integer movement points
 */
+static twdll::Property<int, TW_Character> MovementPoints{&TW_Character::movement_points, CHAR_PTR, "character"};
+static int GetMovementPoints(lua_State* L) { return MovementPoints.get(L); }
+
 /***
 Sets the remaining movement points for the character.
 @function SetMovementPoints
 @tparam userdata character the character object (first argument)
 @tparam integer value new movement points
 */
-TW_PROP(MovementPoints, TW_Character, movement_points, CHAR_PTR, "character")
+static int SetMovementPoints(lua_State* L) { return MovementPoints.set(L); }
 
 /***
 Gets the ambition level of the character.
@@ -42,13 +45,16 @@ Gets the ambition level of the character.
 @tparam userdata character the character object (first argument)
 @treturn integer ambition level
 */
+static twdll::Property<int, TW_Character> Ambition{&TW_Character::ambition, CHAR_PTR, "character"};
+static int GetAmbition(lua_State* L) { return Ambition.get(L); }
+
 /***
 Sets the ambition level of the character.
 @function SetAmbition
 @tparam userdata character the character object (first argument)
 @tparam integer value new ambition level
 */
-TW_PROP(Ambition,       TW_Character, ambition,        CHAR_PTR, "character")
+static int SetAmbition(lua_State* L) { return Ambition.set(L); }
 
 /***
 Gets the gravitas of the character.
@@ -56,13 +62,16 @@ Gets the gravitas of the character.
 @tparam userdata character the character object (first argument)
 @treturn integer gravitas
 */
+static twdll::Property<int, TW_Character> Gravitas{&TW_Character::gravitas, CHAR_PTR, "character"};
+static int GetGravitas(lua_State* L) { return Gravitas.get(L); }
+
 /***
 Sets the gravitas of the character.
 @function SetGravitas
 @tparam userdata character the character object (first argument)
 @tparam integer value new gravitas
 */
-TW_PROP(Gravitas,       TW_Character, gravitas,        CHAR_PTR, "character")
+static int SetGravitas(lua_State* L) { return Gravitas.set(L); }
 
 /***
 Returns the memory address of the real character object as a hexadecimal string.

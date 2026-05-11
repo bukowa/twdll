@@ -24,7 +24,8 @@ Returns the number of units in the recruitment queue.
 @tparam userdata military_force the military force object (first argument)
 @treturn integer number of units
 */
-TW_GET(RecruitmentQueueSize, TW_MilitaryForce, recruitment_queue_size, MIL_FORCE_PTR, "military_force")
+static twdll::Getter<int, TW_MilitaryForce> RecruitmentQueueSize{&TW_MilitaryForce::recruitment_queue_size, MIL_FORCE_PTR, "military_force"};
+static int GetRecruitmentQueueSize(lua_State* L) { return RecruitmentQueueSize.get(L); }
 
 /***
 Returns the memory address of the real military force object.
