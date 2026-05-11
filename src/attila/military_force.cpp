@@ -1,6 +1,6 @@
 /// @module twdll_military_force
 /// Military force properties for Total War: Attila.
-#include "../tw.h"
+#include "../common/tw.h"
 #include <cstddef>
 
 // ── Memory layout ─────────────────────────────────────────────────────────────

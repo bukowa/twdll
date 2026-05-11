@@ -3,8 +3,8 @@
 // Consumed by src/lua/lua_api.cpp via extern g_signatures[].
 // No preprocessor conditionals — this file IS the Rome 2 variant.
 
-#include "../lua/lua_api.h"
-#include "../signature_scanner.h"
+#include "../common/lua_api.h"
+#include "../common/signature_scanner.h"
 
 const char* GAME_NAME = "Rome2";
 const char* GAME_MODULE_NAME = "empire.retail.dll";

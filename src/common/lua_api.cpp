@@ -3,8 +3,8 @@
 #include <cstring>
 #include <windows.h>
 #include <Psapi.h>
-#include "../log.h"
-#include "../signature_scanner.h"
+#include "log.h"
+#include "signature_scanner.h"
 
 // Game function pointer definitions (declared extern in lua_api.h)
 lua_pushstring_t    g_game_lua_pushstring    = nullptr;

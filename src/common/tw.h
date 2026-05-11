@@ -4,7 +4,7 @@
 // Provides: memory helpers, Lua object unwrapping, typed property
 // accessor templates, and the TW_PROP registration macro.
 
-#include "lua/lua_api.h"
+#include "lua_api.h"
 #include "log.h"
 #include <cstddef>
 #include <cstdio>

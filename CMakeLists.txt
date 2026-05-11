@@ -4,6 +4,7 @@ project(libtwdll LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT MSVC)
     message(FATAL_ERROR "MSVC (Visual Studio) compiler required.")
@@ -18,10 +19,10 @@ message(STATUS "Building for game: ${TW_GAME}")
 # Common sources shared across all games
 set(TWDLL_COMMON_SOURCES
     src/main.cpp
-    src/log.cpp
-    src/lua/lua_api.cpp
-    src/lua/lua_core.cpp
-    src/signature_scanner.cpp
+    src/common/log.cpp
+    src/common/lua_api.cpp
+    src/common/lua_core.cpp
+    src/common/signature_scanner.cpp
 )
 
 # Game-specific sources (struct layouts, Lua signatures)
@@ -34,6 +35,16 @@ add_library(twdll SHARED
 )
 
 target_include_directories(twdll PRIVATE src)
+
+# Add Windows SDK and compiler standard library paths
+if(MSVC)
+    target_include_directories(twdll PRIVATE
+        "$ENV{INCLUDE}"
+    )
+    # Also need LIB path for linking
+    string(REPLACE ";" "\\;" LIB_PATHS "$ENV{LIB}")
+    target_link_directories(twdll PRIVATE ${LIB_PATHS})
+endif()
 
 set_target_properties(twdll PROPERTIES
     OUTPUT_NAME              "twdll"
@@ -80,12 +91,10 @@ add_custom_target(tw-test
     VERBATIM USES_TERMINAL
 )
 
-# ── Documentation ─────────────────────────────────────────────────────────────
-# Only parse common and game-specific files to avoid duplicate LDoc modules
-file(GLOB TWDLL_DOC_SOURCES "src/*.cpp" "src/${TW_GAME}/*.cpp")
-add_subdirectory(docs/lua)
+# ── Documentation targets (defer to docs/CMakeLists.txt) ────────────────────
+add_subdirectory(docs)
 
 add_custom_target(tw-docs
     DEPENDS docs
-    COMMENT "Building unified documentation"
+    COMMENT "Building documentation (${TW_GAME})"
 )

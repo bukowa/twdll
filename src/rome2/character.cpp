@@ -1,6 +1,6 @@
 /// @module twdll_character
 /// Campaign character properties for Rome 2.
-#include "../tw.h"
+#include "../common/tw.h"
 #include <cstddef>
 
 // ── Memory layout ─────────────────────────────────────────────────────────────

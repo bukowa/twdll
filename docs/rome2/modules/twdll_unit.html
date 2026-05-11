@@ -39,49 +39,50 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
+  <li><a href="../modules/twdll.html">twdll</a></li>
   <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
-  <li><strong>twdll_character</strong></li>
+  <li><a href="../modules/twdll_character.html">twdll_character</a></li>
   <li><a href="../modules/twdll_faction.html">twdll_faction</a></li>
   <li><a href="../modules/twdll_military_force.html">twdll_military_force</a></li>
-  <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
+  <li><strong>twdll_unit</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>twdll_character</code></h1>
+<h1>Module <code>twdll_unit</code></h1>
 <p>
 
 </p>
-<p> Campaign character properties for Total War: Attila.</p>
+<p> Campaign unit properties for Rome 2.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (character, value)</a></td>
-	<td class="summary">Sets the remaining movement points for the character.</td>
+	<td class="name" nowrap><a href="#SetNumberOfMan">SetNumberOfMan (unit, value)</a></td>
+	<td class="summary">Sets the current number of man in the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetAmbition">GetAmbition (character)</a></td>
-	<td class="summary">Gets the ambition level of the character.</td>
+	<td class="name" nowrap><a href="#GetMaxNumberOfMan">GetMaxNumberOfMan (unit)</a></td>
+	<td class="summary">Gets the maximum number of man in the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetAmbition">SetAmbition (character, value)</a></td>
-	<td class="summary">Sets the ambition level of the character.</td>
+	<td class="name" nowrap><a href="#SetMaxNumberOfMan">SetMaxNumberOfMan (unit, value)</a></td>
+	<td class="summary">Sets the maximum number of man in the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetGravitas">GetGravitas (character)</a></td>
-	<td class="summary">Gets the gravitas of the character.</td>
+	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints (unit)</a></td>
+	<td class="summary">Gets the remaining movement points for the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetGravitas">SetGravitas (character, value)</a></td>
-	<td class="summary">Sets the gravitas of the character.</td>
+	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (unit, value)</a></td>
+	<td class="summary">Sets the remaining movement points for the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (character)</a></td>
-	<td class="summary">Returns the memory address of the real character object as a hexadecimal string.</td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (unit)</a></td>
+	<td class="summary">Returns the memory address of the real unit object as a hexadecimal string.</td>
 	</tr>
 </table>
 
@@ -93,18 +94,122 @@
 
     <dl class="function">
     <dt>
-    <a name = "SetMovementPoints"></a>
-    <strong>SetMovementPoints (character, value)</strong>
+    <a name = "SetNumberOfMan"></a>
+    <strong>SetNumberOfMan (unit, value)</strong>
     </dt>
     <dd>
-    Sets the remaining movement points for the character.
+    Sets the current number of man in the unit.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">character</span>
+        <li><span class="parameter">unit</span>
             <span class="types"><span class="type">userdata</span></span>
-         the character object (first argument)
+         the unit object (first argument)
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new number of man
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMaxNumberOfMan"></a>
+    <strong>GetMaxNumberOfMan (unit)</strong>
+    </dt>
+    <dd>
+    Gets the maximum number of man in the unit.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum number of man
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMaxNumberOfMan"></a>
+    <strong>SetMaxNumberOfMan (unit, value)</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of man in the unit.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum number of man
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMovementPoints"></a>
+    <strong>GetMovementPoints (unit)</strong>
+    </dt>
+    <dd>
+    Gets the remaining movement points for the unit.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        movement points
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMovementPoints"></a>
+    <strong>SetMovementPoints (unit, value)</strong>
+    </dt>
+    <dd>
+    Sets the remaining movement points for the unit.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit object (first argument)
         </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
@@ -118,122 +223,18 @@
 
 </dd>
     <dt>
-    <a name = "GetAmbition"></a>
-    <strong>GetAmbition (character)</strong>
-    </dt>
-    <dd>
-    Gets the ambition level of the character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the character object (first argument)
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        ambition level
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetAmbition"></a>
-    <strong>SetAmbition (character, value)</strong>
-    </dt>
-    <dd>
-    Sets the ambition level of the character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the character object (first argument)
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new ambition level
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetGravitas"></a>
-    <strong>GetGravitas (character)</strong>
-    </dt>
-    <dd>
-    Gets the gravitas of the character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the character object (first argument)
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        gravitas
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetGravitas"></a>
-    <strong>SetGravitas (character, value)</strong>
-    </dt>
-    <dd>
-    Sets the gravitas of the character.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the character object (first argument)
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new gravitas
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
     <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress (character)</strong>
+    <strong>GetMemoryAddress (unit)</strong>
     </dt>
     <dd>
-    Returns the memory address of the real character object as a hexadecimal string.
+    Returns the memory address of the real unit object as a hexadecimal string.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">character</span>
+        <li><span class="parameter">unit</span>
             <span class="types"><span class="type">userdata</span></span>
-         the character object (first argument)
+         the unit object (first argument)
         </li>
     </ul>
 

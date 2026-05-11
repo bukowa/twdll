@@ -2,7 +2,7 @@
 // Game-agnostic: all game-specific code lives in src/rome2/ or src/attila/.
 
 #include <windows.h>
-#include "tw.h"
+#include "common/tw.h"
 
 // Forward-declare Lua registration tables from per-game translation units.
 extern const luaL_Reg unit_functions[];

@@ -3,8 +3,8 @@
 // Consumed by src/lua/lua_api.cpp via extern g_signatures[].
 // No preprocessor conditionals — this file IS the Attila variant.
 
-#include "../lua/lua_api.h"
-#include "../signature_scanner.h"
+#include "../common/lua_api.h"
+#include "../common/signature_scanner.h"
 
 const char* GAME_NAME = "Attila";
 const char* GAME_MODULE_NAME = "empire.retail.dll";
@@ -16,8 +16,7 @@ const char* GAME_MODULE_NAME = "empire.retail.dll";
 #define LUA_PUSHCCLOSURE_SIG    "55 56 8B 74 24 ? 57 8B 4E ? 8B 41"
 #define LUA_SETTABLE_SIG        "56 FF 74 24 ? 8B 74 24 ? 56 E8 ? ? ? ? 8B 56 ? 8D 4A"
 #define LUA_SETMETATABLE_SIG    "56 8B 74 24 ? 57 FF 74 24 ? 56 E8 ? ? ? ? 8B 4E ? 83 C4 ? 8B D0"
-#define LUA_SETFIELD_SIG        "83 EC ? 53 56 8B 74 24 ? 57 FF 74 24 ? 56 E8 ? ? ? ? 8B 54 24 ? 83 C4 ? 8B CA 8B F8 8D 59 ? " \
-                                "8A 01 41 84 C0 75 ? 2B CB 51 52 56 E8 ? ? ? ? 89 44 24"
+#define LUA_SETFIELD_SIG        "83 EC ? 53 56 8B 74 24 ? 57 FF 74 24 ? 56 E8 ? ? ? ? 8B 54 24 ? 83 C4 ? 8B CA 8B F8 8D 59 ? 8A 01 41 84 C0 75 ? 2B CB 51 52 56 E8 ? ? ? ? 89 44 24"
 #define LUAL_CHECKLSTRING_SIG   "56 FF 74 24 ? FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 8B F0"
 #define LUAL_REGISTER_SIG       "6A ? FF 74 24 ? FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 83 C4 ? C3 ? ? ? ? ? ? ? ? ? 56"
 #define LUA_CREATETABLE_SIG     "56 57 8B 7C 24 ? 8B 4F ? 8B 41 ? 3B 41 ? 72 ? 57 E8 ? ? ? ? 83 C4 ? FF 74 24 ? 8B 77 ? FF 74 24 ? 57 E8 ? ? ? ? 83 C4 ? ? ? C7 46 ? ? ? ? ? 83 47 ? ? 5F 5E C3 ? ? 8B 4C 24 ? 8B 41 ? 83 78"

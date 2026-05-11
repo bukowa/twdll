@@ -41,31 +41,28 @@
 <ul class="nowrap">
   <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
   <li><a href="../modules/twdll_character.html">twdll_character</a></li>
-  <li><strong>twdll_faction</strong></li>
-  <li><a href="../modules/twdll_military_force.html">twdll_military_force</a></li>
+  <li><a href="../modules/twdll_faction.html">twdll_faction</a></li>
+  <li><strong>twdll_military_force</strong></li>
   <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
+  <li><a href="../modules/twdll.html">twdll</a></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>twdll_faction</code></h1>
+<h1>Module <code>twdll_military_force</code></h1>
 <p>
 
 </p>
-<p> Faction properties for Total War: Attila.</p>
+<p> Military force properties for Total War: Attila.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#SetGold">SetGold (faction, value)</a></td>
-	<td class="summary">Sets the amount of gold for the faction.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (faction)</a></td>
-	<td class="summary">Returns the memory address of the real faction object as a hexadecimal string.</td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (military_force)</a></td>
+	<td class="summary">Returns the memory address of the real military force object.</td>
 	</tr>
 </table>
 
@@ -77,43 +74,18 @@
 
     <dl class="function">
     <dt>
-    <a name = "SetGold"></a>
-    <strong>SetGold (faction, value)</strong>
-    </dt>
-    <dd>
-    Sets the amount of gold for the faction.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">faction</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the faction object (first argument)
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new gold amount
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
     <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress (faction)</strong>
+    <strong>GetMemoryAddress (military_force)</strong>
     </dt>
     <dd>
-    Returns the memory address of the real faction object as a hexadecimal string.
+    Returns the memory address of the real military force object.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">faction</span>
+        <li><span class="parameter">military_force</span>
             <span class="types"><span class="type">userdata</span></span>
-         the faction object (first argument)
+         the military force object (first argument)
         </li>
     </ul>
 
