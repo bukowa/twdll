@@ -1,0 +1,266 @@
+name: Build, Release, and Deploy Docs
+
+on:
+  push:
+    branches: [ "master" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # ===============================================================
+  # JOB 0: Filter changes
+  # ===============================================================
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      src_files: ${{ steps.filter.outputs.src_files }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@f3ceefdc7ef57bc2d8560787d4b6c33e44044cec
+        id: filter
+        with:
+          filters: |
+            src_files:
+              - 'src/**'
+              - 'docs/**'
+              - 'CMakeLists.txt'
+              - 'CMakePresets.json'
+              - 'CHANGELOG.md'
+              - '.github/workflows/**'
+
+  # ===============================================================
+  # JOB 1: Build and Package
+  # ===============================================================
+  build:
+    needs: changes
+    if: >
+      needs.changes.outputs.src_files == 'true' ||
+      github.event_name == 'pull_request' ||
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: windows-latest
+    env:
+      PRESET: ci-release
+      STAGING_DIR: staging
+      ARCHIVE_NAME: release-package.zip
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: x86
+          toolset: 14.44.35207
+          sdk: 10.0.26100.0
+
+      - name: Configure and Build (Rome 2)
+        run: |
+          cmake -S . -B build/ci-rome2 --preset ${{env.PRESET}} -DTW_GAME=rome2
+          cmake --build build/ci-rome2
+      - name: Configure and Build (Attila)
+        run: |
+          cmake -S . -B build/ci-attila --preset ${{env.PRESET}} -DTW_GAME=attila
+          cmake --build build/ci-attila
+      - name: Build Documentation
+        run: |
+          cmake --build build/ci-rome2 --target docs
+          cmake --build build/ci-attila --target docs
+
+      # ===============================================================
+      # Create a single ZIP file from the release directory
+      # Output is always twdll.dll — renamed per-game for the release package.
+      # ===============================================================
+      - name: Prepare Release Directory
+        run: |
+          New-Item -ItemType Directory -Force -Path ${{env.STAGING_DIR}}
+          Copy-Item -Path "build\ci-rome2\twdll.dll"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.dll"
+          Copy-Item -Path "build\ci-rome2\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.pdb"
+          Copy-Item -Path "build\ci-attila\twdll.dll"  -Destination "${{env.STAGING_DIR}}\twdll_attila.dll"
+          Copy-Item -Path "build\ci-attila\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_attila.pdb"
+        shell: pwsh
+
+      - name: Create Release ZIP Archive
+        run: |
+          cd ${{env.STAGING_DIR}}
+          powershell Compress-Archive -Path * -DestinationPath ..\${{env.ARCHIVE_NAME}}
+          cd ..
+        shell: pwsh
+
+      # ===============================================================
+      # Upload the single ZIP as the release artifact
+      # ===============================================================
+      - name: Archive Release Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package # The name of the artifact bundle
+          path: ${{github.workspace}}/${{env.ARCHIVE_NAME}} # Path to the single zip file
+          retention-days: 7
+
+      - name: Archive Documentation Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-html
+          path: |
+            ${{github.workspace}}/docs/rome2
+            ${{github.workspace}}/docs/attila
+
+  # ===============================================================
+  # JOB 2: Deploy Docs - Z POPRAWKĄ INSTALACJI PAKIETU
+  # ===============================================================
+  deploy-docs:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with: { path: main, fetch-depth: '0' }
+      - uses: actions/download-artifact@v4
+        with: { name: docs-html, path: new-docs }
+      - id: docs_dir
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            VERSION=$(echo $GITHUB_REF | sed 's/refs\/tags\/v//')
+            echo "dir=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "dir=nightly" >> $GITHUB_OUTPUT
+          fi
+      - uses: actions/checkout@v6
+        with: { ref: gh-pages, path: gh-pages }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.x' }
+
+      # ===============================================================
+      # KLUCZOWA POPRAWKA JEST TUTAJ
+      # Instalujemy brakujący pakiet 'packaging' za pomocą pip
+      # ===============================================================
+      - name: Install Python dependencies
+        run: pip install packaging
+
+      - name: Generate dynamic index.html
+        run: |
+          python main/.github/scripts/generate_doc_index.py \
+            main/.github/docs_template/index.template.html \
+            gh-pages/index.html \
+            gh-pages \
+            ${{ steps.docs_dir.outputs.dir }} \
+            main
+      - name: Prepare deployment directory
+        run: |
+          mkdir -p gh-pages/${{ steps.docs_dir.outputs.dir }}
+          cp -r new-docs/* gh-pages/${{ steps.docs_dir.outputs.dir }}/
+          cp main/.github/docs_template/game-selector.html gh-pages/${{ steps.docs_dir.outputs.dir }}/index.html
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./gh-pages
+          keep_files: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+
+  # ===============================================================
+  # JOB 3: Create an official GitHub Release (for tags)
+  # ===============================================================
+  create-official-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # Download the pre-packaged zip file
+      - name: Download release package
+        uses: actions/download-artifact@v4
+        with: { name: release-package } # Downloads release-package.zip
+
+      # Rename the file to include the version number
+      - name: Prepare Release Archive
+        id: archive
+        run: |
+          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          ARCHIVE_NAME="libtwdll-${VERSION}.zip"
+          mv release-package.zip "${ARCHIVE_NAME}"
+          echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Extract Changelog Entry
+        id: changelog
+        run: |
+          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          sed -i 's/\r$//' CHANGELOG.md
+          CHANGELOG_BODY=$(awk 'BEGIN{hdr="## [" "'"$VERSION"'" "]"} index($0, hdr) == 1 {f=1;next} f && /^## \[/{f=0} f' CHANGELOG.md)
+          if [ -z "$CHANGELOG_BODY" ]; then
+            echo "::error::Changelog entry for version '$VERSION' not found!"
+            exit 1
+          fi
+          echo "body<<EOF" >> $GITHUB_ENV
+          echo "## Quick Download" >> $GITHUB_ENV
+          echo "**All files in one package: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "---" >> $GITHUB_ENV
+          echo "## Changelog" >> $GITHUB_ENV
+          echo "$CHANGELOG_BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ env.body }}
+          files: ${{ steps.archive.outputs.name }}
+
+  # ===============================================================
+  # JOB 4: Publish the Dev Build (Nightly)
+  # ===============================================================
+  publish-nightly-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Cancel previous nightly runs
+        uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # Download the pre-packaged zip file
+      - name: Download release package
+        uses: actions/download-artifact@v4
+        with: { name: release-package } # Downloads release-package.zip
+
+      # Rename the file to the nightly name
+      - name: Prepare Release Archive
+        id: archive
+        run: |
+          ARCHIVE_NAME="libtwdll-nightly.zip"
+          mv release-package.zip "${ARCHIVE_NAME}"
+          echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+      - name: Create ZIP archive with source code
+        run: git archive -o source-code.zip HEAD
+
+      - name: Prepare Release Notes
+        id: prep_notes
+        run: |
+          {
+            echo "This is the latest development build from the **master** branch. Assets are automatically updated on every push."
+            echo ""
+            echo "## Quick Download"
+            echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
+            echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
+          } > release_notes.md
+      - name: Ensure 'nightly' release exists and update its body
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          gh release view nightly || gh release create nightly --title "Dev Build (from master)" --prerelease --notes "Placeholder"
+          gh release edit nightly --title "Dev Build (from master)" --notes-file release_notes.md
+      - name: Upload/Overwrite Release Assets (using gh CLI)
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: gh release upload nightly ${{ steps.archive.outputs.name }} source-code.zip --clobber
