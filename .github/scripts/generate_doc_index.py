@@ -44,8 +44,8 @@ def generate_version_list(versions, repo_slug, changelog_text, repo_path):
         # ZMIANA: Kontener na dwa nowe przyciski
         html += '        <div class="version-actions">\n'
 
-        # ZMIANA: Nowy przycisk "View Documentation" - teraz pokazuje Rome 2 jako główny
-        doc_url = f"./{version}/rome2/"
+        # ZMIANA: Przycisk "View Documentation" teraz prowadzi do głównego katalogu wersji (z selektorem gier)
+        doc_url = f"./{version}/"
         html += f'            <a href="{doc_url}" class="button doc-link">View Documentation</a>\n'
 
         # ZMIANA: Zaktualizowany przycisk pobierania z nowymi klasami CSS
