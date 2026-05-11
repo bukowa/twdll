@@ -2,10 +2,13 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "_",
+      "name": "_base",
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
       "vendor": {
         "jetbrains.com/clion": {
           "toolchain": "Visual Studio"
@@ -13,18 +16,9 @@
       }
     },
     {
-      "name": "base",
+      "name": "_vs2022",
       "hidden": true,
-      "inherits": "_",
-      "architecture": {},
-      "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      }
-    },
-    {
-      "name": "vs2022-base",
-      "hidden": true,
-      "inherits": "base",
+      "inherits": "_base",
       "environment": {
         "PATH": "C:\\Program\\ Files\\ (x86)\\NASM;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX86\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x86;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\Common7\\IDE;$penv{PATH}",
         "LIB": "C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x86;C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x86;C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\lib\\x86",
@@ -38,104 +32,48 @@
       }
     },
     {
-      "name": "vs2022-install",
-      "inherits": "vs2022-base",
+      "name": "rome2",
+      "inherits": "_vs2022",
+      "displayName": "Rome 2 (Debug)",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TW_GAME": "rome2"
       }
     },
     {
-      "name": "vs2022-install-release",
-      "inherits": "vs2022-base",
+      "name": "attila",
+      "inherits": "_vs2022",
+      "displayName": "Attila (Debug)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TW_GAME": "attila"
+      }
+    },
+    {
+      "name": "rome2-release",
+      "inherits": "_vs2022",
+      "displayName": "Rome 2 (Release)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "TW_GAME": "rome2"
+      }
+    },
+    {
+      "name": "attila-release",
+      "inherits": "_vs2022",
+      "displayName": "Attila (Release)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "TW_GAME": "attila"
+      }
+    },
+    {
+      "name": "ci-release",
+      "inherits": "_base",
+      "generator": "Ninja",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
-    },
-    {
-      "name": "vs2022-install-steam",
-      "inherits": "vs2022-base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "vs2022-release",
-      "inherits": "vs2022-base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "vs2022-debug",
-      "inherits": "vs2022-base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "vs2022-release-ci",
-      "inherits": "_",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    }
-  ],
-  "buildPresets": [
-    {
-      "name": "vs2022-install",
-      "configurePreset": "vs2022-install"
-    },
-    {
-      "name": "vs2022-install-release",
-      "configurePreset": "vs2022-install-release"
-    },
-    {
-      "name": "vs2022-release",
-      "configurePreset": "vs2022-release"
-    },
-    {
-      "name": "vs2022-debug",
-      "configurePreset": "vs2022-debug"
-    },
-    {
-      "name": "vs2022-release-ci",
-      "configurePreset": "vs2022-release-ci"
-    },
-    {
-      "name": "run-alone",
-      "displayName": "Run Standalone Game",
-      "configurePreset": "vs2022-install",
-      "targets": ["run_alone"]
-    },
-    {
-      "name": "run-steam",
-      "displayName": "Run Steam Game",
-      "configurePreset": "vs2022-install-steam",
-      "targets": ["run_steam"]
-    },
-    {
-      "name": "run-alone-tail",
-      "displayName": "Run & Tail Standalone Game",
-      "configurePreset": "vs2022-install",
-      "targets": ["run_alone_tail"]
-    },
-    {
-      "name": "run-steam-tail",
-      "displayName": "Run & Tail Steam Game",
-      "configurePreset": "vs2022-install-steam",
-      "targets": ["run_steam_tail"]
-    },
-    {
-      "name": "run-alone-test-tail",
-      "displayName": "Run Tests (Standalone)",
-      "configurePreset": "vs2022-install",
-      "targets": ["run_alone_test_tail"]
-    },
-    {
-      "name": "run-steam-test-tail",
-      "displayName": "Run Tests (Steam)",
-      "configurePreset": "vs2022-install-steam",
-      "targets": ["run_steam_test_tail"]
     }
   ]
 }

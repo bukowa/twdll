@@ -5,14 +5,31 @@ list(REMOVE_ITEM LUA_CORE_SOURCES "${LUA_SRC_DIR}/lua.c" "${LUA_SRC_DIR}/luac.c"
 add_library(lua_dll SHARED ${LUA_CORE_SOURCES})
 target_include_directories(lua_dll PUBLIC ${LUA_SRC_DIR})
 target_compile_definitions(lua_dll PRIVATE LUA_BUILD_AS_DLL PUBLIC LUA_LIB)
+
+# Add Windows SDK paths for C stdlib headers
+if(MSVC)
+    target_include_directories(lua_dll PRIVATE "$ENV{INCLUDE}")
+    string(REPLACE ";" "\\;" LIB_PATHS "$ENV{LIB}")
+    target_link_directories(lua_dll PRIVATE ${LIB_PATHS})
+endif()
 set_target_properties(lua_dll PROPERTIES OUTPUT_NAME "lua")
 
 add_library(luafilesystem MODULE "${PROJECT_SOURCE_DIR}/docs/lua/include/luafilesystem/src/lfs.c")
 set_target_properties(luafilesystem PROPERTIES PREFIX "" OUTPUT_NAME "lfs")
 target_link_libraries(luafilesystem PRIVATE lua_dll)
+if(MSVC)
+    target_include_directories(luafilesystem PRIVATE "$ENV{INCLUDE}")
+    string(REPLACE ";" "\\;" LIB_PATHS "$ENV{LIB}")
+    target_link_directories(luafilesystem PRIVATE ${LIB_PATHS})
+endif()
 
 add_executable(lua_for_docs "${LUA_SRC_DIR}/lua.c")
 target_link_libraries(lua_for_docs PRIVATE lua_dll)
+if(MSVC)
+    target_include_directories(lua_for_docs PRIVATE "$ENV{INCLUDE}")
+    string(REPLACE ";" "\\;" LIB_PATHS "$ENV{LIB}")
+    target_link_directories(lua_for_docs PRIVATE ${LIB_PATHS})
+endif()
 
 set(LUA_MODULE_PATH
     "${PROJECT_SOURCE_DIR}/docs/lua/ldoc/?.lua;"
@@ -20,9 +37,11 @@ set(LUA_MODULE_PATH
     "${PROJECT_SOURCE_DIR}/docs/lua/penlight/lua/?/init.lua"
 )
 set(LUA_CMODULE_PATH "$<TARGET_FILE_DIR:luafilesystem>/?.dll")
-set(DOCS_OUTPUT_FILE "${PROJECT_SOURCE_DIR}/docs/lua/doc/index.html")
+
+# Per-game documentation output
+set(DOCS_OUTPUT_FILE "${TWDLL_DOC_OUTPUT}")
 set(CONFIG_LD_SOURCE "${PROJECT_SOURCE_DIR}/docs/lua/config.ld")
-set(CONFIG_LD_GENERATED "${PROJECT_BINARY_DIR}/config.ld.generated")
+set(CONFIG_LD_GENERATED "${PROJECT_BINARY_DIR}/config.ld.${TW_GAME}.generated")
 
 set(lua_formatted_files "")
 foreach(source_file IN LISTS TWDLL_DOC_SOURCES)
@@ -32,6 +51,7 @@ string(JOIN ",\n" lua_file_list_string "${lua_formatted_files}")
 
 file(READ ${CONFIG_LD_SOURCE} ORIGINAL_CONFIG_CONTENT)
 string(REPLACE "file = {}" "file = {\n${lua_file_list_string}\n}" MODIFIED_CONFIG_CONTENT "${ORIGINAL_CONFIG_CONTENT}")
+string(REPLACE "dir = \"docs/lua/doc\"" "dir = \"docs/${TW_GAME}\"" MODIFIED_CONFIG_CONTENT "${MODIFIED_CONFIG_CONTENT}")
 file(WRITE ${CONFIG_LD_GENERATED} "${MODIFIED_CONFIG_CONTENT}")
 
 add_custom_command(

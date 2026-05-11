@@ -33,3 +33,5 @@ log
 prompt
 compile_commands.json
 .cache
+tools/paths.ps1
+config.ld.*.generated
