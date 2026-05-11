@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-05-11
+
+### Fixed
+- Just another repo cleanup testing the release.
+
 ## [0.6.0] - 2026-05-06
 
 ### Added
