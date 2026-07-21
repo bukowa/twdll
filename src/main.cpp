@@ -10,9 +10,14 @@ extern const luaL_Reg character_functions[];
 extern const luaL_Reg battle_unit_functions[];
 extern const luaL_Reg faction_functions[];
 extern const luaL_Reg military_force_functions[];
+extern const luaL_Reg world_functions[];
+extern const luaL_Reg campaign_ui_functions[];
 
 // Core module functions (from src/lua/lua_core.cpp)
 extern const luaL_Reg twdll_core[];
+
+// Game-specific hooks (compiled in only for the relevant game)
+#include "common/campaign_hooks.h"
 
 // ── DLL entry ─────────────────────────────────────────────────────────────────
 
@@ -22,6 +27,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
         init_logger();
         Log("[twdll] DLL_PROCESS_ATTACH — initializing");
         initialize_lua_api();
+        install_campaign_hooks();
     }
     return TRUE;
 }
@@ -37,6 +43,8 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State* L) {
     l_register(L, "twdll_battle_unit",   battle_unit_functions);
     l_register(L, "twdll_faction",       faction_functions);
     l_register(L, "twdll_military_force",military_force_functions);
+    l_register(L, "twdll_world",         world_functions);
+    l_register(L, "twdll_campaign_ui",   campaign_ui_functions);
 
     Log("[twdll] luaopen_twdll: done");
     return 1;

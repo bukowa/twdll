@@ -4,7 +4,6 @@
 #include <cstddef>
 
 // ── Memory layout ─────────────────────────────────────────────────────────────
-// NOTE: Layout currently matches Rome 2. Verify before changing offsets.
 #pragma pack(push, 1)
 struct TW_UnitStats {
     char  pad_00[0x010C];

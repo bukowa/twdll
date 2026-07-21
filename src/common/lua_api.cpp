@@ -52,7 +52,7 @@ void initialize_lua_api() {
             continue;
         }
         try {
-            uintptr_t addr = find_signature(base, size, s->signature);
+            uintptr_t addr = Scanner::find_signature(base, size, s->signature);
             if (addr) {
                 *s->target_function_ptr = reinterpret_cast<void*>(addr);
                 Log("[twdll] Found: %s", s->function_name);

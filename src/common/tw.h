@@ -84,6 +84,19 @@ inline int tw_get_nested(lua_State* L, size_t ptr_off, N* S::* nested_ptr,
     return 1;
 }
 
+// Global variant: reads from a raw global void** pointer instead of Lua userdata.
+template <typename S, typename F>
+inline int tw_get_global(lua_State* L, void** global_ptr, F S::* field) {
+    if (!global_ptr || !*global_ptr) { l_pushnil(L); return 1; }
+    void* obj = *global_ptr;
+    F v = static_cast<S*>(obj)->*field;
+    if constexpr (std::is_integral_v<F>)
+        l_pushinteger(L, static_cast<lua_Integer>(v));
+    else if constexpr (std::is_floating_point_v<F>)
+        l_pushnumber(L, static_cast<double>(v));
+    return 1;
+}
+
 // ── Raw offset helpers (for diagnostic / exploratory use) ────────────────────
 
 inline int tw_get_int_at(lua_State* L, const char* tag, size_t ptr_off) {
@@ -143,6 +156,20 @@ private:
     T S::* field_;
     size_t ptr_off_;
     const char* tag_;
+};
+
+// ── Global Getter class ──────────────────────────────────────────────────
+// For read-only properties on global singleton objects.
+
+template <typename T, typename S>
+class GlobalGetter {
+public:
+    GlobalGetter(T S::* field, void** global_ptr)
+        : field_(field), global_ptr_(global_ptr) {}
+    int get(lua_State* L) { return tw_get_global(L, global_ptr_, field_); }
+private:
+    T S::* field_;
+    void** global_ptr_;
 };
 
 // ── Nested property getter ────────────────────────────────────────────────────

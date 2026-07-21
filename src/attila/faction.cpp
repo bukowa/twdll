@@ -1,10 +1,10 @@
 /// @module twdll_faction
-/// Faction properties for Total War: Attila.
+/// Faction properties and campaign world access for Total War: Attila.
 #include "../common/tw.h"
 #include <cstddef>
+#include <cstdio>
 
 // ── Memory layout ─────────────────────────────────────────────────────────────
-// NOTE: Layout currently matches Rome 2. Verify before changing offsets.
 #pragma pack(push, 1)
 struct TW_Faction {
     char pad_00[0x6C4];
@@ -16,7 +16,8 @@ static_assert(offsetof(TW_Faction, gold) == 0x6C4, "TW_Faction Attila: gold");
 
 constexpr size_t FACTION_PTR = 0x8;
 
-// ── Accessors ─────────────────────────────────────────────────────────────────
+// ── Accessors (faction userdata from Lua) ─────────────────────────────────────
+
 /***
 Gets the amount of gold for the faction.
 @function GetGold
@@ -44,8 +45,8 @@ static int GetMemAddress(lua_State* L) { return tw_mem_address(L, "faction", FAC
 
 // ── Lua registration table ────────────────────────────────────────────────────
 extern const luaL_Reg faction_functions[] = {
-    {"GetMemoryAddress", GetMemAddress},
-    {"GetGold",          GetGold},
-    {"SetGold",          SetGold},
+    {"GetMemoryAddress",  GetMemAddress},
+    {"GetGold",           GetGold},
+    {"SetGold",           SetGold},
     {nullptr, nullptr}
 };

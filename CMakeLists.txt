@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# ── MinHook ───────────────────────────────────────────────────────────────────
+add_subdirectory(vendor/minhook EXCLUDE_FROM_ALL)
+
 if(NOT MSVC)
     message(FATAL_ERROR "MSVC (Visual Studio) compiler required.")
 endif()
@@ -23,6 +26,7 @@ set(TWDLL_COMMON_SOURCES
     src/common/lua_api.cpp
     src/common/lua_core.cpp
     src/common/signature_scanner.cpp
+    src/common/campaign_hooks.cpp
 )
 
 # Game-specific sources (struct layouts, Lua signatures)
@@ -35,6 +39,7 @@ add_library(twdll SHARED
 )
 
 target_include_directories(twdll PRIVATE src)
+target_link_libraries(twdll PRIVATE minhook)
 
 # Add Windows SDK and compiler standard library paths
 if(MSVC)
@@ -59,6 +64,13 @@ set_target_properties(twdll PROPERTIES
 target_compile_options(twdll PRIVATE /Zi /utf-8 /W4)
 target_link_options(twdll PRIVATE /DEBUG)
 target_compile_definitions(twdll PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+# ── Game preprocessor define ──────────────────────────────────────────────────
+if(TW_GAME STREQUAL "attila")
+    target_compile_definitions(twdll PRIVATE TW_ATTILA)
+elseif(TW_GAME STREQUAL "rome2")
+    target_compile_definitions(twdll PRIVATE TW_ROME2)
+endif()
 
 # ── Task targets (delegate to tools/twdll.ps1) ────────────────────────────────
 # Logic lives in the script; these targets exist for IDE integration.
