@@ -51,6 +51,8 @@ jobs:
       ARCHIVE_NAME: release-package.zip
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: recursive
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
           arch: x86
