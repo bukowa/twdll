@@ -22,8 +22,15 @@ def generate_version_list(versions, repo_slug, changelog_text, repo_path):
     """Generates HTML list items with new sorting and naming."""
     html = ""
 
-    # Sortowanie pozostaje bez zmian
-    tagged_versions = [v for v in versions if v != 'nightly']
+    tagged_versions = []
+    for v in versions:
+        if v == 'nightly': continue
+        try:
+            parse_version(v)
+            tagged_versions.append(v)
+        except:
+            pass
+    
     tagged_versions.sort(key=lambda v: parse_version(v), reverse=True)
     sorted_list = tagged_versions
     if 'nightly' in versions:
