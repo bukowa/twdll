@@ -41,9 +41,9 @@
 <ul class="nowrap">
   <li><a href="../modules/twdll.html">twdll</a></li>
   <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
-  <li><a href="../modules/twdll_campaign_ui.html">twdll_campaign_ui</a></li>
+  <li><strong>twdll_campaign_ui</strong></li>
   <li><a href="../modules/twdll_character.html">twdll_character</a></li>
-  <li><strong>twdll_faction</strong></li>
+  <li><a href="../modules/twdll_faction.html">twdll_faction</a></li>
   <li><a href="../modules/twdll_military_force.html">twdll_military_force</a></li>
   <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
   <li><a href="../modules/twdll_world.html">twdll_world</a></li>
@@ -53,22 +53,19 @@
 
 <div id="content">
 
-<h1>Module <code>twdll_faction</code></h1>
+<h1>Module <code>twdll_campaign_ui</code></h1>
 <p>
 
 </p>
-<p> Faction properties for Rome 2.</p>
+<p> Campaign UI singleton accessor for Total War: Rome 2.
+ The pointer is captured at runtime when the game constructs the CAMPAIGN_UI object.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#SetGold">SetGold (faction, value)</a></td>
-	<td class="summary">Sets the amount of gold for the faction.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (faction)</a></td>
-	<td class="summary">Returns the memory address of the real faction object as a hexadecimal string.</td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.</td>
 	</tr>
 </table>
 
@@ -80,51 +77,19 @@
 
     <dl class="function">
     <dt>
-    <a name = "SetGold"></a>
-    <strong>SetGold (faction, value)</strong>
-    </dt>
-    <dd>
-    Sets the amount of gold for the faction.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">faction</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the faction object (first argument)
-        </li>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new gold amount
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
     <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress (faction)</strong>
+    <strong>GetMemoryAddress ()</strong>
     </dt>
     <dd>
-    Returns the memory address of the real faction object as a hexadecimal string.
+    Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.
 
 
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">faction</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the faction object (first argument)
-        </li>
-    </ul>
 
     <h3>Returns:</h3>
     <ol>
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
+        memory address (e.g. "0x12345678"), or nil if not yet initialised
     </ol>
 
 

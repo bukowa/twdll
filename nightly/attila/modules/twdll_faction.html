@@ -40,10 +40,12 @@
 <h2>Modules</h2>
 <ul class="nowrap">
   <li><a href="../modules/twdll_battle_unit.html">twdll_battle_unit</a></li>
+  <li><a href="../modules/twdll_campaign_ui.html">twdll_campaign_ui</a></li>
   <li><a href="../modules/twdll_character.html">twdll_character</a></li>
   <li><strong>twdll_faction</strong></li>
   <li><a href="../modules/twdll_military_force.html">twdll_military_force</a></li>
   <li><a href="../modules/twdll_unit.html">twdll_unit</a></li>
+  <li><a href="../modules/twdll_world.html">twdll_world</a></li>
   <li><a href="../modules/twdll.html">twdll</a></li>
 </ul>
 
@@ -55,11 +57,15 @@
 <p>
 
 </p>
-<p> Faction properties for Total War: Attila.</p>
+<p> Faction properties and campaign world access for Total War: Attila.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#GetGold">GetGold (faction)</a></td>
+	<td class="summary">Gets the amount of gold for the faction.</td>
+	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetGold">SetGold (faction, value)</a></td>
 	<td class="summary">Sets the amount of gold for the faction.</td>
@@ -77,6 +83,33 @@
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
+    <dt>
+    <a name = "GetGold"></a>
+    <strong>GetGold (faction)</strong>
+    </dt>
+    <dd>
+    Gets the amount of gold for the faction.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">faction</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the faction object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        amount of gold
+    </ol>
+
+
+
+
+</dd>
     <dt>
     <a name = "SetGold"></a>
     <strong>SetGold (faction, value)</strong>
