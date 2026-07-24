@@ -1,4 +1,4 @@
-/// @module twdll_military_force
+/// @module twdll.military_force
 /// Military force properties for Rome 2.
 #include "../common/tw.h"
 #include <cstddef>

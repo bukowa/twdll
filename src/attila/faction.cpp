@@ -1,4 +1,4 @@
-/// @module twdll_faction
+/// @module twdll.faction
 /// Faction properties and campaign world access for Total War: Attila.
 #include "../common/tw.h"
 #include <cstddef>

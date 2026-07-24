@@ -136,14 +136,22 @@ package.path = package.path .. ";data/campaigns/" .. campaign_name .. "/?.lua ..
 local function load_twdll()
     -- Load the DLL (it should be in the game root as twdll.dll)
     local path = "twdll"
-    local ok, err = pcall(function()
-        package.loadlib(path, "luaopen_twdll")()
-    end)
-
+    local func, load_err = package.loadlib(path, "luaopen_twdll")
+    
     local f = io.open("twdll.log", "a")
     if f then
-        if ok then f:write("[LUA] twdll loaded successfully\n")
-        else f:write("[LUA] twdll load failed: " .. tostring(err) .. "\n") end
+        if not func then
+            f:write("[LUA] FATAL: Failed to load twdll DLL. Reason: " .. tostring(load_err) .. "\n")
+        else
+            local ok, call_err = pcall(function()
+                twdll = func()
+            end)
+            if ok then
+                f:write("[LUA] twdll loaded successfully\n")
+            else
+                f:write("[LUA] FATAL: Error during luaopen_twdll execution: " .. tostring(call_err) .. "\n")
+            end
+        end
         f:close()
     end
 end

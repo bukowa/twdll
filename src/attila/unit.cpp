@@ -1,4 +1,4 @@
-/// @module twdll_unit
+/// @module twdll.unit
 /// Campaign unit properties for Total War: Attila.
 #include "../common/tw.h"
 #include <cstddef>

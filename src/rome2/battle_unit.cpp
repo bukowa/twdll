@@ -1,4 +1,4 @@
-/// @module twdll_battle_unit
+/// @module twdll.battle_unit
 /// Battle unit properties for Rome 2.
 #include "../common/tw.h"
 #include <cstddef>

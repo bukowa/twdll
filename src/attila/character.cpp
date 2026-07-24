@@ -1,4 +1,4 @@
-/// @module twdll_character
+/// @module twdll.character
 /// Campaign character properties for Total War: Attila.
 #include "../common/tw.h"
 #include <cstddef>

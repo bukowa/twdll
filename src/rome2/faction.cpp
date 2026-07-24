@@ -1,4 +1,4 @@
-/// @module twdll_faction
+/// @module twdll.faction
 /// Faction properties for Rome 2.
 #include "../common/tw.h"
 #include <cstddef>

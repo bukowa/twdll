@@ -7,7 +7,7 @@ extern const char* GAME_MODULE_NAME;
 extern const uintptr_t OFFSET_MAX_UNITS_ARMY;
 extern const uintptr_t OFFSET_MAX_UNITS_NAVY;
 
-/// @module twdll
+/// @module twdll.core
 /// Core twdll functions available in all games.
 
 /// Log a message to the console.

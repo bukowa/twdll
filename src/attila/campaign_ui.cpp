@@ -1,4 +1,4 @@
-/// @module twdll_campaign_ui
+/// @module twdll.campaign_ui
 /// Campaign UI singleton accessor for Total War: Attila.
 /// The pointer is captured at runtime when the game constructs the CAMPAIGN_UI object.
 #include "../common/tw.h"

@@ -37,14 +37,31 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
 extern "C" __declspec(dllexport) int luaopen_twdll(lua_State* L) {
     Log("[twdll] luaopen_twdll: registering modules");
 
-    l_register(L, "twdll",               twdll_core);
-    l_register(L, "twdll_unit",          unit_functions);
-    l_register(L, "twdll_character",     character_functions);
-    l_register(L, "twdll_battle_unit",   battle_unit_functions);
-    l_register(L, "twdll_faction",       faction_functions);
-    l_register(L, "twdll_military_force",military_force_functions);
-    l_register(L, "twdll_world",         world_functions);
-    l_register(L, "twdll_campaign_ui",   campaign_ui_functions);
+    l_createtable(L, 0, 8); // Master table
+
+    l_register(L, "twdll", twdll_core);
+    l_setfield(L, -2, "core");
+
+    l_register(L, "twdll_unit", unit_functions);
+    l_setfield(L, -2, "unit");
+
+    l_register(L, "twdll_character", character_functions);
+    l_setfield(L, -2, "character");
+
+    l_register(L, "twdll_battle_unit", battle_unit_functions);
+    l_setfield(L, -2, "battle_unit");
+
+    l_register(L, "twdll_faction", faction_functions);
+    l_setfield(L, -2, "faction");
+
+    l_register(L, "twdll_military_force", military_force_functions);
+    l_setfield(L, -2, "military_force");
+
+    l_register(L, "twdll_world", world_functions);
+    l_setfield(L, -2, "world");
+
+    l_register(L, "twdll_campaign_ui", campaign_ui_functions);
+    l_setfield(L, -2, "campaign_ui");
 
     Log("[twdll] luaopen_twdll: done");
     return 1;

@@ -17,10 +17,10 @@ Load the DLL in your Lua script:
 
 ```lua
 -- For Rome 2
-package.loadlib("twdll_rome2.dll", "luaopen_twdll")()
+twdll = package.loadlib("twdll_rome2.dll", "luaopen_twdll")()
 
 -- For Attila
-package.loadlib("twdll_attila.dll", "luaopen_twdll")()
+twdll = package.loadlib("twdll_attila.dll", "luaopen_twdll")()
 
 -- Use the API
 twdll.Log("Hello from C++!")

@@ -1,4 +1,4 @@
-/// @module twdll_military_force
+/// @module twdll.military_force
 /// Military force properties for Total War: Attila.
 #include "../common/tw.h"
 #include <cstddef>

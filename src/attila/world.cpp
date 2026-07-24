@@ -1,4 +1,4 @@
-/// @module twdll_world
+/// @module twdll.world
 /// Campaign WORLD singleton accessor for Total War: Attila.
 /// The pointer is captured at runtime when the game constructs the WORLD object.
 #include "../common/tw.h"
