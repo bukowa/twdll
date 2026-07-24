@@ -112,6 +112,32 @@ function Install-Test {
     Write-Host "Test env installed for $Game"
 }
 
+function Fix-CpuAffinity($procName) {
+    # Windows 11 freeze workaround: exclude CPU0 from the game's affinity mask.
+    $startTime = Get-Date
+    while ($true) {
+        $proc = Get-Process -Name $procName -ErrorAction SilentlyContinue
+        if ($proc) {
+            try {
+                # Build mask with all CPUs except CPU0 (bit 0)
+                $sys = [System.Environment]::ProcessorCount
+                $fullMask = [int64]([math]::Pow(2, $sys) - 1)
+                $newMask  = $fullMask -band (-bnot 1)
+                $proc.ProcessorAffinity = [System.IntPtr]$newMask
+                Write-Host "CPU affinity fixed: CPU0 excluded (mask 0x$($newMask.ToString('X')))"
+            } catch {
+                Write-Host "Warning: could not set CPU affinity: $_"
+            }
+            return
+        }
+        if (((Get-Date) - $startTime).TotalSeconds -gt 30) {
+            Write-Host "Warning: timeout waiting for $procName to set affinity"
+            return
+        }
+        Start-Sleep -Milliseconds 200
+    }
+}
+
 function Launch-Game {
     if (Test-Path $LogFile) { 
         Remove-Item $LogFile -ErrorAction SilentlyContinue 
@@ -131,6 +157,9 @@ function Launch-Game {
         Start-Process -FilePath $Exe -WorkingDirectory $InstallDir -WindowStyle Hidden
         Write-Host "Launched"
     }
+
+    $ProcName = if ($Game -eq "rome2") { "Rome2" } else { "Attila" }
+    Fix-CpuAffinity $ProcName
 }
 
 function Tail-Log {
