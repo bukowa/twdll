@@ -67,6 +67,9 @@ typedef lua_Number  (*lua_tonumber_t)     (lua_State*, int);
 typedef void        (*lua_pushnil_t)      (lua_State*);
 typedef int         (*lua_pcall_t)        (lua_State*, int, int, int);
 typedef int         (*luaB_loadstring)    (lua_State*);
+typedef void        (*lua_getfield_t)     (lua_State*, int, const char*);
+typedef int         (*lua_type_t)         (lua_State*, int);
+typedef void        (*lua_settop_t)       (lua_State*, int);
 
 // Global function pointer instances (defined in lua_api.cpp)
 extern lua_pushstring_t    g_game_lua_pushstring;
@@ -87,6 +90,9 @@ extern lua_tonumber_t      g_game_lua_tonumber;
 extern lua_pushnil_t       g_game_lua_pushnil;
 extern lua_pcall_t         g_game_lua_pcall;
 extern luaB_loadstring     g_game_luaB_loadstring;
+extern lua_getfield_t      g_game_lua_getfield;
+extern lua_type_t          g_game_lua_type;
+extern lua_settop_t        g_game_lua_settop;
 
 // Maps l_* macros to game function pointers
 #define l_pushstring    g_game_lua_pushstring
@@ -107,6 +113,10 @@ extern luaB_loadstring     g_game_luaB_loadstring;
 #define l_pushnil       g_game_lua_pushnil
 #define l_pcall         g_game_lua_pcall
 #define l_loadstring    g_game_luaB_loadstring
+#define l_getfield      g_game_lua_getfield
+#define l_type          g_game_lua_type
+#define l_settop        g_game_lua_settop
+#define l_pop(L, n)     g_game_lua_settop(L, -(n)-1)
 
 // Signature scan descriptor — used by lua_api.cpp + per-game lua_sigs.cpp
 struct TW_SignatureInfo {

@@ -25,6 +25,9 @@ lua_tonumber_t      g_game_lua_tonumber      = nullptr;
 lua_pushnil_t       g_game_lua_pushnil       = nullptr;
 lua_pcall_t         g_game_lua_pcall         = nullptr;
 luaB_loadstring     g_game_luaB_loadstring   = nullptr;
+lua_getfield_t      g_game_lua_getfield      = nullptr;
+lua_type_t          g_game_lua_type          = nullptr;
+lua_settop_t        g_game_lua_settop        = nullptr;
 
 // Provided by the game-specific translation unit (rome2/lua_sigs.cpp or attila/lua_sigs.cpp)
 extern const char*            GAME_MODULE_NAME;

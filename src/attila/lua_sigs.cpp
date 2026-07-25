@@ -28,6 +28,9 @@ const char* GAME_MODULE_NAME = "empire.retail.dll";
 #define LUA_PUSHNIL_SIG         "8B 4C 24 ? 8B 41 ? C7 40"
 #define LUA_PCALL_SIG           "8B 44 24 ? 83 EC ? 53 56 57 8B 7C 24"
 #define LUAB_LOADSTRING_SIG     "51 56 57 8B 7C 24 ? 8D 44 24 ? 50 6A"
+#define LUA_GETFIELD_SIG        "83 EC 08 53 56 8B 74 24 ? 57 FF 74 24 ? 56 E8 ? ? ? ? 8B 54 24 ? 83 C4 08 8B CA 8B F8 8D 59 ? 8A 01 41 84 C0 75 ? 2B CB 51 52 56 E8 ? ? ? ? FF 76"
+#define LUA_TYPE_SIG            "FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 83 C4 ? 3D ? ? ? ? 75 ? 83 C8"
+#define LUA_SETTOP_SIG          "8B 4C 24 ? 8B 44 24 ? 56 8D 34 CD"
 // clang-format on
 
 // Table consumed by initialize_lua_api() in lua_api.cpp.
@@ -50,6 +53,9 @@ extern const TW_SignatureInfo g_signatures[] = {
     {"lua_pushnil",      (void**)&g_game_lua_pushnil,        LUA_PUSHNIL_SIG},
     {"lua_pcall",        (void**)&g_game_lua_pcall,          LUA_PCALL_SIG},
     {"luaB_loadstring",  (void**)&g_game_luaB_loadstring,   LUAB_LOADSTRING_SIG},
+    {"lua_getfield",     (void**)&g_game_lua_getfield,      LUA_GETFIELD_SIG},
+    {"lua_type",         (void**)&g_game_lua_type,          LUA_TYPE_SIG},
+    {"lua_settop",       (void**)&g_game_lua_settop,        LUA_SETTOP_SIG},
     {nullptr, nullptr, nullptr}
 };
 
