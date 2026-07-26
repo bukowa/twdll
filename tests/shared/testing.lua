@@ -150,6 +150,32 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 4: faction GetGold / SetGold
+        -- Attila: Hunni start with 15000 gold.
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 4: faction GetGold/SetGold ---")
+        do
+            local f            = game:model():world():faction_by_key(faction)
+            local gold_initial = f:GetGold()
+            twdll.core.Log("[TEST] GetGold initial = " .. tostring(gold_initial))
+
+            if twdll.core.GameBuild() == "Attila" and gold_initial == 15000 then
+                twdll.core.Log("[TEST] GetGold initial: OK (15000)")
+            else
+                twdll.core.Log("[TEST] GetGold initial: got " .. tostring(gold_initial))
+            end
+
+            f:SetGold(99999)
+            local gold_after = f:GetGold()
+            twdll.core.Log("[TEST] GetGold after SetGold(99999) = " .. tostring(gold_after))
+            if gold_after == 99999 then
+                twdll.core.Log("[TEST] SetGold: OK")
+            else
+                twdll.core.Log("[TEST] SetGold: FAILED (expected 99999, got " .. tostring(gold_after) .. ")")
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== ALL TESTS DONE =====")

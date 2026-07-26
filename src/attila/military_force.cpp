@@ -1,40 +1,19 @@
 /// @module twdll.military_force
 /// Military force properties for Total War: Attila.
 #include "../common/tw.h"
-#include <cstddef>
+#include "tw_types.h"
 
-// ── Memory layout ─────────────────────────────────────────────────────────────
-#pragma pack(push, 1)
-struct TW_MilitaryForce {
-    char pad_00[0x45C];
-    int  recruitment_queue_size;  // 0x45C
-};
-#pragma pack(pop)
+using twdll::TW_MilitaryForce;
 
-static_assert(offsetof(TW_MilitaryForce, recruitment_queue_size) == 0x45C,
-              "TW_MilitaryForce Attila: recruitment_queue_size");
+constexpr size_t MIL_FORCE_PTR = twdll::TW_PtrOffset<TW_MilitaryForce>::value;
 
-constexpr size_t MIL_FORCE_PTR = 0x8;
+namespace Props {
+    static twdll::Getter RecruitmentQueueSize{&TW_MilitaryForce::recruitment_queue_size, MIL_FORCE_PTR, "military_force"};
+}
 
-// ── Accessors ─────────────────────────────────────────────────────────────────
-/***
-Returns the number of units in the recruitment queue.
-@function GetRecruitmentQueueSize
-@tparam userdata military_force the military force object (first argument)
-@treturn integer number of units
-*/
-static twdll::Getter<int, TW_MilitaryForce> RecruitmentQueueSize{&TW_MilitaryForce::recruitment_queue_size, MIL_FORCE_PTR, "military_force"};
-static int GetRecruitmentQueueSize(lua_State* L) { return RecruitmentQueueSize.get(L); }
+static int GetMemAddress           (lua_State* L) { return tw_mem_address(L, "military_force", MIL_FORCE_PTR); }
+static int GetRecruitmentQueueSize (lua_State* L) { return Props::RecruitmentQueueSize.get(L); }
 
-/***
-Returns the memory address of the real military force object.
-@function GetMemoryAddress
-@tparam userdata military_force the military force object (first argument)
-@treturn string memory address (e.g. "0x12345678")
-*/
-static int GetMemAddress(lua_State* L) { return tw_mem_address(L, "military_force", MIL_FORCE_PTR); }
-
-// ── Lua registration table ────────────────────────────────────────────────────
 extern const luaL_Reg military_force_functions[] = {
     {"GetMemoryAddress",        GetMemAddress},
     {"GetRecruitmentQueueSize", GetRecruitmentQueueSize},

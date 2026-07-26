@@ -3,21 +3,36 @@
 #include "../common/tw.h"
 #include "../common/campaign_hooks.h"
 #include "game_api.h"
+#include "tw_types.h"
 #include <windows.h>
-#include <cstddef>
 #include <cstdio>
 
-// ── Memory layout ─────────────────────────────────────────────────────────────
-#pragma pack(push, 1)
-struct TW_World {
-    char pad_00[0x50];
-    int  faction_count;  // 0x50 — needs verification
-};
-#pragma pack(pop)
+using twdll::TW_World;
 
-static_assert(offsetof(TW_World, faction_count) == 0x50, "TW_World Attila: faction_count");
+static TW_World* g_world = nullptr;
+static void* orig_world_ctor = nullptr;
 
-// ── Accessors ─────────────────────────────────────────────────────────────────
+static void LogWorldHook(void* ptr) {
+    g_world = static_cast<TW_World*>(ptr);
+    Log("[twdll] WORLD ctor hooked — g_world = 0x%08X", reinterpret_cast<uintptr_t>(ptr));
+}
+
+__declspec(naked) static void HookedWorldCtor() {
+    __asm {
+        pushad
+        push ecx
+        call LogWorldHook
+        add esp, 4
+        popad
+        jmp dword ptr [orig_world_ctor]
+    }
+}
+
+static void install_world_hook(uintptr_t base, size_t size) {
+    install_singleton_hook(base, size, "FACTION_ARRAY", "WORLD",
+                           reinterpret_cast<void*>(HookedWorldCtor),
+                           &orig_world_ctor);
+}
 
 /***
 Returns the memory address of the WORLD singleton as a hexadecimal string.
@@ -69,7 +84,6 @@ static int SetMaxUnitsInNavy(lua_State* L) {
     return 0;
 }
 
-// ── Lua registration table ────────────────────────────────────────────────────
 extern const luaL_Reg world_functions[] = {
     {"GetMemoryAddress",   GetMemoryAddress},
     {"GetFactionCount",    GetFactionCount},

@@ -61,17 +61,18 @@ jobs:
           toolset: 14.44.35207
           sdk: 10.0.26100.0
 
-      - name: Configure and Build (Rome 2)
-        run: |
-          cmake -S . -B build/ci-rome2 --preset ${{env.PRESET}} -DTW_GAME=rome2
-          cmake --build build/ci-rome2
+      # Rome 2 build is frozen — disabled until post-patch re-verification
+      # - name: Configure and Build (Rome 2)
+      #   run: |
+      #     cmake -S . -B build/ci-rome2 --preset ${{env.PRESET}} -DTW_GAME=rome2
+      #     cmake --build build/ci-rome2
       - name: Configure and Build (Attila)
         run: |
           cmake -S . -B build/ci-attila --preset ${{env.PRESET}} -DTW_GAME=attila
           cmake --build build/ci-attila
       - name: Build Documentation
         run: |
-          cmake --build build/ci-rome2 --target docs
+          # cmake --build build/ci-rome2 --target docs  # Rome 2 frozen
           cmake --build build/ci-attila --target docs
 
       # ===============================================================
@@ -81,8 +82,8 @@ jobs:
       - name: Prepare Release Directory
         run: |
           New-Item -ItemType Directory -Force -Path ${{env.STAGING_DIR}}
-          Copy-Item -Path "build\ci-rome2\twdll.dll"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.dll"
-          Copy-Item -Path "build\ci-rome2\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.pdb"
+          # Copy-Item -Path "build\ci-rome2\twdll.dll"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.dll"  # Rome 2 frozen
+          # Copy-Item -Path "build\ci-rome2\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.pdb"  # Rome 2 frozen
           Copy-Item -Path "build\ci-attila\twdll.dll"  -Destination "${{env.STAGING_DIR}}\twdll_attila.dll"
           Copy-Item -Path "build\ci-attila\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_attila.pdb"
         shell: pwsh

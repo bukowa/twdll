@@ -1,10 +1,4 @@
-// attila/lua_sigs.cpp — Total War: Attila Lua function signatures
-// Contains: game module name, byte signatures for all hooked Lua functions.
-// Consumed by src/lua/lua_api.cpp via extern g_signatures[].
-// No preprocessor conditionals — this file IS the Attila variant.
-
 #include "../common/lua_api.h"
-#include "../common/signature_scanner.h"
 
 const char* GAME_NAME = "Attila";
 const char* GAME_MODULE_NAME = "empire.retail.dll";
@@ -31,9 +25,7 @@ const char* GAME_MODULE_NAME = "empire.retail.dll";
 #define LUA_GETFIELD_SIG        "83 EC 08 53 56 8B 74 24 ? 57 FF 74 24 ? 56 E8 ? ? ? ? 8B 54 24 ? 83 C4 08 8B CA 8B F8 8D 59 ? 8A 01 41 84 C0 75 ? 2B CB 51 52 56 E8 ? ? ? ? FF 76"
 #define LUA_TYPE_SIG            "FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 83 C4 ? 3D ? ? ? ? 75 ? 83 C8"
 #define LUA_SETTOP_SIG          "8B 4C 24 ? 8B 44 24 ? 56 8D 34 CD"
-// clang-format on
 
-// Table consumed by initialize_lua_api() in lua_api.cpp.
 extern const TW_SignatureInfo g_signatures[] = {
     {"lua_pushstring",   (void**)&g_game_lua_pushstring,    LUA_PUSHSTRING_SIG},
     {"lua_newuserdata",  (void**)&g_game_lua_newuserdata,   LUA_NEWUSERDATA_SIG},
@@ -58,5 +50,4 @@ extern const TW_SignatureInfo g_signatures[] = {
     {"lua_settop",       (void**)&g_game_lua_settop,        LUA_SETTOP_SIG},
     {nullptr, nullptr, nullptr}
 };
-
-
+// clang-format on

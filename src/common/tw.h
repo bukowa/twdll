@@ -68,25 +68,11 @@ inline int tw_set(lua_State* L, size_t ptr_off, F S::* field, const char* tag) {
     return 0;
 }
 
-// Nested variant: obj → ptr_field → nested struct → field
-template <typename S, typename N, typename F>
-inline int tw_get_nested(lua_State* L, size_t ptr_off, N* S::* nested_ptr,
-                         F N::* field, const char* tag) {
-    void* obj = tw_get_obj(L, tag, ptr_off);
-    if (!obj) { l_pushnil(L); return 1; }
-    N* nested = static_cast<S*>(obj)->*nested_ptr;
-    if (!nested) { l_pushnil(L); return 1; }
-    F v = nested->*field;
-    if constexpr (std::is_integral_v<F>)
-        l_pushinteger(L, static_cast<lua_Integer>(v));
-    else if constexpr (std::is_floating_point_v<F>)
-        l_pushnumber(L, static_cast<double>(v));
-    return 1;
-}
 
-// Global variant: reads from a raw global void** pointer instead of Lua userdata.
+
+// Global variant: reads from a raw global typed pointer instead of Lua userdata.
 template <typename S, typename F>
-inline int tw_get_global(lua_State* L, void** global_ptr, F S::* field) {
+inline int tw_get_global(lua_State* L, S** global_ptr, F S::* field) {
     if (!global_ptr || !*global_ptr) { l_pushnil(L); return 1; }
     void* obj = *global_ptr;
     F v = static_cast<S*>(obj)->*field;
@@ -146,14 +132,34 @@ private:
 // ── Getter class ───────────────────────────────────────────────────────
 // For read-only properties.
 
+struct offset_tag_t {};
+inline constexpr offset_tag_t offset_tag{};
+
 template <typename T, typename S>
 class Getter {
 public:
     Getter(T S::* field, size_t ptr_off, const char* tag)
-        : field_(field), ptr_off_(ptr_off), tag_(tag) {}
-    int get(lua_State* L) { return tw_get(L, ptr_off_, field_, tag_); }
+        : field_(field), offset_(0), use_offset_(false), ptr_off_(ptr_off), tag_(tag) {}
+    // Offset-based variant for embedded/nested fields (e.g. offsetof(S, stats.charge_bonus))
+    Getter(offset_tag_t, size_t offset, size_t ptr_off, const char* tag)
+        : field_(nullptr), offset_(offset), use_offset_(true), ptr_off_(ptr_off), tag_(tag) {}
+    int get(lua_State* L) {
+        if (use_offset_) {
+            void* obj = tw_get_obj(L, tag_, ptr_off_);
+            if (!obj) { l_pushnil(L); return 1; }
+            T v = *reinterpret_cast<T*>(static_cast<char*>(obj) + offset_);
+            if constexpr (std::is_integral_v<T>)
+                l_pushinteger(L, static_cast<lua_Integer>(v));
+            else if constexpr (std::is_floating_point_v<T>)
+                l_pushnumber(L, static_cast<double>(v));
+            return 1;
+        }
+        return tw_get(L, ptr_off_, field_, tag_);
+    }
 private:
     T S::* field_;
+    size_t offset_;
+    bool   use_offset_;
     size_t ptr_off_;
     const char* tag_;
 };
@@ -164,28 +170,12 @@ private:
 template <typename T, typename S>
 class GlobalGetter {
 public:
-    GlobalGetter(T S::* field, void** global_ptr)
+    GlobalGetter(T S::* field, S** global_ptr)
         : field_(field), global_ptr_(global_ptr) {}
     int get(lua_State* L) { return tw_get_global(L, global_ptr_, field_); }
 private:
     T S::* field_;
-    void** global_ptr_;
-};
-
-// ── Nested property getter ────────────────────────────────────────────────────
-// For accessing properties within nested structures.
-
-template <typename T, typename S, typename N>
-class NestedProperty {
-public:
-    NestedProperty(T N::* field, N* S::* nested_ptr, size_t ptr_off, const char* tag)
-        : field_(field), nested_ptr_(nested_ptr), ptr_off_(ptr_off), tag_(tag) {}
-    int get(lua_State* L) { return tw_get_nested(L, ptr_off_, nested_ptr_, field_, tag_); }
-private:
-    T N::* field_;
-    N* S::* nested_ptr_;
-    size_t ptr_off_;
-    const char* tag_;
+    S** global_ptr_;
 };
 
 } // namespace twdll

@@ -1,4 +1,3 @@
-// attila/game_sigs.cpp — Total War: Attila game function signatures and offsets.
 #include "game_api.h"
 #include "../common/game_api.h"
 

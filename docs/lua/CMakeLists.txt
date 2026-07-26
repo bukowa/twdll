@@ -56,8 +56,9 @@ file(WRITE ${CONFIG_LD_GENERATED} "${MODIFIED_CONFIG_CONTENT}")
 
 add_custom_command(
     OUTPUT      ${DOCS_OUTPUT_FILE}
-    COMMAND     ${CMAKE_COMMAND} -E env 
-                "LUA_PATH=${LUA_MODULE_PATH}" 
+    COMMAND     ${CMAKE_COMMAND} -E rm -rf "${TWDLL_DOCS_DIR}"
+    COMMAND     ${CMAKE_COMMAND} -E env
+                "LUA_PATH=${LUA_MODULE_PATH}"
                 "LUA_CPATH=${LUA_CMODULE_PATH}"
                 $<TARGET_FILE:lua_for_docs>
                 "${PROJECT_SOURCE_DIR}/docs/lua/ldoc/ldoc.lua"

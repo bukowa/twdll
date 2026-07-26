@@ -1,76 +1,28 @@
 /// @module twdll.character
 /// Campaign character properties for Total War: Attila.
 #include "../common/tw.h"
-#include <cstddef>
-
 #include "tw_types.h"
 
-constexpr size_t CHAR_PTR = offsetof(twdll::GameScriptInterface<twdll::TW_Character>, m_wrapped_object);
+using twdll::TW_Character;
 
+constexpr size_t CHAR_PTR = twdll::TW_PtrOffset<TW_Character>::value;
 
-// ── Accessors ─────────────────────────────────────────────────────────────────
-/***
-Gets the remaining movement points for the character.
-@function GetMovementPoints
-@tparam userdata character the character object (first argument)
-@treturn integer movement points
-*/
-static twdll::Property<int, twdll::TW_Character> MovementPoints{&twdll::TW_Character::movement_points, CHAR_PTR, "character"};
-static int GetMovementPoints(lua_State* L) { return MovementPoints.get(L); }
+namespace Props {
+    static twdll::Property MovementPoints{&TW_Character::movement_points, CHAR_PTR, "character"};
+    static twdll::Property Ambition      {&TW_Character::ambition,        CHAR_PTR, "character"};
+    static twdll::Property Gravitas      {&TW_Character::gravitas,        CHAR_PTR, "character"};
+}
 
-/***
-Sets the remaining movement points for the character.
-@function SetMovementPoints
-@tparam userdata character the character object (first argument)
-@tparam integer value new movement points
-*/
-static int SetMovementPoints(lua_State* L) { return MovementPoints.set(L); }
+static int GetMemAddress    (lua_State* L) { return tw_mem_address(L, "character", CHAR_PTR); }
+static int GetIntAtOffset   (lua_State* L) { return tw_get_int_at(L, "character", CHAR_PTR); }
+static int SetIntAtOffset   (lua_State* L) { return tw_set_int_at(L, "character", CHAR_PTR); }
+static int GetMovementPoints(lua_State* L) { return Props::MovementPoints.get(L); }
+static int SetMovementPoints(lua_State* L) { return Props::MovementPoints.set(L); }
+static int GetAmbition      (lua_State* L) { return Props::Ambition.get(L); }
+static int SetAmbition      (lua_State* L) { return Props::Ambition.set(L); }
+static int GetGravitas      (lua_State* L) { return Props::Gravitas.get(L); }
+static int SetGravitas      (lua_State* L) { return Props::Gravitas.set(L); }
 
-/***
-Gets the ambition level of the character.
-@function GetAmbition
-@tparam userdata character the character object (first argument)
-@treturn integer ambition level
-*/
-static twdll::Property<int, twdll::TW_Character> Ambition{&twdll::TW_Character::ambition, CHAR_PTR, "character"};
-static int GetAmbition(lua_State* L) { return Ambition.get(L); }
-
-/***
-Sets the ambition level of the character.
-@function SetAmbition
-@tparam userdata character the character object (first argument)
-@tparam integer value new ambition level
-*/
-static int SetAmbition(lua_State* L) { return Ambition.set(L); }
-
-/***
-Gets the gravitas of the character.
-@function GetGravitas
-@tparam userdata character the character object (first argument)
-@treturn integer gravitas
-*/
-static twdll::Property<int, twdll::TW_Character> Gravitas{&twdll::TW_Character::gravitas, CHAR_PTR, "character"};
-static int GetGravitas(lua_State* L) { return Gravitas.get(L); }
-
-/***
-Sets the gravitas of the character.
-@function SetGravitas
-@tparam userdata character the character object (first argument)
-@tparam integer value new gravitas
-*/
-static int SetGravitas(lua_State* L) { return Gravitas.set(L); }
-
-/***
-Returns the memory address of the real character object as a hexadecimal string.
-@function GetMemoryAddress
-@tparam userdata character the character object (first argument)
-@treturn string memory address (e.g. "0x12345678")
-*/
-static int GetMemAddress(lua_State* L) { return tw_mem_address(L,  "character", CHAR_PTR); }
-static int GetIntAtOffset(lua_State* L) { return tw_get_int_at(L, "character", CHAR_PTR); }
-static int SetIntAtOffset(lua_State* L) { return tw_set_int_at(L, "character", CHAR_PTR); }
-
-// ── Lua registration table ────────────────────────────────────────────────────
 extern const luaL_Reg character_functions[] = {
     {"GetMemoryAddress",  GetMemAddress},
     {"GetIntAtOffset",    GetIntAtOffset},

@@ -1,20 +1,37 @@
 /// @module twdll.campaign_ui
 /// Campaign UI singleton accessor for Total War: Attila.
-/// The pointer is captured at runtime when the game constructs the CAMPAIGN_UI object.
-#include "../common/tw.h"
 #include "../common/campaign_hooks.h"
-#include <cstddef>
+#include "../common/lua_api.h"
+#include "../common/log.h"
+#include "tw_types.h"
 #include <cstdio>
 
-// ── Memory layout ─────────────────────────────────────────────────────────────
-// Fields TBD — singleton captured, structure not yet mapped.
-#pragma pack(push, 1)
-struct TW_CampaignUi {
-    // placeholder — add verified fields as they are discovered
-};
-#pragma pack(pop)
+using twdll::TW_CampaignUi;
 
-// ── Accessors (global singleton — not Lua userdata) ───────────────────────────
+static TW_CampaignUi* g_campaign_ui = nullptr;
+static void* orig_campaign_ui_ctor = nullptr;
+
+static void LogCampaignUiHook(void* ptr) {
+    g_campaign_ui = static_cast<TW_CampaignUi*>(ptr);
+    Log("[twdll] CAMPAIGN_UI ctor hooked — g_campaign_ui = 0x%08X", reinterpret_cast<uintptr_t>(ptr));
+}
+
+__declspec(naked) static void HookedCampaignUiCtor() {
+    __asm {
+        pushad
+        push ecx
+        call LogCampaignUiHook
+        add esp, 4
+        popad
+        jmp dword ptr [orig_campaign_ui_ctor]
+    }
+}
+
+static void install_campaign_ui_hook(uintptr_t base, size_t size) {
+    install_singleton_hook(base, size, "data/ui/campaign ui/mp_timer", "CAMPAIGN_UI",
+                           reinterpret_cast<void*>(HookedCampaignUiCtor),
+                           &orig_campaign_ui_ctor);
+}
 
 /***
 Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.
@@ -29,7 +46,6 @@ static int GetMemoryAddress(lua_State* L) {
     return 1;
 }
 
-// ── Lua registration table ────────────────────────────────────────────────────
 extern const luaL_Reg campaign_ui_functions[] = {
     {"GetMemoryAddress", GetMemoryAddress},
     {nullptr, nullptr}

@@ -39,14 +39,11 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.battle_unit.html">twdll.battle_unit</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/twdll.character.html">twdll.character</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
   <li><strong>FACTION_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/twdll.military_force.html">twdll.military_force</a></li>
   <li><a href="../modules/twdll.unit.html">twdll.unit</a></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
 </ul>
 
 </div>
@@ -63,20 +60,20 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetGold">GetGold (faction)</a></td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Returns the memory address of the faction object as a hexadecimal string.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetGold">GetGold ()</a></td>
 	<td class="summary">Gets the amount of gold for the faction.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetGold">SetGold (faction, value)</a></td>
+	<td class="name" nowrap><a href="#SetGold">SetGold (value)</a></td>
 	<td class="summary">Sets the amount of gold for the faction.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (faction)</a></td>
-	<td class="summary">Returns the memory address of the real faction object as a hexadecimal string.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (faction, new_character[, old_character[, heir_coming_of_age]])</a></td>
-	<td class="summary">Replaces the faction leader without killing the current one.</td>
+	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age]])</a></td>
+	<td class="summary">Sets a new leader for the faction.</td>
 	</tr>
 </table>
 
@@ -88,20 +85,33 @@
 
     <dl class="function">
     <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the faction object as a hexadecimal string.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+
+</dd>
+    <dt>
     <a name = "GetGold"></a>
-    <strong>GetGold (faction)</strong>
+    <strong>GetGold ()</strong>
     </dt>
     <dd>
     Gets the amount of gold for the faction.
 
 
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">faction</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the faction object (first argument)
-        </li>
-    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -116,7 +126,7 @@
 </dd>
     <dt>
     <a name = "SetGold"></a>
-    <strong>SetGold (faction, value)</strong>
+    <strong>SetGold (value)</strong>
     </dt>
     <dd>
     Sets the amount of gold for the faction.
@@ -124,43 +134,12 @@
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">faction</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the faction object (first argument)
-        </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
-         new gold amount
+         new amount of gold
         </li>
     </ul>
 
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress (faction)</strong>
-    </dt>
-    <dd>
-    Returns the memory address of the real faction object as a hexadecimal string.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">faction</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the faction object (first argument)
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
-    </ol>
 
 
 
@@ -168,40 +147,28 @@
 </dd>
     <dt>
     <a name = "SetFactionLeader"></a>
-    <strong>SetFactionLeader (faction, new_character[, old_character[, heir_coming_of_age]])</strong>
+    <strong>SetFactionLeader (new_character[, old_character[, heir_coming_of_age]])</strong>
     </dt>
     <dd>
-    Replaces the faction leader without killing the current one.
-The old leader remains in the family tree and on the map.</p>
-
-<p>Behaviour depends on the arguments:
-- <code>old_character</code> omitted or nil — no succession event is fired; the swap is silent.
-- <code>old_character</code> provided — fires <code>faction_succession</code> event.
-  - If the new leader is a regent — fires <code>faction_succession_regency</code> instead.
-  - If <code>heir_coming_of_age</code> is true — fires <code>faction_succession_heir_comes_of_age</code> instead.</p>
-
-<p>In all cases: new leader's <code>m_heir</code> is set to 0 and political party allegiance is updated.
-If the faction has no regions after the swap it is added to the deferred death list.
+    Sets a new leader for the faction.
+If <code>old_character</code> is provided, the game fires a succession event. If <code>heir_coming_of_age</code>
+is true, fires <code>faction_succession_heir_comes_of_age</code> instead of the default succession event.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">faction</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the faction object (self)
-        </li>
         <li><span class="parameter">new_character</span>
             <span class="types"><span class="type">userdata</span></span>
          the character to become the new leader
         </li>
         <li><span class="parameter">old_character</span>
             <span class="types"><span class="type">userdata</span></span>
-         the current leader; omit to suppress succession events
+         the outgoing leader (triggers succession event if provided)
          (<em>optional</em>)
         </li>
         <li><span class="parameter">heir_coming_of_age</span>
             <span class="types"><span class="type">boolean</span></span>
-         fire heir<em>comes</em>of_age event instead of normal succession (default false)
+         fire the heir-comes-of-age event variant (default false)
          (<em>optional</em>)
         </li>
     </ul>
@@ -209,12 +176,6 @@ If the faction has no regions after the swap it is added to the deferred death l
 
 
 
-    <h3>Usage:</h3>
-    <ul>
-        <li><pre class="example">faction:<span class="function-name">SetFactionLeader</span>(new_char)              <span class="comment">-- silent swap, no event</span></pre></li>
-        <li><pre class="example">faction:<span class="function-name">SetFactionLeader</span>(new_char, old_char)    <span class="comment">-- normal succession event</span></pre></li>
-        <li><pre class="example">faction:<span class="function-name">SetFactionLeader</span>(new_char, old_char, <span class="keyword">true</span>) <span class="comment">-- heir coming of age event</span></pre></li>
-    </ul>
 
 </dd>
 </dl>

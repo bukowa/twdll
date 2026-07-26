@@ -30,6 +30,10 @@ twdll.core.Log("Hello from C++!")
 - [Rome 2](https://bukowa.github.io/twdll/rome2/)
 - [Attila](https://bukowa.github.io/twdll/attila/)
 
+> **Rome 2 support is currently frozen** pending an incoming game update that will invalidate all
+> internal offsets. Active development targets Attila only. Rome 2 will be updated once the patch
+> lands and structures are re-verified.
+
 ## Development
 
 ### Requirements

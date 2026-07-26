@@ -1,14 +1,17 @@
 #pragma once
-// campaign_hooks.h — String-anchored dynamic hooking for campaign singletons.
-// Reusable across Warscape engine games (Attila, Rome 2).
+// campaign_hooks.h — Dynamic hooking for campaign singletons.
+// Utility layer (game-agnostic).
 
 #include <cstdint>
+#include <cstddef>
 
-// ── Global singletons ─────────────────────────────────────────────────────────
-// Set to nullptr until the game calls the respective constructor.
-extern void* g_world;        // WORLD*
-extern void* g_campaign_ui;  // CAMPAIGN_UI*
-
-// ── Initialisation ────────────────────────────────────────────────────────────
-// Scans the module, locates the constructors, and installs MinHook hooks.
+// ── Hook orchestration ────────────────────────────────────────────────────────
+// Called from DllMain on DLL_PROCESS_ATTACH.
+// Implemented in game-specific translations units (e.g. attila/campaign_hooks.cpp).
 void install_campaign_hooks();
+
+// ── Hook utility ──────────────────────────────────────────────────────────────
+// Scans the module, locates the constructor via anchor, and installs MinHook.
+bool install_singleton_hook(uintptr_t base, size_t size,
+                            const char* anchor, const char* label,
+                            void* hook_fn, void** orig_fn);
