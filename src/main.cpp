@@ -21,7 +21,7 @@ extern void register_faction_methods(lua_State* L);
 
 // Game-specific hooks (compiled in only for the relevant game)
 #include "common/campaign_hooks.h"
-#include "attila/game_api.h"
+#include "common/game_api.h"
 
 // ── DLL entry ─────────────────────────────────────────────────────────────────
 

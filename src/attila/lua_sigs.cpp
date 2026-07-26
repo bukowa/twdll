@@ -59,5 +59,4 @@ extern const TW_SignatureInfo g_signatures[] = {
     {nullptr, nullptr, nullptr}
 };
 
-extern const uintptr_t OFFSET_MAX_UNITS_ARMY = 0;
-extern const uintptr_t OFFSET_MAX_UNITS_NAVY = 0;
+

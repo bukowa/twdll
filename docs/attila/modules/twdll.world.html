@@ -57,8 +57,7 @@
 <p>
 
 </p>
-<p> Campaign WORLD singleton accessor for Total War: Attila.
- The pointer is captured at runtime when the game constructs the WORLD object.</p>
+<p> Campaign world singleton and world-level modifiers for Total War: Attila.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
@@ -70,6 +69,14 @@
 	<tr>
 	<td class="name" nowrap><a href="#GetFactionCount">GetFactionCount ()</a></td>
 	<td class="summary">Gets the number of factions in the current campaign.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxUnitsInArmy">SetMaxUnitsInArmy (val)</a></td>
+	<td class="summary">Sets the maximum number of units allowed in an army.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxUnitsInNavy">SetMaxUnitsInNavy (val)</a></td>
+	<td class="summary">Sets the maximum number of units allowed in a navy.</td>
 	</tr>
 </table>
 
@@ -115,6 +122,48 @@
            <span class="types"><span class="type">integer</span></span>
         number of factions, or nil if not yet initialised
     </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMaxUnitsInArmy"></a>
+    <strong>SetMaxUnitsInArmy (val)</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of units allowed in an army.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">val</span>
+            <span class="types"><span class="type">integer</span></span>
+         maximum unit count
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMaxUnitsInNavy"></a>
+    <strong>SetMaxUnitsInNavy (val)</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of units allowed in a navy.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">val</span>
+            <span class="types"><span class="type">integer</span></span>
+         maximum unit count
+        </li>
+    </ul>
+
 
 
 

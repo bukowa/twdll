@@ -25,6 +25,7 @@ set(TWDLL_COMMON_SOURCES
     src/common/log.cpp
     src/common/lua_api.cpp
     src/common/lua_core.cpp
+    src/common/game_api.cpp
     src/common/signature_scanner.cpp
     src/common/campaign_hooks.cpp
 )

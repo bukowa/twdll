@@ -1,8 +1,9 @@
 /// @module twdll.world
-/// Campaign WORLD singleton accessor for Total War: Attila.
-/// The pointer is captured at runtime when the game constructs the WORLD object.
+/// Campaign world singleton and world-level modifiers for Total War: Attila.
 #include "../common/tw.h"
 #include "../common/campaign_hooks.h"
+#include "game_api.h"
+#include <windows.h>
 #include <cstddef>
 #include <cstdio>
 
@@ -16,7 +17,7 @@ struct TW_World {
 
 static_assert(offsetof(TW_World, faction_count) == 0x50, "TW_World Attila: faction_count");
 
-// ── Accessors (global singleton — not Lua userdata) ───────────────────────────
+// ── Accessors ─────────────────────────────────────────────────────────────────
 
 /***
 Returns the memory address of the WORLD singleton as a hexadecimal string.
@@ -40,9 +41,39 @@ Gets the number of factions in the current campaign.
 */
 static int GetFactionCount(lua_State* L) { return FactionCount.get(L); }
 
+/***
+Sets the maximum number of units allowed in an army.
+@function SetMaxUnitsInArmy
+@tparam integer val maximum unit count
+*/
+static int SetMaxUnitsInArmy(lua_State* L) {
+    int val = static_cast<int>(l_tointeger(L, 1));
+    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
+        *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_UNITS_ARMY) = val;
+        Log("[twdll] SetMaxUnitsInArmy: %d", val);
+    }
+    return 0;
+}
+
+/***
+Sets the maximum number of units allowed in a navy.
+@function SetMaxUnitsInNavy
+@tparam integer val maximum unit count
+*/
+static int SetMaxUnitsInNavy(lua_State* L) {
+    int val = static_cast<int>(l_tointeger(L, 1));
+    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
+        *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_UNITS_NAVY) = val;
+        Log("[twdll] SetMaxUnitsInNavy: %d", val);
+    }
+    return 0;
+}
+
 // ── Lua registration table ────────────────────────────────────────────────────
 extern const luaL_Reg world_functions[] = {
-    {"GetMemoryAddress", GetMemoryAddress},
-    {"GetFactionCount",  GetFactionCount},
+    {"GetMemoryAddress",   GetMemoryAddress},
+    {"GetFactionCount",    GetFactionCount},
+    {"SetMaxUnitsInArmy",  SetMaxUnitsInArmy},
+    {"SetMaxUnitsInNavy",  SetMaxUnitsInNavy},
     {nullptr, nullptr}
 };
