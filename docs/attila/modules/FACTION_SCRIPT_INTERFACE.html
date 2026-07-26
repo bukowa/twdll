@@ -1,0 +1,230 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll.battle_unit.html">twdll.battle_unit</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.character.html">twdll.character</a></li>
+  <li><strong>FACTION_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/twdll.military_force.html">twdll.military_force</a></li>
+  <li><a href="../modules/twdll.unit.html">twdll.unit</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>FACTION_SCRIPT_INTERFACE</code></h1>
+<p>
+
+</p>
+<p> Extensions to the game's faction object for Total War: Attila.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#GetGold">GetGold (faction)</a></td>
+	<td class="summary">Gets the amount of gold for the faction.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetGold">SetGold (faction, value)</a></td>
+	<td class="summary">Sets the amount of gold for the faction.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (faction)</a></td>
+	<td class="summary">Returns the memory address of the real faction object as a hexadecimal string.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (faction, new_character[, old_character[, heir_coming_of_age]])</a></td>
+	<td class="summary">Replaces the faction leader without killing the current one.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "GetGold"></a>
+    <strong>GetGold (faction)</strong>
+    </dt>
+    <dd>
+    Gets the amount of gold for the faction.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">faction</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the faction object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        amount of gold
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetGold"></a>
+    <strong>SetGold (faction, value)</strong>
+    </dt>
+    <dd>
+    Sets the amount of gold for the faction.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">faction</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the faction object (first argument)
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new gold amount
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress (faction)</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the real faction object as a hexadecimal string.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">faction</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the faction object (first argument)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetFactionLeader"></a>
+    <strong>SetFactionLeader (faction, new_character[, old_character[, heir_coming_of_age]])</strong>
+    </dt>
+    <dd>
+    Replaces the faction leader without killing the current one.
+The old leader remains in the family tree and on the map.</p>
+
+<p>Behaviour depends on the arguments:
+- <code>old_character</code> omitted or nil — no succession event is fired; the swap is silent.
+- <code>old_character</code> provided — fires <code>faction_succession</code> event.
+  - If the new leader is a regent — fires <code>faction_succession_regency</code> instead.
+  - If <code>heir_coming_of_age</code> is true — fires <code>faction_succession_heir_comes_of_age</code> instead.</p>
+
+<p>In all cases: new leader's <code>m_heir</code> is set to 0 and political party allegiance is updated.
+If the faction has no regions after the swap it is added to the deferred death list.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">faction</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the faction object (self)
+        </li>
+        <li><span class="parameter">new_character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the character to become the new leader
+        </li>
+        <li><span class="parameter">old_character</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the current leader; omit to suppress succession events
+         (<em>optional</em>)
+        </li>
+        <li><span class="parameter">heir_coming_of_age</span>
+            <span class="types"><span class="type">boolean</span></span>
+         fire heir<em>comes</em>of_age event instead of normal succession (default false)
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <li><pre class="example">faction:<span class="function-name">SetFactionLeader</span>(new_char)              <span class="comment">-- silent swap, no event</span></pre></li>
+        <li><pre class="example">faction:<span class="function-name">SetFactionLeader</span>(new_char, old_char)    <span class="comment">-- normal succession event</span></pre></li>
+        <li><pre class="example">faction:<span class="function-name">SetFactionLeader</span>(new_char, old_char, <span class="keyword">true</span>) <span class="comment">-- heir coming of age event</span></pre></li>
+    </ul>
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

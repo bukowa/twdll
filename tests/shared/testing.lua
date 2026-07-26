@@ -80,6 +80,76 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 3: faction:SetFactionLeader
+        -- Behaviour (from FACTION::new_faction_leader source):
+        --   old_character = nil  → no succession event fired, rest works normally
+        --   old_character given  → fires faction_succession event
+        --     new leader is m_regent     → fires faction_succession_regency instead
+        --     heir_coming_of_age = true  → fires faction_succession_heir_comes_of_age
+        --   always: new leader m_heir set to 0, political party allegiance changed
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 3: faction:SetFactionLeader ---")
+        do
+            local f     = game:model():world():faction_by_key(faction)
+            local chars = f:character_list()
+            local total = chars:num_items()
+
+            -- collect generals
+            local generals = {}
+            for i = 0, total - 1 do
+                local c = chars:item_at(i)
+                if c:character_type("general") then
+                    generals[#generals + 1] = c
+                end
+            end
+
+            if #generals < 2 then
+                twdll.core.Log("[TEST] SetFactionLeader: SKIPPED (need at least 2 generals)")
+            else
+                -- helper: find a general that is not the current leader
+                local function pick_non_leader()
+                    local leader_cqi = f:faction_leader():cqi()
+                    for _, c in ipairs(generals) do
+                        if c:cqi() ~= leader_cqi then return c end
+                    end
+                end
+
+                -- case 1: silent swap (old = nil, no event)
+                local new1 = pick_non_leader()
+                local old1_cqi = f:faction_leader():cqi()
+                f:SetFactionLeader(new1)
+                local after1 = f:faction_leader():cqi()
+                if after1 == new1:cqi() then
+                    twdll.core.Log(string.format("[TEST] SetFactionLeader silent: OK (old=%d new=%d)", old1_cqi, after1))
+                else
+                    twdll.core.Log(string.format("[TEST] SetFactionLeader silent: FAILED (expected=%d got=%d)", new1:cqi(), after1))
+                end
+
+                -- case 2: normal succession (old provided, fires faction_succession)
+                local new2 = pick_non_leader()
+                local old2 = f:faction_leader()
+                f:SetFactionLeader(new2, old2)
+                local after2 = f:faction_leader():cqi()
+                if after2 == new2:cqi() then
+                    twdll.core.Log(string.format("[TEST] SetFactionLeader succession: OK (old=%d new=%d)", old2:cqi(), after2))
+                else
+                    twdll.core.Log(string.format("[TEST] SetFactionLeader succession: FAILED (expected=%d got=%d)", new2:cqi(), after2))
+                end
+
+                -- case 3: heir coming of age (fires faction_succession_heir_comes_of_age)
+                local new3 = pick_non_leader()
+                local old3 = f:faction_leader()
+                f:SetFactionLeader(new3, old3, true)
+                local after3 = f:faction_leader():cqi()
+                if after3 == new3:cqi() then
+                    twdll.core.Log(string.format("[TEST] SetFactionLeader heir_coming_of_age: OK (old=%d new=%d)", old3:cqi(), after3))
+                else
+                    twdll.core.Log(string.format("[TEST] SetFactionLeader heir_coming_of_age: FAILED (expected=%d got=%d)", new3:cqi(), after3))
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== ALL TESTS DONE =====")

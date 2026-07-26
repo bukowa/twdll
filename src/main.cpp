@@ -13,11 +13,15 @@ extern const luaL_Reg military_force_functions[];
 extern const luaL_Reg world_functions[];
 extern const luaL_Reg campaign_ui_functions[];
 
-// Core module functions (from src/lua/lua_core.cpp)
+// Core module functions (from src/common/lua_core.cpp)
 extern const luaL_Reg twdll_core[];
+
+// Game-specific metatable registration (extends game's Lua types with our methods)
+extern void register_faction_methods(lua_State* L);
 
 // Game-specific hooks (compiled in only for the relevant game)
 #include "common/campaign_hooks.h"
+#include "attila/game_api.h"
 
 // ── DLL entry ─────────────────────────────────────────────────────────────────
 
@@ -27,6 +31,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
         init_logger();
         Log("[twdll] DLL_PROCESS_ATTACH — initializing");
         initialize_lua_api();
+        initialize_game_api();
         install_campaign_hooks();
     }
     return TRUE;
@@ -53,6 +58,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State* L) {
 
     l_register(L, "twdll_faction", faction_functions);
     l_setfield(L, -2, "faction");
+    register_faction_methods(L);
 
     l_register(L, "twdll_military_force", military_force_functions);
     l_setfield(L, -2, "military_force");
