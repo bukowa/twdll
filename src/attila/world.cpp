@@ -28,7 +28,7 @@ __declspec(naked) static void HookedWorldCtor() {
     }
 }
 
-static void install_world_hook(uintptr_t base, size_t size) {
+void install_world_hook(uintptr_t base, size_t size) {
     install_singleton_hook(base, size, "FACTION_ARRAY", "WORLD",
                            reinterpret_cast<void*>(HookedWorldCtor),
                            &orig_world_ctor);

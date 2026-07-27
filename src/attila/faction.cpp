@@ -78,7 +78,7 @@ static const luaL_Reg faction_methods[] = {
     {nullptr, nullptr}
 };
 
-static void register_faction_methods(lua_State* L) {
+void register_faction_methods(lua_State* L) {
     l_newmetatable(L, "FACTION_SCRIPT_INTERFACE");
     l_getfield(L, -1, "__index");
     if (l_type(L, -1) == LUA_TTABLE) {

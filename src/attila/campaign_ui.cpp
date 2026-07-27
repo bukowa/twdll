@@ -27,7 +27,7 @@ __declspec(naked) static void HookedCampaignUiCtor() {
     }
 }
 
-static void install_campaign_ui_hook(uintptr_t base, size_t size) {
+void install_campaign_ui_hook(uintptr_t base, size_t size) {
     install_singleton_hook(base, size, "data/ui/campaign ui/mp_timer", "CAMPAIGN_UI",
                            reinterpret_cast<void*>(HookedCampaignUiCtor),
                            &orig_campaign_ui_ctor);
