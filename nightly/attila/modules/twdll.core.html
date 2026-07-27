@@ -39,14 +39,11 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.battle_unit.html">twdll.battle_unit</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/twdll.character.html">twdll.character</a></li>
-  <li><a href="../modules/twdll.faction.html">twdll.faction</a></li>
-  <li><a href="../modules/twdll.military_force.html">twdll.military_force</a></li>
+  <li><strong>twdll.core</strong></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.unit.html">twdll.unit</a></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><strong>twdll.core</strong></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
 </ul>
 
 </div>
@@ -57,26 +54,18 @@
 <p>
 
 </p>
-<p> Core twdll functions available in all games.</p>
+<p> Utility functions available in all games.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
 	<td class="name" nowrap><a href="#Log">Log (msg)</a></td>
-	<td class="summary">Log a message to the console.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#set_max_units_in_army">set_max_units_in_army (val)</a></td>
-	<td class="summary">Set the maximum number of units allowed in an army.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#set_max_units_in_navy">set_max_units_in_navy (val)</a></td>
-	<td class="summary">Set the maximum number of units allowed in a navy.</td>
+	<td class="summary">Log a message to twdll.log.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GameBuild">GameBuild ()</a></td>
-	<td class="summary">Get the game build name.</td>
+	<td class="summary">Returns the game build name.</td>
 	</tr>
 </table>
 
@@ -92,71 +81,20 @@
     <strong>Log (msg)</strong>
     </dt>
     <dd>
-    Log a message to the console.
+    Log a message to twdll.log.
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">msg</span>
-         The message to log
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         message to log
         </li>
     </ul>
 
 
 
 
-    <h3>Usage:</h3>
-    <ul>
-        <pre class="example">twdll.<span class="function-name">Log</span>(<span class="string">"Hello from C++!"</span>)</pre>
-    </ul>
-
-</dd>
-    <dt>
-    <a name = "set_max_units_in_army"></a>
-    <strong>set_max_units_in_army (val)</strong>
-    </dt>
-    <dd>
-    Set the maximum number of units allowed in an army.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">val</span>
-         The maximum number of units
-        </li>
-    </ul>
-
-
-
-
-    <h3>Usage:</h3>
-    <ul>
-        <pre class="example">twdll.<span class="function-name">set_max_units_in_army</span>(<span class="number">100</span>)</pre>
-    </ul>
-
-</dd>
-    <dt>
-    <a name = "set_max_units_in_navy"></a>
-    <strong>set_max_units_in_navy (val)</strong>
-    </dt>
-    <dd>
-    Set the maximum number of units allowed in a navy.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">val</span>
-         The maximum number of units
-        </li>
-    </ul>
-
-
-
-
-    <h3>Usage:</h3>
-    <ul>
-        <pre class="example">twdll.<span class="function-name">set_max_units_in_navy</span>(<span class="number">50</span>)</pre>
-    </ul>
 
 </dd>
     <dt>
@@ -164,22 +102,19 @@
     <strong>GameBuild ()</strong>
     </dt>
     <dd>
-    Get the game build name.
+    Returns the game build name.
 
 
 
     <h3>Returns:</h3>
     <ol>
 
-        The game name string
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        game name (e.g. "Attila")
     </ol>
 
 
 
-    <h3>Usage:</h3>
-    <ul>
-        <pre class="example"><span class="keyword">local</span> game = twdll.<span class="function-name">GameBuild</span>()</pre>
-    </ul>
 
 </dd>
 </dl>
