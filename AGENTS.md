@@ -9,6 +9,30 @@ It is a **32-bit MSVC DLL** loaded in-process by the game.
 
 ---
 
+## What NOT to Do
+
+- **Do not put game-specific structs in `common/`** — they belong in `attila/tw_types.h`.
+- **Do not define structs locally in `.cpp` files** — all `TW_*` structs go in `tw_types.h`.
+- **Do not hardcode `FOO_PTR = 0x8`** — use `TW_PtrOffset<T>::value` (set via `TW_PTR_OFFSET`).
+- **Do not use macros** for property accessors — use `twdll::Property` / `twdll::Getter`.
+- **Do not skip `TW_ASSERT_OFFSET`** on struct fields — it is the only compile-time layout check.
+- **Do not register an untested module in `main.cpp`** — test first, then register.
+- **Do not document functions that are not registered** — LDoc only for active Lua API.
+- **Do not edit `tests/attila/pack/shared/testing.lua`** — edit `tests/shared/testing.lua`.
+- **Do not use `twdll_foo` (underscore) in `@module` tags** — use `twdll.foo` (dot notation).
+- **Do not use raw offsets in accessor functions** — define in `TW_*` struct, access via member pointer or `offsetof`.
+
+## Before Modifying Existing Files
+
+Never edit `tw_types.h`, any `.cpp` file, or `CMakeLists.txt` directly without first showing
+the exact change to the user as a clearly marked code block or diff. Only apply changes after
+explicit confirmation ("ok") from the user.
+
+If a build fails after an accepted change, show the compiler error and propose a fix — do not
+silently retry or patch in a loop. Report the error, propose one fix, wait for confirmation.
+
+---
+
 ## Architecture at a Glance
 
 ```
@@ -354,19 +378,3 @@ void register_faction_methods(lua_State* L); // called once from main.cpp
 
 `tw_push_wrapped<T>(lua_State* L, T* raw_ptr)` creates Lua userdata with `GameScriptInterface<T>`
 layout so that `tw_unwrap<T>` works on the result. Use when pushing a game object to Lua from C++.
-
----
-
-## What NOT to Do
-
-- **Do not hardcode virtual addresses** — use `Scanner::` for runtime location.
-- **Do not put game-specific structs in `common/`** — they belong in `attila/tw_types.h`.
-- **Do not define structs locally in `.cpp` files** — all `TW_*` structs go in `tw_types.h`.
-- **Do not hardcode `FOO_PTR = 0x8`** — use `TW_PtrOffset<T>::value` (set via `TW_PTR_OFFSET`).
-- **Do not use macros** for property accessors — use `twdll::Property` / `twdll::Getter`.
-- **Do not skip `TW_ASSERT_OFFSET`** on struct fields — it is the only compile-time layout check.
-- **Do not register an untested module in `main.cpp`** — test first, then register.
-- **Do not document functions that are not registered** — LDoc only for active Lua API.
-- **Do not edit `tests/attila/pack/shared/testing.lua`** — edit `tests/shared/testing.lua`.
-- **Do not use `twdll_foo` (underscore) in `@module` tags** — use `twdll.foo` (dot notation).
-- **Do not use raw offsets in accessor functions** — define in `TW_*` struct, access via member pointer or `offsetof`.
