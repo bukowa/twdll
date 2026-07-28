@@ -8,9 +8,9 @@ using twdll::TW_Unit;
 constexpr size_t UNIT_PTR = twdll::TW_PtrOffset<TW_Unit>::value;
 
 namespace Props {
-    static twdll::Property NumberOfMan   {&TW_Unit::current_number_of_men, UNIT_PTR, "unit"};
-    static twdll::Property MaxNumberOfMan{&TW_Unit::max_number_of_men,     UNIT_PTR, "unit"};
-    static twdll::Property MovementPoints{&TW_Unit::movement_points,       UNIT_PTR, "unit"};
+    static twdll::Property NumMen      {&TW_Unit::num_men,        UNIT_PTR, "unit"};
+    static twdll::Property MaxNumMen   {&TW_Unit::max_num_men,    UNIT_PTR, "unit"};
+    static twdll::Property ActionPoints{&TW_Unit::action_points,  UNIT_PTR, "unit"};
 }
 
 /***
@@ -22,45 +22,45 @@ static int GetMemoryAddress    (lua_State* L) { return tw_mem_address(L, "unit",
 
 /***
 Gets the current number of men in the unit.
-@function GetNumberOfMan
+@function GetNumMen
 @treturn integer current number of men
 */
-static int GetNumberOfMan   (lua_State* L) { return Props::NumberOfMan.get(L); }
+static int GetNumMen        (lua_State* L) { return Props::NumMen.get(L); }
 
 /***
 Sets the current number of men in the unit.
-@function SetNumberOfMan
+@function SetNumMen
 @tparam integer value new number of men
 */
-static int SetNumberOfMan   (lua_State* L) { return Props::NumberOfMan.set(L); }
+static int SetNumMen        (lua_State* L) { return Props::NumMen.set(L); }
 
 /***
 Gets the maximum number of men the unit can have.
-@function GetMaxNumberOfMan
+@function GetMaxNumMen
 @treturn integer maximum number of men
 */
-static int GetMaxNumberOfMan(lua_State* L) { return Props::MaxNumberOfMan.get(L); }
+static int GetMaxNumMen     (lua_State* L) { return Props::MaxNumMen.get(L); }
 
 /***
 Sets the maximum number of men the unit can have.
-@function SetMaxNumberOfMan
+@function SetMaxNumMen
 @tparam integer value new maximum number of men
 */
-static int SetMaxNumberOfMan(lua_State* L) { return Props::MaxNumberOfMan.set(L); }
+static int SetMaxNumMen     (lua_State* L) { return Props::MaxNumMen.set(L); }
 
 /***
-Gets the movement points remaining for the unit.
-@function GetMovementPoints
-@treturn integer movement points
+Gets the action points remaining for the unit.
+@function GetActionPoints
+@treturn integer action points
 */
-static int GetMovementPoints(lua_State* L) { return Props::MovementPoints.get(L); }
+static int GetActionPoints  (lua_State* L) { return Props::ActionPoints.get(L); }
 
 /***
-Sets the movement points for the unit.
-@function SetMovementPoints
-@tparam integer value new movement points
+Sets the action points for the unit.
+@function SetActionPoints
+@tparam integer value new action points
 */
-static int SetMovementPoints(lua_State* L) { return Props::MovementPoints.set(L); }
+static int SetActionPoints  (lua_State* L) { return Props::ActionPoints.set(L); }
 
 extern const luaL_Reg unit_functions[] = {
     {nullptr, nullptr}
@@ -68,12 +68,12 @@ extern const luaL_Reg unit_functions[] = {
 
 static const luaL_Reg unit_methods[] = {
     {"GetMemoryAddress",  GetMemoryAddress},
-    {"GetNumberOfMan",    GetNumberOfMan},
-    {"SetNumberOfMan",    SetNumberOfMan},
-    {"GetMaxNumberOfMan", GetMaxNumberOfMan},
-    {"SetMaxNumberOfMan", SetMaxNumberOfMan},
-    {"GetMovementPoints", GetMovementPoints},
-    {"SetMovementPoints", SetMovementPoints},
+    {"GetNumMen",         GetNumMen},
+    {"SetNumMen",         SetNumMen},
+    {"GetMaxNumMen",      GetMaxNumMen},
+    {"SetMaxNumMen",      SetMaxNumMen},
+    {"GetActionPoints",   GetActionPoints},
+    {"SetActionPoints",   SetActionPoints},
     {nullptr, nullptr}
 };
 

@@ -15,12 +15,12 @@ struct TW_FamilyMember;
 
 struct TW_Faction {
     char pad_00[0x7DC];
-    int  gold;              // 0x7DC
+    int  treasury;          // 0x7DC
 };
 
 struct TW_Character {
     char             pad_00[0x14];
-    int              movement_points;  // 0x14
+    int              action_points;    // 0x14
     char             pad_18[0x1F0];
     TW_FamilyMember* family_member;    // 0x208
     char             pad_20C[0x34C];
@@ -40,10 +40,10 @@ struct TW_MilitaryForce {
 
 struct TW_Unit {
     char pad_00[0x44];
-    int  current_number_of_men;  // 0x44
-    int  max_number_of_men;      // 0x48
+    int  num_men;                // 0x44
+    int  max_num_men;            // 0x48
     char pad_4C[0x18];
-    int  movement_points;        // 0x64
+    int  action_points;          // 0x64
 };
 
 // EMPIREBATTLE::LAND_STATS — live battle statistics (embedded in UNIT via LAND_STATS_MANAGER)
@@ -81,16 +81,16 @@ struct TW_CampaignUi {
 #define TW_ASSERT_OFFSET(S, F, O) \
     static_assert(offsetof(S, F) == O, #S " Attila: " #F " expected at " #O)
 
-TW_ASSERT_OFFSET(TW_Faction,       gold,                    0x7DC);
-TW_ASSERT_OFFSET(TW_Character,     movement_points,         0x14);
+TW_ASSERT_OFFSET(TW_Faction,       treasury,                0x7DC);
+TW_ASSERT_OFFSET(TW_Character,     action_points,           0x14);
 TW_ASSERT_OFFSET(TW_Character,     family_member,           0x208);
 TW_ASSERT_OFFSET(TW_Character,     ambition,                0x558);
 TW_ASSERT_OFFSET(TW_Character,     gravitas,                0x55C);
 TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);
 TW_ASSERT_OFFSET(TW_MilitaryForce, recruitment_queue_size,  0x45C);
-TW_ASSERT_OFFSET(TW_Unit,          current_number_of_men,   0x44);
-TW_ASSERT_OFFSET(TW_Unit,          max_number_of_men,       0x48);
-TW_ASSERT_OFFSET(TW_Unit,          movement_points,         0x64);
+TW_ASSERT_OFFSET(TW_Unit,          num_men,                 0x44);
+TW_ASSERT_OFFSET(TW_Unit,          max_num_men,             0x48);
+TW_ASSERT_OFFSET(TW_Unit,          action_points,           0x64);
 TW_ASSERT_OFFSET(TW_LandStats,     charge_bonus,            0x38);
 TW_ASSERT_OFFSET(TW_LandStats,     morale,                  0x44);
 TW_ASSERT_OFFSET(TW_LandStats,     melee_attack,            0x48);

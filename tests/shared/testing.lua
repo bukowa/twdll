@@ -58,16 +58,16 @@ local function run_twdll_tests()
         local char = game:model():world():faction_by_key(faction):faction_leader()
         local unit = char:military_force():unit_list():item_at(0)
 
-        local max_men = unit:GetMaxNumberOfMan()
-        local initial_men = unit:GetNumberOfMan()
+        local max_men = unit:GetMaxNumMen()
+        local initial_men = unit:GetNumMen()
         local initial_percentage = unit:percentage_proportion_of_full_strength()
 
         twdll.core.Log("[TEST] Unit Initial State - Men: " ..
             tostring(initial_men) .. "/" .. tostring(max_men) .. " (" .. tostring(initial_percentage) .. "%)")
 
-        unit:SetNumberOfMan(20)
+        unit:SetNumMen(20)
 
-        local new_men = unit:GetNumberOfMan()
+        local new_men = unit:GetNumMen()
         local new_percentage = unit:percentage_proportion_of_full_strength()
 
         twdll.core.Log("[TEST] Unit Modified State - Men: " ..
@@ -79,28 +79,28 @@ local function run_twdll_tests()
             twdll.core.Log("[TEST] unit metatable: FAILED (expected 20, got " .. tostring(new_men) .. ")")
         end
 
-        twdll.core.Log("[TEST] --- Test 2b: SetMaxNumberOfMan ---")
-        local max_before = unit:GetMaxNumberOfMan()
-        twdll.core.Log("[TEST] MaxNumberOfMan initial = " .. tostring(max_before))
-        unit:SetMaxNumberOfMan(150)
-        local max_after = unit:GetMaxNumberOfMan()
-        twdll.core.Log("[TEST] MaxNumberOfMan after  = " .. tostring(max_after))
+        twdll.core.Log("[TEST] --- Test 2b: SetMaxNumMen ---")
+        local max_before = unit:GetMaxNumMen()
+        twdll.core.Log("[TEST] MaxNumMen initial = " .. tostring(max_before))
+        unit:SetMaxNumMen(150)
+        local max_after = unit:GetMaxNumMen()
+        twdll.core.Log("[TEST] MaxNumMen after  = " .. tostring(max_after))
         if max_after == 150 then
-            twdll.core.Log("[TEST] SetMaxNumberOfMan: OK")
+            twdll.core.Log("[TEST] SetMaxNumMen: OK")
         else
-            twdll.core.Log("[TEST] SetMaxNumberOfMan: FAILED (expected 150, got " .. tostring(max_after) .. ")")
+            twdll.core.Log("[TEST] SetMaxNumMen: FAILED (expected 150, got " .. tostring(max_after) .. ")")
         end
 
-        twdll.core.Log("[TEST] --- Test 2c: GetMovementPoints / SetMovementPoints ---")
-        local mp_before = unit:GetMovementPoints()
-        twdll.core.Log("[TEST] MovementPoints initial = " .. tostring(mp_before))
-        unit:SetMovementPoints(50)
-        local mp_after = unit:GetMovementPoints()
-        twdll.core.Log("[TEST] MovementPoints after  = " .. tostring(mp_after))
-        if mp_after == 50 then
-            twdll.core.Log("[TEST] SetMovementPoints: OK")
+        twdll.core.Log("[TEST] --- Test 2c: GetActionPoints / SetActionPoints ---")
+        local ap_before = unit:GetActionPoints()
+        twdll.core.Log("[TEST] ActionPoints initial = " .. tostring(ap_before))
+        unit:SetActionPoints(50)
+        local ap_after = unit:GetActionPoints()
+        twdll.core.Log("[TEST] ActionPoints after  = " .. tostring(ap_after))
+        if ap_after == 50 then
+            twdll.core.Log("[TEST] SetActionPoints: OK")
         else
-            twdll.core.Log("[TEST] SetMovementPoints: FAILED (expected 50, got " .. tostring(mp_after) .. ")")
+            twdll.core.Log("[TEST] SetActionPoints: FAILED (expected 50, got " .. tostring(ap_after) .. ")")
         end
 
         -- ======================================================
@@ -180,22 +180,22 @@ local function run_twdll_tests()
         twdll.core.Log("[TEST] --- Test 4: faction GetGold/SetGold ---")
         do
             local f            = game:model():world():faction_by_key(faction)
-            local gold_initial = f:GetGold()
-            twdll.core.Log("[TEST] GetGold initial = " .. tostring(gold_initial))
+            local gold_initial = f:GetTreasury()
+            twdll.core.Log("[TEST] GetTreasury initial = " .. tostring(gold_initial))
 
             if twdll.core.GameBuild() == "Attila" and gold_initial == 15000 then
-                twdll.core.Log("[TEST] GetGold initial: OK (15000)")
+                twdll.core.Log("[TEST] GetTreasury initial: OK (15000)")
             else
-                twdll.core.Log("[TEST] GetGold initial: got " .. tostring(gold_initial))
+                twdll.core.Log("[TEST] GetTreasury initial: got " .. tostring(gold_initial))
             end
 
-            f:SetGold(99999)
-            local gold_after = f:GetGold()
-            twdll.core.Log("[TEST] GetGold after SetGold(99999) = " .. tostring(gold_after))
+            f:SetTreasury(99999)
+            local gold_after = f:GetTreasury()
+            twdll.core.Log("[TEST] GetTreasury after SetTreasury(99999) = " .. tostring(gold_after))
             if gold_after == 99999 then
-                twdll.core.Log("[TEST] SetGold: OK")
+                twdll.core.Log("[TEST] SetTreasury: OK")
             else
-                twdll.core.Log("[TEST] SetGold: FAILED (expected 99999, got " .. tostring(gold_after) .. ")")
+                twdll.core.Log("[TEST] SetTreasury: FAILED (expected 99999, got " .. tostring(gold_after) .. ")")
             end
         end
 

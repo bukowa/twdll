@@ -10,7 +10,7 @@ using twdll::TW_Character;
 constexpr size_t FACTION_PTR = twdll::TW_PtrOffset<TW_Faction>::value;
 
 namespace Props {
-    static twdll::Property<int, TW_Faction> Gold{&TW_Faction::gold, FACTION_PTR, "faction"};
+    static twdll::Property<int, TW_Faction> Treasury{&TW_Faction::treasury, FACTION_PTR, "faction"};
 }
 
 /***
@@ -21,18 +21,18 @@ Returns the memory address of the faction object as a hexadecimal string.
 static int GetMemoryAddress    (lua_State* L) { return tw_mem_address(L, "faction", FACTION_PTR); }
 
 /***
-Gets the amount of gold for the faction.
-@function GetGold
+Gets the amount of gold (treasury) for the faction.
+@function GetTreasury
 @treturn integer amount of gold
 */
-static int GetGold          (lua_State* L) { return Props::Gold.get(L); }
+static int GetTreasury      (lua_State* L) { return Props::Treasury.get(L); }
 
 /***
-Sets the amount of gold for the faction.
-@function SetGold
+Sets the amount of gold (treasury) for the faction.
+@function SetTreasury
 @tparam integer value new amount of gold
 */
-static int SetGold          (lua_State* L) { return Props::Gold.set(L); }
+static int SetTreasury      (lua_State* L) { return Props::Treasury.set(L); }
 
 /***
 Sets a new leader for the faction.
@@ -72,8 +72,8 @@ extern const luaL_Reg faction_functions[] = {
 
 static const luaL_Reg faction_methods[] = {
     {"GetMemoryAddress",  GetMemoryAddress},
-    {"GetGold",           GetGold},
-    {"SetGold",           SetGold},
+    {"GetTreasury",       GetTreasury},
+    {"SetTreasury",       SetTreasury},
     {"SetFactionLeader",  SetFactionLeader},
     {nullptr, nullptr}
 };
