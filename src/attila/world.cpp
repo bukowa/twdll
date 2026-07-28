@@ -57,6 +57,20 @@ Gets the number of factions in the current campaign.
 static int GetFactionCount(lua_State* L) { return FactionCount.get(L); }
 
 /***
+Gets the maximum number of units allowed in an army.
+@function GetMaxUnitsInArmy
+@treturn integer maximum unit count
+*/
+static int GetMaxUnitsInArmy(lua_State* L) {
+    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
+        l_pushinteger(L, *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_UNITS_ARMY));
+        return 1;
+    }
+    l_pushnil(L);
+    return 1;
+}
+
+/***
 Sets the maximum number of units allowed in an army.
 @function SetMaxUnitsInArmy
 @tparam integer val maximum unit count
@@ -68,6 +82,20 @@ static int SetMaxUnitsInArmy(lua_State* L) {
         Log("[twdll] SetMaxUnitsInArmy: %d", val);
     }
     return 0;
+}
+
+/***
+Gets the maximum number of units allowed in a navy.
+@function GetMaxUnitsInNavy
+@treturn integer maximum unit count
+*/
+static int GetMaxUnitsInNavy(lua_State* L) {
+    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
+        l_pushinteger(L, *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_UNITS_NAVY));
+        return 1;
+    }
+    l_pushnil(L);
+    return 1;
 }
 
 /***
@@ -87,7 +115,9 @@ static int SetMaxUnitsInNavy(lua_State* L) {
 extern const luaL_Reg world_functions[] = {
     {"GetMemoryAddress",   GetMemoryAddress},
     {"GetFactionCount",    GetFactionCount},
+    {"GetMaxUnitsInArmy",  GetMaxUnitsInArmy},
     {"SetMaxUnitsInArmy",  SetMaxUnitsInArmy},
+    {"GetMaxUnitsInNavy",  GetMaxUnitsInNavy},
     {"SetMaxUnitsInNavy",  SetMaxUnitsInNavy},
     {nullptr, nullptr}
 };

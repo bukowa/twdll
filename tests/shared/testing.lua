@@ -202,6 +202,38 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 6: twdll.world SetMaxUnitsInArmy / SetMaxUnitsInNavy
+        -- Attila default: army=20, navy=20
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 6: SetMaxUnitsInArmy / SetMaxUnitsInNavy ---")
+        do
+            local army_before = twdll.world.GetMaxUnitsInArmy()
+            local navy_before = twdll.world.GetMaxUnitsInNavy()
+            twdll.core.Log("[TEST] MaxUnitsInArmy initial = " .. tostring(army_before))
+            twdll.core.Log("[TEST] MaxUnitsInNavy initial = " .. tostring(navy_before))
+
+            twdll.world.SetMaxUnitsInArmy(30)
+            twdll.world.SetMaxUnitsInNavy(15)
+
+            local army_after = twdll.world.GetMaxUnitsInArmy()
+            local navy_after = twdll.world.GetMaxUnitsInNavy()
+            twdll.core.Log("[TEST] MaxUnitsInArmy after Set(30) = " .. tostring(army_after))
+            twdll.core.Log("[TEST] MaxUnitsInNavy after Set(15) = " .. tostring(navy_after))
+
+            if army_after == 30 then
+                twdll.core.Log("[TEST] SetMaxUnitsInArmy: OK")
+            else
+                twdll.core.Log("[TEST] SetMaxUnitsInArmy: FAILED (expected 30, got " .. tostring(army_after) .. ")")
+            end
+
+            if navy_after == 15 then
+                twdll.core.Log("[TEST] SetMaxUnitsInNavy: OK")
+            else
+                twdll.core.Log("[TEST] SetMaxUnitsInNavy: FAILED (expected 15, got " .. tostring(navy_after) .. ")")
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== ALL TESTS DONE =====")
