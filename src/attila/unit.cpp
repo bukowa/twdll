@@ -1,5 +1,5 @@
-/// @module twdll.unit
-/// Campaign unit properties for Total War: Attila.
+/// @module UNIT_SCRIPT_INTERFACE
+/// Extensions to the game's unit object.
 #include "../common/tw.h"
 #include "tw_types.h"
 
@@ -16,7 +16,6 @@ namespace Props {
 /***
 Returns the memory address of the unit object as a hexadecimal string.
 @function GetMemoryAddress
-@tparam userdata unit the unit object
 @treturn string memory address (e.g. "0x12345678")
 */
 static int GetMemAddress    (lua_State* L) { return tw_mem_address(L, "unit", UNIT_PTR); }
@@ -24,7 +23,6 @@ static int GetMemAddress    (lua_State* L) { return tw_mem_address(L, "unit", UN
 /***
 Gets the current number of men in the unit.
 @function GetNumberOfMan
-@tparam userdata unit the unit object
 @treturn integer current number of men
 */
 static int GetNumberOfMan   (lua_State* L) { return Props::NumberOfMan.get(L); }
@@ -32,7 +30,6 @@ static int GetNumberOfMan   (lua_State* L) { return Props::NumberOfMan.get(L); }
 /***
 Sets the current number of men in the unit.
 @function SetNumberOfMan
-@tparam userdata unit the unit object
 @tparam integer value new number of men
 */
 static int SetNumberOfMan   (lua_State* L) { return Props::NumberOfMan.set(L); }
@@ -40,7 +37,6 @@ static int SetNumberOfMan   (lua_State* L) { return Props::NumberOfMan.set(L); }
 /***
 Gets the maximum number of men the unit can have.
 @function GetMaxNumberOfMan
-@tparam userdata unit the unit object
 @treturn integer maximum number of men
 */
 static int GetMaxNumberOfMan(lua_State* L) { return Props::MaxNumberOfMan.get(L); }
@@ -48,7 +44,6 @@ static int GetMaxNumberOfMan(lua_State* L) { return Props::MaxNumberOfMan.get(L)
 /***
 Sets the maximum number of men the unit can have.
 @function SetMaxNumberOfMan
-@tparam userdata unit the unit object
 @tparam integer value new maximum number of men
 */
 static int SetMaxNumberOfMan(lua_State* L) { return Props::MaxNumberOfMan.set(L); }
@@ -56,7 +51,6 @@ static int SetMaxNumberOfMan(lua_State* L) { return Props::MaxNumberOfMan.set(L)
 /***
 Gets the movement points remaining for the unit.
 @function GetMovementPoints
-@tparam userdata unit the unit object
 @treturn integer movement points
 */
 static int GetMovementPoints(lua_State* L) { return Props::MovementPoints.get(L); }
@@ -64,12 +58,15 @@ static int GetMovementPoints(lua_State* L) { return Props::MovementPoints.get(L)
 /***
 Sets the movement points for the unit.
 @function SetMovementPoints
-@tparam userdata unit the unit object
 @tparam integer value new movement points
 */
 static int SetMovementPoints(lua_State* L) { return Props::MovementPoints.set(L); }
 
 extern const luaL_Reg unit_functions[] = {
+    {nullptr, nullptr}
+};
+
+static const luaL_Reg unit_methods[] = {
     {"GetMemoryAddress",  GetMemAddress},
     {"GetNumberOfMan",    GetNumberOfMan},
     {"SetNumberOfMan",    SetNumberOfMan},
@@ -79,3 +76,19 @@ extern const luaL_Reg unit_functions[] = {
     {"SetMovementPoints", SetMovementPoints},
     {nullptr, nullptr}
 };
+
+void register_unit_methods(lua_State* L) {
+    l_newmetatable(L, "UNIT_SCRIPT_INTERFACE");
+    l_getfield(L, -1, "__index");
+    if (l_type(L, -1) == LUA_TTABLE) {
+        for (const luaL_Reg* f = unit_methods; f->name; ++f) {
+            l_pushstring(L, f->name);
+            l_pushcclosure(L, f->func, 0);
+            l_settable(L, -3);
+        }
+        Log("[twdll] UNIT_SCRIPT_INTERFACE extended");
+    } else {
+        Log("[twdll] WARNING: UNIT_SCRIPT_INTERFACE __index not found");
+    }
+    l_pop(L, 2);
+}

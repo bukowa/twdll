@@ -51,32 +51,32 @@ local function run_twdll_tests()
 
 
         -- ======================================================
-        -- TEST 2: twdll_unit read/write
+        -- TEST 2: twdll_unit read/write (via metatable)
         -- ======================================================
-        twdll.core.Log("[TEST] --- Test 2: twdll_unit read/write ---")
+        twdll.core.Log("[TEST] --- Test 2: twdll_unit read/write (via metatable) ---")
 
         local char = game:model():world():faction_by_key(faction):faction_leader()
         local unit = char:military_force():unit_list():item_at(0)
 
-        local max_men = twdll.unit.GetMaxNumberOfMan(unit)
-        local initial_men = twdll.unit.GetNumberOfMan(unit)
+        local max_men = unit:GetMaxNumberOfMan()
+        local initial_men = unit:GetNumberOfMan()
         local initial_percentage = unit:percentage_proportion_of_full_strength()
 
         twdll.core.Log("[TEST] Unit Initial State - Men: " ..
             tostring(initial_men) .. "/" .. tostring(max_men) .. " (" .. tostring(initial_percentage) .. "%)")
 
-        twdll.unit.SetNumberOfMan(unit, 20)
+        unit:SetNumberOfMan(20)
 
-        local new_men = twdll.unit.GetNumberOfMan(unit)
+        local new_men = unit:GetNumberOfMan()
         local new_percentage = unit:percentage_proportion_of_full_strength()
 
         twdll.core.Log("[TEST] Unit Modified State - Men: " ..
             tostring(new_men) .. "/" .. tostring(max_men) .. " (" .. tostring(new_percentage) .. "%)")
 
         if new_men == 20 then
-            twdll.core.Log("[TEST] twdll_unit: OK")
+            twdll.core.Log("[TEST] unit metatable: OK")
         else
-            twdll.core.Log("[TEST] twdll_unit: FAILED (expected 20, got " .. tostring(new_men) .. ")")
+            twdll.core.Log("[TEST] unit metatable: FAILED (expected 20, got " .. tostring(new_men) .. ")")
         end
 
         -- ======================================================

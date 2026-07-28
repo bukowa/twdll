@@ -64,7 +64,7 @@ add_custom_command(
                 "${PROJECT_SOURCE_DIR}/docs/lua/ldoc/ldoc.lua"
                 -c "${CONFIG_LD_GENERATED}"
                 src
-    DEPENDS     lua_for_docs luafilesystem ${CONFIG_LD_GENERATED}
+    DEPENDS     lua_for_docs luafilesystem ${CONFIG_LD_GENERATED} ${TWDLL_DOC_SOURCES}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     VERBATIM
 )

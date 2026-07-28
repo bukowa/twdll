@@ -41,7 +41,7 @@
 <ul class="nowrap">
   <li><a href="../modules/twdll.core.html">twdll.core</a></li>
   <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><strong>twdll.unit</strong></li>
+  <li><strong>UNIT_SCRIPT_INTERFACE</strong></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
   <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
   <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
@@ -51,41 +51,41 @@
 
 <div id="content">
 
-<h1>Module <code>twdll.unit</code></h1>
+<h1>Module <code>UNIT_SCRIPT_INTERFACE</code></h1>
 <p>
 
 </p>
-<p> Campaign unit properties for Total War: Attila.</p>
+<p> Extensions to the game's unit object.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress (unit)</a></td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
 	<td class="summary">Returns the memory address of the unit object as a hexadecimal string.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetNumberOfMan">GetNumberOfMan (unit)</a></td>
+	<td class="name" nowrap><a href="#GetNumberOfMan">GetNumberOfMan ()</a></td>
 	<td class="summary">Gets the current number of men in the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetNumberOfMan">SetNumberOfMan (unit, value)</a></td>
+	<td class="name" nowrap><a href="#SetNumberOfMan">SetNumberOfMan (value)</a></td>
 	<td class="summary">Sets the current number of men in the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMaxNumberOfMan">GetMaxNumberOfMan (unit)</a></td>
+	<td class="name" nowrap><a href="#GetMaxNumberOfMan">GetMaxNumberOfMan ()</a></td>
 	<td class="summary">Gets the maximum number of men the unit can have.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetMaxNumberOfMan">SetMaxNumberOfMan (unit, value)</a></td>
+	<td class="name" nowrap><a href="#SetMaxNumberOfMan">SetMaxNumberOfMan (value)</a></td>
 	<td class="summary">Sets the maximum number of men the unit can have.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints (unit)</a></td>
+	<td class="name" nowrap><a href="#GetMovementPoints">GetMovementPoints ()</a></td>
 	<td class="summary">Gets the movement points remaining for the unit.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (unit, value)</a></td>
+	<td class="name" nowrap><a href="#SetMovementPoints">SetMovementPoints (value)</a></td>
 	<td class="summary">Sets the movement points for the unit.</td>
 	</tr>
 </table>
@@ -99,19 +99,12 @@
     <dl class="function">
     <dt>
     <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress (unit)</strong>
+    <strong>GetMemoryAddress ()</strong>
     </dt>
     <dd>
     Returns the memory address of the unit object as a hexadecimal string.
 
 
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object
-        </li>
-    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -126,19 +119,12 @@
 </dd>
     <dt>
     <a name = "GetNumberOfMan"></a>
-    <strong>GetNumberOfMan (unit)</strong>
+    <strong>GetNumberOfMan ()</strong>
     </dt>
     <dd>
     Gets the current number of men in the unit.
 
 
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object
-        </li>
-    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -153,7 +139,7 @@
 </dd>
     <dt>
     <a name = "SetNumberOfMan"></a>
-    <strong>SetNumberOfMan (unit, value)</strong>
+    <strong>SetNumberOfMan (value)</strong>
     </dt>
     <dd>
     Sets the current number of men in the unit.
@@ -161,10 +147,6 @@
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object
-        </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
          new number of men
@@ -178,19 +160,12 @@
 </dd>
     <dt>
     <a name = "GetMaxNumberOfMan"></a>
-    <strong>GetMaxNumberOfMan (unit)</strong>
+    <strong>GetMaxNumberOfMan ()</strong>
     </dt>
     <dd>
     Gets the maximum number of men the unit can have.
 
 
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object
-        </li>
-    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -205,7 +180,7 @@
 </dd>
     <dt>
     <a name = "SetMaxNumberOfMan"></a>
-    <strong>SetMaxNumberOfMan (unit, value)</strong>
+    <strong>SetMaxNumberOfMan (value)</strong>
     </dt>
     <dd>
     Sets the maximum number of men the unit can have.
@@ -213,10 +188,6 @@
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object
-        </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
          new maximum number of men
@@ -230,19 +201,12 @@
 </dd>
     <dt>
     <a name = "GetMovementPoints"></a>
-    <strong>GetMovementPoints (unit)</strong>
+    <strong>GetMovementPoints ()</strong>
     </dt>
     <dd>
     Gets the movement points remaining for the unit.
 
 
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object
-        </li>
-    </ul>
 
     <h3>Returns:</h3>
     <ol>
@@ -257,7 +221,7 @@
 </dd>
     <dt>
     <a name = "SetMovementPoints"></a>
-    <strong>SetMovementPoints (unit, value)</strong>
+    <strong>SetMovementPoints (value)</strong>
     </dt>
     <dd>
     Sets the movement points for the unit.
@@ -265,10 +229,6 @@
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">unit</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the unit object
-        </li>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
          new movement points
