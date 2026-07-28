@@ -39,34 +39,30 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><strong>twdll.core</strong></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
   <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.unit.html">twdll.unit</a></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
   <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><strong>MILITARY_FORCE_SCRIPT_INTERFACE</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>twdll.core</code></h1>
+<h1>Module <code>MILITARY_FORCE_SCRIPT_INTERFACE</code></h1>
 <p>
 
 </p>
-<p> Utility functions available in all games.</p>
+<p> Extensions to the game's military force object.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#Log">Log (msg)</a></td>
-	<td class="summary">Log a message to twdll.log.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GameBuild">GameBuild ()</a></td>
-	<td class="summary">Returns the game build name.</td>
+	<td class="name" nowrap><a href="#RemoveUnit">RemoveUnit (unit)</a></td>
+	<td class="summary">Removes a unit from this military force.</td>
 	</tr>
 </table>
 
@@ -78,41 +74,21 @@
 
     <dl class="function">
     <dt>
-    <a name = "Log"></a>
-    <strong>Log (msg)</strong>
+    <a name = "RemoveUnit"></a>
+    <strong>RemoveUnit (unit)</strong>
     </dt>
     <dd>
-    Log a message to twdll.log.
+    Removes a unit from this military force.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">msg</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         message to log
+        <li><span class="parameter">unit</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the unit to remove from the force
         </li>
     </ul>
 
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GameBuild"></a>
-    <strong>GameBuild ()</strong>
-    </dt>
-    <dd>
-    Returns the game build name.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        game name (e.g. "Attila")
-    </ol>
 
 
 
