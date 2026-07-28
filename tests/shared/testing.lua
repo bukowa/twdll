@@ -176,6 +176,32 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 5: MILITARY_FORCE RemoveUnit
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 5: MILITARY_FORCE RemoveUnit ---")
+        do
+            local mf   = char:military_force()
+            local ul   = mf:unit_list()
+            local before = ul:num_items()
+
+            twdll.core.Log("[TEST] RemoveUnit: units before = " .. tostring(before))
+
+            if before > 0 then
+                local last_unit = ul:item_at(before - 1)
+                mf:RemoveUnit(last_unit)
+                local after = mf:unit_list():num_items()
+                twdll.core.Log("[TEST] RemoveUnit: units after  = " .. tostring(after))
+                if after == before - 1 then
+                    twdll.core.Log("[TEST] RemoveUnit: OK")
+                else
+                    twdll.core.Log("[TEST] RemoveUnit: FAILED (expected " .. tostring(before - 1) .. ", got " .. tostring(after) .. ")")
+                end
+            else
+                twdll.core.Log("[TEST] RemoveUnit: SKIPPED (military force has no units)")
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== ALL TESTS DONE =====")

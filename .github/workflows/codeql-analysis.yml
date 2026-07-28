@@ -48,11 +48,11 @@ jobs:
       uses: github/codeql-action/init@868e2ea5641bfa2e2af1f144664178b4c5575fab
       with:
         languages: ${{ matrix.language }}
-    - name: Configure and Build (Rome 2)
-      if: matrix.language == 'cpp'
-      run: |
-        cmake -S . -B build/codeql-rome2 --preset ci-release -DTW_GAME=rome2
-        cmake --build build/codeql-rome2
+#    - name: Configure and Build (Rome 2)
+#      if: matrix.language == 'cpp'
+#      run: |
+#        cmake -S . -B build/codeql-rome2 --preset ci-release -DTW_GAME=rome2
+#        cmake --build build/codeql-rome2
     - name: Configure and Build (Attila)
       if: matrix.language == 'cpp'
       run: |

@@ -13,6 +13,7 @@ extern const luaL_Reg campaign_ui_functions[];
 extern const luaL_Reg twdll_core[];
 
 extern void register_faction_methods(lua_State *L);
+extern void register_military_force_methods(lua_State *L);
 
 BOOL APIENTRY DllMain(const HMODULE hModule, const DWORD reason, LPVOID) {
     DisableThreadLibraryCalls(hModule);
@@ -40,6 +41,10 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     l_register(L, "twdll_faction", faction_functions);
     l_setfield(L, -2, "faction");
     register_faction_methods(L);
+
+    l_register(L, "twdll_military_force", military_force_functions);
+    l_setfield(L, -2, "military_force");
+    register_military_force_methods(L);
 
     l_register(L, "twdll_world", world_functions);
     l_setfield(L, -2, "world");

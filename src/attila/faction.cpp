@@ -1,5 +1,5 @@
 /// @module FACTION_SCRIPT_INTERFACE
-/// Extensions to the game's faction object for Total War: Attila.
+/// Extensions to the game's faction object.
 #include "../common/tw.h"
 #include "game_api.h"
 #include "tw_types.h"
