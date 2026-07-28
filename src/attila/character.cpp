@@ -13,7 +13,7 @@ namespace Props {
     static twdll::Property Gravitas      {&TW_Character::gravitas,        CHAR_PTR, "character"};
 }
 
-static int GetMemAddress    (lua_State* L) { return tw_mem_address(L, "character", CHAR_PTR); }
+static int GetMemoryAddress    (lua_State* L) { return tw_mem_address(L, "character", CHAR_PTR); }
 static int GetIntAtOffset   (lua_State* L) { return tw_get_int_at(L, "character", CHAR_PTR); }
 static int SetIntAtOffset   (lua_State* L) { return tw_set_int_at(L, "character", CHAR_PTR); }
 static int GetMovementPoints(lua_State* L) { return Props::MovementPoints.get(L); }
@@ -24,7 +24,7 @@ static int GetGravitas      (lua_State* L) { return Props::Gravitas.get(L); }
 static int SetGravitas      (lua_State* L) { return Props::Gravitas.set(L); }
 
 extern const luaL_Reg character_functions[] = {
-    {"GetMemoryAddress",  GetMemAddress},
+    {"GetMemoryAddress",  GetMemoryAddress},
     {"GetIntAtOffset",    GetIntAtOffset},
     {"SetIntAtOffset",    SetIntAtOffset},
     {"GetMovementPoints", GetMovementPoints},

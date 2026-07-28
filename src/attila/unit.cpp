@@ -18,7 +18,7 @@ Returns the memory address of the unit object as a hexadecimal string.
 @function GetMemoryAddress
 @treturn string memory address (e.g. "0x12345678")
 */
-static int GetMemAddress    (lua_State* L) { return tw_mem_address(L, "unit", UNIT_PTR); }
+static int GetMemoryAddress    (lua_State* L) { return tw_mem_address(L, "unit", UNIT_PTR); }
 
 /***
 Gets the current number of men in the unit.
@@ -67,7 +67,7 @@ extern const luaL_Reg unit_functions[] = {
 };
 
 static const luaL_Reg unit_methods[] = {
-    {"GetMemoryAddress",  GetMemAddress},
+    {"GetMemoryAddress",  GetMemoryAddress},
     {"GetNumberOfMan",    GetNumberOfMan},
     {"SetNumberOfMan",    SetNumberOfMan},
     {"GetMaxNumberOfMan", GetMaxNumberOfMan},

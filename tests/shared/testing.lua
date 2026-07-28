@@ -79,6 +79,30 @@ local function run_twdll_tests()
             twdll.core.Log("[TEST] unit metatable: FAILED (expected 20, got " .. tostring(new_men) .. ")")
         end
 
+        twdll.core.Log("[TEST] --- Test 2b: SetMaxNumberOfMan ---")
+        local max_before = unit:GetMaxNumberOfMan()
+        twdll.core.Log("[TEST] MaxNumberOfMan initial = " .. tostring(max_before))
+        unit:SetMaxNumberOfMan(150)
+        local max_after = unit:GetMaxNumberOfMan()
+        twdll.core.Log("[TEST] MaxNumberOfMan after  = " .. tostring(max_after))
+        if max_after == 150 then
+            twdll.core.Log("[TEST] SetMaxNumberOfMan: OK")
+        else
+            twdll.core.Log("[TEST] SetMaxNumberOfMan: FAILED (expected 150, got " .. tostring(max_after) .. ")")
+        end
+
+        twdll.core.Log("[TEST] --- Test 2c: GetMovementPoints / SetMovementPoints ---")
+        local mp_before = unit:GetMovementPoints()
+        twdll.core.Log("[TEST] MovementPoints initial = " .. tostring(mp_before))
+        unit:SetMovementPoints(50)
+        local mp_after = unit:GetMovementPoints()
+        twdll.core.Log("[TEST] MovementPoints after  = " .. tostring(mp_after))
+        if mp_after == 50 then
+            twdll.core.Log("[TEST] SetMovementPoints: OK")
+        else
+            twdll.core.Log("[TEST] SetMovementPoints: FAILED (expected 50, got " .. tostring(mp_after) .. ")")
+        end
+
         -- ======================================================
         -- TEST 3: faction:SetFactionLeader
         -- Behaviour (from FACTION::new_faction_leader source):

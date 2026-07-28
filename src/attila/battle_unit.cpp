@@ -14,14 +14,14 @@ namespace Props {
     static twdll::Getter<int, TW_BattleUnit> MeleeDefence{twdll::offset_tag, offsetof(TW_BattleUnit, stats.melee_defence), BATTLE_UNIT_PTR, "battle_unit"};
 }
 
-static int GetMemAddress   (lua_State* L) { return tw_mem_address(L, "battle_unit", BATTLE_UNIT_PTR); }
+static int GetMemoryAddress   (lua_State* L) { return tw_mem_address(L, "battle_unit", BATTLE_UNIT_PTR); }
 static int GetChargeBonus  (lua_State* L) { return Props::ChargeBonus.get(L); }
 static int GetMeleeAttack  (lua_State* L) { return Props::MeleeAttack.get(L); }
 static int GetBaseMorale   (lua_State* L) { return Props::BaseMorale.get(L); }
 static int GetMeleeDefence (lua_State* L) { return Props::MeleeDefence.get(L); }
 
 extern const luaL_Reg battle_unit_functions[] = {
-    {"GetMemoryAddress",  GetMemAddress},
+    {"GetMemoryAddress",  GetMemoryAddress},
     {"GetChargeBonus",    GetChargeBonus},
     {"GetMeleeAttack",    GetMeleeAttack},
     {"GetBaseMorale",     GetBaseMorale},

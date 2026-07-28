@@ -18,7 +18,7 @@ Returns the memory address of the faction object as a hexadecimal string.
 @function GetMemoryAddress
 @treturn string memory address (e.g. "0x12345678")
 */
-static int GetMemAddress    (lua_State* L) { return tw_mem_address(L, "faction", FACTION_PTR); }
+static int GetMemoryAddress    (lua_State* L) { return tw_mem_address(L, "faction", FACTION_PTR); }
 
 /***
 Gets the amount of gold for the faction.
@@ -71,7 +71,7 @@ extern const luaL_Reg faction_functions[] = {
 };
 
 static const luaL_Reg faction_methods[] = {
-    {"GetMemoryAddress",  GetMemAddress},
+    {"GetMemoryAddress",  GetMemoryAddress},
     {"GetGold",           GetGold},
     {"SetGold",           SetGold},
     {"SetFactionLeader",  SetFactionLeader},

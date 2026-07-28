@@ -13,7 +13,7 @@ namespace Props {
     static twdll::Getter RecruitmentQueueSize{&TW_MilitaryForce::recruitment_queue_size, MIL_FORCE_PTR, "military_force"};
 }
 
-static int GetMemAddress           (lua_State* L) { return tw_mem_address(L, "military_force", MIL_FORCE_PTR); }
+static int GetMemoryAddress           (lua_State* L) { return tw_mem_address(L, "military_force", MIL_FORCE_PTR); }
 static int GetRecruitmentQueueSize (lua_State* L) { return Props::RecruitmentQueueSize.get(L); }
 
 /***
@@ -34,7 +34,7 @@ static int RemoveUnit(lua_State* L) {
 }
 
 extern const luaL_Reg military_force_functions[] = {
-    {"GetMemoryAddress",        GetMemAddress},
+    {"GetMemoryAddress",        GetMemoryAddress},
     {"GetRecruitmentQueueSize", GetRecruitmentQueueSize},
     {nullptr, nullptr}
 };
