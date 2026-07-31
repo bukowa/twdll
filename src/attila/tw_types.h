@@ -9,7 +9,11 @@
 
 namespace twdll {
 
-struct TW_FamilyMember;
+struct TW_FamilyMember {
+    char             pad_00[0x18];
+    TW_FamilyMember* mother;          // 0x18
+    TW_FamilyMember* father;          // 0x1C
+};
 
 #pragma pack(push, 1)
 
@@ -98,6 +102,8 @@ TW_ASSERT_OFFSET(TW_LandStats,     melee_defence,           0x58);
 TW_ASSERT_OFFSET(TW_BattleUnit,    stats,                   0x1220);
 TW_ASSERT_OFFSET(TW_BattleUnit,    num_men_initial,         0x1C24);
 TW_ASSERT_OFFSET(TW_BattleScriptUnit, m_unit,              0x4);
+TW_ASSERT_OFFSET(TW_FamilyMember,    mother,                  0x18);
+TW_ASSERT_OFFSET(TW_FamilyMember,    father,                  0x1C);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.
@@ -112,19 +118,10 @@ template<typename T> struct TW_PtrOffset {
 
 TW_PTR_OFFSET(TW_Faction,       0x8);
 TW_PTR_OFFSET(TW_Character,     0x8);
+TW_PTR_OFFSET(TW_FamilyMember,  0x8);
 TW_PTR_OFFSET(TW_MilitaryForce, 0x8);
 TW_PTR_OFFSET(TW_Unit,          0x8);
 TW_PTR_OFFSET(TW_BattleUnit,    0x4);
-
-template<typename T>
-struct GameScriptInterface {
-    char pad[TW_PtrOffset<T>::value];
-    T*   m_wrapped_object;
-};
-
-static_assert(offsetof(GameScriptInterface<TW_Faction>,   m_wrapped_object) == 0x8);
-static_assert(offsetof(GameScriptInterface<TW_Character>, m_wrapped_object) == 0x8);
-static_assert(offsetof(GameScriptInterface<TW_BattleUnit>, m_wrapped_object) == 0x4);
 
 template<typename T> T * tw_unwrap(lua_State* L, int slot) {
     void** ud = static_cast<void**>(l_touserdata(L, slot));
@@ -133,10 +130,15 @@ template<typename T> T * tw_unwrap(lua_State* L, int slot) {
 }
 
 template<typename T> void tw_push_wrapped(lua_State* L, T* raw_ptr) {
-    auto* ud = static_cast<GameScriptInterface<T>*>(
-        l_newuserdata(L, sizeof(GameScriptInterface<T>)));
-    memset(ud, 0, sizeof(GameScriptInterface<T>));
-    ud->m_wrapped_object = raw_ptr;
+    if (!raw_ptr) {
+        l_pushnil(L);
+        return;
+    }
+    constexpr size_t off = TW_PtrOffset<T>::value;
+    void** ud = static_cast<void**>(l_newuserdata(L, off + sizeof(void*)));
+    memset(ud, 0, off + sizeof(void*));
+    *ud = ud;
+    *reinterpret_cast<T**>(reinterpret_cast<char*>(ud) + off) = raw_ptr;
 }
 
 }

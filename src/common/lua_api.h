@@ -46,9 +46,11 @@ typedef struct luaL_Reg {
 } luaL_Reg;
 typedef long long lua_Integer;
 typedef double    lua_Number;
-#define LUA_GLOBALSINDEX (-10002)
-#define LUA_TBOOLEAN     1
-#define LUA_TTABLE       5
+#define LUA_GLOBALSINDEX   (-10002)
+#define LUA_REGISTRYINDEX  (-10000)
+#define LUA_TNIL          0
+#define LUA_TBOOLEAN      1
+#define LUA_TTABLE        5
 
 // Function pointer typedefs
 typedef void        (*lua_pushstring_t)   (lua_State*, const char*);
