@@ -16,22 +16,46 @@ extern void register_faction_methods(lua_State *L);
 extern void register_military_force_methods(lua_State *L);
 extern void register_unit_methods(lua_State *L);
 
+static bool g_is_initialized = false;
+
+static int l_twdll_gc_cleanup(lua_State* L) {
+    if (g_is_initialized) {
+        Log("[twdll] GC destroying Lua state — uninstalling campaign hooks");
+        uninstall_campaign_hooks();
+        g_is_initialized = false;
+    }
+    return 0;
+}
+
 BOOL APIENTRY DllMain(const HMODULE hModule, const DWORD reason, LPVOID) {
-    DisableThreadLibraryCalls(hModule);
     if (reason == DLL_PROCESS_ATTACH) {
-        init_logger();
-        Log("[twdll] DLL_PROCESS_ATTACH — initializing");
-        initialize_lua_api();
-        initialize_game_api();
-        install_campaign_hooks();
+        DisableThreadLibraryCalls(hModule);
     }
     return TRUE;
 }
 
 extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
+    Log("[twdll] luaopen_twdll: called");
+
+    if (!g_is_initialized) {
+        init_logger();
+        Log("[twdll] First load: initializing Game API and hooks");
+        initialize_lua_api();
+        initialize_game_api();
+        install_campaign_hooks();
+        g_is_initialized = true;
+    }
+
     Log("[twdll] luaopen_twdll: registering modules");
 
-    l_createtable(L, 0, 8); // Master table
+    l_createtable(L, 0, 8);
+
+    l_newuserdata(L, 1);
+    l_createtable(L, 0, 1);
+    l_pushcclosure(L, l_twdll_gc_cleanup, 0);
+    l_setfield(L, -2, "__gc");
+    l_setmetatable(L, -2);
+    l_setfield(L, -2, "__cleanup_proxy");
 
     l_register(L, "twdll", twdll_core);
     l_setfield(L, -2, "core");

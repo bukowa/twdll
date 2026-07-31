@@ -1,9 +1,12 @@
 /// @module twdll.world
 /// Campaign world singleton and world-level modifiers for Total War: Attila.
-#include "../common/tw.h"
-#include "../common/campaign_hooks.h"
+#include "common/tw.h"
+#include "common/campaign_hooks.h"
 #include "game_api.h"
 #include "tw_types.h"
+#include "common/signature_scanner.h"
+#include <MinHook.h>
+
 #include <windows.h>
 #include <cstdio>
 
@@ -11,6 +14,7 @@ using twdll::TW_World;
 
 static TW_World* g_world = nullptr;
 static void* orig_world_ctor = nullptr;
+static uintptr_t world_ctor_addr = 0;
 
 static void LogWorldHook(void* ptr) {
     g_world = static_cast<TW_World*>(ptr);
@@ -29,9 +33,49 @@ __declspec(naked) static void HookedWorldCtor() {
 }
 
 void install_world_hook(uintptr_t base, size_t size) {
-    install_singleton_hook(base, size, "FACTION_ARRAY", "WORLD",
-                           reinterpret_cast<void*>(HookedWorldCtor),
-                           &orig_world_ctor);
+    // ---- Explicit, non‑abstracted hook installation -------------------------
+    const char* anchor = "FACTION_ARRAY";
+    const char* label  = "WORLD";
+
+    Log("[twdll] Processing anchor '%s' for %s ctor", anchor, label);
+
+    uintptr_t str_addr = Scanner::FindString(base, size, anchor);
+    if (!str_addr) {
+        Log("[twdll] [%s] anchor string not found", label);
+        return;
+    }
+
+    uintptr_t push_addr = Scanner::FindPushRef(base, size, str_addr);
+    if (!push_addr) {
+        Log("[twdll] [%s] push ref not found", label);
+        return;
+    }
+
+    uintptr_t ctor_addr = Scanner::FindPrologue(push_addr);
+    if (!ctor_addr) {
+        Log("[twdll] [%s] prologue not found", label);
+        return;
+    }
+
+    MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(ctor_addr),
+                                   reinterpret_cast<void*>(HookedWorldCtor),
+                                   reinterpret_cast<void**>(&orig_world_ctor));
+    if (mhs == MH_OK) {
+        world_ctor_addr = ctor_addr;
+    }
+    if (mhs != MH_OK) {
+        Log("[twdll] [%s] MH_CreateHook failed (%d)", label, mhs);
+        return;
+    }
+
+    mhs = MH_EnableHook(reinterpret_cast<void*>(ctor_addr));
+    if (mhs != MH_OK) {
+        Log("[twdll] [%s] MH_EnableHook failed (%d)", label, mhs);
+        return;
+    }
+
+    Log("[twdll] [%s] hook installed OK", label);
+    // ------------------------------------------------------------------------
 }
 
 /***
@@ -121,3 +165,14 @@ extern const luaL_Reg world_functions[] = {
     {"SetMaxUnitsInNavy",  SetMaxUnitsInNavy},
     {nullptr, nullptr}
 };
+
+// Uninstall hook and clear global pointers
+void uninstall_world_hook() {
+    if (world_ctor_addr) {
+        MH_DisableHook(reinterpret_cast<void*>(world_ctor_addr));
+        MH_RemoveHook(reinterpret_cast<void*>(world_ctor_addr));
+        world_ctor_addr = 0;
+    }
+    g_world = nullptr;
+    orig_world_ctor = nullptr;
+}

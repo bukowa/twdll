@@ -9,6 +9,7 @@
 // Called from DllMain on DLL_PROCESS_ATTACH.
 // Implemented in game-specific translations units (e.g. attila/campaign_hooks.cpp).
 void install_campaign_hooks();
+void uninstall_campaign_hooks();
 
 // ── Hook utility ──────────────────────────────────────────────────────────────
 // Scans the module, locates the constructor via anchor, and installs MinHook.
