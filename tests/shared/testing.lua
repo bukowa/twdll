@@ -200,28 +200,28 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
-        -- TEST 5: MILITARY_FORCE RemoveUnit
+        -- TEST 5: twdll.model DisbandUnits
         -- ======================================================
-        twdll.core.Log("[TEST] --- Test 5: MILITARY_FORCE RemoveUnit ---")
+        twdll.core.Log("[TEST] --- Test 5: twdll.model DisbandUnits ---")
         do
             local mf   = char:military_force()
             local ul   = mf:unit_list()
             local before = ul:num_items()
 
-            twdll.core.Log("[TEST] RemoveUnit: units before = " .. tostring(before))
+            twdll.core.Log("[TEST] DisbandUnits: units before = " .. tostring(before))
 
             if before > 0 then
                 local last_unit = ul:item_at(before - 1)
-                mf:RemoveUnit(last_unit)
+                twdll.model.DisbandUnits(last_unit)
                 local after = mf:unit_list():num_items()
-                twdll.core.Log("[TEST] RemoveUnit: units after  = " .. tostring(after))
+                twdll.core.Log("[TEST] DisbandUnits: units after  = " .. tostring(after))
                 if after == before - 1 then
-                    twdll.core.Log("[TEST] RemoveUnit: OK")
+                    twdll.core.Log("[TEST] DisbandUnits: OK")
                 else
-                    twdll.core.Log("[TEST] RemoveUnit: FAILED (expected " .. tostring(before - 1) .. ", got " .. tostring(after) .. ")")
+                    twdll.core.Log("[TEST] DisbandUnits: FAILED (expected " .. tostring(before - 1) .. ", got " .. tostring(after) .. ")")
                 end
             else
-                twdll.core.Log("[TEST] RemoveUnit: SKIPPED (military force has no units)")
+                twdll.core.Log("[TEST] DisbandUnits: SKIPPED (military force has no units)")
             end
         end
 
@@ -258,9 +258,48 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 7: game:add_unit_to_force — add 80 units to every army
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 7: game:add_unit_to_force (add 80 to our armies) ---")
+        do
+            twdll.world.SetMaxUnitsInArmy(80)
+            local cap = twdll.world.GetMaxUnitsInArmy()
+
+            local f   = game:model():world():faction_by_key(faction)
+            local mfl = f:military_force_list()
+            local mfl_n = mfl:num_items()
+
+            local key = "att_nom_hunnic_mounted_warband"
+            local forces_done = 0
+            local units_added = 0
+
+            for j = 0, mfl_n - 1 do
+                local mf     = mfl:item_at(j)
+                local cqi    = mf:command_queue_index()
+                local before = mf:unit_list():num_items()
+                for k = 1, 80 do
+                    game:add_unit_to_force(key, cqi)
+                end
+                local after  = mf:unit_list():num_items()
+                forces_done  = forces_done + 1
+                units_added  = units_added + (after - before)
+                twdll.core.Log(string.format("[TEST]   force cqi=%d: %d -> %d units", cqi, before, after))
+            end
+
+            twdll.core.Log(string.format("[TEST] add_unit_to_force: forces=%d units_added=%d cap=%d", forces_done, units_added, cap))
+
+            if units_added > 0 then
+                twdll.core.Log("[TEST] add_unit_to_force: OK (units added)")
+            else
+                twdll.core.Log("[TEST] add_unit_to_force: FAILED (no units added)")
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== ALL TESTS DONE =====")
+        twdll.world.SetMaxUnitsInArmy(20)
 
     else
         local f2 = io.open("twdll.log", "a")

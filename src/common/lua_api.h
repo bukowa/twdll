@@ -48,6 +48,7 @@ typedef long long lua_Integer;
 typedef double    lua_Number;
 #define LUA_GLOBALSINDEX   (-10002)
 #define LUA_REGISTRYINDEX  (-10000)
+#define LUA_TNONE          (-1)
 #define LUA_TNIL          0
 #define LUA_TBOOLEAN      1
 #define LUA_TTABLE        5

@@ -8,12 +8,12 @@ extern const luaL_Reg character_functions[];
 extern const luaL_Reg battle_unit_functions[];
 extern const luaL_Reg faction_functions[];
 extern const luaL_Reg military_force_functions[];
+extern const luaL_Reg model_functions[];
 extern const luaL_Reg world_functions[];
 extern const luaL_Reg campaign_ui_functions[];
 extern const luaL_Reg twdll_core[];
 
 extern void register_faction_methods(lua_State *L);
-extern void register_military_force_methods(lua_State *L);
 extern void register_unit_methods(lua_State *L);
 
 static bool g_is_initialized = false;
@@ -81,7 +81,9 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     l_register(L, "twdll_military_force", military_force_functions);
     l_setfield(L, -2, "military_force");
-    register_military_force_methods(L);
+
+    l_register(L, "twdll_model", model_functions);
+    l_setfield(L, -2, "model");
 
     l_register(L, "twdll_world", world_functions);
     l_setfield(L, -2, "world");
