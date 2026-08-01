@@ -39,35 +39,31 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><strong>twdll.core</strong></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
   <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
   <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
   <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><strong>twdll.model</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>twdll.core</code></h1>
+<h1>Module <code>twdll.model</code></h1>
 <p>
 
 </p>
-<p> Utility functions available in all games.</p>
+<p> Campaign model-level operations for Total War: Attila.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#Log">Log (msg)</a></td>
-	<td class="summary">Log a message to twdll.log.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GameBuild">GameBuild ()</a></td>
-	<td class="summary">Returns the game build name.</td>
+	<td class="name" nowrap><a href="#DisbandUnits">DisbandUnits (units)</a></td>
+	<td class="summary">Disbands (permanently removes) one or more units from the game.</td>
 	</tr>
 </table>
 
@@ -79,41 +75,23 @@
 
     <dl class="function">
     <dt>
-    <a name = "Log"></a>
-    <strong>Log (msg)</strong>
+    <a name = "DisbandUnits"></a>
+    <strong>DisbandUnits (units)</strong>
     </dt>
     <dd>
-    Log a message to twdll.log.
+    Disbands (permanently removes) one or more units from the game.  This mirrors
+the game's own UNIT::disband_units path, so each unit is fully removed from
+the world and all bookkeeping (events, dirty flags, force teardown) runs
+correctly. Unlike a bare container remove, this is save/load safe.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">msg</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         message to log
+        <li><span class="parameter">units</span>
+         vararg userdata, one or more UNIT userdata values to disband
         </li>
     </ul>
 
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GameBuild"></a>
-    <strong>GameBuild ()</strong>
-    </dt>
-    <dd>
-    Returns the game build name.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        game name (e.g. "Attila")
-    </ol>
 
 
 
