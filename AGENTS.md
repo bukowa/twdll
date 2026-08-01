@@ -40,6 +40,11 @@ silently retry or patch in a loop. Report the error, propose one fix, wait for c
 **All comments, doc comments, and log messages must be in English.** No exceptions, including
 work-in-progress code, TODO notes, or temporary debugging logs.
 
+Use `snake_case` for internal install-time machinery (hook install/uninstall helpers, original
+trampolines, byte patches) — never `PascalCase`. `PascalCase` is reserved for Lua-exposed
+functions and the MinHook naked stubs (`Hooked<Ctor>`). Global singletons are `g_<thing>`. This
+keeps "install-time plumbing" visually distinct from the Lua API surface.
+
 ---
 
 ## Testing
