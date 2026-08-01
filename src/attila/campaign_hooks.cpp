@@ -8,8 +8,10 @@
 // Forward declarations to the game-specific modules
 extern void install_world_hook(uintptr_t base, size_t size);
 extern void install_campaign_ui_hook(uintptr_t base, size_t size);
+extern void install_model_hook(uintptr_t base, size_t size);
 extern void uninstall_world_hook();
 extern void uninstall_campaign_ui_hook();
+extern void uninstall_model_hook();
 
 static const char* TARGET_MODULE = "empire.retail.dll";
 
@@ -72,6 +74,7 @@ void install_campaign_hooks() {
 
     install_world_hook(base, size);
     install_campaign_ui_hook(base, size);
+    install_model_hook(base, size);
 
     Log("[twdll] install_campaign_hooks: done");
 }
@@ -81,6 +84,7 @@ void uninstall_campaign_hooks() {
     // Disable and remove installed hooks, then clear global pointers.
     uninstall_world_hook();
     uninstall_campaign_ui_hook();
+    uninstall_model_hook();
     // Optionally deinitialize MinHook if no longer needed.
     MH_Uninitialize();
     Log("[twdll] uninstall_campaign_hooks: done");
