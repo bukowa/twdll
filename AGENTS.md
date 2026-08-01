@@ -47,6 +47,21 @@ keeps "install-time plumbing" visually distinct from the Lua API surface.
 
 ---
 
+## Building
+
+One command builds the DLL. `cmake` is NOT on PATH — when working in CLion
+(this repo has `.idea`), invoke the CMake bundled with CLion by full path:
+
+```powershell
+& "C:\Program Files\JetBrains\CLion 2026.2\bin\cmake\win\x64\bin\cmake.exe" --build build\attila
+```
+
+Deployment/tests go through `tools/twdll.ps1` (`tw-pack`/`tw-install`/
+`tw-run`/`tw-test` CMake targets). `tw-test` launches the real game and takes
+minutes — leave it to the user unless explicitly asked.
+
+---
+
 ## Testing
 
 ### Layout
@@ -72,6 +87,24 @@ cmake --build --preset attila --target tw-test
 
 Builds the DLL, packages it, launches the game with `tests.save`, runs the Lua test suite at
 `FirstTickAfterWorldCreated`. Results appear in `twdll.log`.
+
+### Test Conventions
+
+Every test case in `tests/shared/testing.lua` must record its outcome so the suite
+prints a clear summary. Use the suite-level helpers defined at the top of
+`run_twdll_tests()`:
+
+- `report(name, condition)` — call once per assertion, in **both** the OK and
+  FAILED branches of the existing `if ... then OK else FAILED end` blocks.
+- `record_skip()` — call in the SKIPPED branch when a precondition isn't met
+  (e.g. `< 2 generals`, empty unit list).
+
+Do not introduce a new test case without wiring it into these helpers. The final
+block emits `PASSED: N  FAILED: M  SKIPPED: K` and, when `failed > 0`, a list of
+the failed test names — so you can see at a glance whether something broke and
+which case. Keep all `[TEST]` log lines via `twdll.core.Log` (not raw
+`io.write` to `twdll.log`), so they go through the same logging path as the rest
+of the suite.
 
 ### When You Change the Lua API
 
