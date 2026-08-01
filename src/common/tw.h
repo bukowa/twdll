@@ -43,7 +43,8 @@ inline void* tw_get_obj(lua_State* L, const char* tag, size_t ptr_off) {
 
 // ── Typed field accessors (member-pointer based) ──────────────────────────────
 // tw_get / tw_set use C++ member pointers for type-safe field access.
-// Supports int/short/char (→ lua_Integer) and float/double (→ lua_Number).
+// Supports int/short/char (→ lua_Integer) and float/double
+// (→ lua_pushnumber / lua_tonumber).
 
 template <typename S, typename F>
 inline int tw_get(lua_State* L, size_t ptr_off, F S::* field, const char* tag) {
@@ -53,7 +54,7 @@ inline int tw_get(lua_State* L, size_t ptr_off, F S::* field, const char* tag) {
     if constexpr (std::is_integral_v<F>)
         l_pushinteger(L, static_cast<lua_Integer>(v));
     else if constexpr (std::is_floating_point_v<F>)
-        l_pushnumber(L, static_cast<double>(v));
+        l_pushnumber(L, static_cast<float>(v));
     return 1;
 }
 
@@ -79,7 +80,7 @@ inline int tw_get_global(lua_State* L, S** global_ptr, F S::* field) {
     if constexpr (std::is_integral_v<F>)
         l_pushinteger(L, static_cast<lua_Integer>(v));
     else if constexpr (std::is_floating_point_v<F>)
-        l_pushnumber(L, static_cast<double>(v));
+        l_pushnumber(L, static_cast<float>(v));
     return 1;
 }
 
@@ -151,7 +152,7 @@ public:
             if constexpr (std::is_integral_v<T>)
                 l_pushinteger(L, static_cast<lua_Integer>(v));
             else if constexpr (std::is_floating_point_v<T>)
-                l_pushnumber(L, static_cast<double>(v));
+                l_pushnumber(L, static_cast<float>(v));
             return 1;
         }
         return tw_get(L, ptr_off_, field_, tag_);

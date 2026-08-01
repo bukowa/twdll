@@ -44,8 +44,7 @@ typedef struct luaL_Reg {
     const char*   name;
     lua_CFunction func;
 } luaL_Reg;
-typedef long long lua_Integer;
-typedef double    lua_Number;
+typedef int lua_Integer;
 #define LUA_GLOBALSINDEX   (-10002)
 #define LUA_REGISTRYINDEX  (-10000)
 #define LUA_TNONE          (-1)
@@ -67,8 +66,8 @@ typedef void        (*lua_createtable_t)  (lua_State*, int, int);
 typedef void*       (*lua_touserdata_t)   (lua_State*, int);
 typedef void        (*lua_pushinteger_t)  (lua_State*, lua_Integer);
 typedef lua_Integer (*lua_tointeger_t)    (lua_State*, int);
-typedef void        (*lua_pushnumber_t)   (lua_State*, lua_Number);
-typedef lua_Number  (*lua_tonumber_t)     (lua_State*, int);
+typedef void        (*lua_pushnumber_t)   (lua_State*, float);
+typedef double      (*lua_tonumber_t)     (lua_State*, int);
 typedef void        (*lua_pushnil_t)      (lua_State*);
 typedef int         (*lua_pcall_t)        (lua_State*, int, int, int);
 typedef int         (*luaB_loadstring)    (lua_State*);

@@ -9,6 +9,7 @@
 
 #include <windows.h>
 #include <cstdio>
+#include <cstring>
 
 using twdll::TW_World;
 
@@ -156,13 +157,111 @@ static int SetMaxUnitsInNavy(lua_State* L) {
     return 0;
 }
 
+namespace {
+constexpr size_t  kReinfCapInsnLen = 6;
+constexpr uint8_t kReinfCapOrig[6] = {0x8B, 0x80, 0x3C, 0x01, 0x00, 0x00};
+} // namespace
+
+// REINFORCEMENTS_MANAGER ctor stores `max units per army` from the battle setup
+// into the manager field at offset 0x28. Replacing the load instruction
+//   mov eax, [eax+0x13C]   (8B 80 3C 01 00 00)
+//   mov [esi+0x28], eax    (89 46 28)
+// with `mov eax, <imm32>` + nop lets scripts set the cap to any value before a
+// battle starts, so the deploy gate (m_size >= m_max_num_units_per_army) never
+// blocks reinforcements. It is a permanent code modification and applies to
+// battles started after the call. restore_default == true writes the original
+// bytes back; otherwise max_units (any uint32, including 0) is the new cap.
+bool set_reinforcement_cap(bool restore_default, uint32_t max_units) {
+    if (!g_reinf_cap_insn_addr) {
+        Log("[twdll] set_reinforcement_cap: signature not resolved");
+        return false;
+    }
+    uint8_t* p = reinterpret_cast<uint8_t*>(g_reinf_cap_insn_addr);
+
+    uint8_t cur[kReinfCapInsnLen];
+    memcpy(cur, p, sizeof(cur));
+    const bool is_orig  = memcmp(cur, kReinfCapOrig, sizeof(cur)) == 0;
+    const bool is_patch = cur[0] == 0xB8 && cur[kReinfCapInsnLen - 1] == 0x90;
+    if (!is_orig && !is_patch) {
+        Log("[twdll] set_reinforcement_cap: unexpected bytes at 0x%08X - skipping",
+            static_cast<unsigned int>(g_reinf_cap_insn_addr));
+        return false;
+    }
+
+    uint8_t dst[kReinfCapInsnLen];
+    if (restore_default) {
+        memcpy(dst, kReinfCapOrig, sizeof(dst));           // restore original
+    } else {
+        dst[0] = 0xB8;                                     // mov eax, imm32
+        memcpy(dst + 1, &max_units, sizeof(max_units));
+        dst[5] = 0x90;                                     // nop padding
+    }
+    if (memcmp(cur, dst, sizeof(dst)) == 0)
+        return true; // already in the requested state
+
+    DWORD old_protect = 0;
+    if (!VirtualProtect(p, sizeof(dst), PAGE_EXECUTE_READWRITE, &old_protect)) {
+        Log("[twdll] set_reinforcement_cap: VirtualProtect failed (%lu)", GetLastError());
+        return false;
+    }
+    memcpy(p, dst, sizeof(dst));
+    VirtualProtect(p, sizeof(dst), old_protect, &old_protect);
+    Log("[twdll] set_reinforcement_cap: %s (max units = %u)",
+        restore_default ? "restored" : "patched", max_units);
+    return true;
+}
+
+/***
+Sets the reinforcement cap (max units per army in battle) for battles started
+after the call. Pass -1 to restore the game default (disable the override).
+Any value >= 0 is applied as-is.
+@function SetReinforcementCap
+@tparam integer max_units new cap value, or -1 to restore the default
+*/
+static int SetReinforcementCap(lua_State* L) {
+    if (l_type(L, 1) == LUA_TNIL || l_type(L, 1) == LUA_TNONE) {
+        return 0;
+    }
+    // lua_Integer is 32-bit in Attila's Lua; -1 means restore default.
+    int v = static_cast<int>(l_tointeger(L, 1));
+    if (v == -1) {
+        set_reinforcement_cap(true, 0);
+    } else if (v < 0) {
+        Log("[twdll] SetReinforcementCap: value must be >= 0 or -1 (default), got %d", v);
+    } else {
+        set_reinforcement_cap(false, static_cast<uint32_t>(v));
+    }
+    return 0;
+}
+
+/***
+Returns the currently applied reinforcement cap, or nil if the game default is
+in effect.
+@function GetReinforcementCap
+@treturn[opt] integer current cap value
+*/
+static int GetReinforcementCap(lua_State* L) {
+    if (!g_reinf_cap_insn_addr) { l_pushnil(L); return 1; }
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(g_reinf_cap_insn_addr);
+    if (p[0] == 0xB8 && p[kReinfCapInsnLen - 1] == 0x90) {
+        int v;
+        memcpy(&v, p + 1, sizeof(v));
+        l_pushinteger(L, v);
+        return 1;
+    }
+    l_pushnil(L);
+    return 1;
+}
+
 extern const luaL_Reg world_functions[] = {
-    {"GetMemoryAddress",   GetMemoryAddress},
-    {"GetFactionCount",    GetFactionCount},
-    {"GetMaxUnitsInArmy",  GetMaxUnitsInArmy},
-    {"SetMaxUnitsInArmy",  SetMaxUnitsInArmy},
-    {"GetMaxUnitsInNavy",  GetMaxUnitsInNavy},
-    {"SetMaxUnitsInNavy",  SetMaxUnitsInNavy},
+    {"GetMemoryAddress",    GetMemoryAddress},
+    {"GetFactionCount",     GetFactionCount},
+    {"GetMaxUnitsInArmy",   GetMaxUnitsInArmy},
+    {"SetMaxUnitsInArmy",   SetMaxUnitsInArmy},
+    {"GetMaxUnitsInNavy",   GetMaxUnitsInNavy},
+    {"SetMaxUnitsInNavy",   SetMaxUnitsInNavy},
+    {"GetReinforcementCap", GetReinforcementCap},
+    {"SetReinforcementCap", SetReinforcementCap},
     {nullptr, nullptr}
 };
 

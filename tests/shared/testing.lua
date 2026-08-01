@@ -13,6 +13,15 @@ local function run_twdll_tests()
     if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
         twdll.core.Log("[TEST] twdll is loaded. Starting unit tests...")
 
+        -- Aggregate test outcomes across the whole suite.
+        local passed, failed, skipped = 0, 0, 0
+        local failed_names = {}
+        local function report(name, condition)
+            if condition then passed = passed + 1
+            else failed = failed + 1; failed_names[#failed_names + 1] = name end
+        end
+        local function record_skip() skipped = skipped + 1 end
+
         -- ======================================================
         -- TEST 1: Verify WORLD and CAMPAIGN_UI singleton hooks
         -- ======================================================
@@ -28,14 +37,18 @@ local function run_twdll_tests()
 
         if world_ptr ~= nil and world_ptr ~= 0 then
             twdll.core.Log("[TEST] g_world hook: OK")
+            report("g_world hook", true)
         else
             twdll.core.Log("[TEST] g_world hook: FAILED (nil or zero!)")
+            report("g_world hook", false)
         end
 
         if ui_ptr ~= nil and ui_ptr ~= 0 then
             twdll.core.Log("[TEST] g_campaign_ui hook: OK")
+            report("g_campaign_ui hook", true)
         else
             twdll.core.Log("[TEST] g_campaign_ui hook: FAILED (nil or zero!)")
+            report("g_campaign_ui hook", false)
         end
 
         local engine_faction_count = game:model():world():faction_list():num_items()
@@ -44,8 +57,10 @@ local function run_twdll_tests()
         
         if faction_count == engine_faction_count and faction_count ~= nil and faction_count > 0 then
             twdll.core.Log("[TEST] g_world hook validation: PASSED")
+            report("g_world hook validation", true)
         else
             twdll.core.Log("[TEST] g_world hook validation: FAILED")
+            report("g_world hook validation", false)
         end
 
 
@@ -75,8 +90,10 @@ local function run_twdll_tests()
 
         if new_men == 20 then
             twdll.core.Log("[TEST] unit metatable: OK")
+            report("unit metatable", true)
         else
             twdll.core.Log("[TEST] unit metatable: FAILED (expected 20, got " .. tostring(new_men) .. ")")
+            report("unit metatable", false)
         end
 
         twdll.core.Log("[TEST] --- Test 2b: SetMaxNumMen ---")
@@ -87,8 +104,10 @@ local function run_twdll_tests()
         twdll.core.Log("[TEST] MaxNumMen after  = " .. tostring(max_after))
         if max_after == 150 then
             twdll.core.Log("[TEST] SetMaxNumMen: OK")
+            report("SetMaxNumMen", true)
         else
             twdll.core.Log("[TEST] SetMaxNumMen: FAILED (expected 150, got " .. tostring(max_after) .. ")")
+            report("SetMaxNumMen", false)
         end
 
         twdll.core.Log("[TEST] --- Test 2c: GetActionPoints / SetActionPoints ---")
@@ -99,8 +118,10 @@ local function run_twdll_tests()
         twdll.core.Log("[TEST] ActionPoints after  = " .. tostring(ap_after))
         if ap_after == 50 then
             twdll.core.Log("[TEST] SetActionPoints: OK")
+            report("SetActionPoints", true)
         else
             twdll.core.Log("[TEST] SetActionPoints: FAILED (expected 50, got " .. tostring(ap_after) .. ")")
+            report("SetActionPoints", false)
         end
 
         -- ======================================================
@@ -129,6 +150,7 @@ local function run_twdll_tests()
 
             if #generals < 2 then
                 twdll.core.Log("[TEST] SetFactionLeader: SKIPPED (need at least 2 generals)")
+                record_skip()
             else
                 -- helper: find a general that is not the current leader
                 local function pick_non_leader()
@@ -145,8 +167,10 @@ local function run_twdll_tests()
                 local after1 = f:faction_leader():cqi()
                 if after1 == new1:cqi() then
                     twdll.core.Log(string.format("[TEST] SetFactionLeader silent: OK (old=%d new=%d)", old1_cqi, after1))
+                    report("SetFactionLeader silent", true)
                 else
                     twdll.core.Log(string.format("[TEST] SetFactionLeader silent: FAILED (expected=%d got=%d)", new1:cqi(), after1))
+                    report("SetFactionLeader silent", false)
                 end
 
                 -- case 2: normal succession (old provided, fires faction_succession)
@@ -156,8 +180,10 @@ local function run_twdll_tests()
                 local after2 = f:faction_leader():cqi()
                 if after2 == new2:cqi() then
                     twdll.core.Log(string.format("[TEST] SetFactionLeader succession: OK (old=%d new=%d)", old2:cqi(), after2))
+                    report("SetFactionLeader succession", true)
                 else
                     twdll.core.Log(string.format("[TEST] SetFactionLeader succession: FAILED (expected=%d got=%d)", new2:cqi(), after2))
+                    report("SetFactionLeader succession", false)
                 end
 
                 -- case 3: heir coming of age (fires faction_succession_heir_comes_of_age)
@@ -167,8 +193,10 @@ local function run_twdll_tests()
                 local after3 = f:faction_leader():cqi()
                 if after3 == new3:cqi() then
                     twdll.core.Log(string.format("[TEST] SetFactionLeader heir_coming_of_age: OK (old=%d new=%d)", old3:cqi(), after3))
+                    report("SetFactionLeader heir_coming_of_age", true)
                 else
                     twdll.core.Log(string.format("[TEST] SetFactionLeader heir_coming_of_age: FAILED (expected=%d got=%d)", new3:cqi(), after3))
+                    report("SetFactionLeader heir_coming_of_age", false)
                 end
             end
         end
@@ -185,8 +213,10 @@ local function run_twdll_tests()
 
             if twdll.core.GameBuild() == "Attila" and gold_initial == 15000 then
                 twdll.core.Log("[TEST] GetTreasury initial: OK (15000)")
+                report("GetTreasury initial", true)
             else
-                twdll.core.Log("[TEST] GetTreasury initial: got " .. tostring(gold_initial))
+                twdll.core.Log("[TEST] GetTreasury initial: FAILED (expected 15000 on Attila, got " .. tostring(gold_initial) .. ")")
+                report("GetTreasury initial", false)
             end
 
             f:SetTreasury(99999)
@@ -194,8 +224,10 @@ local function run_twdll_tests()
             twdll.core.Log("[TEST] GetTreasury after SetTreasury(99999) = " .. tostring(gold_after))
             if gold_after == 99999 then
                 twdll.core.Log("[TEST] SetTreasury: OK")
+                report("SetTreasury", true)
             else
                 twdll.core.Log("[TEST] SetTreasury: FAILED (expected 99999, got " .. tostring(gold_after) .. ")")
+                report("SetTreasury", false)
             end
         end
 
@@ -217,11 +249,14 @@ local function run_twdll_tests()
                 twdll.core.Log("[TEST] DisbandUnits: units after  = " .. tostring(after))
                 if after == before - 1 then
                     twdll.core.Log("[TEST] DisbandUnits: OK")
+                    report("DisbandUnits", true)
                 else
                     twdll.core.Log("[TEST] DisbandUnits: FAILED (expected " .. tostring(before - 1) .. ", got " .. tostring(after) .. ")")
+                    report("DisbandUnits", false)
                 end
             else
                 twdll.core.Log("[TEST] DisbandUnits: SKIPPED (military force has no units)")
+                record_skip()
             end
         end
 
@@ -246,14 +281,18 @@ local function run_twdll_tests()
 
             if army_after == 30 then
                 twdll.core.Log("[TEST] SetMaxUnitsInArmy: OK")
+                report("SetMaxUnitsInArmy", true)
             else
                 twdll.core.Log("[TEST] SetMaxUnitsInArmy: FAILED (expected 30, got " .. tostring(army_after) .. ")")
+                report("SetMaxUnitsInArmy", false)
             end
 
             if navy_after == 15 then
                 twdll.core.Log("[TEST] SetMaxUnitsInNavy: OK")
+                report("SetMaxUnitsInNavy", true)
             else
                 twdll.core.Log("[TEST] SetMaxUnitsInNavy: FAILED (expected 15, got " .. tostring(navy_after) .. ")")
+                report("SetMaxUnitsInNavy", false)
             end
         end
 
@@ -290,15 +329,69 @@ local function run_twdll_tests()
 
             if units_added > 0 then
                 twdll.core.Log("[TEST] add_unit_to_force: OK (units added)")
+                report("add_unit_to_force", true)
             else
                 twdll.core.Log("[TEST] add_unit_to_force: FAILED (no units added)")
+                report("add_unit_to_force", false)
+            end
+        end
+
+        -- ======================================================
+        -- TEST 8: twdll.world SetReinforcementCap / GetReinforcementCap
+        -- -1 restores the game default (nil from the getter).
+        -- Note: Attila's Lua stores numbers as 32-bit floats, so values must
+        -- be exactly representable (<= 2^24); 1000000 is "effectively unlimited".
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 8: SetReinforcementCap / GetReinforcementCap ---")
+        do
+            local initial = twdll.world.GetReinforcementCap()
+            twdll.core.Log("[TEST] ReinforcementCap initial = " .. tostring(initial))
+
+            twdll.world.SetReinforcementCap(0)
+            local v0 = twdll.world.GetReinforcementCap()
+            if v0 == 0 then
+                twdll.core.Log("[TEST] SetReinforcementCap(0): OK")
+                report("SetReinforcementCap(0)", true)
+            else
+                twdll.core.Log("[TEST] SetReinforcementCap(0): FAILED (expected 0, got " .. tostring(v0) .. ")")
+                report("SetReinforcementCap(0)", false)
+            end
+
+            twdll.world.SetReinforcementCap(1000000)
+            local vmax = twdll.world.GetReinforcementCap()
+            if vmax == 1000000 then
+                twdll.core.Log("[TEST] SetReinforcementCap(1000000): OK")
+                report("SetReinforcementCap(1000000)", true)
+            else
+                twdll.core.Log("[TEST] SetReinforcementCap(1000000): FAILED (expected 1000000, got " .. tostring(vmax) .. ")")
+                report("SetReinforcementCap(1000000)", false)
+            end
+
+            twdll.world.SetReinforcementCap(-1)
+            local vdef = twdll.world.GetReinforcementCap()
+            if vdef == nil then
+                twdll.core.Log("[TEST] SetReinforcementCap(-1) restore: OK")
+                report("SetReinforcementCap(-1) restore", true)
+            else
+                twdll.core.Log("[TEST] SetReinforcementCap(-1) restore: FAILED (expected nil, got " .. tostring(vdef) .. ")")
+                report("SetReinforcementCap(-1) restore", false)
             end
         end
 
         -- ======================================================
         -- SUMMARY
         -- ======================================================
-        twdll.core.Log("[TEST] ===== ALL TESTS DONE =====")
+        twdll.core.Log("[TEST] ===== TEST SUMMARY =====")
+        twdll.core.Log(string.format("[TEST] PASSED: %d   FAILED: %d   SKIPPED: %d", passed, failed, skipped))
+        if failed == 0 then
+            twdll.core.Log("[TEST] ===== ALL TESTS PASSED =====")
+        else
+            twdll.core.Log("[TEST] !!! THERE WERE FAILURES !!!")
+            for _, n in ipairs(failed_names) do
+                twdll.core.Log("[TEST]   - " .. n)
+            end
+            twdll.core.Log("[TEST] ===== TESTS DONE (WITH FAILURES) =====")
+        end
         twdll.world.SetMaxUnitsInArmy(20)
 
     else
@@ -327,7 +420,7 @@ local _, err = pcall(function()
         game = scripting.game_interface
 
         local ok, err = pcall(run_twdll_tests)
-        twdll.core.Log(err)
+        twdll.core.Log(ok and "[TEST] run_twdll_tests returned normally" or ("[TEST] run_twdll_tests error: " .. tostring(err)))
     end)
 end)
 

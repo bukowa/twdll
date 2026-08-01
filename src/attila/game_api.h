@@ -9,5 +9,9 @@ extern FnDisbandUnits g_disband_units;
 
 extern void* g_campaign_model;
 
+// Address of the `mov eax, [eax+0x13C]` instruction in the REINFORCEMENTS_MANAGER
+// ctor, resolved by initialize_game_api().
+extern uintptr_t g_reinf_cap_insn_addr;
+
 extern const uintptr_t OFFSET_MAX_UNITS_ARMY;
 extern const uintptr_t OFFSET_MAX_UNITS_NAVY;

@@ -85,6 +85,16 @@
 	<td class="name" nowrap><a href="#SetMaxUnitsInNavy">SetMaxUnitsInNavy (val)</a></td>
 	<td class="summary">Sets the maximum number of units allowed in a navy.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetReinforcementCap">SetReinforcementCap (max_units)</a></td>
+	<td class="summary">Sets the reinforcement cap (max units per army in battle) for battles started
+after the call.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetReinforcementCap">GetReinforcementCap ()</a></td>
+	<td class="summary">Returns the currently applied reinforcement cap, or nil if the game default is
+in effect.</td>
+	</tr>
 </table>
 
 <br/>
@@ -211,6 +221,50 @@
         </li>
     </ul>
 
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetReinforcementCap"></a>
+    <strong>SetReinforcementCap (max_units)</strong>
+    </dt>
+    <dd>
+    Sets the reinforcement cap (max units per army in battle) for battles started
+after the call.  Pass -1 to restore the game default (disable the override).
+Any value >= 0 is applied as-is.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">max_units</span>
+            <span class="types"><span class="type">integer</span></span>
+         new cap value, or -1 to restore the default
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetReinforcementCap"></a>
+    <strong>GetReinforcementCap ()</strong>
+    </dt>
+    <dd>
+    Returns the currently applied reinforcement cap, or nil if the game default is
+in effect.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        current cap value
+    </ol>
 
 
 
