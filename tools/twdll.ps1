@@ -139,9 +139,6 @@ function Fix-CpuAffinity($procName) {
 }
 
 function Launch-Game {
-    if (Test-Path $LogFile) { 
-        Remove-Item $LogFile -ErrorAction SilentlyContinue 
-    }
     $reg = "HKCU:\SOFTWARE\The Creative Assembly\" + $Game
     if (!(Test-Path $reg)) { New-Item -Path $reg -Force | Out-Null }
     Set-ItemProperty -Path $reg -Name "last_game_version" -Value 131076 -Type DWord
@@ -177,9 +174,15 @@ function Tail-Log {
         Start-Sleep -Milliseconds 500
     }
 
+    # Start tailing from the end so previous runs are not re-printed
+    if (Test-Path $LogFile) {
+        $lastCount = @(Get-Content -Path $LogFile -ErrorAction SilentlyContinue).Count
+    }
+
     while ($true) {
         if (Test-Path $LogFile) {
             $lines = @(Get-Content -Path $LogFile -ErrorAction SilentlyContinue)
+            if ($lines.Count -lt $lastCount) { $lastCount = 0 }
             if ($lines.Count -gt $lastCount) {
                 for ($i = $lastCount; $i -lt $lines.Count; $i++) {
                     $line = $lines[$i]

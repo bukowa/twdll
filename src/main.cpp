@@ -27,8 +27,20 @@ static int l_twdll_gc_cleanup(lua_State* L) {
     return 0;
 }
 
+static const char* dll_reason_name(DWORD reason) {
+    switch (reason) {
+        case DLL_PROCESS_DETACH: return "DLL_PROCESS_DETACH";
+        case DLL_PROCESS_ATTACH: return "DLL_PROCESS_ATTACH";
+        case DLL_THREAD_ATTACH:  return "DLL_THREAD_ATTACH";
+        case DLL_THREAD_DETACH:  return "DLL_THREAD_DETACH";
+        default:                 return "UNKNOWN";
+    }
+}
+
 BOOL APIENTRY DllMain(const HMODULE hModule, const DWORD reason, LPVOID) {
+    Log("DllMain() called, reason=%u (%s)", reason, dll_reason_name(reason));
     if (reason == DLL_PROCESS_ATTACH) {
+        Log("DllMain() PROCESS_ATTACH: disabling thread attach/detach calls");
         DisableThreadLibraryCalls(hModule);
     }
     return TRUE;
@@ -38,7 +50,6 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     Log("[twdll] luaopen_twdll: called");
 
     if (!g_is_initialized) {
-        init_logger();
         Log("[twdll] First load: initializing Game API and hooks");
         initialize_lua_api();
         initialize_game_api();
