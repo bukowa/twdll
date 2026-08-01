@@ -70,58 +70,75 @@ local function run_twdll_tests()
         -- ======================================================
         twdll.core.Log("[TEST] --- Test 2: twdll_unit read/write (via metatable) ---")
 
-        local char = game:model():world():faction_by_key(faction):faction_leader()
-        local unit = char:military_force():unit_list():item_at(0)
-
-        local max_men = unit:GetMaxNumMen()
-        local initial_men = unit:GetNumMen()
-        local initial_percentage = unit:percentage_proportion_of_full_strength()
-
-        twdll.core.Log("[TEST] Unit Initial State - Men: " ..
-            tostring(initial_men) .. "/" .. tostring(max_men) .. " (" .. tostring(initial_percentage) .. "%)")
-
-        unit:SetNumMen(20)
-
-        local new_men = unit:GetNumMen()
-        local new_percentage = unit:percentage_proportion_of_full_strength()
-
-        twdll.core.Log("[TEST] Unit Modified State - Men: " ..
-            tostring(new_men) .. "/" .. tostring(max_men) .. " (" .. tostring(new_percentage) .. "%)")
-
-        if new_men == 20 then
-            twdll.core.Log("[TEST] unit metatable: OK")
-            report("unit metatable", true)
-        else
-            twdll.core.Log("[TEST] unit metatable: FAILED (expected 20, got " .. tostring(new_men) .. ")")
-            report("unit metatable", false)
+        -- Iterate all faction characters and take the first one that has a
+        -- military force (the faction leader may not have one).
+        local char = nil
+        local chars = game:model():world():faction_by_key(faction):character_list()
+        for i = 0, chars:num_items() - 1 do
+            local c = chars:item_at(i)
+            if c:military_force() ~= nil then
+                char = c
+                twdll.core.Log(string.format("[TEST] picked character cqi=%d (first with a military force)", c:cqi()))
+                break
+            end
         end
 
-        twdll.core.Log("[TEST] --- Test 2b: SetMaxNumMen ---")
-        local max_before = unit:GetMaxNumMen()
-        twdll.core.Log("[TEST] MaxNumMen initial = " .. tostring(max_before))
-        unit:SetMaxNumMen(150)
-        local max_after = unit:GetMaxNumMen()
-        twdll.core.Log("[TEST] MaxNumMen after  = " .. tostring(max_after))
-        if max_after == 150 then
-            twdll.core.Log("[TEST] SetMaxNumMen: OK")
-            report("SetMaxNumMen", true)
+        if char == nil then
+            twdll.core.Log("[TEST] unit metatable: SKIPPED (no character with a military force)")
+            record_skip()
         else
-            twdll.core.Log("[TEST] SetMaxNumMen: FAILED (expected 150, got " .. tostring(max_after) .. ")")
-            report("SetMaxNumMen", false)
-        end
+            local unit = char:military_force():unit_list():item_at(0)
 
-        twdll.core.Log("[TEST] --- Test 2c: GetActionPoints / SetActionPoints ---")
-        local ap_before = unit:GetActionPoints()
-        twdll.core.Log("[TEST] ActionPoints initial = " .. tostring(ap_before))
-        unit:SetActionPoints(50)
-        local ap_after = unit:GetActionPoints()
-        twdll.core.Log("[TEST] ActionPoints after  = " .. tostring(ap_after))
-        if ap_after == 50 then
-            twdll.core.Log("[TEST] SetActionPoints: OK")
-            report("SetActionPoints", true)
-        else
-            twdll.core.Log("[TEST] SetActionPoints: FAILED (expected 50, got " .. tostring(ap_after) .. ")")
-            report("SetActionPoints", false)
+            local max_men = unit:GetMaxNumMen()
+            local initial_men = unit:GetNumMen()
+            local initial_percentage = unit:percentage_proportion_of_full_strength()
+
+            twdll.core.Log("[TEST] Unit Initial State - Men: " ..
+                tostring(initial_men) .. "/" .. tostring(max_men) .. " (" .. tostring(initial_percentage) .. "%)")
+
+            unit:SetNumMen(20)
+
+            local new_men = unit:GetNumMen()
+            local new_percentage = unit:percentage_proportion_of_full_strength()
+
+            twdll.core.Log("[TEST] Unit Modified State - Men: " ..
+                tostring(new_men) .. "/" .. tostring(max_men) .. " (" .. tostring(new_percentage) .. "%)")
+
+            if new_men == 20 then
+                twdll.core.Log("[TEST] unit metatable: OK")
+                report("unit metatable", true)
+            else
+                twdll.core.Log("[TEST] unit metatable: FAILED (expected 20, got " .. tostring(new_men) .. ")")
+                report("unit metatable", false)
+            end
+
+            twdll.core.Log("[TEST] --- Test 2b: SetMaxNumMen ---")
+            local max_before = unit:GetMaxNumMen()
+            twdll.core.Log("[TEST] MaxNumMen initial = " .. tostring(max_before))
+            unit:SetMaxNumMen(150)
+            local max_after = unit:GetMaxNumMen()
+            twdll.core.Log("[TEST] MaxNumMen after  = " .. tostring(max_after))
+            if max_after == 150 then
+                twdll.core.Log("[TEST] SetMaxNumMen: OK")
+                report("SetMaxNumMen", true)
+            else
+                twdll.core.Log("[TEST] SetMaxNumMen: FAILED (expected 150, got " .. tostring(max_after) .. ")")
+                report("SetMaxNumMen", false)
+            end
+
+            twdll.core.Log("[TEST] --- Test 2c: GetActionPoints / SetActionPoints ---")
+            local ap_before = unit:GetActionPoints()
+            twdll.core.Log("[TEST] ActionPoints initial = " .. tostring(ap_before))
+            unit:SetActionPoints(50)
+            local ap_after = unit:GetActionPoints()
+            twdll.core.Log("[TEST] ActionPoints after  = " .. tostring(ap_after))
+            if ap_after == 50 then
+                twdll.core.Log("[TEST] SetActionPoints: OK")
+                report("SetActionPoints", true)
+            else
+                twdll.core.Log("[TEST] SetActionPoints: FAILED (expected 50, got " .. tostring(ap_after) .. ")")
+                report("SetActionPoints", false)
+            end
         end
 
         -- ======================================================
@@ -236,27 +253,32 @@ local function run_twdll_tests()
         -- ======================================================
         twdll.core.Log("[TEST] --- Test 5: twdll.model DisbandUnits ---")
         do
-            local mf   = char:military_force()
-            local ul   = mf:unit_list()
-            local before = ul:num_items()
-
-            twdll.core.Log("[TEST] DisbandUnits: units before = " .. tostring(before))
-
-            if before > 0 then
-                local last_unit = ul:item_at(before - 1)
-                twdll.model.DisbandUnits(last_unit)
-                local after = mf:unit_list():num_items()
-                twdll.core.Log("[TEST] DisbandUnits: units after  = " .. tostring(after))
-                if after == before - 1 then
-                    twdll.core.Log("[TEST] DisbandUnits: OK")
-                    report("DisbandUnits", true)
-                else
-                    twdll.core.Log("[TEST] DisbandUnits: FAILED (expected " .. tostring(before - 1) .. ", got " .. tostring(after) .. ")")
-                    report("DisbandUnits", false)
-                end
-            else
-                twdll.core.Log("[TEST] DisbandUnits: SKIPPED (military force has no units)")
+            if char == nil then
+                twdll.core.Log("[TEST] DisbandUnits: SKIPPED (no character with a military force)")
                 record_skip()
+            else
+                local mf   = char:military_force()
+                local ul   = mf:unit_list()
+                local before = ul:num_items()
+
+                twdll.core.Log("[TEST] DisbandUnits: units before = " .. tostring(before))
+
+                if before > 0 then
+                    local last_unit = ul:item_at(before - 1)
+                    twdll.model.DisbandUnits(last_unit)
+                    local after = mf:unit_list():num_items()
+                    twdll.core.Log("[TEST] DisbandUnits: units after  = " .. tostring(after))
+                    if after == before - 1 then
+                        twdll.core.Log("[TEST] DisbandUnits: OK")
+                        report("DisbandUnits", true)
+                    else
+                        twdll.core.Log("[TEST] DisbandUnits: FAILED (expected " .. tostring(before - 1) .. ", got " .. tostring(after) .. ")")
+                        report("DisbandUnits", false)
+                    end
+                else
+                    twdll.core.Log("[TEST] DisbandUnits: SKIPPED (military force has no units)")
+                    record_skip()
+                end
             end
         end
 
