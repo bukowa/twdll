@@ -77,6 +77,32 @@ struct TW_BattleScriptUnit {
     TW_BattleUnit* m_unit;  // 0x4
 };
 
+struct TW_VectorNcc {
+    void*  m_capacity_and_allocator;  // 0x0  (low bits: capacity, high bits: allocator ptr)
+    int    m_size;                    // 0x4
+    void** m_elements;                // 0x8
+};
+
+struct TW_ReinforcementsManager {
+    void*         m_battle_env;                    // 0x0
+    bool          m_debug_draw;                    // 0x4
+    char          pad_05[0x3];
+    void*         m_debug_draw_menu_item;          // 0x8
+    TW_VectorNcc  m_spawn_zones;                   // 0xC
+    TW_VectorNcc  m_reinforcements;                // 0x18
+    bool          m_reinforcements_message_issued; // 0x24
+    char          pad_25[0x3];
+    int           m_max_num_units_per_army;        // 0x28
+};
+
+struct TW_Battle {
+    void*                      m_battle_env;               // 0x0
+    char                       pad_04[0x10];               // 0x4
+    int                        m_battle_phase;             // 0x14
+    char                       pad_18[0x2530];             // 0x18
+    TW_ReinforcementsManager*  m_reinforcements_manager;   // 0x2548
+};
+
 struct TW_CampaignUi {
 };
 
@@ -104,6 +130,19 @@ TW_ASSERT_OFFSET(TW_BattleUnit,    num_men_initial,         0x1C24);
 TW_ASSERT_OFFSET(TW_BattleScriptUnit, m_unit,              0x4);
 TW_ASSERT_OFFSET(TW_FamilyMember,    mother,                  0x18);
 TW_ASSERT_OFFSET(TW_FamilyMember,    father,                  0x1C);
+TW_ASSERT_OFFSET(TW_VectorNcc,             m_capacity_and_allocator, 0x0);
+TW_ASSERT_OFFSET(TW_VectorNcc,             m_size,                   0x4);
+TW_ASSERT_OFFSET(TW_VectorNcc,             m_elements,               0x8);
+TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_battle_env,             0x0);
+TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_debug_draw,             0x4);
+TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_debug_draw_menu_item,   0x8);
+TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_spawn_zones,            0xC);
+TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_reinforcements,         0x18);
+TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_reinforcements_message_issued, 0x24);
+TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_max_num_units_per_army, 0x28);
+TW_ASSERT_OFFSET(TW_Battle,            m_battle_env,            0x0);
+TW_ASSERT_OFFSET(TW_Battle,            m_battle_phase,          0x14);
+TW_ASSERT_OFFSET(TW_Battle,            m_reinforcements_manager, 0x2548);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.

@@ -401,6 +401,35 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 9: twdll.battle GetBattleInfo
+        -- Expected nil while the test suite runs (campaign, no active battle).
+        -- Live battle layout verification happens in twdll.log via the
+        -- BATTLE ctor/dtor hooks (user plays a battle with tw-test).
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 9: GetBattleInfo ---")
+        do
+            local info = twdll.battle.GetBattleInfo()
+            if info == nil then
+                twdll.core.Log("[TEST] GetBattleInfo in campaign: OK (nil)")
+                report("GetBattleInfo campaign nil", true)
+            elseif type(info) == "table" then
+                twdll.core.Log(string.format(
+                    "[TEST] GetBattleInfo during battle: battle=%s manager=%s cap=%s size=%s",
+                    tostring(info.battle), tostring(info.manager), tostring(info.cap), tostring(info.size)))
+                if info.battle ~= nil and info.battle ~= 0 and info.manager ~= nil and info.cap ~= nil and info.size ~= nil then
+                    twdll.core.Log("[TEST] GetBattleInfo during battle: OK")
+                    report("GetBattleInfo battle table", true)
+                else
+                    twdll.core.Log("[TEST] GetBattleInfo during battle: FAILED (missing fields)")
+                    report("GetBattleInfo battle table", false)
+                end
+            else
+                twdll.core.Log("[TEST] GetBattleInfo: FAILED (unexpected type " .. type(info) .. ")")
+                report("GetBattleInfo type", false)
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

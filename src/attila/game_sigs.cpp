@@ -8,11 +8,17 @@
 // from the battle setup) followed by `mov [esi+0x28], eax` (store into the
 // manager field). Unique in the image; used as the reinforcement cap patch site.
 #define REINF_CAP_SIG   "8B 80 3C 01 00 00 89 46 28"
+// EMPIREBATTLE::MANAGER ctor/dtor entry points. Verified unique in the image;
+// both signatures start at the function entry, so they can be hooked directly.
+#define BATTLE_CTOR_SIG "83 EC 0C 53 55 8B 6C 24 ? 56 57 8B F9 8B 45"
+#define BATTLE_DTOR_SIG "51 53 55 56 57 8B F9 8B B7 ? ? ? ? 85 F6"
 // clang-format on
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
 uintptr_t          g_reinf_cap_insn_addr = 0;
+uintptr_t          g_battle_ctor_addr    = 0;
+uintptr_t          g_battle_dtor_addr    = 0;
 
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
@@ -21,5 +27,7 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"FACTION::new_faction_leader",     (void**)&g_new_faction_leader, NEW_FACTION_LEADER_SIG},
     {"UNIT::disband_units",             (void**)&g_disband_units,      DISBAND_UNITS_SIG},
     {"REINFORCEMENTS_MANAGER::max_units_load", (void**)&g_reinf_cap_insn_addr, REINF_CAP_SIG},
+    {"EMPIREBATTLE::MANAGER::ctor",            (void**)&g_battle_ctor_addr,    BATTLE_CTOR_SIG},
+    {"EMPIREBATTLE::MANAGER::dtor",            (void**)&g_battle_dtor_addr,    BATTLE_DTOR_SIG},
     {nullptr, nullptr, nullptr}
 };

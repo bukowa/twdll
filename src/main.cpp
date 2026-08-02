@@ -10,6 +10,7 @@ extern const luaL_Reg faction_functions[];
 extern const luaL_Reg military_force_functions[];
 extern const luaL_Reg model_functions[];
 extern const luaL_Reg world_functions[];
+extern const luaL_Reg battle_functions[];
 extern const luaL_Reg campaign_ui_functions[];
 extern const luaL_Reg twdll_core[];
 
@@ -87,6 +88,9 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     l_register(L, "twdll_world", world_functions);
     l_setfield(L, -2, "world");
+
+    l_register(L, "twdll_battle", battle_functions);
+    l_setfield(L, -2, "battle");
 
     l_register(L, "twdll_campaign_ui", campaign_ui_functions);
     l_setfield(L, -2, "campaign_ui");
