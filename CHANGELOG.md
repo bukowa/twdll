@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-08-03
+
+### Added
+- **Live campaign/battle hooks**: ctor/dtor hooks for the `WORLD`, `CAMPAIGN_UI`, `CAMPAIGN_MODEL` and `BATTLE` (`EMPIREBATTLE::MANAGER`) singletons, installed on first load and uninstalled automatically when the Lua state is collected.
+- New `twdll.world` module: `GetFactionCount`, `GetMaxUnitsInArmy` / `SetMaxUnitsInArmy`, `GetMaxUnitsInNavy` / `SetMaxUnitsInNavy`, `GetReinforcementCap` / `SetReinforcementCap` (pass `-1` to restore the game default).
+- New `twdll.model` module: `DisbandUnits` — save/load-safe unit removal using the game's own disband path.
+- New `twdll.battle` module: `GetBattleInfo` — live battle object, reinforcements manager, cap and queue size.
+- New `twdll.campaign_ui` module: `GetMemoryAddress`.
+- Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `GetNumMen` / `SetNumMen`, `GetMaxNumMen` / `SetMaxNumMen`, `GetActionPoints` / `SetActionPoints`.
+- Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `GetTreasury` / `SetTreasury` and `SetFactionLeader` (supports the succession and heir-comes-of-age event variants).
+- New Lua runtime signatures: `lua_getfield`, `lua_type`, `lua_settop`.
+- Reworked test suite (9 cases: singletons, unit/faction interfaces, `SetFactionLeader`, treasury, `DisbandUnits`, army/navy caps, reinforcement cap, `GetBattleInfo`).
+
+### Changed
+- **API restructure**: all modules now live under a single `twdll` table — `twdll.core`, `twdll.unit`, `twdll.faction`, `twdll.military_force`, `twdll.model`, `twdll.world`, `twdll.battle`, `twdll.campaign_ui`. Old flat entry points moved accordingly (`twdll.Log` → `twdll.core.Log`, `twdll.set_max_units_in_army` → `twdll.world.SetMaxUnitsInArmy`).
+- Property accessors rewritten from macros to template `Property` / `Getter` / `GlobalGetter` classes, with offset-based getters for embedded fields.
+- Hooks install once per Lua state instead of on every DLL load.
+- Build/tooling: MSVC toolset bumped to 14.51, GH Actions submodule init fixes, new CodeQL workflow, `tools/twdll.ps1` sets CPU affinity on Win11, docs build fixes.
+
+### Removed
+- The `twdll_character` and `twdll_battle_unit` modules are no longer registered in the new single-table layout.
+
 ## [0.6.1] - 2026-05-11
 
 ### Fixed
