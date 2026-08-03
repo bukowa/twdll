@@ -7,9 +7,9 @@ set(TWDLL_DOCS_DIR "${PROJECT_SOURCE_DIR}/docs/${TW_GAME}")
 set(TWDLL_DOC_OUTPUT "${TWDLL_DOCS_DIR}/index.html")
 
 # Collect source files for documentation.
-# List explicitly — only files whose modules are registered in main.cpp.
-# Do NOT use GLOB here; unregistered modules (character, battle_unit, military_force)
-# must be omitted until they are tested and re-enabled.
+# List explicitly — one entry per module registered in main.cpp (luaopen_twdll).
+# Do NOT use GLOB here: adding a new module requires adding its source file here,
+# otherwise its docs page is missing (e.g. twdll.battle / GetBattleInfo).
 if(TW_GAME STREQUAL "attila")
     set(TWDLL_DOC_SOURCES
         "${PROJECT_SOURCE_DIR}/src/main.cpp"
@@ -20,6 +20,7 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/campaign_ui.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/military_force.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/model.cpp"
+        "${PROJECT_SOURCE_DIR}/src/attila/battle_hooks.cpp"
     )
 elseif(TW_GAME STREQUAL "rome2")
     set(TWDLL_DOC_SOURCES

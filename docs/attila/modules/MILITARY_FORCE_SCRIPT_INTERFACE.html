@@ -31,6 +31,10 @@
   <li><a href="../index.html">Index</a></li>
 </ul>
 
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
 
 
 <h2>Modules</h2>
@@ -42,6 +46,7 @@
   <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
   <li><strong>MILITARY_FORCE_SCRIPT_INTERFACE</strong></li>
   <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
 </ul>
 
 </div>
@@ -55,11 +60,66 @@
 <p> Extensions to the game's military force object.</p>
 
 
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Returns the memory address of the military force object as a hexadecimal string.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetRecruitmentQueueSize">GetRecruitmentQueueSize ()</a></td>
+	<td class="summary">Returns the number of units in the recruitment queue.</td>
+	</tr>
+</table>
 
 <br/>
 <br/>
 
 
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the military force object as a hexadecimal string.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetRecruitmentQueueSize"></a>
+    <strong>GetRecruitmentQueueSize ()</strong>
+    </dt>
+    <dd>
+    Returns the number of units in the recruitment queue.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        number of units
+    </ol>
+
+
+
+
+</dd>
+</dl>
 
 
 </div> <!-- id="content" -->

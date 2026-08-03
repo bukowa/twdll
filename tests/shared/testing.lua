@@ -283,6 +283,42 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 5b: MILITARY_FORCE_SCRIPT_INTERFACE methods
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 5b: MILITARY_FORCE_SCRIPT_INTERFACE methods ---")
+        do
+            if char == nil then
+                twdll.core.Log("[TEST] MILITARY_FORCE_SCRIPT_INTERFACE: SKIPPED (no character with a military force)")
+                record_skip()
+            else
+                local mf = char:military_force()
+                if type(mf.GetRecruitmentQueueSize) == "function" then
+                    local qsize = mf:GetRecruitmentQueueSize()
+                    twdll.core.Log("[TEST] MILITARY_FORCE_SCRIPT_INTERFACE: recruitment queue size = " .. tostring(qsize))
+                    if qsize == 0 then
+                        twdll.core.Log("[TEST] GetRecruitmentQueueSize: OK")
+                        report("GetRecruitmentQueueSize", true)
+                    else
+                        twdll.core.Log("[TEST] GetRecruitmentQueueSize: FAILED (expected 0, got " .. tostring(qsize) .. ")")
+                        report("GetRecruitmentQueueSize", false)
+                    end
+                    local addr = mf:GetMemoryAddress()
+                    if type(addr) == "string" and string.match(addr, "^0x") then
+                        twdll.core.Log("[TEST] GetMemoryAddress: OK")
+                        report("GetMemoryAddress", true)
+                    else
+                        twdll.core.Log("[TEST] GetMemoryAddress: FAILED (got " .. tostring(addr) .. ")")
+                        report("GetMemoryAddress", false)
+                    end
+                else
+                    twdll.core.Log("[TEST] MILITARY_FORCE_SCRIPT_INTERFACE: FAILED (methods not registered)")
+                    report("GetRecruitmentQueueSize", false)
+                    report("GetMemoryAddress", false)
+                end
+            end
+        end
+
+        -- ======================================================
         -- TEST 6: twdll.world SetMaxUnitsInArmy / SetMaxUnitsInNavy
         -- Attila default: army=20, navy=20
         -- ======================================================
