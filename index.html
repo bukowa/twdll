@@ -121,6 +121,38 @@
     <ul id="version-list">
         <li>
     <div class="version-header">
+        <span class="version-label">0.7.0</span>
+        <div class="version-actions">
+            <a href="./0.7.0/" class="button doc-link">View Documentation</a>
+            <a href="https://github.com/bukowa/twdll/releases/tag/v0.7.0" class="button release-link" target="_blank">Download Release</a>
+        </div>
+    </div>
+    <details class="changelog-details">
+        <summary>View Changes</summary>
+        <ul>
+  <li>2026-08-03</li>
+</ul><h4>Added</h4><ul>
+  <li>**Live campaign/battle hooks**: ctor/dtor hooks for the `WORLD`, `CAMPAIGN_UI`, `CAMPAIGN_MODEL` and `BATTLE` (`EMPIREBATTLE::MANAGER`) singletons, installed on first load and uninstalled automatically when the Lua state is collected.</li>
+  <li>New `twdll.world` module: `GetFactionCount`, `GetMaxUnitsInArmy` / `SetMaxUnitsInArmy`, `GetMaxUnitsInNavy` / `SetMaxUnitsInNavy`, `GetReinforcementCap` / `SetReinforcementCap` (pass `-1` to restore the game default).</li>
+  <li>New `twdll.model` module: `DisbandUnits` — save/load-safe unit removal using the game's own disband path.</li>
+  <li>New `twdll.battle` module: `GetBattleInfo` — live battle object, reinforcements manager, cap and queue size.</li>
+  <li>New `twdll.campaign_ui` module: `GetMemoryAddress`.</li>
+  <li>Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `GetNumMen` / `SetNumMen`, `GetMaxNumMen` / `SetMaxNumMen`, `GetActionPoints` / `SetActionPoints`.</li>
+  <li>Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `GetTreasury` / `SetTreasury` and `SetFactionLeader` (supports the succession and heir-comes-of-age event variants).</li>
+  <li>New Lua runtime signatures: `lua_getfield`, `lua_type`, `lua_settop`.</li>
+  <li>Reworked test suite (9 cases: singletons, unit/faction interfaces, `SetFactionLeader`, treasury, `DisbandUnits`, army/navy caps, reinforcement cap, `GetBattleInfo`).</li>
+</ul><h4>Changed</h4><ul>
+  <li>**API restructure**: all modules now live under a single `twdll` table — `twdll.core`, `twdll.unit`, `twdll.faction`, `twdll.military_force`, `twdll.model`, `twdll.world`, `twdll.battle`, `twdll.campaign_ui`. Old flat entry points moved accordingly (`twdll.Log` → `twdll.core.Log`, `twdll.set_max_units_in_army` → `twdll.world.SetMaxUnitsInArmy`).</li>
+  <li>Property accessors rewritten from macros to template `Property` / `Getter` / `GlobalGetter` classes, with offset-based getters for embedded fields.</li>
+  <li>Hooks install once per Lua state instead of on every DLL load.</li>
+  <li>Build/tooling: MSVC toolset bumped to 14.51, GH Actions submodule init fixes, new CodeQL workflow, `tools/twdll.ps1` sets CPU affinity on Win11, docs build fixes.</li>
+</ul><h4>Removed</h4><ul>
+  <li>The `twdll_character` and `twdll_battle_unit` modules are no longer registered in the new single-table layout.</li>
+</ul>
+    </details>
+</li>
+<li>
+    <div class="version-header">
         <span class="version-label">0.6.1</span>
         <div class="version-actions">
             <a href="./0.6.1/" class="button doc-link">View Documentation</a>
