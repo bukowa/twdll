@@ -75,5 +75,12 @@
         "CMAKE_BUILD_TYPE": "Release"
       }
     }
+  ],
+  "buildPresets": [
+    {
+      "name": "attila",
+      "configurePreset": "attila",
+      "targets": ["twdll"]
+    }
   ]
 }
