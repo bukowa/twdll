@@ -66,6 +66,18 @@
 	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
 	<td class="summary">Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxSlots">SetMaxSlots (slots)</a></td>
+	<td class="summary">Overrides the maximum number of building slots shown in the settlement panel.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxSlots">GetMaxSlots ()</a></td>
+	<td class="summary">Returns the currently configured max-slot override, or nil if none is set.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#ClearMaxSlots">ClearMaxSlots ()</a></td>
+	<td class="summary">Restores the game default max-slot count (4, or 6 for capitals).</td>
+	</tr>
 </table>
 
 <br/>
@@ -90,6 +102,69 @@
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
         memory address (e.g. "0x12345678"), or nil if not yet initialised
     </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMaxSlots"></a>
+    <strong>SetMaxSlots (slots)</strong>
+    </dt>
+    <dd>
+    Overrides the maximum number of building slots shown in the settlement panel.
+Clamped to 1..20. Applies from the next panel open/refresh onwards.
+Values below 1 are rejected (no-op). Use ClearMaxSlots to restore the default.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">slots</span>
+            <span class="types"><span class="type">number</span></span>
+         max slot count to display
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        the applied value, or nil if rejected
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMaxSlots"></a>
+    <strong>GetMaxSlots ()</strong>
+    </dt>
+    <dd>
+    Returns the currently configured max-slot override, or nil if none is set.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        slots
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "ClearMaxSlots"></a>
+    <strong>ClearMaxSlots ()</strong>
+    </dt>
+    <dd>
+    Restores the game default max-slot count (4, or 6 for capitals).
+
+
+
 
 
 
