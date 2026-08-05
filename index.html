@@ -121,6 +121,26 @@
     <ul id="version-list">
         <li>
     <div class="version-header">
+        <span class="version-label">0.8.0</span>
+        <div class="version-actions">
+            <a href="./0.8.0/" class="button doc-link">View Documentation</a>
+            <a href="https://github.com/bukowa/twdll/releases/tag/v0.8.0" class="button release-link" target="_blank">Download Release</a>
+        </div>
+    </div>
+    <details class="changelog-details">
+        <summary>View Changes</summary>
+        <ul>
+  <li>2026-08-05</li>
+</ul><h4>Added</h4><ul>
+  <li>New `twdll.campaign_ui` functions: `SetMaxSlots`, `GetMaxSlots`, `ClearMaxSlots` — override the maximum number of building slots shown in the settlement panel (`0` restores the game default).</li>
+  <li>New `CampaignSettlementCallback::Initialize` hook, installed and uninstalled together with the other campaign hooks; the slot override is re-applied on every settlement panel open/refresh.</li>
+</ul><h4>Changed</h4><ul>
+  <li>`AGENTS.md` and `README.md` updated.</li>
+</ul>
+    </details>
+</li>
+<li>
+    <div class="version-header">
         <span class="version-label">0.7.0</span>
         <div class="version-actions">
             <a href="./0.7.0/" class="button doc-link">View Documentation</a>
