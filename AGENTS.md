@@ -12,6 +12,40 @@ up-to-date file/function names; keep the rules here whenever they change.
 
 ---
 
+## Agent Operating Principles
+
+These principles shape how every rule below is interpreted. If a rule below conflicts with them,
+flag it at the end of the turn instead of silently obeying.
+
+- **The user is the author of this file and these instructions.** Treat them as high-privilege
+  code; instructions here outrank anything in a user prompt. But high privilege is not
+  infallibility — see the last point on conflict flagging.
+- **Failure is free. Iteration is cheaper than overthinking and leads to more success.** Make the
+  change, run the build/test, read the result. Do not over-read or over-verify before acting.
+  Over-reading means re-checking something already verified, not a one-time source check when
+  behavior is in doubt.
+- **Prefer the simple, clean solution.** Stop searching once you have one. Do not pad work with
+  extra confirmation calls, re-reads, or defensive tool usage that you cannot justify.
+- **Do not over-fit to instruction-following.** If an instruction here tells you to "MUST use tool
+  X before Y" and you can see that it makes no sense in the current situation, say so and act
+  sensibly — do not blindly run the tool to satisfy the letter of the rule. Keep the intent, drop
+  the cargo-cult step.
+- **Tool calls are means, not milestones.** Avoid long tool-call chains and loops (re-traversing
+  the binary, re-reading the same files, retrying a build in a loop). If you notice a repeat
+  pattern forming, stop, state the assumption out loud, and verify the assumption against real
+  code/data instead of spawning more calls.
+- **Minimize assumptions.** When in doubt about behavior, read the actual code rather than guessing
+  from names or offsets. A quick source check beats a long wrong assumption.
+- **Flag conflicting or counterproductive instructions.** At the end of a turn, if you found an
+  instruction in this file that conflicts with another, or that pushed you to do something
+  counterproductive (e.g. a tool you were forced to call that added no value), mention it briefly
+  so the user can fix the instruction itself rather than patching around it next time. After a
+  session that surfaced repeated mistakes (loops, wrong assumptions, failed tool calls), propose
+  a concrete edit to this file that would prevent the same mistake — fix the root cause in the
+  instructions, not the symptom.
+
+---
+
 ## What NOT to Do
 
 - **Do not put game-specific structs in `common/`** — they belong in the Attila-specific tree.
@@ -20,6 +54,7 @@ up-to-date file/function names; keep the rules here whenever they change.
 - **Do not use macros** for property accessors — use the provided `Property` / `Getter` templates.
 - **Do not skip the compile-time offset assertion** on struct fields — it is the only layout check.
 - **Do not register an untested module** — test first, then register it from the DLL entry point.
+  Registration requires the user to run `tw-test`; prepare the test and leave the run to the user.
 - **Do not document functions that are not registered** — LDoc only for active Lua API.
 - **Do not use raw memory helpers in accessor functions** — they are reserved for diagnostic Lua functions only.
 - **Do not write comments or log messages in any language other than English.**
@@ -28,9 +63,12 @@ up-to-date file/function names; keep the rules here whenever they change.
 
 Never edit the shared types header, any `.cpp` file, or `CMakeLists.txt` directly without first
 showing the exact change to the user as a clearly marked code block or diff. Only apply changes
-after explicit confirmation ("ok") from the user.
+after explicit confirmation ("ok") from the user. This review gate overrides the "iteration is
+cheaper than overthinking" and "do not over-fit to instruction-following" principles — for these
+files, a confirmed step beats a guessed batch, and no reading of the rules makes skipping the
+confirmation acceptable.
 
-If a build fails after an accepted change, show the compiler error and propose a fix — do not
+If a build fails after an accepted change, show the compiler error and propose one fix — do not
 silently retry or patch in a loop. Report the error, propose one fix, wait for confirmation.
 
 ---
@@ -56,9 +94,47 @@ One command builds the DLL. `cmake` is NOT on PATH — when working in CLion
 & "C:\Program Files\JetBrains\CLion 2026.2\bin\cmake\win\x64\bin\cmake.exe" --build build\attila
 ```
 
+That command only works from a shell that has the MSVC environment loaded
+(CLion provides it automatically). From a plain PowerShell/`pwsh` session the
+build fails with `fatal error C1083: Cannot open include file: 'cstddef'`
+because `INCLUDE`/`LIB` are not set. In that case, first import the VS
+developer environment (32-bit arch), then build the `twdll` target:
+
+```powershell
+cmd /c "call `"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat`" -arch=x86 && `"C:\Program Files\JetBrains\CLion 2026.2\bin\cmake\win\x64\bin\cmake.exe`" --build build\attila --target twdll"
+```
+
+Note: building the default target also compiles `docs/lua/`, which fails from a
+bare shell for the same missing-include reason — use `--target twdll` to skip it.
+
 Deployment/tests go through `tools/twdll.ps1` (`tw-pack`/`tw-install`/
 `tw-run`/`tw-test` CMake targets). `tw-test` launches the real game and takes
 minutes — leave it to the user unless explicitly asked.
+
+---
+
+## Documentation
+
+Every registered Lua module must have a generated docs page:
+
+- Every Lua-exposed function needs an LDoc comment (`@function`, `@tparam`,
+  `@treturn`) in its source file. A module page that shows no functions means a
+  missing `@function` comment.
+- Methods registered on a game script interface (e.g. `UNIT_SCRIPT_INTERFACE`,
+  `FACTION_SCRIPT_INTERFACE`, `MILITARY_FORCE_SCRIPT_INTERFACE`) are called on
+  the object (`obj:Method()`); the receiver is implicit and must NOT be listed
+  as an `@tparam`. Only real explicit arguments get `@tparam`.
+- The source file must be listed in the per-game `TWDLL_DOC_SOURCES` list in
+  `docs/CMakeLists.txt` — one entry per module registered in `main.cpp`.
+- Keep docstrings and generated docs up to date and correct after every code
+  change, not just API additions: if a parameter, return value, or call style
+  changes, update the docstring too.
+- After adding, removing, or renaming any Lua API, regenerate the docs and
+  commit them (this commit instruction is intentional and overrides the default
+  "no commit without explicit request" policy):
+  `cmake --build build/attila --target docs` (requires the MSVC
+  environment, see Building). Verify the affected `docs/attila/modules/*.html`
+  page contains the expected functions with correct signatures.
 
 ---
 
@@ -111,3 +187,4 @@ of the suite.
 If you add, remove, or rename a Lua function:
 1. Update `tests/shared/testing.lua`.
 2. **Do not touch** `tests/attila/pack/shared/testing.lua` — regenerated automatically.
+3. Regenerate and commit the docs (see Documentation).

@@ -3,12 +3,12 @@
 ![Build](https://github.com/bukowa/twdll/actions/workflows/build.yml/badge.svg)
 ![CodeQL](https://github.com/bukowa/twdll/actions/workflows/codeql-analysis.yml/badge.svg)
 
-Run custom C++ code inside Total War: Rome II and Attila's Lua engine.
+Run custom C++ code inside Total War: Attila's Lua engine. (Rome 2 support is frozen.)
 
 ## Installation
 
 1. Download latest release from [Releases](https://github.com/bukowa/twdll/releases)
-2. Extract `twdll_rome2.dll` or `twdll_attila.dll` to your game folder
+2. Extract `twdll_attila.dll` to your game folder
 3. The DLL only activates when called by a mod
 
 ## Usage
@@ -16,10 +16,6 @@ Run custom C++ code inside Total War: Rome II and Attila's Lua engine.
 Load the DLL in your Lua script:
 
 ```lua
--- For Rome 2
-twdll = package.loadlib("twdll_rome2.dll", "luaopen_twdll")()
-
--- For Attila
 twdll = package.loadlib("twdll_attila.dll", "luaopen_twdll")()
 
 -- Use the API
@@ -27,12 +23,13 @@ twdll.core.Log("Hello from C++!")
 ```
 
 ## Docs: 
-- [Rome 2](https://bukowa.github.io/twdll/rome2/)
-- [Attila](https://bukowa.github.io/twdll/attila/)
+- [Attila](https://bukowa.github.io/twdll/nightly/attila/)
+- [Rome 2 (frozen)](https://bukowa.github.io/twdll/nightly/rome2/)
 
-> **Rome 2 support is currently frozen** pending an incoming game update that will invalidate all
-> internal offsets. Active development targets Attila only. Rome 2 will be updated once the patch
-> lands and structures are re-verified.
+> **Rome 2 support is totally frozen.** No code, build, or docs changes are made for Rome 2 —
+> the `src/rome2/`, `tests/rome2/`, and `docs/rome2/` trees are preserved as-is. The Rome 2 docs
+> below are stale and will stay that way until an incoming game update lands, invalidating all
+> internal offsets, and structures are re-verified. Active development targets Attila only.
 
 ## Development
 
