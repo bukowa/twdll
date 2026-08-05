@@ -106,6 +106,24 @@ struct TW_Battle {
 struct TW_CampaignUi {
 };
 
+// EMPIRECAMPAIGN::CampaignSettlementCallback — selected fields (32-bit Attila layout).
+// Gap analysis vs 64-bit DWARF (m_region@0x68, m_max_slots@0x74,
+// m_num_available_slots@0x78): the ComponentCallbacks+LISTENER base shrinks by
+// 0x28 (10 pointers 8B→4B), so m_region@0x40, m_max_slots@0x48,
+// m_num_available_slots@0x4C. Verified via disasm of CampaignSettlementCallback__Initialize
+// (0x113E1D50):
+//   113e1d66  mov [esi+40h], edi    ; m_region = region arg
+//   113e1d7b  mov [esi+4Ch], eax    ; m_num_available_slots = settlement->m_slots.m_size
+//   113e2513  cmp [esi+48h], ebx    ; slot-render loop bound = m_max_slots
+//   113e25cb  cmp ebx, [esi+4Ch]    ; avail-slot gate
+struct TW_SettlementCallback {
+    char  pad_00[0x40];
+    void* m_region;                 // 0x40  (EMPIRE_UTILITY SAFE_PTR deref -> REGION)
+    char  pad_44[0x4];
+    int   m_max_slots;              // 0x48  (max slots to render; 4 normal, 6 capital)
+    int   m_num_available_slots;    // 0x4C  (settlement->m_slots.m_size)
+};
+
 #pragma pack(pop)
 
 #define TW_ASSERT_OFFSET(S, F, O) \
@@ -143,6 +161,9 @@ TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_max_num_units_per_army, 0x28);
 TW_ASSERT_OFFSET(TW_Battle,            m_battle_env,            0x0);
 TW_ASSERT_OFFSET(TW_Battle,            m_battle_phase,          0x14);
 TW_ASSERT_OFFSET(TW_Battle,            m_reinforcements_manager, 0x2548);
+TW_ASSERT_OFFSET(TW_SettlementCallback, m_region,               0x40);
+TW_ASSERT_OFFSET(TW_SettlementCallback, m_max_slots,            0x48);
+TW_ASSERT_OFFSET(TW_SettlementCallback, m_num_available_slots,  0x4C);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.

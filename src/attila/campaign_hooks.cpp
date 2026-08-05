@@ -7,10 +7,12 @@
 // Forward declarations to the game-specific modules
 extern void install_world_hook(uintptr_t base, size_t size);
 extern void install_campaign_ui_hook(uintptr_t base, size_t size);
+extern void install_settlement_slots_hook(uintptr_t base, size_t size);
 extern void install_model_hook(uintptr_t base, size_t size);
 extern void install_battle_hook();
 extern void uninstall_world_hook();
 extern void uninstall_campaign_ui_hook();
+extern void uninstall_settlement_slots_hook();
 extern void uninstall_model_hook();
 extern void uninstall_battle_hook();
 
@@ -42,6 +44,7 @@ void install_campaign_hooks() {
 
     install_world_hook(base, size);
     install_campaign_ui_hook(base, size);
+    install_settlement_slots_hook(base, size);
     install_model_hook(base, size);
     install_battle_hook();
 
@@ -53,6 +56,7 @@ void uninstall_campaign_hooks() {
     // Disable and remove installed hooks, then clear global pointers.
     uninstall_world_hook();
     uninstall_campaign_ui_hook();
+    uninstall_settlement_slots_hook();
     uninstall_model_hook();
     uninstall_battle_hook();
     // Optionally deinitialize MinHook if no longer needed.

@@ -17,5 +17,8 @@ extern uintptr_t g_reinf_cap_insn_addr;
 extern uintptr_t g_battle_ctor_addr;
 extern uintptr_t g_battle_dtor_addr;
 
+// CampaignSettlementCallback::Initialize entry point, resolved by initialize_game_api().
+extern uintptr_t g_settlement_cb_initialize_addr;
+
 extern const uintptr_t OFFSET_MAX_UNITS_ARMY;
 extern const uintptr_t OFFSET_MAX_UNITS_NAVY;
