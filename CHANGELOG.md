@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-08-05
+
+### Added
+- New `twdll.campaign_ui` functions: `SetMaxSlots`, `GetMaxSlots`, `ClearMaxSlots` — override the maximum number of building slots shown in the settlement panel (`0` restores the game default).
+- New `CampaignSettlementCallback::Initialize` hook, installed and uninstalled together with the other campaign hooks; the slot override is re-applied on every settlement panel open/refresh.
+
+### Changed
+- `AGENTS.md` and `README.md` updated.
+
 ## [0.7.0] - 2026-08-03
 
 ### Added
