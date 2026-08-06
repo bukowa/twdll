@@ -22,6 +22,18 @@ twdll = package.loadlib("twdll_attila.dll", "luaopen_twdll")()
 twdll.core.Log("Hello from C++!")
 ```
 
+> **Where to load twdll**
+>
+> Load the DLL from the campaign script — `campaigns/<campaign>/scripting.lua` — exactly as the
+> test suite does (`tests/attila/pack/campaigns/main_attila/scripting.lua`). On first load twdll
+> hooks game singletons (world, campaign UI, campaign model), and those objects are only
+> constructed once a campaign world is created. Calling singleton-dependent functions any earlier
+> (e.g. from the main menu or a global script) can return `nil` or crash.
+>
+> Not every function requires this: plain utilities (`twdll.core.Log`, `twdll.core.GameBuild`) and
+> functions that read fixed module offsets work regardless of where they are called. This is how
+> the current hook architecture works, not a permanent contract — it may change in the future.
+
 ## Docs: 
 - [Attila](https://bukowa.github.io/twdll/nightly/attila/)
 - [Rome 2 (frozen)](https://bukowa.github.io/twdll/nightly/rome2/)
