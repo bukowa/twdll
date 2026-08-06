@@ -128,6 +128,7 @@ table.index td { text-align: left; vertical-align: top; }
     border-left: 2px solid #cccccc;
     border-right: 2px solid #cccccc;
     background-color: #ffffff;
+    max-width: 75em;
 }
 
 #about {

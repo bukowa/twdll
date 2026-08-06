@@ -5,7 +5,6 @@
 <head>
     <title>twdll Lua API</title>
     <link rel="stylesheet" href="../ldoc.css" type="text/css" />
-    <link rel="stylesheet" href="../custom.css" type="text/css" />
 </head>
 <body>
 
@@ -68,16 +67,26 @@
 	<td class="summary">Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetMaxSlots">SetMaxSlots (slots)</a></td>
-	<td class="summary">Overrides the maximum number of building slots shown in the settlement panel.</td>
+	<td class="name" nowrap><a href="#SetMaxSlotsMajor">SetMaxSlotsMajor (slots)</a></td>
+	<td class="summary">Overrides the maximum number of building slots shown on the main (capital)
+settlement card in the settlement panel.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetMaxSlots">GetMaxSlots ()</a></td>
-	<td class="summary">Returns the currently configured max-slot override, or nil if none is set.</td>
+	<td class="name" nowrap><a href="#SetMaxSlotsMinor">SetMaxSlotsMinor (slots)</a></td>
+	<td class="summary">Overrides the maximum number of building slots shown on the minor settlement
+cards in the settlement panel.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxSlotsMajor">GetMaxSlotsMajor ()</a></td>
+	<td class="summary">Returns the currently configured major-slot override, or nil if none is set.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxSlotsMinor">GetMaxSlotsMinor ()</a></td>
+	<td class="summary">Returns the currently configured minor-slot override, or nil if none is set.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#ClearMaxSlots">ClearMaxSlots ()</a></td>
-	<td class="summary">Restores the game default max-slot count (4, or 6 for capitals).</td>
+	<td class="summary">Restores the game default max-slot count (4, or 6 for the main settlement card).</td>
 	</tr>
 </table>
 
@@ -109,13 +118,13 @@
 
 </dd>
     <dt>
-    <a name = "SetMaxSlots"></a>
-    <strong>SetMaxSlots (slots)</strong>
+    <a name = "SetMaxSlotsMajor"></a>
+    <strong>SetMaxSlotsMajor (slots)</strong>
     </dt>
     <dd>
-    Overrides the maximum number of building slots shown in the settlement panel.
-Clamped to 1..20. Applies from the next panel open/refresh onwards.
-Values below 1 are rejected (no-op). Use ClearMaxSlots to restore the default.
+    Overrides the maximum number of building slots shown on the main (capital)
+settlement card in the settlement panel.  Clamped to 1..20. Applies from the
+next panel open/refresh onwards. Values below 1 are rejected (no-op).
 
 
     <h3>Parameters:</h3>
@@ -138,11 +147,60 @@ Values below 1 are rejected (no-op). Use ClearMaxSlots to restore the default.
 
 </dd>
     <dt>
-    <a name = "GetMaxSlots"></a>
-    <strong>GetMaxSlots ()</strong>
+    <a name = "SetMaxSlotsMinor"></a>
+    <strong>SetMaxSlotsMinor (slots)</strong>
     </dt>
     <dd>
-    Returns the currently configured max-slot override, or nil if none is set.
+    Overrides the maximum number of building slots shown on the minor settlement
+cards in the settlement panel.  Clamped to 1..20. Applies from the next panel
+open/refresh onwards. Values below 1 are rejected (no-op).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">slots</span>
+            <span class="types"><span class="type">number</span></span>
+         max slot count to display
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        the applied value, or nil if rejected
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMaxSlotsMajor"></a>
+    <strong>GetMaxSlotsMajor ()</strong>
+    </dt>
+    <dd>
+    Returns the currently configured major-slot override, or nil if none is set.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        slots
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMaxSlotsMinor"></a>
+    <strong>GetMaxSlotsMinor ()</strong>
+    </dt>
+    <dd>
+    Returns the currently configured minor-slot override, or nil if none is set.
 
 
 
@@ -162,7 +220,7 @@ Values below 1 are rejected (no-op). Use ClearMaxSlots to restore the default.
     <strong>ClearMaxSlots ()</strong>
     </dt>
     <dd>
-    Restores the game default max-slot count (4, or 6 for capitals).
+    Restores the game default max-slot count (4, or 6 for the main settlement card).
 
 
 

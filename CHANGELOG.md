@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-08-06
+
+### Added
+- New `twdll.campaign_ui` functions: `SetMaxSlotsMajor` / `SetMaxSlotsMinor` and `GetMaxSlotsMajor` / `GetMaxSlotsMinor` - set/get the building-slot override separately for major (province capital) and minor settlements. The override now distinguishes the two via the settlement's capital flag instead of applying to every settlement.
+
+### Changed
+- `ClearMaxSlots` clears both the major and minor overrides.
+- Docs build fixed: `custom.css` removed entirely, its rule (`max-width: 75em`) merged into the vendored LDoc stylesheet.
+- `AGENTS.md` and `README.md` updated.
+
+### Removed
+- `SetMaxSlots` / `GetMaxSlots` removed (0.x, no backward compatibility) - use the `Major` variants instead.
+
 ## [0.8.0] - 2026-08-05
 
 ### Added

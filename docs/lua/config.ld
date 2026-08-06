@@ -1,7 +1,6 @@
 project = "twdll"
 title = "twdll Lua API"
 description = "Lua bindings for Total War: Attila"
-custom_css = "custom.css"
 full_description = [[Load the DLL from the campaign script — `campaigns/<campaign>/scripting.lua` — exactly as the test suite does.
 
 twdll hooks game singletons (world, campaign UI, campaign model) on first load; those are only constructed once a campaign world exists. Calling singleton-dependent functions any earlier (e.g. from the main menu or a global script) can return `nil` or crash.

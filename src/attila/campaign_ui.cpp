@@ -83,13 +83,21 @@ void install_campaign_ui_hook(uintptr_t base, size_t size) {
 // loop bound of m_max_slots (this+0x48), re-read every iteration. Hooking its
 // entry and writing m_max_slots before the original runs lets us override the
 // slot count on every panel open/refresh. 0 = use the game default (4/6).
-static int g_settlement_max_slots_override = 0;
+//
+// The major/minor split uses m_is_capital (this+0x44): the main/selected
+// settlement card is initialised via SetAsCapital (m_is_capital=1) before
+// Initialize, while the other province cards keep m_is_capital=0 (Construct).
+static int g_settlement_max_slots_override_major = 0;
+static int g_settlement_max_slots_override_minor = 0;
 static void* orig_settlement_cb_initialize = nullptr;
 static uintptr_t settlement_cb_initialize_addr = 0;
 
 static void ApplySlotOverride(void* callback) {
-    if (g_settlement_max_slots_override <= 0) return;
-    static_cast<TW_SettlementCallback*>(callback)->m_max_slots = g_settlement_max_slots_override;
+    auto* cb = static_cast<TW_SettlementCallback*>(callback);
+    int override = cb->m_is_capital ? g_settlement_max_slots_override_major
+                                    : g_settlement_max_slots_override_minor;
+    if (override <= 0) return;
+    cb->m_max_slots = override;
 }
 
 __declspec(naked) static void HookedSettlementCallbackInitialize() {
@@ -140,7 +148,8 @@ void uninstall_settlement_slots_hook() {
         settlement_cb_initialize_addr = 0;
     }
     orig_settlement_cb_initialize = nullptr;
-    g_settlement_max_slots_override = 0;
+    g_settlement_max_slots_override_major = 0;
+    g_settlement_max_slots_override_minor = 0;
 }
 
 /***
@@ -157,49 +166,81 @@ static int GetMemoryAddress(lua_State* L) {
 }
 
 /***
-Overrides the maximum number of building slots shown in the settlement panel.
-Clamped to 1..20. Applies from the next panel open/refresh onwards.
-Values below 1 are rejected (no-op). Use ClearMaxSlots to restore the default.
-@function SetMaxSlots
+Overrides the maximum number of building slots shown on the main (capital)
+settlement card in the settlement panel. Clamped to 1..20. Applies from the
+next panel open/refresh onwards. Values below 1 are rejected (no-op).
+@function SetMaxSlotsMajor
 @tparam number slots max slot count to display
 @treturn number the applied value, or nil if rejected
 */
-static int SetMaxSlots(lua_State* L) {
+static int SetMaxSlotsMajor(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));
     if (val < 1) { l_pushnil(L); return 1; }
     if (val > 20) val = 20;
-    g_settlement_max_slots_override = val;
-    Log("[twdll] SetMaxSlots: override = %d", val);
+    g_settlement_max_slots_override_major = val;
+    Log("[twdll] SetMaxSlotsMajor: override = %d", val);
     l_pushinteger(L, val);
     return 1;
 }
 
 /***
-Returns the currently configured max-slot override, or nil if none is set.
-@function GetMaxSlots
-@treturn number|nil slots
+Overrides the maximum number of building slots shown on the minor settlement
+cards in the settlement panel. Clamped to 1..20. Applies from the next panel
+open/refresh onwards. Values below 1 are rejected (no-op).
+@function SetMaxSlotsMinor
+@tparam number slots max slot count to display
+@treturn number the applied value, or nil if rejected
 */
-static int GetMaxSlots(lua_State* L) {
-    if (g_settlement_max_slots_override <= 0) { l_pushnil(L); return 1; }
-    l_pushinteger(L, g_settlement_max_slots_override);
+static int SetMaxSlotsMinor(lua_State* L) {
+    int val = static_cast<int>(l_tointeger(L, 1));
+    if (val < 1) { l_pushnil(L); return 1; }
+    if (val > 20) val = 20;
+    g_settlement_max_slots_override_minor = val;
+    Log("[twdll] SetMaxSlotsMinor: override = %d", val);
+    l_pushinteger(L, val);
     return 1;
 }
 
 /***
-Restores the game default max-slot count (4, or 6 for capitals).
+Returns the currently configured major-slot override, or nil if none is set.
+@function GetMaxSlotsMajor
+@treturn number|nil slots
+*/
+static int GetMaxSlotsMajor(lua_State* L) {
+    if (g_settlement_max_slots_override_major <= 0) { l_pushnil(L); return 1; }
+    l_pushinteger(L, g_settlement_max_slots_override_major);
+    return 1;
+}
+
+/***
+Returns the currently configured minor-slot override, or nil if none is set.
+@function GetMaxSlotsMinor
+@treturn number|nil slots
+*/
+static int GetMaxSlotsMinor(lua_State* L) {
+    if (g_settlement_max_slots_override_minor <= 0) { l_pushnil(L); return 1; }
+    l_pushinteger(L, g_settlement_max_slots_override_minor);
+    return 1;
+}
+
+/***
+Restores the game default max-slot count (4, or 6 for the main settlement card).
 @function ClearMaxSlots
 */
 static int ClearMaxSlots(lua_State* L) {
-    g_settlement_max_slots_override = 0;
+    g_settlement_max_slots_override_major = 0;
+    g_settlement_max_slots_override_minor = 0;
     l_pushnil(L);
     return 1;
 }
 
 extern const luaL_Reg campaign_ui_functions[] = {
     {"GetMemoryAddress", GetMemoryAddress},
-    {"SetMaxSlots",      SetMaxSlots},
-    {"GetMaxSlots",      GetMaxSlots},
     {"ClearMaxSlots",    ClearMaxSlots},
+    {"SetMaxSlotsMajor", SetMaxSlotsMajor},
+    {"GetMaxSlotsMajor", GetMaxSlotsMajor},
+    {"SetMaxSlotsMinor", SetMaxSlotsMinor},
+    {"GetMaxSlotsMinor", GetMaxSlotsMinor},
     {nullptr, nullptr}
 };
 
