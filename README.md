@@ -35,8 +35,7 @@ twdll.core.Log("Hello from C++!")
 > the current hook architecture works, not a permanent contract — it may change in the future.
 
 ## Docs: 
-- [Attila](https://bukowa.github.io/twdll/nightly/attila/)
-- [Rome 2 (frozen)](https://bukowa.github.io/twdll/nightly/rome2/)
+- [Click](https://bukowa.github.io/twdll/)
 
 > **Rome 2 support is totally frozen.** No code, build, or docs changes are made for Rome 2 —
 > the `src/rome2/`, `tests/rome2/`, and `docs/rome2/` trees are preserved as-is. The Rome 2 docs
