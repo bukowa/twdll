@@ -121,6 +121,29 @@
     <ul id="version-list">
         <li>
     <div class="version-header">
+        <span class="version-label">0.9.0</span>
+        <div class="version-actions">
+            <a href="./0.9.0/" class="button doc-link">View Documentation</a>
+            <a href="https://github.com/bukowa/twdll/releases/tag/v0.9.0" class="button release-link" target="_blank">Download Release</a>
+        </div>
+    </div>
+    <details class="changelog-details">
+        <summary>View Changes</summary>
+        <ul>
+  <li>2026-08-06</li>
+</ul><h4>Added</h4><ul>
+  <li>New `twdll.campaign_ui` functions: `SetMaxSlotsMajor` / `SetMaxSlotsMinor` and `GetMaxSlotsMajor` / `GetMaxSlotsMinor` - set/get the building-slot override separately for major (province capital) and minor settlements. The override now distinguishes the two via the settlement's capital flag instead of applying to every settlement.</li>
+</ul><h4>Changed</h4><ul>
+  <li>`ClearMaxSlots` clears both the major and minor overrides.</li>
+  <li>Docs build fixed: `custom.css` removed entirely, its rule (`max-width: 75em`) merged into the vendored LDoc stylesheet.</li>
+  <li>`AGENTS.md` and `README.md` updated.</li>
+</ul><h4>Removed</h4><ul>
+  <li>`SetMaxSlots` / `GetMaxSlots` removed (0.x, no backward compatibility) - use the `Major` variants instead.</li>
+</ul>
+    </details>
+</li>
+<li>
+    <div class="version-header">
         <span class="version-label">0.8.0</span>
         <div class="version-actions">
             <a href="./0.8.0/" class="button doc-link">View Documentation</a>
