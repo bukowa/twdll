@@ -131,6 +131,34 @@ struct TW_SettlementCallback {
     int   m_num_available_slots;    // 0x4C  (settlement->m_slots.m_size)
 };
 
+// EMPIRECAMPAIGN::PROVINCE_DEVELOPMENT — 3 fields, 12B in 32-bit.
+// Gap analysis vs 64-bit DWARF (m_faction_province_manager@0x0 ptr,
+// m_development_points@0x8, m_accumulated_growth@0xC): the back-ref pointer
+// shrinks 8B->4B, so both card32 fields shift to 0x4 and 0x8. Verified via disasm:
+//   10b6b71f  add [ebx+4], eax    ; m_development_points += eax
+//   10b6c4b6  mov [esi+8], eax    ; m_accumulated_growth = eax
+//   10b6c4e5  sub [esi+8], edi    ; m_accumulated_growth -= threshold
+struct TW_PROVINCE_DEVELOPMENT {
+    void*        m_faction_province_manager; // 0x0  (back-ref to FPM)
+    unsigned int m_development_points;       // 0x4  (spent dev points)
+    unsigned int m_accumulated_growth;       // 0x8  (surplus population accumulator)
+};
+
+// EMPIRECAMPAIGN::FACTION_PROVINCE_MANAGER — selected fields (32-bit Attila layout).
+// Gap analysis vs 64-bit DWARF (m_province_development@0x340): FPM's leading
+// pointer members shrink 8B->4B before m_province_development, so it lands at 0x23C.
+// Verified via disasm of SCRIPTING_INTERFACE::add_development_points_to_region:
+//   1073d4e0  lea ecx, [eax+23Ch]  ; ecx = &fpm->m_province_development
+struct TW_FACTION_PROVINCE_MANAGER {
+    char pad_00[0x23C];
+    TW_PROVINCE_DEVELOPMENT m_province_development; // 0x23C
+};
+
+// EMPIRECAMPAIGN::REGION — tag type only. The REGION object itself is never
+// dereferenced directly; FACTION_PROVINCE_MANAGER is reached via the engine
+// function REGION::faction_province_manager (see game_sigs.cpp).
+struct TW_Region {};
+
 #pragma pack(pop)
 
 #define TW_ASSERT_OFFSET(S, F, O) \
@@ -172,6 +200,9 @@ TW_ASSERT_OFFSET(TW_SettlementCallback, m_region,               0x40);
 TW_ASSERT_OFFSET(TW_SettlementCallback, m_is_capital,           0x44);
 TW_ASSERT_OFFSET(TW_SettlementCallback, m_max_slots,            0x48);
 TW_ASSERT_OFFSET(TW_SettlementCallback, m_num_available_slots,  0x4C);
+TW_ASSERT_OFFSET(TW_PROVINCE_DEVELOPMENT,     m_development_points,  0x4);
+TW_ASSERT_OFFSET(TW_PROVINCE_DEVELOPMENT,     m_accumulated_growth,  0x8);
+TW_ASSERT_OFFSET(TW_FACTION_PROVINCE_MANAGER, m_province_development, 0x23C);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.
@@ -190,6 +221,7 @@ TW_PTR_OFFSET(TW_FamilyMember,  0x8);
 TW_PTR_OFFSET(TW_MilitaryForce, 0x8);
 TW_PTR_OFFSET(TW_Unit,          0x8);
 TW_PTR_OFFSET(TW_BattleUnit,    0x4);
+TW_PTR_OFFSET(TW_Region,        0x8);
 
 template<typename T> T * tw_unwrap(lua_State* L, int slot) {
     void** ud = static_cast<void**>(l_touserdata(L, slot));

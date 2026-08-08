@@ -21,6 +21,7 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/military_force.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/model.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/battle_hooks.cpp"
+        "${PROJECT_SOURCE_DIR}/src/attila/region.cpp"
     )
 elseif(TW_GAME STREQUAL "rome2")
     set(TWDLL_DOC_SOURCES

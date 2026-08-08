@@ -466,6 +466,80 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 10: REGION_SCRIPT_INTERFACE methods
+        -- GetPopulationSurplus / SetPopulationSurplus /
+        -- GetGrowthPoints / SetGrowthPoints
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 10: REGION_SCRIPT_INTERFACE methods ---")
+        do
+            local region = game:model():world():region_manager():region_by_key("att_reg_scandza_hafn")
+            if region == nil or region:is_null_interface() then
+                twdll.core.Log("[TEST] REGION_SCRIPT_INTERFACE: SKIPPED (region att_reg_scandza_hafn not found)")
+                record_skip()
+            else
+                if type(region.GetPopulationSurplus) ~= "function" then
+                    twdll.core.Log("[TEST] REGION_SCRIPT_INTERFACE: FAILED (methods not registered)")
+                    report("region methods registered", false)
+                else
+                    report("region methods registered", true)
+
+                    -- Population surplus: game-start value is 5
+                    local dp_orig = region:GetPopulationSurplus()
+                    twdll.core.Log("[TEST] PopulationSurplus initial = " .. tostring(dp_orig))
+                    if dp_orig == 5 then
+                        twdll.core.Log("[TEST] PopulationSurplus initial: OK (5)")
+                        report("PopulationSurplus initial", true)
+                    else
+                        twdll.core.Log("[TEST] PopulationSurplus initial: FAILED (expected 5, got " .. tostring(dp_orig) .. ")")
+                        report("PopulationSurplus initial", false)
+                    end
+                    region:SetPopulationSurplus(10)
+                    local dp_after = region:GetPopulationSurplus()
+                    twdll.core.Log("[TEST] PopulationSurplus after Set(10) = " .. tostring(dp_after))
+                    if dp_after == 10 then
+                        twdll.core.Log("[TEST] SetPopulationSurplus: OK")
+                        report("SetPopulationSurplus", true)
+                    else
+                        twdll.core.Log(string.format("[TEST] SetPopulationSurplus: FAILED (expected 10, got %d)", dp_after))
+                        report("SetPopulationSurplus", false)
+                    end
+                    region:SetPopulationSurplus(dp_orig)
+
+                    -- Growth points: game-start value is 0
+                    local sp_orig = region:GetGrowthPoints()
+                    twdll.core.Log("[TEST] GrowthPoints initial = " .. tostring(sp_orig))
+                    if sp_orig == 0 then
+                        twdll.core.Log("[TEST] GrowthPoints initial: OK (0)")
+                        report("GrowthPoints initial", true)
+                    else
+                        twdll.core.Log("[TEST] GrowthPoints initial: FAILED (expected 0, got " .. tostring(sp_orig) .. ")")
+                        report("GrowthPoints initial", false)
+                    end
+                    region:SetGrowthPoints(20)
+                    local sp_after = region:GetGrowthPoints()
+                    twdll.core.Log("[TEST] GrowthPoints after Set(20) = " .. tostring(sp_after))
+                    if sp_after == 20 then
+                        twdll.core.Log("[TEST] SetGrowthPoints: OK")
+                        report("SetGrowthPoints", true)
+                    else
+                        twdll.core.Log(string.format("[TEST] SetGrowthPoints: FAILED (expected 20, got %d)", sp_after))
+                        report("SetGrowthPoints", false)
+                    end
+                    region:SetGrowthPoints(sp_orig)
+
+                    local addr = region:GetMemoryAddress()
+                    if type(addr) == "string" and string.match(addr, "^0x") then
+                        twdll.core.Log("[TEST] region GetMemoryAddress: OK")
+                        report("region GetMemoryAddress", true)
+                    else
+                        twdll.core.Log("[TEST] region GetMemoryAddress: FAILED (got " .. tostring(addr) .. ")")
+                        report("region GetMemoryAddress", false)
+                    end
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

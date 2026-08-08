@@ -7,6 +7,11 @@ extern FnNewFactionLeader g_new_faction_leader;
 using FnDisbandUnits = void(__cdecl*)(void* units_vector, void* campaign_model);
 extern FnDisbandUnits g_disband_units;
 
+// REGION::faction_province_manager(this=REGION*) -> FACTION_PROVINCE_MANAGER*
+// Resolved once by initialize_game_api() via FACTION_PROVINCE_MANAGER_SIG.
+using FnFactionProvinceManager = void*(__thiscall*)(void* region);
+extern FnFactionProvinceManager g_faction_province_manager;
+
 extern void* g_campaign_model;
 
 // Address of the `mov eax, [eax+0x13C]` instruction in the REINFORCEMENTS_MANAGER
