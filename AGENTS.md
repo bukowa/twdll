@@ -138,6 +138,19 @@ Every registered Lua module must have a generated docs page:
 
 ---
 
+## Changelog
+
+- Update `CHANGELOG.md` on every Lua API change: add, remove, or rename functions → new entry.
+- New changes go under `## [Unreleased]` at the top; a version + date heading is added on release.
+- Describe only the **user-facing Lua API** — what a modder can call and what it does.
+  No technical details: no memory offsets, byte signatures, structs, or engine internals.
+- Follow the file's existing style: `### Added` / `### Changed` / `### Fixed` / `### Removed`,
+  one concise bullet per change.
+- Keep entries small — a feature is one or a few bullets, not a dump of everything touched.
+- Commit the changelog together with the code change (same intent as the docs/commit rule).
+
+---
+
 ## Testing
 
 ### Layout
