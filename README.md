@@ -68,6 +68,34 @@ src/
 └── attila/               # Attila specific code
 ```
 
+## Contributing
+
+twdll works by injecting C++ into Attila's Lua engine: it finds game functions and
+structs by byte-signature scanning and fixed offsets, then hooks them at runtime. Most
+contribution work is reverse-engineering the game to map out what to hook.
+
+### The Linux build is your best reverse-engineering aid
+
+> The **Steam Linux build of Attila is 64-bit and ships with DWARF debug symbols**
+> built in. The Windows binary this project targets is 32-bit and stripped, so it is
+> far harder to read. If you want to contribute:
+>
+> 1. Download the Linux version of Attila from Steam.
+> 2. Load it in IDA/Ghidra (or a DWARF-aware tool) to read real function names,
+>    class layouts and vtables instead of guessing from disassembly.
+> 3. Map what you learn from the 64-bit Linux symbols back onto the 32-bit Windows
+>    binary — addresses differ, but the class structures and logic carry over.
+
+### Adding a Lua API
+
+1. Register the module in `src/main.cpp`.
+2. Add an LDoc comment (`@function`, `@tparam`, `@treturn`) for every exposed function.
+3. List the source in `TWDLL_DOC_SOURCES` in `docs/CMakeLists.txt`.
+4. Add test cases in `tests/shared/testing.lua`.
+5. Regenerate docs and commit them (see `AGENTS.md` → Documentation).
+
+Questions and ideas go in [Issues](https://github.com/bukowa/twdll/issues).
+
 ## Release
 
 1. Update `CHANGELOG.md`
