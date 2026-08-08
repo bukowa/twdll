@@ -40,6 +40,7 @@
   <li><a href="modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
   <li><a href="modules/twdll.model.html">twdll.model</a></li>
   <li><a href="modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -47,7 +48,12 @@
 <div id="content">
 
 
-  <h2>Lua bindings for Total War: Rome II</h2>
+  <h2>Lua bindings for Total War: Attila</h2>
+  <p>Load the DLL from the campaign script — <code>campaigns/&lt;campaign&gt;/scripting.lua</code> — exactly as the test suite does.</p>
+
+<p>twdll hooks game singletons (world, campaign UI, campaign model) on first load; those are only constructed once a campaign world exists. Calling singleton-dependent functions any earlier (e.g. from the main menu or a global script) can return <code>nil</code> or crash.</p>
+
+<p>Not every function requires this: plain utilities (<a href="modules/twdll.core.html#Log">twdll.core.Log</a>, <a href="modules/twdll.core.html#GameBuild">twdll.core.GameBuild</a>) and functions that read fixed module offsets work regardless of where they are called. This is how the current hook architecture works, not a permanent contract — it may change in the future.</p>
 
 <h2>Modules</h2>
 <table class="module_list">
@@ -95,6 +101,12 @@
 	</tr>
 	<tr>
 		<td class="name" nowrap><a href="modules/twdll.battle.html">twdll.battle</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></td>
 		<td class="summary">
 
 </td>

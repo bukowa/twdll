@@ -40,44 +40,48 @@
 <h2>Modules</h2>
 <ul class="nowrap">
   <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><strong>FACTION_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
   <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
   <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><strong>REGION_SCRIPT_INTERFACE</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>FACTION_SCRIPT_INTERFACE</code></h1>
+<h1>Module <code>REGION_SCRIPT_INTERFACE</code></h1>
 <p>
 
 </p>
-<p> Extensions to the game's faction object.</p>
+<p> Extensions to the game's region object.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
 	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the faction object as a hexadecimal string.</td>
+	<td class="summary">Returns the memory address of the region object as a hexadecimal string.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetTreasury">GetTreasury ()</a></td>
-	<td class="summary">Gets the amount of gold (treasury) for the faction.</td>
+	<td class="name" nowrap><a href="#GetPopulationSurplus">GetPopulationSurplus ()</a></td>
+	<td class="summary">Gets the population surplus for the region (points used to expand settlement slots).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetTreasury">SetTreasury (value)</a></td>
-	<td class="summary">Sets the amount of gold (treasury) for the faction.</td>
+	<td class="name" nowrap><a href="#SetPopulationSurplus">SetPopulationSurplus (value)</a></td>
+	<td class="summary">Sets the population surplus for the region (points used to expand settlement slots).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age]])</a></td>
-	<td class="summary">Sets a new leader for the faction.</td>
+	<td class="name" nowrap><a href="#GetGrowthPoints">GetGrowthPoints ()</a></td>
+	<td class="summary">Gets the number of growth points for the region (accumulated growth).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetGrowthPoints">SetGrowthPoints (value)</a></td>
+	<td class="summary">Sets the number of growth points for the region (accumulated growth).</td>
 	</tr>
 </table>
 
@@ -93,7 +97,7 @@
     <strong>GetMemoryAddress ()</strong>
     </dt>
     <dd>
-    Returns the memory address of the faction object as a hexadecimal string.
+    Returns the memory address of the region object as a hexadecimal string.
 
 
 
@@ -109,11 +113,11 @@
 
 </dd>
     <dt>
-    <a name = "GetTreasury"></a>
-    <strong>GetTreasury ()</strong>
+    <a name = "GetPopulationSurplus"></a>
+    <strong>GetPopulationSurplus ()</strong>
     </dt>
     <dd>
-    Gets the amount of gold (treasury) for the faction.
+    Gets the population surplus for the region (points used to expand settlement slots).
 
 
 
@@ -121,7 +125,7 @@
     <ol>
 
            <span class="types"><span class="type">integer</span></span>
-        amount of gold
+        population surplus
     </ol>
 
 
@@ -129,18 +133,18 @@
 
 </dd>
     <dt>
-    <a name = "SetTreasury"></a>
-    <strong>SetTreasury (value)</strong>
+    <a name = "SetPopulationSurplus"></a>
+    <strong>SetPopulationSurplus (value)</strong>
     </dt>
     <dd>
-    Sets the amount of gold (treasury) for the faction.
+    Sets the population surplus for the region (points used to expand settlement slots).
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
-         new amount of gold
+         new population surplus
         </li>
     </ul>
 
@@ -150,30 +154,38 @@
 
 </dd>
     <dt>
-    <a name = "SetFactionLeader"></a>
-    <strong>SetFactionLeader (new_character[, old_character[, heir_coming_of_age]])</strong>
+    <a name = "GetGrowthPoints"></a>
+    <strong>GetGrowthPoints ()</strong>
     </dt>
     <dd>
-    Sets a new leader for the faction.
-If <code>old_character</code> is provided, the game fires a succession event. If <code>heir_coming_of_age</code>
-is true, fires <code>faction_succession_heir_comes_of_age</code> instead of the default succession event.
+    Gets the number of growth points for the region (accumulated growth).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        number of growth points
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetGrowthPoints"></a>
+    <strong>SetGrowthPoints (value)</strong>
+    </dt>
+    <dd>
+    Sets the number of growth points for the region (accumulated growth).
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">new_character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the character to become the new leader
-        </li>
-        <li><span class="parameter">old_character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the outgoing leader (triggers succession event if provided)
-         (<em>optional</em>)
-        </li>
-        <li><span class="parameter">heir_coming_of_age</span>
-            <span class="types"><span class="type">boolean</span></span>
-         fire the heir-comes-of-age event variant (default false)
-         (<em>optional</em>)
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new number of growth points
         </li>
     </ul>
 
