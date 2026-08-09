@@ -19,7 +19,11 @@ struct TW_FamilyMember {
 
 struct TW_Faction {
     char pad_00[0x7DC];
-    int  treasury;          // 0x7DC
+    int  treasury;                  // 0x7DC
+    char pad_7E0[0xB0];
+    void* m_home_region;            // 0x890
+    void* m_original_home_region;   // 0x894
+    void* m_home_theatre;           // 0x898
 };
 
 struct TW_Character {
@@ -154,10 +158,21 @@ struct TW_FACTION_PROVINCE_MANAGER {
     TW_PROVINCE_DEVELOPMENT m_province_development; // 0x23C
 };
 
-// EMPIRECAMPAIGN::REGION — tag type only. The REGION object itself is never
-// dereferenced directly; FACTION_PROVINCE_MANAGER is reached via the engine
-// function REGION::faction_province_manager (see game_sigs.cpp).
-struct TW_Region {};
+// EMPIRECAMPAIGN::REGION — selected fields (32-bit Attila layout).
+// Gap analysis vs 64-bit DWARF (m_region_data@0x78): REGION's leading members
+// shrink 8B->4B before m_region_data, so it lands at 0x50. Verified via disasm
+// of REGION::theatre (sub_1094FCA0 @ 0x1094FCA0):
+//   1094fca0  mov eax, [ecx+50h]   ; eax = this->m_region_data
+//   1094fca3  mov eax, [eax+94h]   ; eax = m_region_data->m_theatre
+struct TW_RegionData {
+    char  pad_00[0x94];
+    void* m_theatre;   // 0x94  (const CAMPAIGN_THEATRE*)
+};
+
+struct TW_Region {
+    char           pad_00[0x50];
+    TW_RegionData* m_region_data;   // 0x50
+};
 
 #pragma pack(pop)
 
@@ -165,6 +180,9 @@ struct TW_Region {};
     static_assert(offsetof(S, F) == O, #S " Attila: " #F " expected at " #O)
 
 TW_ASSERT_OFFSET(TW_Faction,       treasury,                0x7DC);
+TW_ASSERT_OFFSET(TW_Faction,       m_home_region,            0x890);
+TW_ASSERT_OFFSET(TW_Faction,       m_original_home_region,   0x894);
+TW_ASSERT_OFFSET(TW_Faction,       m_home_theatre,           0x898);
 TW_ASSERT_OFFSET(TW_Character,     action_points,           0x14);
 TW_ASSERT_OFFSET(TW_Character,     family_member,           0x208);
 TW_ASSERT_OFFSET(TW_Character,     ambition,                0x558);
@@ -203,6 +221,8 @@ TW_ASSERT_OFFSET(TW_SettlementCallback, m_num_available_slots,  0x4C);
 TW_ASSERT_OFFSET(TW_PROVINCE_DEVELOPMENT,     m_development_points,  0x4);
 TW_ASSERT_OFFSET(TW_PROVINCE_DEVELOPMENT,     m_accumulated_growth,  0x8);
 TW_ASSERT_OFFSET(TW_FACTION_PROVINCE_MANAGER, m_province_development, 0x23C);
+TW_ASSERT_OFFSET(TW_Region,        m_region_data,            0x50);
+TW_ASSERT_OFFSET(TW_RegionData,    m_theatre,                0x94);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.

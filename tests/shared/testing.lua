@@ -540,6 +540,57 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 11: faction:SetCapital
+        -- Uses a settled (non-horde) faction so it actually has a capital.
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 11: faction:SetCapital ---")
+        do
+            local f = nil
+            local fl = game:model():world():faction_list()
+            if fl ~= nil then
+                for i = 0, fl:num_items() - 1 do
+                    local cand = fl:item_at(i)
+                    if cand ~= nil and not cand:is_null_interface()
+                        and not cand:is_horde()
+                        and cand:region_list() ~= nil and cand:region_list():num_items() > 0 then
+                        f = cand
+                        break
+                    end
+                end
+            end
+            local region = game:model():world():region_manager():region_by_key("att_reg_scandza_hafn")
+            if f == nil then
+                twdll.core.Log("[TEST] SetCapital: SKIPPED (no settled faction with regions found)")
+                record_skip()
+            elseif region == nil or region:is_null_interface() then
+                twdll.core.Log("[TEST] SetCapital: SKIPPED (region att_reg_scandza_hafn not found)")
+                record_skip()
+            elseif type(f.SetCapital) ~= "function" then
+                twdll.core.Log("[TEST] SetCapital: FAILED (method not registered)")
+                report("SetCapital registered", false)
+            else
+                report("SetCapital registered", true)
+                local orig_capital = f:home_region()
+                twdll.core.Log("[TEST] SetCapital: faction = " .. tostring(f:name())
+                    .. ", original capital = " .. tostring(orig_capital ~= nil and orig_capital:name() or "nil"))
+                f:SetCapital(region)
+                local new_capital = f:home_region()
+                if new_capital ~= nil and new_capital:name() == region:name() then
+                    twdll.core.Log("[TEST] SetCapital: OK (new capital = " .. tostring(new_capital:name()) .. ")")
+                    report("SetCapital", true)
+                else
+                    twdll.core.Log("[TEST] SetCapital: FAILED (expected " .. tostring(region:name())
+                        .. ", got " .. tostring(new_capital ~= nil and new_capital:name() or "nil") .. ")")
+                    report("SetCapital", false)
+                end
+                if orig_capital ~= nil and not orig_capital:is_null_interface() then
+                    f:SetCapital(orig_capital)
+                    twdll.core.Log("[TEST] SetCapital: restored original capital")
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

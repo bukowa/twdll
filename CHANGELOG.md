@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Extended the game's region interface (`REGION_SCRIPT_INTERFACE`) with:
   - `GetPopulationSurplus` / `SetPopulationSurplus` — read or set the population surplus a region has to spend on expanding settlement slots.
   - `GetGrowthPoints` / `SetGrowthPoints` — read or set the growth points a region has accumulated.
+- Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `SetCapital(region)` — makes the given region the faction's capital.
 
 ## [0.9.0] - 2026-08-06
 

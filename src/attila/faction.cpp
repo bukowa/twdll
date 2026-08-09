@@ -6,6 +6,7 @@
 
 using twdll::TW_Faction;
 using twdll::TW_Character;
+using twdll::TW_Region;
 
 constexpr size_t FACTION_PTR = twdll::TW_PtrOffset<TW_Faction>::value;
 
@@ -33,6 +34,29 @@ Sets the amount of gold (treasury) for the faction.
 @tparam integer value new amount of gold
 */
 static int SetTreasury      (lua_State* L) { return Props::Treasury.set(L); }
+
+/***
+Makes the given region the faction's capital.
+Works even if the faction currently has no home region: the fields are
+set exactly as the engine does in FACTION::attach_to_region, including the
+original home region and home theatre when they are not yet assigned.
+@function SetCapital
+@tparam userdata region the region to become the new capital
+*/
+static int SetCapital(lua_State* L) {
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    auto* region  = twdll::tw_unwrap<TW_Region>(L, 2);
+    if (!faction || !region) {
+        Log("[twdll] SetCapital: null faction or region");
+        return 0;
+    }
+    faction->m_home_region = region;
+    if (!faction->m_original_home_region)
+        faction->m_original_home_region = region;
+    if (!faction->m_home_theatre && region->m_region_data)
+        faction->m_home_theatre = region->m_region_data->m_theatre;
+    return 0;
+}
 
 /***
 Sets a new leader for the faction.
@@ -75,6 +99,7 @@ static const luaL_Reg faction_methods[] = {
     {"GetTreasury",       GetTreasury},
     {"SetTreasury",       SetTreasury},
     {"SetFactionLeader",  SetFactionLeader},
+    {"SetCapital",        SetCapital},
     {nullptr, nullptr}
 };
 

@@ -76,6 +76,10 @@
 	<td class="summary">Sets the amount of gold (treasury) for the faction.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#SetCapital">SetCapital (region)</a></td>
+	<td class="summary">Makes the given region the faction's capital.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age]])</a></td>
 	<td class="summary">Sets a new leader for the faction.</td>
 	</tr>
@@ -141,6 +145,30 @@
         <li><span class="parameter">value</span>
             <span class="types"><span class="type">integer</span></span>
          new amount of gold
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetCapital"></a>
+    <strong>SetCapital (region)</strong>
+    </dt>
+    <dd>
+    Makes the given region the faction's capital.
+Works even if the faction currently has no home region: the fields are
+set exactly as the engine does in FACTION::attach<em>to</em>region, including the
+original home region and home theatre when they are not yet assigned.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">region</span>
+            <span class="types"><span class="type">userdata</span></span>
+         the region to become the new capital
         </li>
     </ul>
 
