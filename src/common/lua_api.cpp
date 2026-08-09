@@ -21,6 +21,7 @@ lua_touserdata_t    g_game_lua_touserdata    = nullptr;
 lua_pushinteger_t   g_game_lua_pushinteger   = nullptr;
 lua_tointeger_t     g_game_lua_tointeger     = nullptr;
 lua_pushnumber_t    g_game_lua_pushnumber    = nullptr;
+lua_pushboolean_t   g_game_lua_pushboolean   = nullptr;
 lua_tonumber_t      g_game_lua_tonumber      = nullptr;
 lua_pushnil_t       g_game_lua_pushnil       = nullptr;
 lua_pcall_t         g_game_lua_pcall         = nullptr;

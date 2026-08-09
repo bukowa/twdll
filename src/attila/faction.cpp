@@ -7,6 +7,10 @@
 using twdll::TW_Faction;
 using twdll::TW_Character;
 using twdll::TW_Region;
+using twdll::TW_CampaignModel;
+using twdll::TW_CampaignEnv;
+using twdll::TW_GameCore;
+using twdll::TW_Databases;
 
 constexpr size_t FACTION_PTR = twdll::TW_PtrOffset<TW_Faction>::value;
 
@@ -59,6 +63,102 @@ static int SetCapital(lua_State* L) {
 }
 
 /***
+Instantly completes research of the given technology for the faction, using the
+game's own internal path for finishing a technology. This is exactly what the
+engine does when a tech completes, so events, achievements and unit upgrades
+fire normally, and parent prerequisites are completed automatically.
+Note: this differs from the game's built-in `cm:unlock_technology`, which only
+makes a technology selectable and never actually finishes the research.
+@function InstantlyResearchTechnology
+@tparam string technology_key the technology record key (e.g. "att_tech_military_barracks")
+@treturn boolean true if the technology was found and completed
+*/
+static int InstantlyResearchTechnology(lua_State* L) {
+    if (!g_instant_set_researched || !g_record_index) {
+        Log("[twdll] InstantlyResearchTechnology: signatures not resolved");
+        return 0;
+    }
+    if (!g_campaign_model) {
+        Log("[twdll] InstantlyResearchTechnology: campaign model not available");
+        return 0;
+    }
+
+    size_t key_len = 0;
+    const char* key = l_checklstring(L, 2, &key_len);
+    if (!key) {
+        Log("[twdll] InstantlyResearchTechnology: technology key not a string");
+        return 0;
+    }
+
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    if (!faction) {
+        Log("[twdll] InstantlyResearchTechnology: null faction");
+        return 0;
+    }
+
+    // Resolve the game's database list through the campaign model, the same
+    // way the game itself looks up records (the typed chain below is verified
+    // in tw_types.h against the 64-bit reference layout):
+    //   env = cm->m_campaign_env; core = env->m_game_core; dbs = core->m_databases
+    auto* env = static_cast<TW_CampaignModel*>(g_campaign_model)->m_campaign_env;
+    if (!env) {
+        Log("[twdll] InstantlyResearchTechnology: campaign env not resolved");
+        return 0;
+    }
+    auto* game_core = static_cast<TW_CampaignEnv*>(env)->m_game_core;
+    if (!game_core) {
+        Log("[twdll] InstantlyResearchTechnology: game core not resolved");
+        return 0;
+    }
+    auto* databases = static_cast<TW_GameCore*>(game_core)->m_databases;
+    if (!databases) {
+        Log("[twdll] InstantlyResearchTechnology: databases not resolved");
+        return 0;
+    }
+
+    // technologies_table is the lazy-loader cache field on the databases object.
+    void* tech_table = static_cast<TW_Databases*>(databases)->m_technologies_table;
+    if (!tech_table) {
+        Log("[twdll] InstantlyResearchTechnology: technologies_table not loaded");
+        return 0;
+    }
+
+    // 32-bit CA::String layout verified via disasm: m_len @+0 (ctor stores
+    // strlen @ sub_100DB440), m_data @+8 (hash base @ sub_100C76D0, compare
+    // @ sub_100D9D90). record_index only reads the key (hash + compare, never
+    // frees it), so no ctor/dtor, no heap, no leak. The +4 pad is unread by
+    // the lookup path and matches the default ctor's 0.
+    struct RecordKey {
+        uint32_t    m_len;
+        uint32_t    m_pad;
+        const char* m_data;
+    } key_string = { static_cast<uint32_t>(key_len), 0, key };
+
+    void* record = g_record_index(tech_table, &key_string);
+    if (!record) {
+        Log("[twdll] InstantlyResearchTechnology: no record for key '%s'", key);
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    void* manager = faction->m_faction_technology_manager;
+    if (!manager) {
+        Log("[twdll] InstantlyResearchTechnology: no technology manager");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    Log("[twdll] InstantlyResearchTechnology: faction=0x%08X manager=0x%08X record=0x%08X key='%s'",
+        reinterpret_cast<uintptr_t>(faction),
+        reinterpret_cast<uintptr_t>(manager),
+        reinterpret_cast<uintptr_t>(record), key);
+
+    g_instant_set_researched(manager, record, /*report_to_ui*/ true);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
+/***
 Sets a new leader for the faction.
 If `old_character` is provided, the game fires a succession event. If `heir_coming_of_age`
 is true, fires `faction_succession_heir_comes_of_age` instead of the default succession event.
@@ -100,6 +200,7 @@ static const luaL_Reg faction_methods[] = {
     {"SetTreasury",       SetTreasury},
     {"SetFactionLeader",  SetFactionLeader},
     {"SetCapital",        SetCapital},
+    {"InstantlyResearchTechnology", InstantlyResearchTechnology},
     {nullptr, nullptr}
 };
 

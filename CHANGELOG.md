@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
   - `GetPopulationSurplus` / `SetPopulationSurplus` — read or set the population surplus a region has to spend on expanding settlement slots.
   - `GetGrowthPoints` / `SetGrowthPoints` — read or set the growth points a region has accumulated.
 - Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `SetCapital(region)` — makes the given region the faction's capital.
+- Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `InstantlyResearchTechnology(technology_key)` — instantly completes a technology through the game's own native path (`FACTION_TECHNOLOGY_MANAGER::instant_set_researched` + effect/availability refresh), firing events, achievements and unit upgrades and completing parent prerequisites recursively.
 
 ## [0.9.0] - 2026-08-06
 

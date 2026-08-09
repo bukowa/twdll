@@ -14,6 +14,22 @@ extern FnFactionProvinceManager g_faction_province_manager;
 
 extern void* g_campaign_model;
 
+// ── Technology research (instantly_research_technology) ──────────────────────
+// 32-bit analogs of the 64-bit FACTION_TECHNOLOGY_MANAGER instant-research
+// path (research/ structures_faction_substructs.md + plan_6_features_twdll.md):
+//   sub_10B9D3D0 = instant_set_researched_without_updating_effects wrapper:
+//     (this=manager, record, report_to_ui) -> lookup_tech_for_record ->
+//     sub_10B9D400 (set_tech_as_researched + event + parent recursion) ->
+//     update_effect_list + update_availabilities. This is exactly the game's
+//     native per-tech instant completion, so it fires events, achievements,
+//     unit upgrades and refreshes effects — no manual field writes.
+using FnInstantSetResearched = void(__thiscall*)(void* manager, void* record, bool report_to_ui);
+extern FnInstantSetResearched g_instant_set_researched;
+
+// sub_10192660 = DATABASE_TABLE::record_index(table, &CA::String key) -> record.
+using FnRecordIndex = void*(__thiscall*)(void* table, void* key_string);
+extern FnRecordIndex g_record_index;
+
 // Address of the `mov eax, [eax+0x13C]` instruction in the REINFORCEMENTS_MANAGER
 // ctor, resolved by initialize_game_api().
 extern uintptr_t g_reinf_cap_insn_addr;

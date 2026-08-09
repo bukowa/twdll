@@ -18,6 +18,7 @@ const char* GAME_MODULE_NAME = "empire.retail.dll";
 #define LUA_PUSHINTEGER_SIG     "8B 4C 24 ? 66 0F 6E 44 24"
 #define LUA_TOINTEGER_SIG       "83 EC ? FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 83 C4 ? 83 78 ? ? 74 ? ? ? ? 51 50 E8 ? ? ? ? 83 C4 ? 85 C0 75 ? 83 C4 ? C3 ? ? ? ? 83 C4"
 #define LUA_PUSHNUMBER_SIG      "8B 4C 24 ? F3 0F 10 44 24 ? 8B 41"
+#define LUA_PUSHBOOLEAN_SIG     "8B 54 24 04 33 C0 39 44 24 08 0F 95 C0 8B 4A 08 89 01 C7 41 04 01 00 00 00 83 42 08 08 C3"
 #define LUA_TONUMBER_SIG        "83 EC ? FF 74 24 ? FF 74 24 ? E8 ? ? ? ? 83 C4 ? 83 78 ? ? 74 ? ? ? ? 51 50 E8 ? ? ? ? 83 C4 ? 85 C0 75 ? ? ? 83 C4"
 #define LUA_PUSHNIL_SIG         "8B 4C 24 ? 8B 41 ? C7 40"
 #define LUA_PCALL_SIG           "8B 44 24 ? 83 EC ? 53 56 57 8B 7C 24"
@@ -41,6 +42,7 @@ extern const TW_SignatureInfo g_signatures[] = {
     {"lua_pushinteger",  (void**)&g_game_lua_pushinteger,   LUA_PUSHINTEGER_SIG},
     {"lua_tointeger",    (void**)&g_game_lua_tointeger,     LUA_TOINTEGER_SIG},
     {"lua_pushnumber",   (void**)&g_game_lua_pushnumber,    LUA_PUSHNUMBER_SIG},
+    {"lua_pushboolean",  (void**)&g_game_lua_pushboolean,   LUA_PUSHBOOLEAN_SIG},
     {"lua_tonumber",     (void**)&g_game_lua_tonumber,      LUA_TONUMBER_SIG},
     {"lua_pushnil",      (void**)&g_game_lua_pushnil,        LUA_PUSHNIL_SIG},
     {"lua_pcall",        (void**)&g_game_lua_pcall,          LUA_PCALL_SIG},

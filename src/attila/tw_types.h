@@ -24,6 +24,8 @@ struct TW_Faction {
     void* m_home_region;            // 0x890
     void* m_original_home_region;   // 0x894
     void* m_home_theatre;           // 0x898
+    char  pad_89C[0x98];
+    void* m_faction_technology_manager;  // 0x934  verified via disasm: mov eax,[ecx+934h] @ sub_10705560
 };
 
 struct TW_Character {
@@ -174,6 +176,42 @@ struct TW_Region {
     TW_RegionData* m_region_data;   // 0x50
 };
 
+// EMPIRECAMPAIGN::CAMPAIGN_MODEL — selected fields (32-bit Attila layout).
+// CAMPAIGN_ENV_MODEL_ACCESS (single pointer m_campaign_env) is embedded here;
+// in 64-bit it sits at 0x21E0 behind the REPORTING_NEXUS base, which shrinks
+// to 0x10F0 in 32-bit (all pointers 8B->4B). Verified via disasm of the 32-bit
+// unlock wrapper sub_1073C7F0: `lea ecx,[ecx+10F0h]; call sub_109C8F70`.
+struct TW_CampaignModel {
+    char  pad_00[0x10F0];
+    void* m_campaign_env;   // 0x10F0  CAMPAIGN_ENV_MODEL_ACCESS::m_campaign_env (CAMPAIGN_ENV*)
+};
+
+// EMPIRECAMPAIGN::CAMPAIGN_ENV — selected fields (32-bit Attila layout).
+// 64-bit m_game_core@0x58 -> 32-bit 0x30 (leading members shrink 8B->4B).
+// Verified via disasm of sub_109C8F70: `mov eax,[eax+30h]`.
+struct TW_CampaignEnv {
+    char  pad_00[0x30];
+    void* m_game_core;      // 0x30  EMPIRECOMMON::GAME_CORE*
+};
+
+// EMPIRECOMMON::GAME_CORE — selected fields (32-bit Attila layout).
+// 64-bit m_databases@0x20 -> 32-bit 0x10 (leading pointers shrink 8B->4B).
+// Verified via disasm of sub_109C8F70: `mov eax,[eax+10h]`.
+struct TW_GameCore {
+    char  pad_00[0x10];
+    void* m_databases;      // 0x10  EMPIREUTILITY::EMPIRE_DATABASES*
+};
+
+// EMPIREUTILITY::EMPIRE_DATABASES — selected fields (32-bit Attila layout).
+// 64-bit m_technologies_table@0x20E0 -> 32-bit 0x1604 (the pointer-heavy table
+// members shrink 8B->4B). Lazy-loader cache field: populated on the first tick
+// of any running campaign (the tech tree resolves it), null-checked by callers.
+// Verified via disasm of sub_10E35B00: `cmp [esi+1604h],ebx; ... mov eax,[esi+1604h]`.
+struct TW_Databases {
+    char  pad_00[0x1604];
+    void* m_technologies_table;  // 0x1604
+};
+
 #pragma pack(pop)
 
 #define TW_ASSERT_OFFSET(S, F, O) \
@@ -183,6 +221,7 @@ TW_ASSERT_OFFSET(TW_Faction,       treasury,                0x7DC);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_region,            0x890);
 TW_ASSERT_OFFSET(TW_Faction,       m_original_home_region,   0x894);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_theatre,           0x898);
+TW_ASSERT_OFFSET(TW_Faction,       m_faction_technology_manager, 0x934);
 TW_ASSERT_OFFSET(TW_Character,     action_points,           0x14);
 TW_ASSERT_OFFSET(TW_Character,     family_member,           0x208);
 TW_ASSERT_OFFSET(TW_Character,     ambition,                0x558);
@@ -223,6 +262,10 @@ TW_ASSERT_OFFSET(TW_PROVINCE_DEVELOPMENT,     m_accumulated_growth,  0x8);
 TW_ASSERT_OFFSET(TW_FACTION_PROVINCE_MANAGER, m_province_development, 0x23C);
 TW_ASSERT_OFFSET(TW_Region,        m_region_data,            0x50);
 TW_ASSERT_OFFSET(TW_RegionData,    m_theatre,                0x94);
+TW_ASSERT_OFFSET(TW_CampaignModel, m_campaign_env,           0x10F0);
+TW_ASSERT_OFFSET(TW_CampaignEnv,   m_game_core,              0x30);
+TW_ASSERT_OFFSET(TW_GameCore,      m_databases,              0x10);
+TW_ASSERT_OFFSET(TW_Databases,     m_technologies_table,     0x1604);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.

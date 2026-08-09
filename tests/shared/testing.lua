@@ -591,6 +591,46 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 12: faction:InstantlyResearchTechnology
+        -- Uses the game's native per-tech instant completion (events,
+        -- achievements, unit upgrades + effect/availability refresh).
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 12: faction:InstantlyResearchTechnology ---")
+        do
+            local f = nil
+            local fl = game:model():world():faction_list()
+            if fl ~= nil then
+                for i = 0, fl:num_items() - 1 do
+                    local cand = fl:item_at(i)
+                    if cand ~= nil and not cand:is_null_interface() then
+                        f = cand
+                        break
+                    end
+                end
+            end
+            if f == nil then
+                twdll.core.Log("[TEST] InstantlyResearchTechnology: SKIPPED (no faction found)")
+                record_skip()
+            elseif type(f.InstantlyResearchTechnology) ~= "function" then
+                twdll.core.Log("[TEST] InstantlyResearchTechnology: FAILED (method not registered)")
+                report("InstantlyResearchTechnology registered", false)
+            else
+                report("InstantlyResearchTechnology registered", true)
+                twdll.core.Log("[TEST] InstantlyResearchTechnology: faction = " .. tostring(f:name()))
+                -- A real base-game technology key (verified present in data.pack).
+                local ok = f:InstantlyResearchTechnology("att_hunnic_military_combat_at_distance")
+                twdll.core.Log("[TEST] InstantlyResearchTechnology: result = " .. tostring(ok))
+                if ok == true then
+                    twdll.core.Log("[TEST] InstantlyResearchTechnology: OK (native path completed)")
+                    report("InstantlyResearchTechnology", true)
+                else
+                    twdll.core.Log("[TEST] InstantlyResearchTechnology: FAILED (returned " .. tostring(ok) .. ")")
+                    report("InstantlyResearchTechnology", false)
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

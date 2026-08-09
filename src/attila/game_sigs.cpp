@@ -23,6 +23,16 @@
 #define SETTLEMENT_CB_INITIALIZE_SIG "83 EC 74 53 55 56 8B F1 33 DB"
 // clang-format on
 
+// FACTION_TECHNOLOGY_MANAGER instant-research path (see game_api.h).
+// instant_set_researched_without_updating_effects wrapper:
+//   `push esi; push [esp+4+arg_0]; mov esi,ecx; call finder; ...` @ 0x10B9D3D0
+#define INSTANT_SET_RESEARCHED_SIG "56 FF 74 24 ? 8B F1 E8 ? ? ? ? 85 C0 74 ? 6A 00 FF 74 24"
+// DATABASE_TABLE::record_index(table, &CA::String key) @ 0x10192660.
+// The `68 ? ? ? ?` wildcards the `push 0x11AB8010` (error-string address): it is
+// an absolute image pointer that ASLR relocates at load, so only the on-disk
+// bytes would match a hardcoded sig — it must stay wildcarded.
+#define RECORD_INDEX_SIG "83 EC 0C 53 8B D9 56 8B 74 24 ? 56 8D 4B ? E8 ? ? ? ? 85 C0 74 ? 8B 08 8B 43 ? EB ? 57 8B CE E8 ? ? ? ? 8D 4B ? 8B F8 E8 ? ? ? ? 68 ? ? ? ? 8D 4C 24 ? 8B F0 E8 ? ? ? ? 57 8D 44 24 ? 56 50 E8 ? ? ? ? 83 C4 0C 8D 4C 24 ? E8 ? ? ? ? 8B 4B ? 8B C1 5F 3B C8 73 ? 8B 43 ? 5E 5B 8B 04 88 83 C4 0C"
+
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
 FnFactionProvinceManager g_faction_province_manager = nullptr;
@@ -30,6 +40,9 @@ uintptr_t          g_reinf_cap_insn_addr = 0;
 uintptr_t          g_battle_ctor_addr    = 0;
 uintptr_t          g_battle_dtor_addr    = 0;
 uintptr_t          g_settlement_cb_initialize_addr = 0;
+
+FnInstantSetResearched g_instant_set_researched = nullptr;
+FnRecordIndex          g_record_index           = nullptr;
 
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
@@ -42,5 +55,7 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"EMPIREBATTLE::MANAGER::ctor",            (void**)&g_battle_ctor_addr,    BATTLE_CTOR_SIG},
     {"EMPIREBATTLE::MANAGER::dtor",            (void**)&g_battle_dtor_addr,    BATTLE_DTOR_SIG},
     {"CampaignSettlementCallback::Initialize", (void**)&g_settlement_cb_initialize_addr, SETTLEMENT_CB_INITIALIZE_SIG},
+    {"FACTION_TECHNOLOGY_MANAGER::instant_set_researched", (void**)&g_instant_set_researched, INSTANT_SET_RESEARCHED_SIG},
+    {"DATABASE_TABLE::record_index",                       (void**)&g_record_index,           RECORD_INDEX_SIG},
     {nullptr, nullptr, nullptr}
 };

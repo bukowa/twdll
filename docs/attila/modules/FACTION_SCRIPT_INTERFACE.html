@@ -80,6 +80,11 @@
 	<td class="summary">Makes the given region the faction's capital.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#InstantlyResearchTechnology">InstantlyResearchTechnology (technology_key)</a></td>
+	<td class="summary">Instantly completes research of the given technology for the faction, using the
+game's own internal path for finishing a technology.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age]])</a></td>
 	<td class="summary">Sets a new leader for the faction.</td>
 	</tr>
@@ -172,6 +177,38 @@ original home region and home theatre when they are not yet assigned.
         </li>
     </ul>
 
+
+
+
+
+</dd>
+    <dt>
+    <a name = "InstantlyResearchTechnology"></a>
+    <strong>InstantlyResearchTechnology (technology_key)</strong>
+    </dt>
+    <dd>
+    Instantly completes research of the given technology for the faction, using the
+game's own internal path for finishing a technology.  This is exactly what the
+engine does when a tech completes, so events, achievements and unit upgrades
+fire normally, and parent prerequisites are completed automatically.
+Note: this differs from the game's built-in <code>cm:unlock_technology</code>, which only
+makes a technology selectable and never actually finishes the research.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key (e.g. "att<em>tech</em>military_barracks")
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the technology was found and completed
+    </ol>
 
 
 
