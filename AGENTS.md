@@ -46,6 +46,37 @@ flag it at the end of the turn instead of silently obeying.
 
 ---
 
+## Feature Development Loop
+
+Every feature (new Lua API, new hook, new struct offset) runs the same loop. Do not skip steps; do not collapse them
+into one giant action.
+
+1. **Identify** — what to add: user request, the feature plan, or a gap vs. the vanilla
+   Attila API inventory. If the game already
+   exposes it, do not reimplement.
+2. **Research (separate repo)** — offsets and struct layouts are verified in the
+   reverse-engineering project (64-bit DWARF reference + 32-bit IDA MCP on
+   `empire.retail.dll`), never guessed here. Follow that project's conventions:
+   anchor priority, gap analysis, `disasm` as the single source of truth. Save
+   verified offsets there. Use methodology (string/offset search), never raw
+   addresses copied from research files — addresses differ between binaries.
+3. **Propose** — show the exact struct/offset additions and the Lua API shape (code
+   block/diff). Wait for "ok" (see "Before Modifying Existing Files").
+4. **Implement** — structs + `TW_ASSERT_OFFSET` in `tw_types.h`, methods in the `.cpp`,
+   registration in `main.cpp`.
+5. **Build** — `ninja twdll` (see Building).
+6. **Test** — add cases to `tests/shared/testing.lua`; run `tw-test` (real game, takes
+   minutes — the user usually runs it). Assert against verified values, not "not nil".
+7. **Docs** — LDoc comments, add the file to `TWDLL_DOC_SOURCES`, regenerate docs,
+   verify the HTML (see Documentation).
+8. **Changelog** — one `[Unreleased]` bullet, user-facing only (see Changelog).
+9. **Finish** — report status; commit/push only on explicit user request.
+
+Steps 3 (proposal) and 6 (test) are the two gates that catch wrong assumptions — never
+skip them. One feature = one tight pass, not an open-ended tool-call chain.
+
+---
+
 ## What NOT to Do
 
 - **Do not put game-specific structs in `common/`** — they belong in the Attila-specific tree.
