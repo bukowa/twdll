@@ -631,6 +631,144 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 13: faction political parties API
+        -- Full coverage of the politics surface with hardcoded expected
+        -- values (manually verified in-game against att_fact_hunni):
+        --   faction:GetPoliticalParties()   -> array of party userdata
+        --   faction:GetPoliticalParty(key)  -> single party or nil
+        --   faction:GetPrimaryParty()       -> primary party or nil
+        --   faction:HasPoliticalParties()   -> boolean
+        --   party:GetKey() / GetSenators() / GetPower() / IsPrimary()
+        -- Power is compared as a whole percent: round(power * 100).
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 13: faction political parties API ---")
+        do
+            local fl = game:model():world():faction_list()
+            if fl == nil then
+                twdll.core.Log("[TEST] PoliticalParties: SKIPPED (no faction list)")
+                record_skip()
+            else
+                -- find the known politics faction and the first faction with
+                -- zero parties (for the HasPoliticalParties false check)
+                local hunni, empty_faction = nil, nil
+                for i = 0, fl:num_items() - 1 do
+                    local cand = fl:item_at(i)
+                    if cand ~= nil and not cand:is_null_interface() then
+                        local parties = cand:GetPoliticalParties()
+                        local n = type(parties) == "table" and #parties or 0
+                        if cand:name() == "att_fact_hunni" then
+                            hunni = { f = cand, parties = parties, n = n }
+                        end
+                        if empty_faction == nil and n == 0 then
+                            empty_faction = cand
+                        end
+                    end
+                end
+
+                local function round(x) return math.floor(x + 0.5) end
+
+                if hunni == nil then
+                    twdll.core.Log("[TEST] PoliticalParties: FAILED (faction 'att_fact_hunni' not found)")
+                    report("PoliticalParties list", false)
+                    report("PoliticalParties party fields", false)
+                    report("PoliticalParties GetPoliticalParty", false)
+                    report("PoliticalParties GetPrimaryParty", false)
+                    report("PoliticalParties HasPoliticalParties true", false)
+                    report("PoliticalParties HasPoliticalParties false", false)
+                else
+                    local f = hunni.f
+                    local parties = hunni.parties
+                    twdll.core.Log(string.format(
+                        "[TEST] PoliticalParties: faction '%s' has %d parties",
+                        tostring(f:name()), hunni.n))
+
+                    -- expected values (verified in-game)
+                    local expected = {
+                        ["att_politics_hunni_ruler"]   = { senators = 480, power_pct = 70, primary = true  },
+                        ["att_politics_hunni_council"] = { senators = 720, power_pct = 30, primary = false },
+                    }
+
+                    -- GetPoliticalParties: exactly the two known parties
+                    local list_ok = type(parties) == "table" and hunni.n == 2
+                    report("PoliticalParties list", list_ok)
+
+                    -- per-party data against hardcoded values
+                    local fields_ok, field_names = true, {}
+                    for _, p in ipairs(parties) do
+                        local key = p:GetKey()
+                        local exp = expected[key]
+                        if exp == nil then
+                            fields_ok = false
+                            table.insert(field_names, "unknown key '" .. tostring(key) .. "'")
+                        else
+                            local sens = p:GetSenators()
+                            local pct  = round(p:GetPower() * 100)
+                            local prim = p:IsPrimary()
+                            if sens ~= exp.senators or pct ~= exp.power_pct or prim ~= exp.primary then
+                                fields_ok = false
+                                table.insert(field_names, string.format(
+                                    "'%s' got(sen=%s,pct=%s,prim=%s) want(sen=%s,pct=%s,prim=%s)",
+                                    key, tostring(sens), tostring(pct), tostring(prim),
+                                    exp.senators, exp.power_pct, tostring(exp.primary)))
+                            end
+                            twdll.core.Log(string.format(
+                                "[TEST]   party '%s' senators=%d power=%d%% primary=%s",
+                                key, sens, pct, tostring(prim)))
+                        end
+                    end
+                    if not fields_ok then
+                        twdll.core.Log("[TEST] party fields mismatch: " .. table.concat(field_names, "; "))
+                    end
+                    report("PoliticalParties party fields", fields_ok)
+
+                    -- GetPoliticalParty(key): every expected key retrievable, unknown key nil
+                    local lookup_ok = true
+                    for key in pairs(expected) do
+                        local by_key = f:GetPoliticalParty(key)
+                        if by_key == nil or by_key:GetKey() ~= key then
+                            lookup_ok = false
+                            twdll.core.Log(string.format(
+                                "[TEST] GetPoliticalParty: FAILED for key '%s'", key))
+                        end
+                    end
+                    if f:GetPoliticalParty("no_such_party") ~= nil then
+                        lookup_ok = false
+                        twdll.core.Log("[TEST] GetPoliticalParty: FAILED (unknown key returned a party)")
+                    end
+                    report("PoliticalParties GetPoliticalParty", lookup_ok)
+
+                    -- GetPrimaryParty: must equal the ruler party
+                    local primary = f:GetPrimaryParty()
+                    local primary_ok = primary ~= nil and primary:GetKey() == "att_politics_hunni_ruler"
+                        and primary:IsPrimary()
+                    if not primary_ok then
+                        twdll.core.Log(string.format(
+                            "[TEST] GetPrimaryParty: FAILED primary=%s",
+                            tostring(primary and primary:GetKey() or "<nil>")))
+                    end
+                    report("PoliticalParties GetPrimaryParty", primary_ok)
+
+                    -- HasPoliticalParties: true on the politics faction
+                    report("PoliticalParties HasPoliticalParties true", f:HasPoliticalParties() == true)
+
+                    -- HasPoliticalParties: false on a faction with no parties, if one exists
+                    if empty_faction ~= nil then
+                        local ok = empty_faction:HasPoliticalParties() == false
+                        if not ok then
+                            twdll.core.Log(string.format(
+                                "[TEST] HasPoliticalParties: FAILED (faction '%s' has no parties but returned true)",
+                                tostring(empty_faction:name())))
+                        end
+                        report("PoliticalParties HasPoliticalParties false", ok)
+                    else
+                        twdll.core.Log("[TEST] HasPoliticalParties: no empty faction found, SKIPPING false check")
+                        record_skip()
+                    end
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

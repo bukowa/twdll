@@ -17,6 +17,98 @@ struct TW_FamilyMember {
 
 #pragma pack(push, 1)
 
+// EMPIREUTILITY::POLITICAL_PARTY_RECORD — 32-bit layout, derived via gap
+// analysis from the 64-bit DWARF (112B) where pointers shrink 8B->4B.
+// The static DB row behind each campaign party. m_key is a CA::String whose
+// 32-bit layout {m_len@0, m_pad@4, m_data@8} is verified in faction.cpp.
+// Only fields needed so far are mapped; m_initial_power is used to seed a
+// party's senators in the CAMPAIGN_POLITICAL_PARTY ctor (sub_10BF2640):
+//   10bf269d  movd xmm0, dword ptr [eax+44h]   ; record->m_initial_power
+struct TW_CAString {
+    uint32_t    m_len;    // 0x0
+    uint32_t    m_pad;    // 0x4
+    const char* m_data;   // 0x8
+};
+
+struct TW_PoliticalPartyRecord {
+    TW_CAString m_key;          // 0x0
+    char        pad_0C[0x38];
+    float       m_initial_power;   // 0x44
+};
+
+// EMPIRECAMPAIGN::CAMPAIGN_POLITICAL_PARTY — one runtime party inside a
+// faction's politics map. 32-bit layout derived via gap analysis from 64-bit
+// DWARF (64B): m_politics 8->4, m_party_record 8->4, m_senators_string
+// (CA::UniString) 16->12, so m_senators 0x20->0x14 and m_power 0x24->0x18.
+// Verified via disasm of the party ctor sub_10BF2640:
+//   10bf264a  mov [esi], eax            ; m_politics
+//   10bf2653  mov [esi+4], eax          ; m_party_record
+//   10bf2656  call sub_100DB6C0         ; m_senators_string ctor @ +0x8
+//   10bf26e1  mov [esi+14h], eax        ; m_senators = (int)(initial_power * senator_total * mult)
+struct TW_CampaignPoliticalParty {
+    void* m_politics;        // 0x0  (CAMPAIGN_POLITICS*)
+    void* m_party_record;    // 0x4  (const POLITICAL_PARTY_RECORD*)
+    char  pad_08[0xC];       // 0x8  m_senators_string (CA::UniString)
+    int   m_senators;        // 0x14 (CA::card32)
+    float m_power;           // 0x18 (CA::float32)
+    char  pad_1C[0x10];      // 0x1C m_active_effects, 0x20 m_possible_effects (unused so far)
+};
+
+// CA_STD::UNORDERED_MAP_NCC bucket walk layout — the m_political_parties map
+// (24B) lives at politics+0x28 (verified below). Member order follows CA_STD
+// (same as TW_VectorNcc: capacity first, then size, then elements). Each
+// bucket is 12B:
+//   bucket+0  m_head_and_allocator.m_member  (head NODE* or &bucket+4 if empty)
+//   bucket+4  m_fake_node                    (terminator sentinel)
+// Each NODE is 12B header + the value:
+//   node+0    m_previous
+//   node+4    m_next
+//   node+8    m_data.first    (const POLITICAL_PARTY_RECORD*)
+//   node+0xC  m_data.second   (CAMPAIGN_POLITICAL_PARTY)
+// Verified via disasm of politics ctor insert loop (sub_10BF27C0):
+//   10bf2832  add edi, 28h            ; edi = &this->m_political_parties (map base)
+//   10bf2903  mov esi, [edi+8]        ; esi = map->m_size (bucket count)
+//   10bf2911  mov eax, [edi+0Ch]      ; eax = map->m_elements
+//   10bf2921  mov esi, [ecx+eax]      ; esi = buckets[idx*12].m_head
+//   10bf2936  mov esi, [esi+4]        ; node = node->m_next
+//   10bf29e2  mov [edi+8], ecx        ; node->m_data.first = record
+//   10bf29e5  lea ecx, [edi+0Ch]      ; &node->m_data.second (party)
+// And rehash sub_10C6A9D0: [ebp+8] count, [ebp+0Ch] elements, [ebp+10h] count
+// of entries, [ebp+14h] max_load_factor; bucket stride: add edi, 0Ch @ 10c6ab3d
+struct TW_PoliticalPartiesMap {
+    char   pad_00[0x4];     // m_hash_function (1B) + m_equality_comparison (1B) + pad
+    void*  m_capacity;      // 0x4  bucket vector capacity
+    int    m_size;          // 0x8  bucket count
+    void** m_elements;      // 0xC  buckets array (each element 12B)
+    int    m_count;         // 0x10 number of entries (map size)
+    float  m_max_load_factor; // 0x14
+};
+
+// EMPIRECAMPAIGN::CAMPAIGN_POLITICS — per-faction politics manager, embedded
+// in FACTION at 0x112C. 32-bit layout derived via gap analysis from 64-bit
+// DWARF (184B @ 0x1518): two embedded SAFER_REPORTERs shrink 32->16B each,
+// CAMPAIGN_ENV_MODEL_ACCESS 8->4B, so the map lands at +0x28 and m_active at
+// +0x48 (64-bit: map @ +0x50, m_active @ +0x7C). Verified via disasm of the
+// politics ctor sub_10BF27C0:
+//   10bf27d5  lea eax, [esi+158h]     ; faction env access (0x158)
+//   10bf27dc  lea ecx, [edi+20h]      ; CAMPAIGN_ENV_MODEL_ACCESS @ +0x20
+//   10bf282f  mov [edi+24h], esi      ; m_faction @ +0x24
+//   10bf2832  add edi, 28h            ; m_political_parties @ +0x28
+//   10bf283e  call sub_10BE4D20(4,..) ; map ctor (4 buckets)
+//   10bf285e  mov byte ptr [eax+48h], 1  ; m_active @ +0x48
+//   10bf2868  mov dword ptr [eax+40h], 0 ; m_primary_party @ +0x40
+//   10bf2865  lea ecx, [eax+5Ch]      ; m_political_event_data @ +0x5C
+struct TW_CampaignPolitics {
+    char                 pad_00[0x24];
+    void*                m_faction;           // 0x24 (FACTION*)
+    TW_PoliticalPartiesMap m_political_parties; // 0x28
+    void*                m_primary_party;     // 0x40 (const POLITICAL_PARTY_RECORD*)
+    char                 pad_44[0x4];
+    bool                 m_active;            // 0x48
+    char                 pad_49[0x13];
+    char                 m_political_event_data[0x18]; // 0x5C
+};
+
 struct TW_Faction {
     char pad_00[0x7DC];
     int  treasury;                  // 0x7DC
@@ -26,6 +118,8 @@ struct TW_Faction {
     void* m_home_theatre;           // 0x898
     char  pad_89C[0x98];
     void* m_faction_technology_manager;  // 0x934  verified via disasm: mov eax,[ecx+934h] @ sub_10705560
+    char  pad_938[0x7F4];
+    TW_CampaignPolitics m_politics; // 0x112C verified via disasm: lea ecx,[ebx+112Ch]; push ebx; call sub_10BF27C0 @ 0x106c2140
 };
 
 struct TW_Character {
@@ -222,6 +316,7 @@ TW_ASSERT_OFFSET(TW_Faction,       m_home_region,            0x890);
 TW_ASSERT_OFFSET(TW_Faction,       m_original_home_region,   0x894);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_theatre,           0x898);
 TW_ASSERT_OFFSET(TW_Faction,       m_faction_technology_manager, 0x934);
+TW_ASSERT_OFFSET(TW_Faction,       m_politics,               0x112C);
 TW_ASSERT_OFFSET(TW_Character,     action_points,           0x14);
 TW_ASSERT_OFFSET(TW_Character,     family_member,           0x208);
 TW_ASSERT_OFFSET(TW_Character,     ambition,                0x558);
@@ -266,6 +361,18 @@ TW_ASSERT_OFFSET(TW_CampaignModel, m_campaign_env,           0x10F0);
 TW_ASSERT_OFFSET(TW_CampaignEnv,   m_game_core,              0x30);
 TW_ASSERT_OFFSET(TW_GameCore,      m_databases,              0x10);
 TW_ASSERT_OFFSET(TW_Databases,     m_technologies_table,     0x1604);
+TW_ASSERT_OFFSET(TW_PoliticalPartyRecord, m_key,            0x0);
+TW_ASSERT_OFFSET(TW_PoliticalPartyRecord, m_initial_power,   0x44);
+TW_ASSERT_OFFSET(TW_CampaignPoliticalParty, m_politics,      0x0);
+TW_ASSERT_OFFSET(TW_CampaignPoliticalParty, m_party_record,  0x4);
+TW_ASSERT_OFFSET(TW_CampaignPoliticalParty, m_senators,      0x14);
+TW_ASSERT_OFFSET(TW_CampaignPoliticalParty, m_power,         0x18);
+TW_ASSERT_OFFSET(TW_PoliticalPartiesMap, m_size,             0x8);
+TW_ASSERT_OFFSET(TW_PoliticalPartiesMap, m_elements,         0xC);
+TW_ASSERT_OFFSET(TW_CampaignPolitics, m_faction,             0x24);
+TW_ASSERT_OFFSET(TW_CampaignPolitics, m_political_parties,   0x28);
+TW_ASSERT_OFFSET(TW_CampaignPolitics, m_primary_party,       0x40);
+TW_ASSERT_OFFSET(TW_CampaignPolitics, m_active,              0x48);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.
@@ -285,6 +392,8 @@ TW_PTR_OFFSET(TW_MilitaryForce, 0x8);
 TW_PTR_OFFSET(TW_Unit,          0x8);
 TW_PTR_OFFSET(TW_BattleUnit,    0x4);
 TW_PTR_OFFSET(TW_Region,        0x8);
+TW_PTR_OFFSET(TW_PoliticalPartyRecord,   0x8);
+TW_PTR_OFFSET(TW_CampaignPoliticalParty, 0x8);
 
 template<typename T> T * tw_unwrap(lua_State* L, int slot) {
     void** ud = static_cast<void**>(l_touserdata(L, slot));

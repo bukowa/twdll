@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `GetPoliticalParties()`, `GetPoliticalParty(party_key)`, `GetPrimaryParty()` and `HasPoliticalParties()` for campaign politics, plus a new `CAMPAIGN_POLITICAL_PARTY` script interface (`GetKey`, `GetSenators`, `GetPower`, `IsPrimary`) for the party objects they return.
 - Extended the game's region interface (`REGION_SCRIPT_INTERFACE`) with:
   - `GetPopulationSurplus` / `SetPopulationSurplus` — read or set the population surplus a region has to spend on expanding settlement slots.
   - `GetGrowthPoints` / `SetGrowthPoints` — read or set the growth points a region has accumulated.

@@ -11,6 +11,12 @@ using twdll::TW_CampaignModel;
 using twdll::TW_CampaignEnv;
 using twdll::TW_GameCore;
 using twdll::TW_Databases;
+using twdll::TW_CampaignPolitics;
+using twdll::TW_CampaignPoliticalParty;
+using twdll::TW_PoliticalPartiesMap;
+using twdll::TW_PoliticalPartyRecord;
+
+void push_campaign_political_party(lua_State* L, TW_CampaignPoliticalParty* party);
 
 constexpr size_t FACTION_PTR = twdll::TW_PtrOffset<TW_Faction>::value;
 
@@ -190,6 +196,139 @@ static int SetFactionLeader(lua_State* L) {
     return 0;
 }
 
+namespace {
+
+// Iterates every CAMPAIGN_POLITICAL_PARTY in a faction's politics map.
+// Bucket/NODE layout documented in tw_types.h (TW_PoliticalPartiesMap).
+template <typename Fn>
+void for_each_party(const TW_CampaignPolitics& politics, Fn&& fn) {
+    const TW_PoliticalPartiesMap& map = politics.m_political_parties;
+    for (int i = 0; i < map.m_size; ++i) {
+        char* bucket = reinterpret_cast<char*>(map.m_elements) + i * 12;
+        char* fake   = bucket + 4;
+        char* node   = *reinterpret_cast<char**>(bucket);
+        while (node && node != fake) {
+            auto* party = reinterpret_cast<TW_CampaignPoliticalParty*>(node + 0xC);
+            fn(party);
+            node = *reinterpret_cast<char**>(node + 4);
+        }
+    }
+}
+
+// Finds the party whose record key matches, or nullptr. Linear scan is fine:
+// factions have 2-4 parties (the map's hash hashes the key string, not a
+// pointer, so keying by string would need the FNV routine for no benefit).
+TW_CampaignPoliticalParty* find_party_by_key(const TW_CampaignPolitics& politics, const char* key) {
+    TW_CampaignPoliticalParty* found = nullptr;
+    for_each_party(politics, [&](TW_CampaignPoliticalParty* party) {
+        if (found) return;
+        auto* record = static_cast<TW_PoliticalPartyRecord*>(party->m_party_record);
+        if (record && record->m_key.m_data && std::strcmp(record->m_key.m_data, key) == 0)
+            found = party;
+    });
+    return found;
+}
+
+// Finds the faction's primary (leading) party, or nullptr.
+TW_CampaignPoliticalParty* find_primary_party(const TW_CampaignPolitics& politics) {
+    TW_CampaignPoliticalParty* found = nullptr;
+    for_each_party(politics, [&](TW_CampaignPoliticalParty* party) {
+        if (found) return;
+        if (party->m_party_record == politics.m_primary_party)
+            found = party;
+    });
+    return found;
+}
+
+}  // namespace
+
+/***
+Returns a list of the faction's campaign political parties as userdata.
+Each party exposes GetKey(), GetSenators() and GetPower().
+@function GetPoliticalParties
+@treturn table array of CAMPAIGN_POLITICAL_PARTY userdata
+*/
+static int GetPoliticalParties(lua_State* L) {
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    if (!faction) {
+        Log("[twdll] GetPoliticalParties: null faction");
+        l_pushnil(L);
+        return 1;
+    }
+
+    const TW_PoliticalPartiesMap& map = faction->m_politics.m_political_parties;
+    l_createtable(L, map.m_count, 0);
+
+    int n = 0;
+    for_each_party(faction->m_politics, [&](TW_CampaignPoliticalParty* party) {
+        // lua_settable: value on top, key below → push key first, then value
+        l_pushinteger(L, ++n);
+        push_campaign_political_party(L, party);
+        l_settable(L, -3);
+    });
+    return 1;
+}
+
+/***
+Returns the faction's political party with the given record key, or nil.
+@function GetPoliticalParty
+@tparam string party_key the party record key (e.g. "att_political_party_romans_1")
+@treturn userdata CAMPAIGN_POLITICAL_PARTY or nil
+*/
+static int GetPoliticalParty(lua_State* L) {
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    const char* key = l_checklstring(L, 2, nullptr);
+    if (!faction || !key) {
+        Log("[twdll] GetPoliticalParty: null faction or key");
+        l_pushnil(L);
+        return 1;
+    }
+    auto* party = find_party_by_key(faction->m_politics, key);
+    if (!party) {
+        l_pushnil(L);
+        return 1;
+    }
+    push_campaign_political_party(L, party);
+    return 1;
+}
+
+/***
+Returns the faction's primary (leading) political party, or nil.
+@function GetPrimaryParty
+@treturn userdata CAMPAIGN_POLITICAL_PARTY or nil
+*/
+static int GetPrimaryParty(lua_State* L) {
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    if (!faction) {
+        Log("[twdll] GetPrimaryParty: null faction");
+        l_pushnil(L);
+        return 1;
+    }
+    auto* party = find_primary_party(faction->m_politics);
+    if (!party) {
+        l_pushnil(L);
+        return 1;
+    }
+    push_campaign_political_party(L, party);
+    return 1;
+}
+
+/***
+Returns whether the faction has any campaign political parties.
+@function HasPoliticalParties
+@treturn boolean true if the faction has at least one party
+*/
+static int HasPoliticalParties(lua_State* L) {
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    if (!faction) {
+        Log("[twdll] HasPoliticalParties: null faction");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    l_pushboolean(L, faction->m_politics.m_political_parties.m_count > 0);
+    return 1;
+}
+
 extern const luaL_Reg faction_functions[] = {
     {nullptr, nullptr}
 };
@@ -201,6 +340,10 @@ static const luaL_Reg faction_methods[] = {
     {"SetFactionLeader",  SetFactionLeader},
     {"SetCapital",        SetCapital},
     {"InstantlyResearchTechnology", InstantlyResearchTechnology},
+    {"GetPoliticalParties", GetPoliticalParties},
+    {"GetPoliticalParty", GetPoliticalParty},
+    {"GetPrimaryParty",   GetPrimaryParty},
+    {"HasPoliticalParties", HasPoliticalParties},
     {nullptr, nullptr}
 };
 

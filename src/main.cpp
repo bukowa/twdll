@@ -19,6 +19,7 @@ extern void register_faction_methods(lua_State *L);
 extern void register_unit_methods(lua_State *L);
 extern void register_military_force_methods(lua_State *L);
 extern void register_region_methods(lua_State *L);
+extern void register_political_party_methods(lua_State *L);
 
 static bool g_is_initialized = false;
 
@@ -82,6 +83,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     l_register(L, "twdll_faction", faction_functions);
     l_setfield(L, -2, "faction");
     register_faction_methods(L);
+    register_political_party_methods(L);
 
     l_register(L, "twdll_military_force", military_force_functions);
     l_setfield(L, -2, "military_force");
