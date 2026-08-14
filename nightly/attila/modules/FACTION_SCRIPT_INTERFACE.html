@@ -49,6 +49,7 @@
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
   <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -91,7 +92,7 @@ game's own internal path for finishing a technology.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetPoliticalParties">GetPoliticalParties ()</a></td>
-	<td class="summary">Returns a list of the faction's campaign political parties as userdata.</td>
+	<td class="summary">Returns a list interface for the faction's campaign political parties.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetPoliticalParty">GetPoliticalParty (party_key)</a></td>
@@ -269,16 +270,17 @@ is true, fires <code>faction_succession_heir_comes_of_age</code> instead of the 
     <strong>GetPoliticalParties ()</strong>
     </dt>
     <dd>
-    Returns a list of the faction's campaign political parties as userdata.
-Each party exposes GetKey(), GetSenators() and GetPower().
+    Returns a list interface for the faction's campaign political parties.
+Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to iterate it.
+Each party exposes GetKey(), GetSenators(), GetPower() and IsPrimary().
 
 
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
-        array of CAMPAIGN<em>POLITICAL</em>PARTY userdata
+           <span class="types"><span class="type">userdata</span></span>
+        POLITICAL<em>PARTY</em>LIST<em>SCRIPT</em>INTERFACE
     </ol>
 
 

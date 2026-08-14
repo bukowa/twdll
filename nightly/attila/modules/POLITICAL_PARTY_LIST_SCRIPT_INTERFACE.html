@@ -44,34 +44,38 @@
   <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
   <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><strong>MILITARY_FORCE_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
   <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><strong>POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>MILITARY_FORCE_SCRIPT_INTERFACE</code></h1>
+<h1>Module <code>POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</code></h1>
 <p>
 
 </p>
-<p> Extensions to the game's military force object.</p>
+<p> List interface for campaign political parties.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the military force object as a hexadecimal string.</td>
+	<td class="name" nowrap><a href="#num_items">num_items ()</a></td>
+	<td class="summary">Returns the number of political parties in this list.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetRecruitmentQueueSize">GetRecruitmentQueueSize ()</a></td>
-	<td class="summary">Returns the number of units in the recruitment queue.</td>
+	<td class="name" nowrap><a href="#item_at">item_at (index)</a></td>
+	<td class="summary">Returns the political party at a zero-based index, or nil when out of bounds.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#is_empty">is_empty ()</a></td>
+	<td class="summary">Returns whether this political party list is empty.</td>
 	</tr>
 </table>
 
@@ -83,31 +87,11 @@
 
     <dl class="function">
     <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
+    <a name = "num_items"></a>
+    <strong>num_items ()</strong>
     </dt>
     <dd>
-    Returns the memory address of the military force object as a hexadecimal string.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetRecruitmentQueueSize"></a>
-    <strong>GetRecruitmentQueueSize ()</strong>
-    </dt>
-    <dd>
-    Returns the number of units in the recruitment queue.
+    Returns the number of political parties in this list.
 
 
 
@@ -115,7 +99,54 @@
     <ol>
 
            <span class="types"><span class="type">integer</span></span>
-        number of units
+        number of parties
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "item_at"></a>
+    <strong>item_at (index)</strong>
+    </dt>
+    <dd>
+    Returns the political party at a zero-based index, or nil when out of bounds.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">index</span>
+            <span class="types"><span class="type">integer</span></span>
+         zero-based list index
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">userdata</span></span>
+        CAMPAIGN<em>POLITICAL</em>PARTY or nil
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "is_empty"></a>
+    <strong>is_empty ()</strong>
+    </dt>
+    <dd>
+    Returns whether this political party list is empty.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true when the list has no parties
     </ol>
 
 
