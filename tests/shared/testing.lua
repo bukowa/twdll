@@ -634,7 +634,7 @@ local function run_twdll_tests()
         -- TEST 13: faction political parties API
         -- Full coverage of the politics surface with hardcoded expected
         -- values (manually verified in-game against att_fact_hunni):
-        --   faction:GetPoliticalParties()   -> array of party userdata
+        --   faction:GetPoliticalParties()   -> POLITICAL_PARTY_LIST_SCRIPT_INTERFACE
         --   faction:GetPoliticalParty(key)  -> single party or nil
         --   faction:GetPrimaryParty()       -> primary party or nil
         --   faction:HasPoliticalParties()   -> boolean
@@ -655,7 +655,7 @@ local function run_twdll_tests()
                     local cand = fl:item_at(i)
                     if cand ~= nil and not cand:is_null_interface() then
                         local parties = cand:GetPoliticalParties()
-                        local n = type(parties) == "table" and #parties or 0
+                        local n = type(parties) == "userdata" and parties:num_items() or 0
                         if cand:name() == "att_fact_hunni" then
                             hunni = { f = cand, parties = parties, n = n }
                         end
@@ -689,12 +689,17 @@ local function run_twdll_tests()
                     }
 
                     -- GetPoliticalParties: exactly the two known parties
-                    local list_ok = type(parties) == "table" and hunni.n == 2
+                    local list_ok = type(parties) == "userdata"
+                        and parties:num_items() == 2
+                        and not parties:is_empty()
+                        and parties:item_at(-1) == nil
+                        and parties:item_at(999) == nil
                     report("PoliticalParties list", list_ok)
 
                     -- per-party data against hardcoded values
                     local fields_ok, field_names = true, {}
-                    for _, p in ipairs(parties) do
+                    for i = 0, parties:num_items() - 1 do
+                        local p = parties:item_at(i)
                         local key = p:GetKey()
                         local exp = expected[key]
                         if exp == nil then
@@ -753,7 +758,11 @@ local function run_twdll_tests()
 
                     -- HasPoliticalParties: false on a faction with no parties, if one exists
                     if empty_faction ~= nil then
+                        local empty_list = empty_faction:GetPoliticalParties()
                         local ok = empty_faction:HasPoliticalParties() == false
+                            and empty_list ~= nil
+                            and empty_list:num_items() == 0
+                            and empty_list:is_empty()
                         if not ok then
                             twdll.core.Log(string.format(
                                 "[TEST] HasPoliticalParties: FAILED (faction '%s' has no parties but returned true)",

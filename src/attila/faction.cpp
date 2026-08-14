@@ -3,6 +3,7 @@
 #include "../common/tw.h"
 #include "game_api.h"
 #include "tw_types.h"
+#include <vector>
 
 using twdll::TW_Faction;
 using twdll::TW_Character;
@@ -17,6 +18,9 @@ using twdll::TW_PoliticalPartiesMap;
 using twdll::TW_PoliticalPartyRecord;
 
 void push_campaign_political_party(lua_State* L, TW_CampaignPoliticalParty* party);
+void push_political_party_list(lua_State* L,
+                               TW_CampaignPoliticalParty* const* parties,
+                               int count);
 
 constexpr size_t FACTION_PTR = twdll::TW_PtrOffset<TW_Faction>::value;
 
@@ -243,10 +247,11 @@ TW_CampaignPoliticalParty* find_primary_party(const TW_CampaignPolitics& politic
 }  // namespace
 
 /***
-Returns a list of the faction's campaign political parties as userdata.
-Each party exposes GetKey(), GetSenators() and GetPower().
+Returns a list interface for the faction's campaign political parties.
+Use `num_items()` and zero-based `item_at(index)` to iterate it.
+Each party exposes GetKey(), GetSenators(), GetPower() and IsPrimary().
 @function GetPoliticalParties
-@treturn table array of CAMPAIGN_POLITICAL_PARTY userdata
+@treturn userdata POLITICAL_PARTY_LIST_SCRIPT_INTERFACE
 */
 static int GetPoliticalParties(lua_State* L) {
     auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
@@ -257,15 +262,13 @@ static int GetPoliticalParties(lua_State* L) {
     }
 
     const TW_PoliticalPartiesMap& map = faction->m_politics.m_political_parties;
-    l_createtable(L, map.m_count, 0);
-
-    int n = 0;
+    std::vector<TW_CampaignPoliticalParty*> parties;
+    parties.reserve(map.m_count);
     for_each_party(faction->m_politics, [&](TW_CampaignPoliticalParty* party) {
-        // lua_settable: value on top, key below → push key first, then value
-        l_pushinteger(L, ++n);
-        push_campaign_political_party(L, party);
-        l_settable(L, -3);
+        parties.push_back(party);
     });
+
+    push_political_party_list(L, parties.data(), static_cast<int>(parties.size()));
     return 1;
 }
 

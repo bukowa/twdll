@@ -51,6 +51,7 @@ typedef int lua_Integer;
 #define LUA_TNONE          (-1)
 #define LUA_TNIL          0
 #define LUA_TBOOLEAN      1
+#define LUA_TNUMBER       3
 #define LUA_TTABLE        5
 
 // Function pointer typedefs
