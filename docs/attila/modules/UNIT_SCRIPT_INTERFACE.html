@@ -93,6 +93,12 @@
 	<td class="name" nowrap><a href="#SetActionPoints">SetActionPoints (value)</a></td>
 	<td class="summary">Sets the action points for the unit.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#ConvertUnit">ConvertUnit (unit_key)</a></td>
+	<td class="summary">Replaces the unit with a new unit of the given type, in the same army, using
+the engine's own unit conversion path (the same one used for religion and
+technology upgrades).</td>
+	</tr>
 </table>
 
 <br/>
@@ -240,6 +246,37 @@
         </li>
     </ul>
 
+
+
+
+
+</dd>
+    <dt>
+    <a name = "ConvertUnit"></a>
+    <strong>ConvertUnit (unit_key)</strong>
+    </dt>
+    <dd>
+    Replaces the unit with a new unit of the given type, in the same army, using
+the engine's own unit conversion path (the same one used for religion and
+technology upgrades).  The new unit keeps the old unit's men count, experience
+and combat statistics. The old unit object is destroyed in the process, so the
+original unit reference is no longer valid afterwards.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the unit record key (e.g. "att<em>inf</em>melee<em>spear</em>att")
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the unit was converted, false otherwise
+    </ol>
 
 
 

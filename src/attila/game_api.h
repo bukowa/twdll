@@ -30,6 +30,12 @@ extern FnInstantSetResearched g_instant_set_researched;
 using FnRecordIndex = void*(__thiscall*)(void* table, void* key_string);
 extern FnRecordIndex g_record_index;
 
+// UNIT::convert_unit (sub_106FC010): replace old_unit with a fresh UNIT built
+// from target_record inside the same force, preserving men/xp/stats, then
+// destroy old_unit. Returns the new UNIT*.
+using FnConvertUnit = void*(__cdecl*)(void* old_unit, void* force, void* target_record);
+extern FnConvertUnit g_convert_unit;
+
 // Address of the `mov eax, [eax+0x13C]` instruction in the REINFORCEMENTS_MANAGER
 // ctor, resolved by initialize_game_api().
 extern uintptr_t g_reinf_cap_insn_addr;

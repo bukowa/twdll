@@ -139,6 +139,41 @@ local function run_twdll_tests()
                 twdll.core.Log("[TEST] SetActionPoints: FAILED (expected 50, got " .. tostring(ap_after) .. ")")
                 report("SetActionPoints", false)
             end
+
+            twdll.core.Log("[TEST] --- Test 2d: ConvertUnit ---")
+            local ul = char:military_force():unit_list()
+            local src_index = -1
+            for i = 0, ul:num_items() - 1 do
+                if ul:item_at(i):unit_key() == "att_nom_steppe_chieftain" then
+                    src_index = i
+                    break
+                end
+            end
+            if src_index < 0 then
+                twdll.core.Log("[TEST] ConvertUnit: SKIPPED (no att_nom_steppe_chieftain in force)")
+                record_skip()
+            else
+                local src_unit = ul:item_at(src_index)
+                local men_before = src_unit:GetNumMen()
+                local ok = src_unit:ConvertUnit("att_merc_ger_agathyrsi_warriors")
+                if ok ~= true then
+                    twdll.core.Log("[TEST] ConvertUnit: FAILED (returned " .. tostring(ok) .. ")")
+                    report("ConvertUnit", false)
+                else
+                    local unit_after = char:military_force():unit_list():item_at(src_index)
+                    local men_after = unit_after:GetNumMen()
+                    local key_after = unit_after:unit_key()
+                    twdll.core.Log("[TEST] ConvertUnit: men " .. tostring(men_before) ..
+                        " -> " .. tostring(men_after) .. ", key '" .. tostring(key_after) .. "'")
+                    if men_after == men_before and key_after == "att_merc_ger_agathyrsi_warriors" then
+                        twdll.core.Log("[TEST] ConvertUnit: OK")
+                        report("ConvertUnit", true)
+                    else
+                        twdll.core.Log("[TEST] ConvertUnit: FAILED (men/key mismatch)")
+                        report("ConvertUnit", false)
+                    end
+                end
+            end
         end
 
         -- ======================================================

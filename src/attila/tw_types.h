@@ -143,11 +143,13 @@ struct TW_MilitaryForce {
 };
 
 struct TW_Unit {
-    char pad_00[0x44];
-    int  num_men;                // 0x44
-    int  max_num_men;            // 0x48
-    char pad_4C[0x18];
-    int  action_points;          // 0x64
+    char  pad_00[0x38];
+    void* m_force_link;          // 0x38  m_force_link.m_link.m_object -> ONE_TO_MANY_LINK<UNIT_CONTAINER,UNIT>*
+    char  pad_3C[0x8];           // 0x3C  m_faction, 0x40 m_unit_record
+    int   num_men;               // 0x44
+    int   max_num_men;           // 0x48
+    char  pad_4C[0x18];
+    int   action_points;         // 0x64
 };
 
 // EMPIREBATTLE::LAND_STATS — live battle statistics (embedded in UNIT via LAND_STATS_MANAGER)
@@ -302,7 +304,9 @@ struct TW_GameCore {
 // of any running campaign (the tech tree resolves it), null-checked by callers.
 // Verified via disasm of sub_10E35B00: `cmp [esi+1604h],ebx; ... mov eax,[esi+1604h]`.
 struct TW_Databases {
-    char  pad_00[0x1604];
+    char  pad_00[0x1000];
+    void* m_main_units_table;    // 0x1000  MAIN_UNITS_TABLE* (lazy-loader cache)
+    char  pad_1004[0x600];
     void* m_technologies_table;  // 0x1604
 };
 
@@ -323,6 +327,7 @@ TW_ASSERT_OFFSET(TW_Character,     ambition,                0x558);
 TW_ASSERT_OFFSET(TW_Character,     gravitas,                0x55C);
 TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);
 TW_ASSERT_OFFSET(TW_MilitaryForce, recruitment_queue_size,  0x45C);
+TW_ASSERT_OFFSET(TW_Unit,          m_force_link,            0x38);
 TW_ASSERT_OFFSET(TW_Unit,          num_men,                 0x44);
 TW_ASSERT_OFFSET(TW_Unit,          max_num_men,             0x48);
 TW_ASSERT_OFFSET(TW_Unit,          action_points,           0x64);
@@ -360,6 +365,7 @@ TW_ASSERT_OFFSET(TW_RegionData,    m_theatre,                0x94);
 TW_ASSERT_OFFSET(TW_CampaignModel, m_campaign_env,           0x10F0);
 TW_ASSERT_OFFSET(TW_CampaignEnv,   m_game_core,              0x30);
 TW_ASSERT_OFFSET(TW_GameCore,      m_databases,              0x10);
+TW_ASSERT_OFFSET(TW_Databases,     m_main_units_table,      0x1000);
 TW_ASSERT_OFFSET(TW_Databases,     m_technologies_table,     0x1604);
 TW_ASSERT_OFFSET(TW_PoliticalPartyRecord, m_key,            0x0);
 TW_ASSERT_OFFSET(TW_PoliticalPartyRecord, m_initial_power,   0x44);

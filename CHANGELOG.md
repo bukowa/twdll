@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
   - `GetGrowthPoints` / `SetGrowthPoints` — read or set the growth points a region has accumulated.
 - Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `SetCapital(region)` — makes the given region the faction's capital.
 - Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `InstantlyResearchTechnology(technology_key)` — instantly completes a technology through the game's own native path (`FACTION_TECHNOLOGY_MANAGER::instant_set_researched` + effect/availability refresh), firing events, achievements and unit upgrades and completing parent prerequisites recursively.
+- Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `ConvertUnit(unit_key)` — replaces the unit with a new unit of the given type in the same army, using the engine's native unit conversion path (same as religion/technology upgrades). Men count, experience and combat statistics are preserved; the original unit object is destroyed.
 
 ## [0.9.0] - 2026-08-06
 

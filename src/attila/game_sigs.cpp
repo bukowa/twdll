@@ -32,6 +32,10 @@
 // an absolute image pointer that ASLR relocates at load, so only the on-disk
 // bytes would match a hardcoded sig — it must stay wildcarded.
 #define RECORD_INDEX_SIG "83 EC 0C 53 8B D9 56 8B 74 24 ? 56 8D 4B ? E8 ? ? ? ? 85 C0 74 ? 8B 08 8B 43 ? EB ? 57 8B CE E8 ? ? ? ? 8D 4B ? 8B F8 E8 ? ? ? ? 68 ? ? ? ? 8D 4C 24 ? 8B F0 E8 ? ? ? ? 57 8D 44 24 ? 56 50 E8 ? ? ? ? 83 C4 0C 8D 4C 24 ? E8 ? ? ? ? 8B 4B ? 8B C1 5F 3B C8 73 ? 8B 43 ? 5E 5B 8B 04 88 83 C4 0C"
+// UNIT::convert_unit @ 0x106FC010: break force link (lea ecx,[ebx+34h]),
+// read m_soldiers, clamp vs unit-multiplier(num_men), LIST_POOL::allocate(0x164),
+// 4-arg ctor, subsume into force, destroy old. Verified unique.
+#define CONVERT_UNIT_SIG "53 8B 5C 24 08 55 56 57 8D 4B 34 E8 ? ? ? ? 8D 4B 30 E8 ? ? ? ? 8D 88 F0 10 00 00 E8 ? ? ? ? 8B 6C 24 1C 8D 48 18 FF 75 28"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -43,6 +47,7 @@ uintptr_t          g_settlement_cb_initialize_addr = 0;
 
 FnInstantSetResearched g_instant_set_researched = nullptr;
 FnRecordIndex          g_record_index           = nullptr;
+FnConvertUnit          g_convert_unit           = nullptr;
 
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
@@ -57,5 +62,6 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"CampaignSettlementCallback::Initialize", (void**)&g_settlement_cb_initialize_addr, SETTLEMENT_CB_INITIALIZE_SIG},
     {"FACTION_TECHNOLOGY_MANAGER::instant_set_researched", (void**)&g_instant_set_researched, INSTANT_SET_RESEARCHED_SIG},
     {"DATABASE_TABLE::record_index",                       (void**)&g_record_index,           RECORD_INDEX_SIG},
+    {"UNIT::convert_unit",                                 (void**)&g_convert_unit,           CONVERT_UNIT_SIG},
     {nullptr, nullptr, nullptr}
 };
