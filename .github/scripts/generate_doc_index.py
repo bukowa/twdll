@@ -32,9 +32,10 @@ def generate_version_list(versions, repo_slug, changelog_text, repo_path):
             pass
     
     tagged_versions.sort(key=lambda v: parse_version(v), reverse=True)
-    sorted_list = tagged_versions
+    sorted_list = []
     if 'nightly' in versions:
         sorted_list.append('nightly')
+    sorted_list.extend(tagged_versions)
 
     for version in sorted_list:
         is_nightly = (version == 'nightly')

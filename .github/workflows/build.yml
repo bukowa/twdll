@@ -110,9 +110,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: docs-html
-          path: |
-            ${{github.workspace}}/docs/rome2
-            ${{github.workspace}}/docs/attila
+          path: ${{github.workspace}}/docs/attila/
 
   # ===============================================================
   # JOB 2: Deploy Docs - Z POPRAWKĄ INSTALACJI PAKIETU
@@ -163,7 +161,6 @@ jobs:
         run: |
           mkdir -p gh-pages/${{ steps.docs_dir.outputs.dir }}
           cp -r new-docs/* gh-pages/${{ steps.docs_dir.outputs.dir }}/
-          cp main/.github/docs_template/game-selector.html gh-pages/${{ steps.docs_dir.outputs.dir }}/index.html
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -192,14 +189,24 @@ jobs:
         uses: actions/download-artifact@v4
         with: { name: release-package } # Downloads release-package.zip
 
-      # Rename the file to include the version number
-      - name: Prepare Release Archive
+      - name: Download documentation artifact
+        uses: actions/download-artifact@v4
+        with: { name: docs-html, path: docs-staging }
+
+      # Rename the file to include the version number and prepare docs archive
+      - name: Prepare Release Archives
         id: archive
         run: |
           VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           ARCHIVE_NAME="libtwdll-${VERSION}.zip"
           mv release-package.zip "${ARCHIVE_NAME}"
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+
+          DOCS_ARCHIVE_NAME="docs-${VERSION}.zip"
+          cd docs-staging
+          zip -q -r "../${DOCS_ARCHIVE_NAME}" .
+          cd ..
+          echo "docs_name=${DOCS_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Extract Changelog Entry
         id: changelog
@@ -213,7 +220,8 @@ jobs:
           fi
           echo "body<<EOF" >> $GITHUB_ENV
           echo "## Quick Download" >> $GITHUB_ENV
-          echo "**All files in one package: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**" >> $GITHUB_ENV
+          echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**" >> $GITHUB_ENV
+          echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.docs_name }})**" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           echo "---" >> $GITHUB_ENV
           echo "## Changelog" >> $GITHUB_ENV
@@ -224,7 +232,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           body: ${{ env.body }}
-          files: ${{ steps.archive.outputs.name }}
+          files: |
+            ${{ steps.archive.outputs.name }}
+            ${{ steps.archive.outputs.docs_name }}
 
   # ===============================================================
   # JOB 4: Publish the Dev Build (Nightly)
@@ -251,13 +261,24 @@ jobs:
         uses: actions/download-artifact@v4
         with: { name: release-package } # Downloads release-package.zip
 
-      # Rename the file to the nightly name
-      - name: Prepare Release Archive
+      - name: Download documentation artifact
+        uses: actions/download-artifact@v4
+        with: { name: docs-html, path: docs-staging }
+
+      # Rename the file to the nightly name and prepare docs archive
+      - name: Prepare Release Archives
         id: archive
         run: |
           ARCHIVE_NAME="libtwdll-nightly.zip"
           mv release-package.zip "${ARCHIVE_NAME}"
           echo "name=${ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+
+          DOCS_ARCHIVE_NAME="docs-nightly.zip"
+          cd docs-staging
+          zip -q -r "../${DOCS_ARCHIVE_NAME}" .
+          cd ..
+          echo "docs_name=${DOCS_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+
       - name: Create ZIP archive with source code
         run: zip -q -r source-code.zip . -x ".git/*" -x "**/.git/*" -x "*.zip"
 
@@ -269,6 +290,7 @@ jobs:
             echo ""
             echo "## Quick Download"
             echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
+            echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.docs_name }})**"
             echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
           } > release_notes.md
       - name: Ensure 'nightly' release exists and update its body
@@ -278,4 +300,4 @@ jobs:
           gh release edit nightly --title "Dev Build (from master)" --notes-file release_notes.md
       - name: Upload/Overwrite Release Assets (using gh CLI)
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release upload nightly ${{ steps.archive.outputs.name }} source-code.zip --clobber
+        run: gh release upload nightly ${{ steps.archive.outputs.name }} ${{ steps.archive.outputs.docs_name }} source-code.zip --clobber

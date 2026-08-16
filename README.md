@@ -34,13 +34,12 @@ twdll.core.Log("Hello from C++!")
 > functions that read fixed module offsets work regardless of where they are called. This is how
 > the current hook architecture works, not a permanent contract — it may change in the future.
 
-## Docs: 
-- [Click](https://bukowa.github.io/twdll/)
+## Documentation
+- [Online API Documentation](https://bukowa.github.io/twdll/)
 
-> **Rome 2 support is totally frozen.** No code, build, or docs changes are made for Rome 2 —
-> the `src/rome2/`, `tests/rome2/`, and `docs/rome2/` trees are preserved as-is. The Rome 2 docs
-> below are stale and will stay that way until an incoming game update lands, invalidating all
-> internal offsets, and structures are re-verified. Active development targets Attila only.
+> **Rome 2 support is frozen.** No code, build, or docs changes are actively made for Rome 2 —
+> the `src/rome2/`, `tests/rome2/`, and `docs/rome2/` trees are preserved as-is. Active development,
+> releases, and documentation target Attila only.
 
 ## Development
 
@@ -50,13 +49,13 @@ twdll.core.Log("Hello from C++!")
 
 ### Build
 ```sh
-# Rome 2
-cmake --preset rome2
-cmake --build --preset rome2
-
-# Attila
+# Attila (active)
 cmake --preset attila
 cmake --build --preset attila
+
+# Rome 2 (frozen)
+# cmake --preset rome2
+# cmake --build --preset rome2
 ```
 
 ### Project Structure
@@ -64,8 +63,8 @@ cmake --build --preset attila
 src/
 ├── main.cpp              # DLL entry point
 ├── common/               # Shared utilities
-├── rome2/                # Rome 2 specific code
-└── attila/               # Attila specific code
+├── attila/               # Attila specific code (active)
+└── rome2/                # Rome 2 specific code (frozen)
 ```
 
 ## Contributing
