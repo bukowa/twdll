@@ -1,0 +1,250 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><strong>CHARACTER_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>CHARACTER_SCRIPT_INTERFACE</code></h1>
+<p>
+
+</p>
+<p> Extensions to the game's character object.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Returns the memory address of the character object as a hexadecimal string.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetActionPoints">GetActionPoints ()</a></td>
+	<td class="summary">Gets the current action points of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetActionPoints">SetActionPoints (value)</a></td>
+	<td class="summary">Sets the action points of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetInfluence">GetInfluence ()</a></td>
+	<td class="summary">Gets the political influence of the character (m<em>political</em>gravitas).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetInfluence">SetInfluence (value)</a></td>
+	<td class="summary">Sets the political influence of the character (m<em>political</em>gravitas).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetDefaultBodyGuard">SetDefaultBodyGuard (unit_key)</a></td>
+	<td class="summary">Overrides the default bodyguard unit record for a general so that whenever
+the general is recruited into an army (including re-recruitment after being
+wounded or disbanded, or through 'Replace this general' in the UI), they
+receive this unit type as their default bodyguard.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the character object as a hexadecimal string.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetActionPoints"></a>
+    <strong>GetActionPoints ()</strong>
+    </dt>
+    <dd>
+    Gets the current action points of the character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        action points
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetActionPoints"></a>
+    <strong>SetActionPoints (value)</strong>
+    </dt>
+    <dd>
+    Sets the action points of the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new action points
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetInfluence"></a>
+    <strong>GetInfluence ()</strong>
+    </dt>
+    <dd>
+    Gets the political influence of the character (m<em>political</em>gravitas).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        influence
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetInfluence"></a>
+    <strong>SetInfluence (value)</strong>
+    </dt>
+    <dd>
+    Sets the political influence of the character (m<em>political</em>gravitas).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new influence
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetDefaultBodyGuard"></a>
+    <strong>SetDefaultBodyGuard (unit_key)</strong>
+    </dt>
+    <dd>
+    Overrides the default bodyguard unit record for a general so that whenever
+the general is recruited into an army (including re-recruitment after being
+wounded or disbanded, or through 'Replace this general' in the UI), they
+receive this unit type as their default bodyguard.  The record is stored directly
+in the persistent GENERAL<em>BODYGUARD</em>DETAILS struct (serialised with savegames)
+and read by the recruitment panel as the pre-selected default choice.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         unit record key (e.g. "att<em>rom</em>cav<em>general</em>guards")
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the record was found and applied, false otherwise
+    </ol>
+
+
+
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>
