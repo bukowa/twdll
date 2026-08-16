@@ -103,6 +103,13 @@ add_custom_target(tw-test
     VERBATIM USES_TERMINAL
 )
 
+add_custom_target(tw-test-keep
+    DEPENDS twdll
+    COMMAND powershell -ExecutionPolicy Bypass -File "${TW_PS1}" test-keep "${TW_GAME}" "$<TARGET_FILE:twdll>"
+    COMMENT "Running tests, keeping game alive (${TW_GAME})"
+    VERBATIM USES_TERMINAL
+)
+
 # ── Documentation targets (defer to docs/CMakeLists.txt) ────────────────────
 add_subdirectory(docs)
 

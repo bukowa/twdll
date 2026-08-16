@@ -41,7 +41,7 @@
 <ul class="nowrap">
   <li><a href="../modules/twdll.core.html">twdll.core</a></li>
   <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><strong>UNIT_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
   <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
   <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
@@ -50,55 +50,56 @@
   <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><strong>CHARACTER_SCRIPT_INTERFACE</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>UNIT_SCRIPT_INTERFACE</code></h1>
+<h1>Module <code>CHARACTER_SCRIPT_INTERFACE</code></h1>
 <p>
 
 </p>
-<p> Extensions to the game's unit object.</p>
+<p> Extensions to the game's character object.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
 	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the unit object as a hexadecimal string.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetNumMen">GetNumMen ()</a></td>
-	<td class="summary">Gets the current number of men in the unit.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetNumMen">SetNumMen (value)</a></td>
-	<td class="summary">Sets the current number of men in the unit.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMaxNumMen">GetMaxNumMen ()</a></td>
-	<td class="summary">Gets the maximum number of men the unit can have.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetMaxNumMen">SetMaxNumMen (value)</a></td>
-	<td class="summary">Sets the maximum number of men the unit can have.</td>
+	<td class="summary">Returns the memory address of the character object as a hexadecimal string.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetActionPoints">GetActionPoints ()</a></td>
-	<td class="summary">Gets the action points remaining for the unit.</td>
+	<td class="summary">Gets the current action points of the character.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetActionPoints">SetActionPoints (value)</a></td>
-	<td class="summary">Sets the action points for the unit.</td>
+	<td class="summary">Sets the action points of the character.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#ConvertUnit">ConvertUnit (unit_key)</a></td>
-	<td class="summary">Replaces the unit with a new unit of the given type, in the same army, using
-the engine's own unit conversion path (the same one used for religion and
-technology upgrades).</td>
+	<td class="name" nowrap><a href="#GetAmbition">GetAmbition ()</a></td>
+	<td class="summary">Gets the ambition value of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetAmbition">SetAmbition (value)</a></td>
+	<td class="summary">Sets the ambition value of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetGravitas">GetGravitas ()</a></td>
+	<td class="summary">Gets the gravitas value of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetGravitas">SetGravitas (value)</a></td>
+	<td class="summary">Sets the gravitas value of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetDefaultBodyGuard">SetDefaultBodyGuard (unit_key)</a></td>
+	<td class="summary">Overrides the default bodyguard unit record for a general so that whenever
+the general is recruited into an army (including re-recruitment after being
+wounded or disbanded, or through 'Replace this general' in the UI), they
+always receive this unit type as their bodyguard.</td>
 	</tr>
 </table>
 
@@ -114,7 +115,7 @@ technology upgrades).</td>
     <strong>GetMemoryAddress ()</strong>
     </dt>
     <dd>
-    Returns the memory address of the unit object as a hexadecimal string.
+    Returns the memory address of the character object as a hexadecimal string.
 
 
 
@@ -130,93 +131,11 @@ technology upgrades).</td>
 
 </dd>
     <dt>
-    <a name = "GetNumMen"></a>
-    <strong>GetNumMen ()</strong>
-    </dt>
-    <dd>
-    Gets the current number of men in the unit.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        current number of men
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetNumMen"></a>
-    <strong>SetNumMen (value)</strong>
-    </dt>
-    <dd>
-    Sets the current number of men in the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new number of men
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMaxNumMen"></a>
-    <strong>GetMaxNumMen ()</strong>
-    </dt>
-    <dd>
-    Gets the maximum number of men the unit can have.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        maximum number of men
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMaxNumMen"></a>
-    <strong>SetMaxNumMen (value)</strong>
-    </dt>
-    <dd>
-    Sets the maximum number of men the unit can have.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new maximum number of men
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
     <a name = "GetActionPoints"></a>
     <strong>GetActionPoints ()</strong>
     </dt>
     <dd>
-    Gets the action points remaining for the unit.
+    Gets the current action points of the character.
 
 
 
@@ -236,7 +155,7 @@ technology upgrades).</td>
     <strong>SetActionPoints (value)</strong>
     </dt>
     <dd>
-    Sets the action points for the unit.
+    Sets the action points of the character.
 
 
     <h3>Parameters:</h3>
@@ -253,22 +172,105 @@ technology upgrades).</td>
 
 </dd>
     <dt>
-    <a name = "ConvertUnit"></a>
-    <strong>ConvertUnit (unit_key)</strong>
+    <a name = "GetAmbition"></a>
+    <strong>GetAmbition ()</strong>
     </dt>
     <dd>
-    Replaces the unit with a new unit of the given type, in the same army, using
-the engine's own unit conversion path (the same one used for religion and
-technology upgrades).  The new unit keeps the old unit's men count, experience
-and combat statistics. The old unit object is destroyed in the process, so the
-original unit reference is no longer valid afterwards.
+    Gets the ambition value of the character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        ambition
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetAmbition"></a>
+    <strong>SetAmbition (value)</strong>
+    </dt>
+    <dd>
+    Sets the ambition value of the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new ambition
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetGravitas"></a>
+    <strong>GetGravitas ()</strong>
+    </dt>
+    <dd>
+    Gets the gravitas value of the character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        gravitas
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetGravitas"></a>
+    <strong>SetGravitas (value)</strong>
+    </dt>
+    <dd>
+    Sets the gravitas value of the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new gravitas
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetDefaultBodyGuard"></a>
+    <strong>SetDefaultBodyGuard (unit_key)</strong>
+    </dt>
+    <dd>
+    Overrides the default bodyguard unit record for a general so that whenever
+the general is recruited into an army (including re-recruitment after being
+wounded or disbanded, or through 'Replace this general' in the UI), they
+always receive this unit type as their bodyguard.  The record is stored directly
+in the persistent GENERAL<em>BODYGUARD</em>DETAILS struct (serialised with savegames)
+and enforced natively at the recruitment choke point.
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">unit_key</span>
             <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         the unit record key (e.g. "att<em>inf</em>melee<em>spear</em>att")
+         unit record key (e.g. "att<em>rom</em>cav<em>general</em>guards")
         </li>
     </ul>
 
@@ -276,7 +278,7 @@ original unit reference is no longer valid afterwards.
     <ol>
 
            <span class="types"><span class="type">boolean</span></span>
-        true if the unit was converted, false otherwise
+        true if the record was found and applied, false otherwise
     </ol>
 
 

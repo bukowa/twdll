@@ -24,6 +24,7 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/region.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/political_party.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/political_party_list.cpp"
+        "${PROJECT_SOURCE_DIR}/src/attila/character.cpp"
     )
 elseif(TW_GAME STREQUAL "rome2")
     set(TWDLL_DOC_SOURCES

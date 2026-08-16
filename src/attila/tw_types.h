@@ -122,14 +122,37 @@ struct TW_Faction {
     TW_CampaignPolitics m_politics; // 0x112C verified via disasm: lea ecx,[ebx+112Ch]; push ebx; call sub_10BF27C0 @ 0x106c2140
 };
 
+// EMPIRECAMPAIGN::GENERAL_BODYGUARD_DETAILS (32-bit layout, size 0x24)
+// Verified via CHARACTER_DETAILS::update_initial_general_bodyguard (sub_107F8A50):
+//   0x107f8a5c  mov eax, [edx]       ; m_unit (MAIN_UNIT_RECORD*)
+//   0x107f8a61  mov [ecx+31Ch], eax  ; stored in CHARACTER_DETAILS+0x31C (= CHARACTER+0x520)
+//   0x107f8a67  movzx eax, word ptr [edx+4] ; m_men -> [ecx+320h]
+//   0x107f8a72  movzx eax, word ptr [edx+6] ; m_men_in_fully_replenished -> [ecx+322h]
+//   0x107f8a7d  mov eax, [edx+8]     ; experience score -> [ecx+324h]
+//   0x107f8a86  mov al, [edx+0Ch]    ; experience level -> [ecx+328h]
+//   0x107f8a8f  mov eax, [edx+10h]   ; experience progress -> [ecx+32Ch]
+struct TW_GeneralBodyguardDetails {
+    void*    m_unit;                      // 0x00 (MAIN_UNIT_RECORD*)
+    uint16_t m_men;                       // 0x04
+    uint16_t m_men_in_fully_replenished;  // 0x06
+    uint32_t m_experience_score;          // 0x08
+    uint8_t  m_experience_level;          // 0x0C
+    uint8_t  pad_0D[3];
+    float    m_experience_progress;       // 0x10
+};
+
 struct TW_Character {
     char             pad_00[0x14];
-    int              action_points;    // 0x14
-    char             pad_18[0x1F0];
-    TW_FamilyMember* family_member;    // 0x208
-    char             pad_20C[0x34C];
-    int              ambition;         // 0x558
-    int              gravitas;         // 0x55C
+    int              action_points;       // 0x14
+    char             pad_18[0x1C4];
+    void*            commanded_unit_link; // 0x1DC  m_commanded_unit.m_link.m_object
+    char             pad_1E0[0x28];
+    TW_FamilyMember* family_member;       // 0x208
+    char                       pad_20C[0x314];
+    TW_GeneralBodyguardDetails m_initial_general_bodyguard_details; // 0x520
+    char             pad_534[0x24];
+    int              ambition;            // 0x558
+    int              gravitas;            // 0x55C
 };
 
 struct TW_World {
@@ -321,10 +344,12 @@ TW_ASSERT_OFFSET(TW_Faction,       m_original_home_region,   0x894);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_theatre,           0x898);
 TW_ASSERT_OFFSET(TW_Faction,       m_faction_technology_manager, 0x934);
 TW_ASSERT_OFFSET(TW_Faction,       m_politics,               0x112C);
-TW_ASSERT_OFFSET(TW_Character,     action_points,           0x14);
-TW_ASSERT_OFFSET(TW_Character,     family_member,           0x208);
-TW_ASSERT_OFFSET(TW_Character,     ambition,                0x558);
-TW_ASSERT_OFFSET(TW_Character,     gravitas,                0x55C);
+TW_ASSERT_OFFSET(TW_Character,     action_points,                        0x14);
+TW_ASSERT_OFFSET(TW_Character,     commanded_unit_link,                  0x1DC);
+TW_ASSERT_OFFSET(TW_Character,     family_member,                        0x208);
+TW_ASSERT_OFFSET(TW_Character,     m_initial_general_bodyguard_details,  0x520);
+TW_ASSERT_OFFSET(TW_Character,     ambition,                             0x558);
+TW_ASSERT_OFFSET(TW_Character,     gravitas,                             0x55C);
 TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);
 TW_ASSERT_OFFSET(TW_MilitaryForce, recruitment_queue_size,  0x45C);
 TW_ASSERT_OFFSET(TW_Unit,          m_force_link,            0x38);

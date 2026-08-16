@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `SetDefaultBodyGuard(unit_key)` — sets a persistent default bodyguard unit for a general, saved natively with savegames and enforced at all recruitment and replacement choke points.
 - Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `GetPoliticalParties()`, `GetPoliticalParty(party_key)`, `GetPrimaryParty()` and `HasPoliticalParties()` for campaign politics, plus a new `CAMPAIGN_POLITICAL_PARTY` script interface (`GetKey`, `GetSenators`, `GetPower`, `IsPrimary`) for the party objects they return. `GetPoliticalParties()` returns a native-style party list (`POLITICAL_PARTY_LIST_SCRIPT_INTERFACE`) iterated with `num_items()`, `item_at(index)`, and `is_empty()`.
 - Extended the game's region interface (`REGION_SCRIPT_INTERFACE`) with:
   - `GetPopulationSurplus` / `SetPopulationSurplus` — read or set the population surplus a region has to spend on expanding settlement slots.

@@ -218,6 +218,64 @@ function Tail-Log {
     }
 }
 
+# Like Tail-Log but never kills the game process - keeps streaming until the
+# game closes on its own. Useful for interactive post-test inspection.
+function Tail-Log-Keep {
+    Write-Host "Tailing $LogFile (keep-alive mode - game will NOT be killed after tests)"
+    $lastCount = 0
+    $ProcName = if ($Game -eq "rome2") { "Rome2" } else { "Attila" }
+
+    # Wait for process to start
+    $startTime = Get-Date
+    while (!(Get-Process -Name $ProcName -ErrorAction SilentlyContinue)) {
+        if (((Get-Date) - $startTime).TotalSeconds -gt 30) {
+            Write-Error "Timeout waiting for game process ($ProcName) to start"
+            exit 1
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    if (Test-Path $LogFile) {
+        $lastCount = @(Get-Content -Path $LogFile -ErrorAction SilentlyContinue).Count
+    }
+
+    while ($true) {
+        if (Test-Path $LogFile) {
+            $lines = @(Get-Content -Path $LogFile -ErrorAction SilentlyContinue)
+            if ($lines.Count -lt $lastCount) { $lastCount = 0 }
+            if ($lines.Count -gt $lastCount) {
+                for ($i = $lastCount; $i -lt $lines.Count; $i++) {
+                    $line = $lines[$i]
+                    Write-Host $line
+                    # Report result but do NOT kill the process
+                    if ($line -match '\[TEST\] Final Result: SUCCESS') {
+                        Write-Host "PASSED (game kept alive)"
+                    }
+                    if ($line -match '\[TEST\] Final Result: FAILED') {
+                        Write-Host "FAILED (game kept alive)"
+                    }
+                }
+                $lastCount = $lines.Count
+            }
+        }
+
+        if (!(Get-Process -Name $ProcName -ErrorAction SilentlyContinue)) {
+            # Flush remaining log lines
+            if (Test-Path $LogFile) {
+                $lines = @(Get-Content -Path $LogFile -ErrorAction SilentlyContinue)
+                if ($lines.Count -gt $lastCount) {
+                    for ($i = $lastCount; $i -lt $lines.Count; $i++) {
+                        Write-Host $lines[$i]
+                    }
+                }
+            }
+            Write-Host "Game process exited"
+            exit 0
+        }
+        Start-Sleep -Milliseconds 500
+    }
+}
+
 $c = $Command.ToLower().Trim()
 switch ($c) {
     "pack"         { Build-Pack $ModPack $ModDir; Build-Pack $TestPack $TestSrcDir }
@@ -227,9 +285,10 @@ switch ($c) {
     "run-test"     { Install-Test; Launch-Game }
     "tail"         { Tail-Log }
     "test"         { Install-Test; Launch-Game; Tail-Log }
+    "test-keep"    { Install-Test; Launch-Game; Tail-Log-Keep }
     "help" {
         Write-Host "Usage: .\tools\twdll.ps1 <command> <game> [-Steam]"
-        Write-Host "Commands: pack, install, install-test, run, run-test, tail, test"
+        Write-Host "Commands: pack, install, install-test, run, run-test, tail, test, test-keep"
     }
     Default {
         Write-Error "Unknown command: $Command"

@@ -813,18 +813,34 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST: Character SetDefaultBodyGuard
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test: Character SetDefaultBodyGuard ---")
+        if char ~= nil then
+            local test_unit_key = "att_merc_ger_agathyrsi_warriors"
+            local res = char:SetDefaultBodyGuard(test_unit_key)
+            twdll.core.Log(string.format("[TEST] char:SetDefaultBodyGuard('%s') returned: %s", test_unit_key, tostring(res)))
+            report("character SetDefaultBodyGuard", res == true)
+        else
+            twdll.core.Log("[TEST] character SetDefaultBodyGuard: SKIPPED (no character)")
+            record_skip()
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")
         twdll.core.Log(string.format("[TEST] PASSED: %d   FAILED: %d   SKIPPED: %d", passed, failed, skipped))
         if failed == 0 then
             twdll.core.Log("[TEST] ===== ALL TESTS PASSED =====")
+            twdll.core.Log("[TEST] Final Result: SUCCESS")
         else
             twdll.core.Log("[TEST] !!! THERE WERE FAILURES !!!")
             for _, n in ipairs(failed_names) do
                 twdll.core.Log("[TEST]   - " .. n)
             end
             twdll.core.Log("[TEST] ===== TESTS DONE (WITH FAILURES) =====")
+            twdll.core.Log("[TEST] Final Result: FAILED")
         end
         twdll.world.SetMaxUnitsInArmy(20)
 
