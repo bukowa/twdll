@@ -2,6 +2,7 @@
 
 ![Build](https://github.com/bukowa/twdll/actions/workflows/build.yml/badge.svg)
 ![CodeQL](https://github.com/bukowa/twdll/actions/workflows/codeql-analysis.yml/badge.svg)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/6vm2M94vhX)
 
 Run custom C++ code inside Total War: Attila's Lua engine. (Rome 2 support is frozen.)
 
@@ -93,7 +94,7 @@ contribution work is reverse-engineering the game to map out what to hook.
 4. Add test cases in `tests/shared/testing.lua`.
 5. Regenerate docs and commit them (see `AGENTS.md` → Documentation).
 
-Questions and ideas go in [Issues](https://github.com/bukowa/twdll/issues).
+Questions and ideas go in [Issues](https://github.com/bukowa/twdll/issues) or on [Discord](https://discord.gg/6vm2M94vhX).
 
 ## Release
 

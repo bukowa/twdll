@@ -293,11 +293,16 @@ jobs:
             echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.docs_name }})**"
             echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
           } > release_notes.md
-      - name: Ensure 'nightly' release exists and update its body
+      - name: Publish Nightly Release
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          gh release view nightly || gh release create nightly --title "Dev Build (from master)" --prerelease --notes "Placeholder"
-          gh release edit nightly --title "Dev Build (from master)" --notes-file release_notes.md
-      - name: Upload/Overwrite Release Assets (using gh CLI)
-        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release upload nightly ${{ steps.archive.outputs.name }} ${{ steps.archive.outputs.docs_name }} source-code.zip --clobber
+          gh release delete nightly --yes 2>/dev/null || true
+          git push origin :refs/tags/nightly 2>/dev/null || true
+          gh release create nightly \
+            --title "Dev Build (from master)" \
+            --prerelease \
+            --target master \
+            --notes-file release_notes.md \
+            ${{ steps.archive.outputs.name }} \
+            ${{ steps.archive.outputs.docs_name }} \
+            source-code.zip
