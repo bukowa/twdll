@@ -17,9 +17,8 @@ using twdll::TW_Databases;
 constexpr size_t CHAR_PTR = twdll::TW_PtrOffset<TW_Character>::value;
 
 namespace Props {
-    static twdll::Property ActionPoints{&TW_Character::action_points, CHAR_PTR, "character"};
-    static twdll::Property Ambition    {&TW_Character::ambition,      CHAR_PTR, "character"};
-    static twdll::Property Gravitas    {&TW_Character::gravitas,      CHAR_PTR, "character"};
+    static twdll::Property ActionPoints {&TW_Character::action_points,      CHAR_PTR, "character"};
+    static twdll::Property Influence    {&TW_Character::political_gravitas, CHAR_PTR, "character"};
 }
 
 /***
@@ -44,32 +43,18 @@ Sets the action points of the character.
 static int SetActionPoints  (lua_State* L) { return Props::ActionPoints.set(L); }
 
 /***
-Gets the ambition value of the character.
-@function GetAmbition
-@treturn integer ambition
+Gets the political influence of the character (m_political_gravitas).
+@function GetInfluence
+@treturn integer influence
 */
-static int GetAmbition      (lua_State* L) { return Props::Ambition.get(L); }
+static int GetInfluence     (lua_State* L) { return Props::Influence.get(L); }
 
 /***
-Sets the ambition value of the character.
-@function SetAmbition
-@tparam integer value new ambition
+Sets the political influence of the character (m_political_gravitas).
+@function SetInfluence
+@tparam integer value new influence
 */
-static int SetAmbition      (lua_State* L) { return Props::Ambition.set(L); }
-
-/***
-Gets the gravitas value of the character.
-@function GetGravitas
-@treturn integer gravitas
-*/
-static int GetGravitas      (lua_State* L) { return Props::Gravitas.get(L); }
-
-/***
-Sets the gravitas value of the character.
-@function SetGravitas
-@tparam integer value new gravitas
-*/
-static int SetGravitas      (lua_State* L) { return Props::Gravitas.set(L); }
+static int SetInfluence     (lua_State* L) { return Props::Influence.set(L); }
 
 /***
 Overrides the default bodyguard unit record for a general so that whenever
@@ -144,10 +129,8 @@ static const luaL_Reg character_methods[] = {
     {"GetMemoryAddress",      GetMemoryAddress},
     {"GetActionPoints",       GetActionPoints},
     {"SetActionPoints",       SetActionPoints},
-    {"GetAmbition",           GetAmbition},
-    {"SetAmbition",           SetAmbition},
-    {"GetGravitas",           GetGravitas},
-    {"SetGravitas",           SetGravitas},
+    {"GetInfluence",          GetInfluence},
+    {"SetInfluence",          SetInfluence},
     {"SetDefaultBodyGuard",   SetDefaultBodyGuard},
     {nullptr, nullptr}
 };

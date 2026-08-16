@@ -837,6 +837,53 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST: Character GetInfluence / SetInfluence
+        -- Character cqi=212 is expected to have influence=35 at game start.
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test: Character GetInfluence / SetInfluence ---")
+        do
+            local inf_char = nil
+            local all = game:model():world():faction_by_key(faction):character_list()
+            for i = 0, all:num_items() - 1 do
+                local c = all:item_at(i)
+                if c:cqi() == 212 then
+                    inf_char = c
+                    break
+                end
+            end
+
+            if inf_char == nil then
+                twdll.core.Log("[TEST] character influence: SKIPPED (cqi 212 not found)")
+                record_skip()
+                record_skip()
+            else
+                -- verify expected initial value
+                local initial = inf_char:GetInfluence()
+                twdll.core.Log("[TEST] GetInfluence cqi=212 initial = " .. tostring(initial))
+                if initial == 35 then
+                    twdll.core.Log("[TEST] GetInfluence initial: OK (35)")
+                    report("character GetInfluence initial", true)
+                else
+                    twdll.core.Log("[TEST] GetInfluence initial: FAILED (expected 35, got " .. tostring(initial) .. ")")
+                    report("character GetInfluence initial", false)
+                end
+
+                -- round-trip
+                inf_char:SetInfluence(99)
+                local after = inf_char:GetInfluence()
+                twdll.core.Log("[TEST] GetInfluence after SetInfluence(99) = " .. tostring(after))
+                if after == 99 then
+                    twdll.core.Log("[TEST] SetInfluence round-trip: OK")
+                    report("character SetInfluence round-trip", true)
+                else
+                    twdll.core.Log("[TEST] SetInfluence round-trip: FAILED (expected 99, got " .. tostring(after) .. ")")
+                    report("character SetInfluence round-trip", false)
+                end
+                inf_char:SetInfluence(initial)
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

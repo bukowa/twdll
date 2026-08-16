@@ -143,16 +143,19 @@ struct TW_GeneralBodyguardDetails {
 
 struct TW_Character {
     char             pad_00[0x14];
-    int              action_points;       // 0x14
+    int              action_points;       // 0x14  verified: LOCOMOTABLE::m_action_points, gap analysis
     char             pad_18[0x1C4];
     void*            commanded_unit_link; // 0x1DC  m_commanded_unit.m_link.m_object
     char             pad_1E0[0x28];
     TW_FamilyMember* family_member;       // 0x208
-    char                       pad_20C[0x314];
-    TW_GeneralBodyguardDetails m_initial_general_bodyguard_details; // 0x520
-    char             pad_534[0x24];
-    int              ambition;            // 0x558
-    int              gravitas;            // 0x55C
+    char             pad_20C[0x2EC];
+    // CHARACTER_DETAILS embedded @ CHARACTER+0x204
+    // verified: sub_107F8A00 @ lea ecx,[esi+204h]; call sub_107F8A50 (update_initial_general_bodyguard)
+    int              political_gravitas;  // 0x4F8  m_political_gravitas (CA::card32)
+                                          //         verified: sub_107DC770 @ mov eax,[ecx+2F4h],
+                                          //         CHARACTER_DETAILS base: sub_107F8A00 lea ecx,[esi+204h]
+    char             pad_4FC[0x24];
+    TW_GeneralBodyguardDetails m_initial_general_bodyguard_details; // 0x520  verified
 };
 
 struct TW_World {
@@ -347,9 +350,8 @@ TW_ASSERT_OFFSET(TW_Faction,       m_politics,               0x112C);
 TW_ASSERT_OFFSET(TW_Character,     action_points,                        0x14);
 TW_ASSERT_OFFSET(TW_Character,     commanded_unit_link,                  0x1DC);
 TW_ASSERT_OFFSET(TW_Character,     family_member,                        0x208);
+TW_ASSERT_OFFSET(TW_Character,     political_gravitas,                   0x4F8);
 TW_ASSERT_OFFSET(TW_Character,     m_initial_general_bodyguard_details,  0x520);
-TW_ASSERT_OFFSET(TW_Character,     ambition,                             0x558);
-TW_ASSERT_OFFSET(TW_Character,     gravitas,                             0x55C);
 TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);
 TW_ASSERT_OFFSET(TW_MilitaryForce, recruitment_queue_size,  0x45C);
 TW_ASSERT_OFFSET(TW_Unit,          m_force_link,            0x38);
