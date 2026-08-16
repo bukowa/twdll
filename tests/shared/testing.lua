@@ -816,13 +816,23 @@ local function run_twdll_tests()
         -- TEST: Character SetDefaultBodyGuard
         -- ======================================================
         twdll.core.Log("[TEST] --- Test: Character SetDefaultBodyGuard ---")
-        if char ~= nil then
+        local bg_char = nil
+        local all_chars = game:model():world():faction_by_key(faction):character_list()
+        for i = 0, all_chars:num_items() - 1 do
+            local c = all_chars:item_at(i)
+            if c:cqi() == 205 then
+                bg_char = c
+                break
+            end
+        end
+
+        if bg_char ~= nil then
             local test_unit_key = "att_merc_ger_agathyrsi_warriors"
-            local res = char:SetDefaultBodyGuard(test_unit_key)
-            twdll.core.Log(string.format("[TEST] char:SetDefaultBodyGuard('%s') returned: %s", test_unit_key, tostring(res)))
+            local res = bg_char:SetDefaultBodyGuard(test_unit_key)
+            twdll.core.Log(string.format("[TEST] char (cqi=%d):SetDefaultBodyGuard('%s') returned: %s", bg_char:cqi(), test_unit_key, tostring(res)))
             report("character SetDefaultBodyGuard", res == true)
         else
-            twdll.core.Log("[TEST] character SetDefaultBodyGuard: SKIPPED (no character)")
+            twdll.core.Log("[TEST] character SetDefaultBodyGuard: SKIPPED (character cqi 205 not found)")
             record_skip()
         end
 

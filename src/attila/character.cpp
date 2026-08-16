@@ -123,6 +123,9 @@ static int SetDefaultBodyGuard(lua_State* L) {
     }
 
     ch->m_initial_general_bodyguard_details.m_unit = record;
+    uint16_t num_men = static_cast<uint16_t>(*reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(record) + 0x28));
+    ch->m_initial_general_bodyguard_details.m_men = num_men;
+    ch->m_initial_general_bodyguard_details.m_men_in_fully_replenished = num_men;
 
     Log("[twdll] SetDefaultBodyGuard: character=0x%08X record=0x%08X key='%s'",
         reinterpret_cast<uintptr_t>(ch),

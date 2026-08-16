@@ -99,7 +99,7 @@
 	<td class="summary">Overrides the default bodyguard unit record for a general so that whenever
 the general is recruited into an army (including re-recruitment after being
 wounded or disbanded, or through 'Replace this general' in the UI), they
-always receive this unit type as their bodyguard.</td>
+receive this unit type as their default bodyguard.</td>
 	</tr>
 </table>
 
@@ -261,9 +261,9 @@ always receive this unit type as their bodyguard.</td>
     Overrides the default bodyguard unit record for a general so that whenever
 the general is recruited into an army (including re-recruitment after being
 wounded or disbanded, or through 'Replace this general' in the UI), they
-always receive this unit type as their bodyguard.  The record is stored directly
+receive this unit type as their default bodyguard.  The record is stored directly
 in the persistent GENERAL<em>BODYGUARD</em>DETAILS struct (serialised with savegames)
-and enforced natively at the recruitment choke point.
+and read by the recruitment panel as the pre-selected default choice.
 
 
     <h3>Parameters:</h3>
