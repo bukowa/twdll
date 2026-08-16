@@ -75,9 +75,9 @@ static int SetGravitas      (lua_State* L) { return Props::Gravitas.set(L); }
 Overrides the default bodyguard unit record for a general so that whenever
 the general is recruited into an army (including re-recruitment after being
 wounded or disbanded, or through 'Replace this general' in the UI), they
-always receive this unit type as their bodyguard. The record is stored directly
+receive this unit type as their default bodyguard. The record is stored directly
 in the persistent GENERAL_BODYGUARD_DETAILS struct (serialised with savegames)
-and enforced natively at the recruitment choke point.
+and read by the recruitment panel as the pre-selected default choice.
 @function SetDefaultBodyGuard
 @tparam string unit_key unit record key (e.g. "att_rom_cav_general_guards")
 @treturn boolean true if the record was found and applied, false otherwise
@@ -132,86 +132,6 @@ static int SetDefaultBodyGuard(lua_State* L) {
     return 1;
 }
 
-// ── Native Recruitment Bodyguard Choke-Point Hook ───────────────────────────
-// Detour in recruit_character_entry_impl (@ 0x107E6DBB) right before UNIT::UNIT
-// is constructed for the general's bodyguard. If the character has a persistent
-// custom bodyguard assigned (via SetDefaultBodyGuard or loaded from savegame),
-// we replace the unit record in GENERAL_BODYGUARD_DETAILS before creation.
-static uintptr_t g_bodyguard_hook_addr = 0;
-static uintptr_t g_bodyguard_hook_ret  = 0;
-static uint8_t   g_bodyguard_hook_orig_bytes[7] = {0};
-
-static void __cdecl OnBeforeCreateBodyguard(TW_Character* ch, TW_GeneralBodyguardDetails* bg) {
-    if (ch && bg && ch->m_initial_general_bodyguard_details.m_unit != nullptr) {
-        bg->m_unit = ch->m_initial_general_bodyguard_details.m_unit;
-        Log("[twdll] [BODYGUARD] override character 0x%08X with bodyguard 0x%08X",
-            reinterpret_cast<uintptr_t>(ch),
-            reinterpret_cast<uintptr_t>(bg->m_unit));
-    }
-}
-
-__declspec(naked) static void Hooked_CreateBodyguard() {
-    __asm {
-        mov ebx, [esp + 0x54]
-        pushad
-        push ebx   // bg
-        push edi   // ch
-        call OnBeforeCreateBodyguard
-        add esp, 8
-        popad
-        cmp dword ptr [ebx], 0
-        jmp dword ptr [g_bodyguard_hook_ret]
-    }
-}
-
-void install_recruit_bodyguard_hook(uintptr_t base, size_t size) {
-    const char* sig = "84 C0 0F 84 E7 03 00 00 8B 5C 24 54 83 3B 00";
-    uintptr_t match = Scanner::find_signature(base, size, sig);
-    if (!match) {
-        Log("[twdll] [RECRUIT_BODYGUARD] signature not found");
-        return;
-    }
-
-    uintptr_t hook_addr = match + 8; // points to 8B 5C 24 54 83 3B 00 (0x107E6DBB)
-    g_bodyguard_hook_addr = hook_addr;
-    g_bodyguard_hook_ret  = hook_addr + 7;
-
-    memcpy(g_bodyguard_hook_orig_bytes, reinterpret_cast<void*>(hook_addr), 7);
-
-    DWORD old_protect = 0;
-    if (!VirtualProtect(reinterpret_cast<void*>(hook_addr), 7, PAGE_EXECUTE_READWRITE, &old_protect)) {
-        Log("[twdll] [RECRUIT_BODYGUARD] VirtualProtect failed (%lu)", GetLastError());
-        return;
-    }
-
-    uintptr_t target = reinterpret_cast<uintptr_t>(Hooked_CreateBodyguard);
-    int32_t rel_offset = static_cast<int32_t>(target - (hook_addr + 5));
-
-    uint8_t patch[7];
-    patch[0] = 0xE9; // JMP rel32
-    *reinterpret_cast<int32_t*>(&patch[1]) = rel_offset;
-    patch[5] = 0x90; // NOP
-    patch[6] = 0x90; // NOP
-
-    memcpy(reinterpret_cast<void*>(hook_addr), patch, 7);
-    VirtualProtect(reinterpret_cast<void*>(hook_addr), 7, old_protect, &old_protect);
-    FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void*>(hook_addr), 7);
-
-    Log("[twdll] [RECRUIT_BODYGUARD] hook installed OK @ 0x%08X -> 0x%08X", hook_addr, target);
-}
-
-void uninstall_recruit_bodyguard_hook() {
-    if (g_bodyguard_hook_addr) {
-        DWORD old_protect = 0;
-        if (VirtualProtect(reinterpret_cast<void*>(g_bodyguard_hook_addr), 7, PAGE_EXECUTE_READWRITE, &old_protect)) {
-            memcpy(reinterpret_cast<void*>(g_bodyguard_hook_addr), g_bodyguard_hook_orig_bytes, 7);
-            VirtualProtect(reinterpret_cast<void*>(g_bodyguard_hook_addr), 7, old_protect, &old_protect);
-            FlushInstructionCache(GetCurrentProcess(), reinterpret_cast<void*>(g_bodyguard_hook_addr), 7);
-        }
-        g_bodyguard_hook_addr = 0;
-        g_bodyguard_hook_ret  = 0;
-    }
-}
 
 extern const luaL_Reg character_functions[] = {
     {nullptr, nullptr}
