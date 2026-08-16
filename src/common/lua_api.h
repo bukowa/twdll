@@ -32,6 +32,7 @@ extern "C" {
 #define l_tonumber      lua_tonumber
 #define l_pushboolean   lua_pushboolean
 #define l_pushnil       lua_pushnil
+#define l_pushvalue     lua_pushvalue
 #define l_pcall         lua_pcall
 #define l_loadstring    luaB_loadstring
 
@@ -72,6 +73,7 @@ typedef void        (*lua_pushnumber_t)   (lua_State*, float);
 typedef void        (*lua_pushboolean_t)  (lua_State*, int);
 typedef double      (*lua_tonumber_t)     (lua_State*, int);
 typedef void        (*lua_pushnil_t)      (lua_State*);
+typedef void        (*lua_pushvalue_t)    (lua_State*, int);
 typedef int         (*lua_pcall_t)        (lua_State*, int, int, int);
 typedef int         (*luaB_loadstring)    (lua_State*);
 typedef void        (*lua_getfield_t)     (lua_State*, int, const char*);
@@ -96,6 +98,7 @@ extern lua_pushnumber_t    g_game_lua_pushnumber;
 extern lua_pushboolean_t   g_game_lua_pushboolean;
 extern lua_tonumber_t      g_game_lua_tonumber;
 extern lua_pushnil_t       g_game_lua_pushnil;
+extern lua_pushvalue_t     g_game_lua_pushvalue;
 extern lua_pcall_t         g_game_lua_pcall;
 extern luaB_loadstring     g_game_luaB_loadstring;
 extern lua_getfield_t      g_game_lua_getfield;
@@ -120,6 +123,7 @@ extern lua_settop_t        g_game_lua_settop;
 #define l_tonumber      g_game_lua_tonumber
 #define l_pushboolean   g_game_lua_pushboolean
 #define l_pushnil       g_game_lua_pushnil
+#define l_pushvalue     g_game_lua_pushvalue
 #define l_pcall         g_game_lua_pcall
 #define l_loadstring    g_game_luaB_loadstring
 #define l_getfield      g_game_lua_getfield

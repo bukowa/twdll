@@ -293,6 +293,27 @@ struct TW_RegionData {
     void* m_theatre;   // 0x94  (const CAMPAIGN_THEATRE*)
 };
 
+struct TW_SettlementExpansionSlot {
+    void*        m_data;      // 0x00 (const SLOT_MAP*)
+    void*        m_slot;      // 0x04 (REGION_SLOT*)
+    uint32_t     m_rotation;  // 0x08 (0..5, rotation * 60 deg)
+};
+
+struct TW_SettlementExpansionManager {
+    char         pad_00[0x14];
+    TW_VectorNcc m_slots;     // 0x14 (vector<SETTLEMENT_EXPANSION_SLOT*>, m_size@0x18, m_elements@0x1C)
+};
+
+struct TW_Settlement {
+    char pad_00[0x1A8];
+    TW_SettlementExpansionManager* m_settlement_expansion_manager; // 0x1A8
+};
+
+struct TW_RegionSlot {
+    char  pad_00[0x1C8];
+    void* m_slot_manager;     // 0x1C8
+};
+
 struct TW_Region {
     char           pad_00[0x50];
     TW_RegionData* m_region_data;   // 0x50
@@ -407,6 +428,13 @@ TW_ASSERT_OFFSET(TW_CampaignPolitics, m_political_parties,   0x28);
 TW_ASSERT_OFFSET(TW_CampaignPolitics, m_primary_party,       0x40);
 TW_ASSERT_OFFSET(TW_CampaignPolitics, m_active,              0x48);
 
+TW_ASSERT_OFFSET(TW_SettlementExpansionSlot, m_data,                  0x00);
+TW_ASSERT_OFFSET(TW_SettlementExpansionSlot, m_slot,                  0x04);
+TW_ASSERT_OFFSET(TW_SettlementExpansionSlot, m_rotation,              0x08);
+TW_ASSERT_OFFSET(TW_SettlementExpansionManager, m_slots,              0x14);
+TW_ASSERT_OFFSET(TW_Settlement, m_settlement_expansion_manager,       0x1A8);
+TW_ASSERT_OFFSET(TW_RegionSlot, m_slot_manager,                       0x1C8);
+
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.
 // No default — missing specialization is a compile error.
@@ -425,6 +453,8 @@ TW_PTR_OFFSET(TW_MilitaryForce, 0x8);
 TW_PTR_OFFSET(TW_Unit,          0x8);
 TW_PTR_OFFSET(TW_BattleUnit,    0x4);
 TW_PTR_OFFSET(TW_Region,        0x8);
+TW_PTR_OFFSET(TW_RegionSlot,    0x8);
+TW_PTR_OFFSET(TW_Settlement,    0x8);
 TW_PTR_OFFSET(TW_PoliticalPartyRecord,   0x8);
 TW_PTR_OFFSET(TW_CampaignPoliticalParty, 0x8);
 

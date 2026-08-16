@@ -884,6 +884,48 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 14: Slot Building Rotation (Olbia)
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 14: Slot Building Rotation (Olbia) ---")
+        do
+            local reg = game:model():world():region_manager():region_by_key("att_reg_sarmatia_europaea_olbia")
+            local settlement = reg and reg:settlement()
+            if settlement and not settlement:is_null_interface() and settlement:slot_list():num_items() > 0 then
+                local slot = settlement:slot_list():item_at(0)
+                if type(slot.GetBuildingRotation) ~= "function" or type(slot.SetBuildingRotation) ~= "function" then
+                    twdll.core.Log("[TEST] Olbia Slot Building Rotation: FAILED (methods not registered)")
+                    report("slot methods registered", false)
+                else
+                    report("slot methods registered", true)
+                    local orig_rot = slot:GetBuildingRotation()
+                    twdll.core.Log("[TEST] Olbia Slot initial rotation = " .. tostring(orig_rot))
+                    local rot_valid = (orig_rot ~= nil and orig_rot >= 0 and orig_rot <= 5)
+                    report("slot GetBuildingRotation valid", rot_valid)
+
+                    -- Set rotation to 3 (180 deg) and keep it (do not restore)
+                    slot:SetBuildingRotation(3)
+                    local after_rot = slot:GetBuildingRotation()
+                    twdll.core.Log("[TEST] Olbia Slot rotation after Set(3) = " .. tostring(after_rot))
+                    report("slot SetBuildingRotation", after_rot == 3)
+
+                    local mem_addr = slot:GetMemoryAddress()
+                    local addr_ok = (type(mem_addr) == "string" and string.match(mem_addr, "^0x"))
+                    twdll.core.Log("[TEST] slot GetMemoryAddress = " .. tostring(mem_addr))
+                    report("slot GetMemoryAddress", addr_ok)
+
+                    -- Trigger visual refresh
+                    if type(twdll.campaign_ui.RefreshSettlements) == "function" then
+                        twdll.campaign_ui.RefreshSettlements()
+                        report("campaign_ui RefreshSettlements", true)
+                    end
+                end
+            else
+                twdll.core.Log("[TEST] Olbia Slot Building Rotation: SKIPPED (no settlement/slots found)")
+                record_skip()
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

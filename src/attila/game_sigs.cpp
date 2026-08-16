@@ -1,5 +1,6 @@
 #include "game_api.h"
 #include "../common/game_api.h"
+#include "../common/log.h"
 
 // clang-format off
 #define NEW_FACTION_LEADER_SIG  "83 EC ? 53 55 56 57 8B F9 8D 4C 24 ? 68 ? ? ? ? 8B B7 ? ? ? ? E8 ? ? ? ? 8D 44 24"
@@ -36,6 +37,9 @@
 // read m_soldiers, clamp vs unit-multiplier(num_men), LIST_POOL::allocate(0x164),
 // 4-arg ctor, subsume into force, destroy old. Verified unique.
 #define CONVERT_UNIT_SIG "53 8B 5C 24 08 55 56 57 8D 4B 34 E8 ? ? ? ? 8D 4B 30 E8 ? ? ? ? 8D 88 F0 10 00 00 E8 ? ? ? ? 8B 6C 24 1C 8D 48 18 FF 75 28"
+// CAMPAIGN_BUILDING_DISPLAY::update_animation @ 0x10B1A790
+// Reads force_settlement_refresh tweak @ offset 0x17 from entry (mov ecx, &tweak).
+#define UPDATE_ANIMATION_SIG "51 56 8B F1 8B 86 ? ? ? ? 8B 48"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -44,6 +48,8 @@ uintptr_t          g_reinf_cap_insn_addr = 0;
 uintptr_t          g_battle_ctor_addr    = 0;
 uintptr_t          g_battle_dtor_addr    = 0;
 uintptr_t          g_settlement_cb_initialize_addr = 0;
+static uintptr_t   g_update_animation_addr = 0;
+static uintptr_t   g_force_settlement_refresh_addr = 0;
 
 FnInstantSetResearched g_instant_set_researched = nullptr;
 FnRecordIndex          g_record_index           = nullptr;
@@ -51,6 +57,19 @@ FnConvertUnit          g_convert_unit           = nullptr;
 
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
+
+void refresh_settlements_display() {
+    if (!g_force_settlement_refresh_addr && g_update_animation_addr) {
+        g_force_settlement_refresh_addr = *reinterpret_cast<uintptr_t*>(g_update_animation_addr + 0x17);
+        Log("[twdll] Resolved force_settlement_refresh tweak @ 0x%08X", g_force_settlement_refresh_addr);
+    }
+    if (g_force_settlement_refresh_addr) {
+        *reinterpret_cast<uint8_t*>(g_force_settlement_refresh_addr + 0x48) = 1;
+        Log("[twdll] Triggered full settlement display refresh");
+    } else {
+        Log("[twdll] WARNING: force_settlement_refresh tweak address not resolved");
+    }
+}
 
 const TW_GameSigInfo g_game_signatures[] = {
     {"FACTION::new_faction_leader",     (void**)&g_new_faction_leader, NEW_FACTION_LEADER_SIG},
@@ -63,5 +82,6 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"FACTION_TECHNOLOGY_MANAGER::instant_set_researched", (void**)&g_instant_set_researched, INSTANT_SET_RESEARCHED_SIG},
     {"DATABASE_TABLE::record_index",                       (void**)&g_record_index,           RECORD_INDEX_SIG},
     {"UNIT::convert_unit",                                 (void**)&g_convert_unit,           CONVERT_UNIT_SIG},
+    {"CAMPAIGN_BUILDING_DISPLAY::update_animation",        (void**)&g_update_animation_addr,  UPDATE_ANIMATION_SIG},
     {nullptr, nullptr, nullptr}
 };

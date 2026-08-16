@@ -234,13 +234,23 @@ static int ClearMaxSlots(lua_State* L) {
     return 1;
 }
 
+/***
+Forces an immediate visual refresh of all settlement building models on the campaign map.
+@function RefreshSettlements
+*/
+static int RefreshSettlements(lua_State*) {
+    refresh_settlements_display();
+    return 0;
+}
+
 extern const luaL_Reg campaign_ui_functions[] = {
-    {"GetMemoryAddress", GetMemoryAddress},
-    {"ClearMaxSlots",    ClearMaxSlots},
-    {"SetMaxSlotsMajor", SetMaxSlotsMajor},
-    {"GetMaxSlotsMajor", GetMaxSlotsMajor},
-    {"SetMaxSlotsMinor", SetMaxSlotsMinor},
-    {"GetMaxSlotsMinor", GetMaxSlotsMinor},
+    {"GetMemoryAddress",    GetMemoryAddress},
+    {"ClearMaxSlots",       ClearMaxSlots},
+    {"SetMaxSlotsMajor",    SetMaxSlotsMajor},
+    {"GetMaxSlotsMajor",    GetMaxSlotsMajor},
+    {"SetMaxSlotsMinor",    SetMaxSlotsMinor},
+    {"GetMaxSlotsMinor",    GetMaxSlotsMinor},
+    {"RefreshSettlements",  RefreshSettlements},
     {nullptr, nullptr}
 };
 

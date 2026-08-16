@@ -5,12 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Extended the game's settlement slot interface (`SLOT_SCRIPT_INTERFACE`) with `GetBuildingRotation`, `SetBuildingRotation(rotation)`, and `Refresh()` — reads or sets the campaign-map building model rotation (`0..5`, representing 60-degree increments), persisted natively across save/load. Visual changes can be applied via `twdll.campaign_ui.RefreshSettlements()` or `slot:Refresh()`.
+- Added `twdll.campaign_ui.RefreshSettlements()` to force an immediate campaign-map visual refresh of all settlement building models without reloading.
 - Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `GetInfluence` / `SetInfluence` — read or write the character's political influence (`m_political_gravitas`).
-
-### Changed
-- `GetInfluence` / `SetInfluence` replace the stale `GetGravitas` / `SetGravitas` (Rome 2 offset) and the incorrectly-modelled `GetAmbition` / `SetAmbition`. Only influence is exposed for now; loyalty and ambition require further research.
-
-### Added
 - Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `SetDefaultBodyGuard(unit_key)` — sets a persistent default bodyguard unit for a general, saved natively with savegames and enforced at all recruitment and replacement choke points.
 - Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `GetPoliticalParties()`, `GetPoliticalParty(party_key)`, `GetPrimaryParty()` and `HasPoliticalParties()` for campaign politics, plus a new `CAMPAIGN_POLITICAL_PARTY` script interface (`GetKey`, `GetSenators`, `GetPower`, `IsPrimary`) for the party objects they return. `GetPoliticalParties()` returns a native-style party list (`POLITICAL_PARTY_LIST_SCRIPT_INTERFACE`) iterated with `num_items()`, `item_at(index)`, and `is_empty()`.
 - Extended the game's region interface (`REGION_SCRIPT_INTERFACE`) with:
@@ -19,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `SetCapital(region)` — makes the given region the faction's capital.
 - Extended the game's faction interface (`FACTION_SCRIPT_INTERFACE`) with `InstantlyResearchTechnology(technology_key)` — instantly completes a technology through the game's own native path (`FACTION_TECHNOLOGY_MANAGER::instant_set_researched` + effect/availability refresh), firing events, achievements and unit upgrades and completing parent prerequisites recursively.
 - Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `ConvertUnit(unit_key)` — replaces the unit with a new unit of the given type in the same army, using the engine's native unit conversion path (same as religion/technology upgrades). Men count, experience and combat statistics are preserved; the original unit object is destroyed.
+
+### Changed
+- `GetInfluence` / `SetInfluence` replace the stale `GetGravitas` / `SetGravitas` (Rome 2 offset) and the incorrectly-modelled `GetAmbition` / `SetAmbition`. Only influence is exposed for now; loyalty and ambition require further research.
 
 ## [0.9.0] - 2026-08-06
 

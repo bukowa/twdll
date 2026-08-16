@@ -24,6 +24,7 @@ lua_pushnumber_t    g_game_lua_pushnumber    = nullptr;
 lua_pushboolean_t   g_game_lua_pushboolean   = nullptr;
 lua_tonumber_t      g_game_lua_tonumber      = nullptr;
 lua_pushnil_t       g_game_lua_pushnil       = nullptr;
+lua_pushvalue_t     g_game_lua_pushvalue     = nullptr;
 lua_pcall_t         g_game_lua_pcall         = nullptr;
 luaB_loadstring     g_game_luaB_loadstring   = nullptr;
 lua_getfield_t      g_game_lua_getfield      = nullptr;

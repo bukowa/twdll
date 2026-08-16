@@ -49,3 +49,5 @@ extern uintptr_t g_settlement_cb_initialize_addr;
 
 extern const uintptr_t OFFSET_MAX_UNITS_ARMY;
 extern const uintptr_t OFFSET_MAX_UNITS_NAVY;
+
+void refresh_settlements_display();
