@@ -48,40 +48,40 @@
   <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
   <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><strong>CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><strong>SLOT_SCRIPT_INTERFACE</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</code></h1>
+<h1>Module <code>SLOT_SCRIPT_INTERFACE</code></h1>
 <p>
 
 </p>
-<p> Political party userdata handed out by faction:GetPoliticalParties().</p>
+<p> Extensions to the game's settlement slot object.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetKey">GetKey ()</a></td>
-	<td class="summary">Returns the party's record key string (e.g.</td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Returns the memory address of the slot object as a hexadecimal string.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetSenators">GetSenators ()</a></td>
-	<td class="summary">Returns the number of senators currently held by the party.</td>
+	<td class="name" nowrap><a href="#GetBuildingRotation">GetBuildingRotation ()</a></td>
+	<td class="summary">Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetPower">GetPower ()</a></td>
-	<td class="summary">Returns the current political power of the party as a float.</td>
+	<td class="name" nowrap><a href="#SetBuildingRotation">SetBuildingRotation (rotation)</a></td>
+	<td class="summary">Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#IsPrimary">IsPrimary ()</a></td>
-	<td class="summary">Returns whether this party is the faction's primary (leading) party.</td>
+	<td class="name" nowrap><a href="#Refresh">Refresh ()</a></td>
+	<td class="summary">Forces an immediate visual refresh of settlement building models on the campaign map.</td>
 	</tr>
 </table>
 
@@ -93,11 +93,11 @@
 
     <dl class="function">
     <dt>
-    <a name = "GetKey"></a>
-    <strong>GetKey ()</strong>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
     </dt>
     <dd>
-    Returns the party's record key string (e.g.  "att<em>political</em>party<em>romans</em>1").
+    Returns the memory address of the slot object as a hexadecimal string.
 
 
 
@@ -105,7 +105,7 @@
     <ol>
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        party record key
+        memory address (e.g. "0x12345678")
     </ol>
 
 
@@ -113,11 +113,11 @@
 
 </dd>
     <dt>
-    <a name = "GetSenators"></a>
-    <strong>GetSenators ()</strong>
+    <a name = "GetBuildingRotation"></a>
+    <strong>GetBuildingRotation ()</strong>
     </dt>
     <dd>
-    Returns the number of senators currently held by the party.
+    Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).
 
 
 
@@ -125,7 +125,7 @@
     <ol>
 
            <span class="types"><span class="type">integer</span></span>
-        number of senators
+        rotation index (0..5)
     </ol>
 
 
@@ -133,40 +133,36 @@
 
 </dd>
     <dt>
-    <a name = "GetPower"></a>
-    <strong>GetPower ()</strong>
+    <a name = "SetBuildingRotation"></a>
+    <strong>SetBuildingRotation (rotation)</strong>
     </dt>
     <dd>
-    Returns the current political power of the party as a float.
+    Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).
+Persisted across save/load. Call <code>twdll.campaign_ui.RefreshSettlements()</code> or <code>slot:Refresh()</code> to apply visual changes on the campaign map.
 
 
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">rotation</span>
+            <span class="types"><span class="type">integer</span></span>
+         new rotation index (0..5)
+        </li>
+    </ul>
 
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">number</span></span>
-        political power
-    </ol>
 
 
 
 
 </dd>
     <dt>
-    <a name = "IsPrimary"></a>
-    <strong>IsPrimary ()</strong>
+    <a name = "Refresh"></a>
+    <strong>Refresh ()</strong>
     </dt>
     <dd>
-    Returns whether this party is the faction's primary (leading) party.
+    Forces an immediate visual refresh of settlement building models on the campaign map.
 
 
 
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">boolean</span></span>
-        true if this is the primary party
-    </ol>
 
 
 
