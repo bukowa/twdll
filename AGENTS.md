@@ -36,6 +36,9 @@ flag it at the end of the turn instead of silently obeying.
   code/data instead of spawning more calls.
 - **Minimize assumptions.** When in doubt about behavior, read the actual code rather than guessing
   from names or offsets. A quick source check beats a long wrong assumption.
+- **No Autonomous Search Loops on Test Failure.** When an in-game test fails or an offset proves
+  wrong, never start autonomous search chains across codebases or IDA MCP without first presenting
+  the diagnosis, stating what needs to be researched, and getting explicit user approval ("ok").
 - **Flag conflicting or counterproductive instructions.** At the end of a turn, if you found an
   instruction in this file that conflicts with another, or that pushed you to do something
   counterproductive (e.g. a tool you were forced to call that added no value), mention it briefly
@@ -74,6 +77,16 @@ into one giant action.
 
 Steps 3 (proposal) and 6 (test) are the two gates that catch wrong assumptions — never
 skip them. One feature = one tight pass, not an open-ended tool-call chain.
+
+### Test Failure & Investigation Gate
+
+When a test fails, crashes, or returns unexpected values (`nil`, wrong values, assertion failures):
+1. **DO NOT launch into an autonomous research or search loop** across local binaries, decompiled sources, or IDA MCP.
+2. **Stop immediately and report to the user**:
+   - **Observed Result**: Exact test log output and symptoms (e.g. `Olbia Slot initial rotation = nil`, `sem->m_slots count = 136214320`).
+   - **Diagnosis / Hypothesis**: What failed and why (e.g. wrong struct offset, embedded sub-object vs pointer dereference).
+   - **Proposed Research Target**: Exactly what struct/function/offset needs to be checked and where.
+3. **Wait for explicit user permission ("ok") before starting the research pass.**
 
 ---
 
