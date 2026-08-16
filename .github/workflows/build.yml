@@ -285,6 +285,8 @@ jobs:
       - name: Prepare Release Notes
         id: prep_notes
         run: |
+          sed -i 's/\r$//' CHANGELOG.md
+          CHANGELOG_BODY=$(awk 'BEGIN{hdr="## [Unreleased]"} index($0, hdr) == 1 {f=1;next} f && /^## \[/{f=0} f' CHANGELOG.md)
           {
             echo "This is the latest development build from the **master** branch. Assets are automatically updated on every push."
             echo ""
@@ -292,17 +294,20 @@ jobs:
             echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
             echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.docs_name }})**"
             echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
+            echo ""
+            echo "---"
+            echo "## Unreleased Changes"
+            if [ -n "$(echo "$CHANGELOG_BODY" | tr -d '[:space:]')" ]; then
+              echo "$CHANGELOG_BODY"
+            else
+              echo "_No unreleased changes documented yet._"
+            fi
           } > release_notes.md
-      - name: Publish Nightly Release
+      - name: Ensure 'nightly' release exists and update its body
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
-          gh release delete nightly --yes 2>/dev/null || true
-          git push origin :refs/tags/nightly 2>/dev/null || true
-          gh release create nightly \
-            --title "Dev Build (from master)" \
-            --prerelease \
-            --target master \
-            --notes-file release_notes.md \
-            ${{ steps.archive.outputs.name }} \
-            ${{ steps.archive.outputs.docs_name }} \
-            source-code.zip
+          gh release view nightly || gh release create nightly --title "Dev Build (from master)" --prerelease --notes "Placeholder"
+          gh release edit nightly --title "Dev Build (from master)" --notes-file release_notes.md
+      - name: Upload/Overwrite Release Assets (using gh CLI)
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: gh release upload nightly ${{ steps.archive.outputs.name }} ${{ steps.archive.outputs.docs_name }} source-code.zip --clobber
