@@ -100,13 +100,21 @@ function Install-Test {
     $TestPackName = Split-Path $TestPack -Leaf
     Copy-Item -Force $TestPack "$DataDir\"
 
+    # Deploy optional extra pack for per-game testing content
+    $ExtraPack = Join-Path $Root ("tests/" + $Game + "/extra.pack")
+    $ExtraModLine = ""
+    if (Test-Path $ExtraPack) {
+        Copy-Item -Force $ExtraPack "$DataDir\"
+        $ExtraModLine = "`nmod `"extra.pack`";"
+    }
+
     $GameSave = Join-Path $Root ("tests/" + $Game + "/tests.save")
     if (Test-Path $GameSave) { 
         Copy-Item -Force $GameSave (Join-Path $SaveDir "tests.save") 
     }
 
     $ConsulPack = if ($Game -eq "rome2") { "consulscriptum.pack" } else { "consulscriptum_attila.pack" }
-    $s = "mod `"$TestPackName`";`nmod `"twdll.pack`";`nmod `"$ConsulPack`";`ngame_startup_mode campaign_load `"tests.save`";"
+    $s = "mod `"$TestPackName`";`nmod `"twdll.pack`";`nmod `"$ConsulPack`";$ExtraModLine`ngame_startup_mode campaign_load `"tests.save`";"
 
     Set-Content -Path (Join-Path $ScriptDir "user.script.txt") -Value $s
     Write-Host "Test env installed for $Game"
