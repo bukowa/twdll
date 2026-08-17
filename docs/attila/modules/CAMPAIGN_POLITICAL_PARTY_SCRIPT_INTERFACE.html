@@ -83,6 +83,10 @@
 	<td class="name" nowrap><a href="#IsPrimary">IsPrimary ()</a></td>
 	<td class="summary">Returns whether this party is the faction's primary (leading) party.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetPrimary">SetPrimary ()</a></td>
+	<td class="summary">Sets this party as the faction's primary (leading) party.</td>
+	</tr>
 </table>
 
 <br/>
@@ -166,6 +170,32 @@
 
            <span class="types"><span class="type">boolean</span></span>
         true if this is the primary party
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetPrimary"></a>
+    <strong>SetPrimary ()</strong>
+    </dt>
+    <dd>
+    Sets this party as the faction's primary (leading) party. </p>
+
+<p>NOTE: This method sets the faction's <code>m_primary_party</code> record pointer directly.
+It does not automatically cascade allegiance changes to existing family members
+or the faction leader. Changing the primary party without synchronizing character
+allegiances can cause UI display conflicts in the Clan / Family Tree panel (where
+characters belonging to other parties appear under 'Other Houses').
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if successfully set, false otherwise
     </ol>
 
 

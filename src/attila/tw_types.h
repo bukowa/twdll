@@ -148,9 +148,10 @@ struct TW_Character {
     void*            commanded_unit_link; // 0x1DC  m_commanded_unit.m_link.m_object
     char             pad_1E0[0x28];
     TW_FamilyMember* family_member;       // 0x208
-    char             pad_20C[0x2EC];
+    char             pad_20C[0x2E4];
     // CHARACTER_DETAILS embedded @ CHARACTER+0x204
-    // verified: sub_107F8A00 @ lea ecx,[esi+204h]; call sub_107F8A50 (update_initial_general_bodyguard)
+    void*            m_political_party;   // 0x4F0  (const POLITICAL_PARTY_RECORD*)
+    int              m_political_ambition;// 0x4F4  (CA::card32)
     int              political_gravitas;  // 0x4F8  m_political_gravitas (CA::card32)
                                           //         verified: sub_107DC770 @ mov eax,[ecx+2F4h],
                                           //         CHARACTER_DETAILS base: sub_107F8A00 lea ecx,[esi+204h]
@@ -371,6 +372,8 @@ TW_ASSERT_OFFSET(TW_Faction,       m_politics,               0x112C);
 TW_ASSERT_OFFSET(TW_Character,     action_points,                        0x14);
 TW_ASSERT_OFFSET(TW_Character,     commanded_unit_link,                  0x1DC);
 TW_ASSERT_OFFSET(TW_Character,     family_member,                        0x208);
+TW_ASSERT_OFFSET(TW_Character,     m_political_party,                    0x4F0);
+TW_ASSERT_OFFSET(TW_Character,     m_political_ambition,                 0x4F4);
 TW_ASSERT_OFFSET(TW_Character,     political_gravitas,                   0x4F8);
 TW_ASSERT_OFFSET(TW_Character,     m_initial_general_bodyguard_details,  0x520);
 TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);

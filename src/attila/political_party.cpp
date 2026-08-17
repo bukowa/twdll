@@ -76,11 +76,37 @@ static int IsPrimary(lua_State* L) {
     return 1;
 }
 
+/***
+Sets this party as the faction's primary (leading) party.
+
+NOTE: This method sets the faction's `m_primary_party` record pointer directly.
+It does not automatically cascade allegiance changes to existing family members
+or the faction leader. Changing the primary party without synchronizing character
+allegiances can cause UI display conflicts in the Clan / Family Tree panel (where
+characters belonging to other parties appear under 'Other Houses').
+@function SetPrimary
+@treturn boolean true if successfully set, false otherwise
+*/
+static int SetPrimary(lua_State* L) {
+    auto* party = twdll::tw_unwrap<TW_CampaignPoliticalParty>(L, 1);
+    if (!party || !party->m_politics || !party->m_party_record) {
+        Log("[twdll] SetPrimary: null party, politics, or party_record");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    auto* politics = static_cast<TW_CampaignPolitics*>(party->m_politics);
+    politics->m_primary_party = party->m_party_record;
+    Log("[twdll] SetPrimary: party 0x%08X set as primary", reinterpret_cast<uintptr_t>(party->m_party_record));
+    l_pushboolean(L, 1);
+    return 1;
+}
+
 static const luaL_Reg party_methods[] = {
     {"GetKey",     GetKey},
     {"GetSenators", GetSenators},
     {"GetPower",   GetPower},
     {"IsPrimary",  IsPrimary},
+    {"SetPrimary", SetPrimary},
     {nullptr, nullptr}
 };
 

@@ -926,6 +926,93 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST: Political Parties & SetPrimary
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test: Political Parties & SetPrimary ---")
+        local hun_faction = game:model():world():faction_by_key("att_fact_hunni")
+        if hun_faction and type(hun_faction.GetPoliticalParties) == "function" then
+            local parties = hun_faction:GetPoliticalParties()
+            local num_parties = (parties and type(parties.num_items) == "function") and parties:num_items() or 0
+            twdll.core.Log(string.format("[TEST] hunni political parties count = %d", num_parties))
+            report("political parties num_items > 0", num_parties > 0)
+
+            if num_parties >= 2 then
+                local p0 = parties:item_at(0)
+                local p1 = parties:item_at(1)
+                twdll.core.Log(string.format("[TEST] Party 0: key=%s, is_primary=%s, senators=%s, power=%s",
+                    tostring(p0:GetKey()), tostring(p0:IsPrimary()), tostring(p0:GetSenators()), tostring(p0:GetPower())))
+                twdll.core.Log(string.format("[TEST] Party 1: key=%s, is_primary=%s, senators=%s, power=%s",
+                    tostring(p1:GetKey()), tostring(p1:IsPrimary()), tostring(p1:GetSenators()), tostring(p1:GetPower())))
+
+                local orig_primary = p0:IsPrimary() and p0 or p1
+                local other_party = (orig_primary == p0) and p1 or p0
+
+                twdll.core.Log(string.format("[TEST] Setting non-primary party '%s' as new primary...", tostring(other_party:GetKey())))
+                local set_ok = other_party:SetPrimary()
+                report("party SetPrimary return true", set_ok == true)
+                report("party IsPrimary after SetPrimary", other_party:IsPrimary() == true and orig_primary:IsPrimary() == false)
+                twdll.core.Log(string.format("[TEST] New primary is now: '%s' (IsPrimary=%s), old primary IsPrimary=%s",
+                    tostring(other_party:GetKey()), tostring(other_party:IsPrimary()), tostring(orig_primary:IsPrimary())))
+
+                -- Restore original primary party
+                local restore_ok = orig_primary:SetPrimary()
+                report("party SetPrimary restore return true", restore_ok == true)
+                report("party IsPrimary restored", orig_primary:IsPrimary() == true and other_party:IsPrimary() == false)
+                twdll.core.Log(string.format("[TEST] Primary restored to: '%s' (IsPrimary=%s)",
+                    tostring(orig_primary:GetKey()), tostring(orig_primary:IsPrimary())))
+            else
+                twdll.core.Log("[TEST] Political Parties SetPrimary: SKIPPED (less than 2 parties)")
+                record_skip()
+            end
+        else
+            twdll.core.Log("[TEST] Political Parties: SKIPPED (GetPoliticalParties not available)")
+            record_skip()
+        end
+
+        -- ======================================================
+        -- TEST: Character Political Party (Get/SetPoliticalParty)
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test: Character Political Party ---")
+        if char and type(char.GetPoliticalParty) == "function" and type(char.SetPoliticalParty) == "function" then
+            local char_party = char:GetPoliticalParty()
+            twdll.core.Log(string.format("[TEST] Character initial political party: %s",
+                char_party and char_party:GetKey() or "nil"))
+            report("character GetPoliticalParty valid", char_party ~= nil)
+
+            if char_party and hun_faction and type(hun_faction.GetPoliticalParties) == "function" then
+                local parties = hun_faction:GetPoliticalParties()
+                if parties and parties:num_items() >= 2 then
+                    local p0 = parties:item_at(0)
+                    local p1 = parties:item_at(1)
+                    local target_party = (char_party:GetKey() == p0:GetKey()) and p1 or p0
+
+                    -- Set by userdata
+                    local set_ud_ok = char:SetPoliticalParty(target_party)
+                    report("character SetPoliticalParty (userdata) return true", set_ud_ok == true)
+                    local after_ud = char:GetPoliticalParty()
+                    report("character GetPoliticalParty matches after SetPoliticalParty (userdata)",
+                        after_ud ~= nil and after_ud:GetKey() == target_party:GetKey())
+
+                    -- Set by key string
+                    local set_str_ok = char:SetPoliticalParty(char_party:GetKey())
+                    report("character SetPoliticalParty (key string) return true", set_str_ok == true)
+                    local after_str = char:GetPoliticalParty()
+                    report("character GetPoliticalParty matches after SetPoliticalParty (key string)",
+                        after_str ~= nil and after_str:GetKey() == char_party:GetKey())
+                else
+                    twdll.core.Log("[TEST] Character SetPoliticalParty: SKIPPED (not enough faction parties)")
+                    record_skip()
+                end
+            else
+                twdll.core.Log("[TEST] Character SetPoliticalParty: SKIPPED (char_party is nil)")
+                record_skip()
+            end
+        else
+            twdll.core.Log("[TEST] Character Political Party: SKIPPED (methods not found)")
+            record_skip()
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")
