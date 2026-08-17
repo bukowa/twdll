@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include "game_api.h"
 #include "../common/lua_api.h"
 
 namespace twdll {
@@ -82,6 +83,41 @@ struct TW_PoliticalPartiesMap {
     void** m_elements;      // 0xC  buckets array (each element 12B)
     int    m_count;         // 0x10 number of entries (map size)
     float  m_max_load_factor; // 0x14
+
+    template <typename Fn>
+    void for_each(Fn&& fn) const {
+        for (int i = 0; i < m_size; ++i) {
+            char* bucket = reinterpret_cast<char*>(m_elements) + i * 12;
+            char* fake   = bucket + 4;
+            char* node   = *reinterpret_cast<char**>(bucket);
+            while (node && node != fake) {
+                auto* party = reinterpret_cast<TW_CampaignPoliticalParty*>(node + 0xC);
+                fn(party);
+                node = *reinterpret_cast<char**>(node + 4);
+            }
+        }
+    }
+
+    TW_CampaignPoliticalParty* find_by_key(const char* key) const {
+        TW_CampaignPoliticalParty* found = nullptr;
+        for_each([&](TW_CampaignPoliticalParty* p) {
+            if (found) return;
+            auto* rec = static_cast<TW_PoliticalPartyRecord*>(p->m_party_record);
+            if (rec && rec->m_key.m_data && std::strcmp(rec->m_key.m_data, key) == 0)
+                found = p;
+        });
+        return found;
+    }
+
+    TW_CampaignPoliticalParty* find_by_record(const void* record) const {
+        TW_CampaignPoliticalParty* found = nullptr;
+        for_each([&](TW_CampaignPoliticalParty* p) {
+            if (found) return;
+            if (p->m_party_record == record)
+                found = p;
+        });
+        return found;
+    }
 };
 
 // EMPIRECAMPAIGN::CAMPAIGN_POLITICS — per-faction politics manager, embedded
@@ -350,16 +386,37 @@ struct TW_GameCore {
     void* m_databases;      // 0x10  EMPIREUTILITY::EMPIRE_DATABASES*
 };
 
-// EMPIREUTILITY::EMPIRE_DATABASES — selected fields (32-bit Attila layout).
-// 64-bit m_technologies_table@0x20E0 -> 32-bit 0x1604 (the pointer-heavy table
-// members shrink 8B->4B). Lazy-loader cache field: populated on the first tick
-// of any running campaign (the tech tree resolves it), null-checked by callers.
-// Verified via disasm of sub_10E35B00: `cmp [esi+1604h],ebx; ... mov eax,[esi+1604h]`.
+// EMPIREUTILITY::DATABASE_TABLE — single DB table lookup interface.
+// Verified via disasm of sub_10192660 (DATABASE_TABLE::record_index).
+struct TW_DatabaseTable {
+    void* find_record(const char* key, size_t key_len = 0) const {
+        if (!this || !g_record_index || !key) return nullptr;
+        if (key_len == 0) key_len = std::strlen(key);
+        struct RecordKey { uint32_t len; uint32_t pad; const char* data; }
+            k = { static_cast<uint32_t>(key_len), 0, key };
+        return g_record_index(const_cast<TW_DatabaseTable*>(this), &k);
+    }
+};
+
+// EMPIREUTILITY::EMPIRE_DATABASES — container for all game database tables (32-bit Attila layout).
+// 64-bit m_technologies_table@0x20E0 -> 32-bit 0x1604, m_main_units_table@0x1000.
+// Lazy-loader cache fields: populated on the first tick of any running campaign.
 struct TW_Databases {
-    char  pad_00[0x1000];
-    void* m_main_units_table;    // 0x1000  MAIN_UNITS_TABLE* (lazy-loader cache)
-    char  pad_1004[0x600];
-    void* m_technologies_table;  // 0x1604
+    char              pad_00[0xF18];
+    TW_DatabaseTable* political_parties; // 0xF18  (POLITICAL_PARTIES_TABLE)
+    char              pad_F1C[0xE4];
+    TW_DatabaseTable* main_units;        // 0x1000 (MAIN_UNITS_TABLE)
+    char              pad_1004[0x600];
+    TW_DatabaseTable* technologies;      // 0x1604 (TECHNOLOGIES_TABLE)
+
+    static TW_Databases* get() {
+        if (!g_campaign_model) return nullptr;
+        auto* cm = static_cast<TW_CampaignModel*>(g_campaign_model);
+        if (!cm->m_campaign_env) return nullptr;
+        auto* env = static_cast<TW_CampaignEnv*>(cm->m_campaign_env);
+        if (!env->m_game_core) return nullptr;
+        return static_cast<TW_Databases*>(static_cast<TW_GameCore*>(env->m_game_core)->m_databases);
+    }
 };
 
 #pragma pack(pop)
@@ -420,8 +477,9 @@ TW_ASSERT_OFFSET(TW_RegionData,    m_theatre,                0x94);
 TW_ASSERT_OFFSET(TW_CampaignModel, m_campaign_env,           0x10F0);
 TW_ASSERT_OFFSET(TW_CampaignEnv,   m_game_core,              0x30);
 TW_ASSERT_OFFSET(TW_GameCore,      m_databases,              0x10);
-TW_ASSERT_OFFSET(TW_Databases,     m_main_units_table,      0x1000);
-TW_ASSERT_OFFSET(TW_Databases,     m_technologies_table,     0x1604);
+TW_ASSERT_OFFSET(TW_Databases,     political_parties,        0xF18);
+TW_ASSERT_OFFSET(TW_Databases,     main_units,               0x1000);
+TW_ASSERT_OFFSET(TW_Databases,     technologies,             0x1604);
 TW_ASSERT_OFFSET(TW_PoliticalPartyRecord, m_key,            0x0);
 TW_ASSERT_OFFSET(TW_PoliticalPartyRecord, m_initial_power,   0x44);
 TW_ASSERT_OFFSET(TW_CampaignPoliticalParty, m_politics,      0x0);

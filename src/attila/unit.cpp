@@ -117,40 +117,13 @@ static int ConvertUnit(lua_State* L) {
         return 0;
     }
 
-    // Resolve the game's database list the same way the engine looks up
-    // records (chain verified in tw_types.h).
-    if (!g_campaign_model) {
-        Log("[twdll] ConvertUnit: campaign model not available");
-        return 0;
-    }
-    auto* env = static_cast<TW_CampaignModel*>(g_campaign_model)->m_campaign_env;
-    if (!env) {
-        Log("[twdll] ConvertUnit: campaign env not resolved");
-        return 0;
-    }
-    auto* game_core = static_cast<TW_CampaignEnv*>(env)->m_game_core;
-    if (!game_core) {
-        Log("[twdll] ConvertUnit: game core not resolved");
-        return 0;
-    }
-    auto* databases = static_cast<TW_GameCore*>(game_core)->m_databases;
-    if (!databases) {
-        Log("[twdll] ConvertUnit: databases not resolved");
-        return 0;
-    }
-    void* units_table = static_cast<TW_Databases*>(databases)->m_main_units_table;
-    if (!units_table) {
-        Log("[twdll] ConvertUnit: main_units_table not loaded");
+    auto* dbs = TW_Databases::get();
+    if (!dbs || !dbs->main_units) {
+        Log("[twdll] ConvertUnit: main_units table not loaded");
         return 0;
     }
 
-    struct RecordKey {
-        uint32_t    m_len;
-        uint32_t    m_pad;
-        const char* m_data;
-    } key_string = { static_cast<uint32_t>(key_len), 0, key };
-
-    void* record = g_record_index(units_table, &key_string);
+    void* record = dbs->main_units->find_record(key, key_len);
     if (!record) {
         Log("[twdll] ConvertUnit: no record for key '%s'", key);
         l_pushboolean(L, 0);

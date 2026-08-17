@@ -69,14 +69,6 @@ and read by the recruitment panel as the pre-selected default choice.
 @treturn boolean true if the record was found and applied, false otherwise
 */
 static int SetDefaultBodyGuard(lua_State* L) {
-    if (!g_record_index) {
-        Log("[twdll] SetDefaultBodyGuard: g_record_index not resolved");
-        return 0;
-    }
-    if (!g_campaign_model) {
-        Log("[twdll] SetDefaultBodyGuard: campaign model not available");
-        return 0;
-    }
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
     if (!ch) {
         Log("[twdll] SetDefaultBodyGuard: null character");
@@ -89,19 +81,13 @@ static int SetDefaultBodyGuard(lua_State* L) {
         return 0;
     }
 
-    auto* env       = static_cast<TW_CampaignModel*>(g_campaign_model)->m_campaign_env;
-    auto* game_core = static_cast<TW_CampaignEnv*>(env)->m_game_core;
-    auto* databases = static_cast<TW_GameCore*>(game_core)->m_databases;
-    void* units_table = static_cast<TW_Databases*>(databases)->m_main_units_table;
-    if (!units_table) {
-        Log("[twdll] SetDefaultBodyGuard: main_units_table not loaded");
+    auto* dbs = TW_Databases::get();
+    if (!dbs || !dbs->main_units) {
+        Log("[twdll] SetDefaultBodyGuard: main_units table not loaded");
         return 0;
     }
 
-    struct RecordKey { uint32_t m_len; uint32_t m_pad; const char* m_data; }
-        key_string = { static_cast<uint32_t>(key_len), 0, key };
-
-    void* record = g_record_index(units_table, &key_string);
+    void* record = dbs->main_units->find_record(key, key_len);
     if (!record) {
         Log("[twdll] SetDefaultBodyGuard: no record for key '%s'", key);
         l_pushboolean(L, 0);
@@ -141,22 +127,7 @@ static int GetPoliticalParty(lua_State* L) {
     if (l_pcall(L, 1, 1, 0) == 0) {
         auto* faction = twdll::tw_unwrap<twdll::TW_Faction>(L, -1);
         if (faction) {
-            twdll::TW_CampaignPoliticalParty* found = nullptr;
-            const auto& map = faction->m_politics.m_political_parties;
-            for (int i = 0; i < map.m_size; ++i) {
-                char* bucket = reinterpret_cast<char*>(map.m_elements) + i * 12;
-                char* fake   = bucket + 4;
-                char* node   = *reinterpret_cast<char**>(bucket);
-                while (node && node != fake) {
-                    auto* party = reinterpret_cast<twdll::TW_CampaignPoliticalParty*>(node + 0xC);
-                    if (party->m_party_record == ch->details.m_political_party) {
-                        found = party;
-                        break;
-                    }
-                    node = *reinterpret_cast<char**>(node + 4);
-                }
-                if (found) break;
-            }
+            auto* found = faction->m_politics.m_political_parties.find_by_record(ch->details.m_political_party);
             l_pop(L, 1);
             if (found) {
                 push_campaign_political_party(L, found);
@@ -201,34 +172,15 @@ static int SetPoliticalParty(lua_State* L) {
             if (l_pcall(L, 1, 1, 0) == 0) {
                 auto* faction = twdll::tw_unwrap<twdll::TW_Faction>(L, -1);
                 if (faction) {
-                    const auto& map = faction->m_politics.m_political_parties;
-                    for (int i = 0; i < map.m_size; ++i) {
-                        char* bucket = reinterpret_cast<char*>(map.m_elements) + i * 12;
-                        char* fake   = bucket + 4;
-                        char* node   = *reinterpret_cast<char**>(bucket);
-                        while (node && node != fake) {
-                            auto* party = reinterpret_cast<twdll::TW_CampaignPoliticalParty*>(node + 0xC);
-                            auto* rec = static_cast<twdll::TW_PoliticalPartyRecord*>(party->m_party_record);
-                            if (rec && rec->m_key.m_data && std::strcmp(rec->m_key.m_data, key) == 0) {
-                                record = rec;
-                                break;
-                            }
-                            node = *reinterpret_cast<char**>(node + 4);
-                        }
-                        if (record) break;
-                    }
+                    auto* party = faction->m_politics.m_political_parties.find_by_key(key);
+                    if (party) record = party->m_party_record;
                 }
                 l_pop(L, 1);
             }
-            if (!record && g_record_index && g_campaign_model) {
-                auto* env = static_cast<TW_CampaignModel*>(g_campaign_model)->m_campaign_env;
-                auto* game_core = static_cast<TW_CampaignEnv*>(env)->m_game_core;
-                auto* databases = static_cast<TW_GameCore*>(game_core)->m_databases;
-                void* parties_table = *reinterpret_cast<void**>(reinterpret_cast<char*>(databases) + 0xF18);
-                if (parties_table) {
-                    struct RecordKey { uint32_t m_len; uint32_t m_pad; const char* m_data; }
-                        key_string = { static_cast<uint32_t>(key_len), 0, key };
-                    record = g_record_index(parties_table, &key_string);
+            if (!record) {
+                auto* dbs = TW_Databases::get();
+                if (dbs && dbs->political_parties) {
+                    record = dbs->political_parties->find_record(key, key_len);
                 }
             }
         }

@@ -106,45 +106,13 @@ static int InstantlyResearchTechnology(lua_State* L) {
         return 0;
     }
 
-    // Resolve the game's database list through the campaign model, the same
-    // way the game itself looks up records (the typed chain below is verified
-    // in tw_types.h against the 64-bit reference layout):
-    //   env = cm->m_campaign_env; core = env->m_game_core; dbs = core->m_databases
-    auto* env = static_cast<TW_CampaignModel*>(g_campaign_model)->m_campaign_env;
-    if (!env) {
-        Log("[twdll] InstantlyResearchTechnology: campaign env not resolved");
-        return 0;
-    }
-    auto* game_core = static_cast<TW_CampaignEnv*>(env)->m_game_core;
-    if (!game_core) {
-        Log("[twdll] InstantlyResearchTechnology: game core not resolved");
-        return 0;
-    }
-    auto* databases = static_cast<TW_GameCore*>(game_core)->m_databases;
-    if (!databases) {
-        Log("[twdll] InstantlyResearchTechnology: databases not resolved");
+    auto* dbs = TW_Databases::get();
+    if (!dbs || !dbs->technologies) {
+        Log("[twdll] InstantlyResearchTechnology: technologies table not loaded");
         return 0;
     }
 
-    // technologies_table is the lazy-loader cache field on the databases object.
-    void* tech_table = static_cast<TW_Databases*>(databases)->m_technologies_table;
-    if (!tech_table) {
-        Log("[twdll] InstantlyResearchTechnology: technologies_table not loaded");
-        return 0;
-    }
-
-    // 32-bit CA::String layout verified via disasm: m_len @+0 (ctor stores
-    // strlen @ sub_100DB440), m_data @+8 (hash base @ sub_100C76D0, compare
-    // @ sub_100D9D90). record_index only reads the key (hash + compare, never
-    // frees it), so no ctor/dtor, no heap, no leak. The +4 pad is unread by
-    // the lookup path and matches the default ctor's 0.
-    struct RecordKey {
-        uint32_t    m_len;
-        uint32_t    m_pad;
-        const char* m_data;
-    } key_string = { static_cast<uint32_t>(key_len), 0, key };
-
-    void* record = g_record_index(tech_table, &key_string);
+    void* record = dbs->technologies->find_record(key, key_len);
     if (!record) {
         Log("[twdll] InstantlyResearchTechnology: no record for key '%s'", key);
         l_pushboolean(L, 0);
@@ -200,52 +168,6 @@ static int SetFactionLeader(lua_State* L) {
     return 0;
 }
 
-namespace {
-
-// Iterates every CAMPAIGN_POLITICAL_PARTY in a faction's politics map.
-// Bucket/NODE layout documented in tw_types.h (TW_PoliticalPartiesMap).
-template <typename Fn>
-void for_each_party(const TW_CampaignPolitics& politics, Fn&& fn) {
-    const TW_PoliticalPartiesMap& map = politics.m_political_parties;
-    for (int i = 0; i < map.m_size; ++i) {
-        char* bucket = reinterpret_cast<char*>(map.m_elements) + i * 12;
-        char* fake   = bucket + 4;
-        char* node   = *reinterpret_cast<char**>(bucket);
-        while (node && node != fake) {
-            auto* party = reinterpret_cast<TW_CampaignPoliticalParty*>(node + 0xC);
-            fn(party);
-            node = *reinterpret_cast<char**>(node + 4);
-        }
-    }
-}
-
-// Finds the party whose record key matches, or nullptr. Linear scan is fine:
-// factions have 2-4 parties (the map's hash hashes the key string, not a
-// pointer, so keying by string would need the FNV routine for no benefit).
-TW_CampaignPoliticalParty* find_party_by_key(const TW_CampaignPolitics& politics, const char* key) {
-    TW_CampaignPoliticalParty* found = nullptr;
-    for_each_party(politics, [&](TW_CampaignPoliticalParty* party) {
-        if (found) return;
-        auto* record = static_cast<TW_PoliticalPartyRecord*>(party->m_party_record);
-        if (record && record->m_key.m_data && std::strcmp(record->m_key.m_data, key) == 0)
-            found = party;
-    });
-    return found;
-}
-
-// Finds the faction's primary (leading) party, or nullptr.
-TW_CampaignPoliticalParty* find_primary_party(const TW_CampaignPolitics& politics) {
-    TW_CampaignPoliticalParty* found = nullptr;
-    for_each_party(politics, [&](TW_CampaignPoliticalParty* party) {
-        if (found) return;
-        if (party->m_party_record == politics.m_primary_party)
-            found = party;
-    });
-    return found;
-}
-
-}  // namespace
-
 /***
 Returns a list interface for the faction's campaign political parties.
 Use `num_items()` and zero-based `item_at(index)` to iterate it.
@@ -261,10 +183,10 @@ static int GetPoliticalParties(lua_State* L) {
         return 1;
     }
 
-    const TW_PoliticalPartiesMap& map = faction->m_politics.m_political_parties;
+    const auto& map = faction->m_politics.m_political_parties;
     std::vector<TW_CampaignPoliticalParty*> parties;
     parties.reserve(map.m_count);
-    for_each_party(faction->m_politics, [&](TW_CampaignPoliticalParty* party) {
+    map.for_each([&](TW_CampaignPoliticalParty* party) {
         parties.push_back(party);
     });
 
@@ -286,7 +208,7 @@ static int GetPoliticalParty(lua_State* L) {
         l_pushnil(L);
         return 1;
     }
-    auto* party = find_party_by_key(faction->m_politics, key);
+    auto* party = faction->m_politics.m_political_parties.find_by_key(key);
     if (!party) {
         l_pushnil(L);
         return 1;
@@ -307,7 +229,7 @@ static int GetPrimaryParty(lua_State* L) {
         l_pushnil(L);
         return 1;
     }
-    auto* party = find_primary_party(faction->m_politics);
+    auto* party = faction->m_politics.m_political_parties.find_by_record(faction->m_politics.m_primary_party);
     if (!party) {
         l_pushnil(L);
         return 1;
