@@ -1031,6 +1031,22 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 32: Campaign UI Encyclopedia URL
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 32: Campaign UI Encyclopedia URL ---")
+        local orig_enc_url = twdll.campaign_ui.GetEncyclopediaUrl()
+        twdll.core.Log("[TEST] Original Encyclopedia URL: " .. tostring(orig_enc_url))
+        report("campaign_ui GetEncyclopediaUrl returns non-empty string", type(orig_enc_url) == "string" and orig_enc_url:len() > 0)
+        report("campaign_ui GetEncyclopediaUrl starts with http", type(orig_enc_url) == "string" and orig_enc_url:find("http://") == 1)
+
+        -- Test setting a custom URL (The Dawnless Days Encyclopedia)
+        local test_custom_url = "https://encyclopedia.thedawnlessdays.com/TDD.html#"
+        local set_res = twdll.campaign_ui.SetEncyclopediaUrl(test_custom_url)
+        report("campaign_ui SetEncyclopediaUrl returns new url", set_res == test_custom_url)
+        local read_back_url = twdll.campaign_ui.GetEncyclopediaUrl()
+        report("campaign_ui GetEncyclopediaUrl matches custom url", read_back_url == test_custom_url)
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

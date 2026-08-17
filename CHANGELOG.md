@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Added `twdll.campaign_ui.SetEncyclopediaUrl(url)` and `twdll.campaign_ui.GetEncyclopediaUrl()` — dynamically gets or sets the base URL prefix for the in-game encyclopedia (e.g. redirecting in-game encyclopedia buttons to a custom local or web server), with automatic restoration of the game's default URL when passed `nil` or an empty string.
 - Extended the game's settlement slot interface (`SLOT_SCRIPT_INTERFACE`) with `GetBuildingRotation`, `SetBuildingRotation(rotation)`, and `Refresh()` — reads or sets the campaign-map building model rotation (`0..5`, representing 60-degree increments), persisted natively across save/load. Visual changes can be applied via `twdll.campaign_ui.RefreshSettlements()` or `slot:Refresh()`.
 - Added `twdll.campaign_ui.RefreshSettlements()` to force an immediate campaign-map visual refresh of all settlement building models without reloading.
 - Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `GetInfluence` / `SetInfluence` — read or write the character's political influence (`m_political_gravitas`).

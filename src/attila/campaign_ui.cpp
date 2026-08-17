@@ -9,6 +9,8 @@
 #include <MinHook.h>
 
 #include <cstdio>
+#include <string>
+#include <windows.h>
 
 using twdll::TW_CampaignUi;
 using twdll::TW_SettlementCallback;
@@ -16,6 +18,10 @@ using twdll::TW_SettlementCallback;
 static TW_CampaignUi* g_campaign_ui = nullptr;
 static void* orig_campaign_ui_ctor = nullptr;
 static uintptr_t campaign_ui_ctor_addr = 0;
+
+static uintptr_t g_encyclopedia_url_ptr_addr = 0;
+static const char* g_original_encyclopedia_url = nullptr;
+static std::string g_custom_encyclopedia_url;
 
 static void LogCampaignUiHook(void* ptr) {
     g_campaign_ui = static_cast<TW_CampaignUi*>(ptr);
@@ -34,6 +40,28 @@ __declspec(naked) static void HookedCampaignUiCtor() {
 }
 
 void install_campaign_ui_hook(uintptr_t base, size_t size) {
+    // ---- Dynamic scan for Encyclopedia URL pointer --------------------------
+    const char* enc_anchor = "http://Atenc.totalwar.com/#";
+    uintptr_t enc_str_addr = Scanner::FindString(base, size, enc_anchor);
+    if (enc_str_addr) {
+        // Scan memory for the 4-byte pointer referencing this string
+        const uint8_t* start = reinterpret_cast<const uint8_t*>(base);
+        const uint8_t* end = start + size - sizeof(uint32_t);
+        for (const uint8_t* p = start; p <= end; ++p) {
+            if (*reinterpret_cast<const uint32_t*>(p) == static_cast<uint32_t>(enc_str_addr)) {
+                g_encyclopedia_url_ptr_addr = reinterpret_cast<uintptr_t>(p);
+                g_original_encyclopedia_url = reinterpret_cast<const char*>(enc_str_addr);
+                Log("[twdll] [ENCYCLOPEDIA_URL] resolved dynamically at 0x%08X -> '%s'",
+                    static_cast<unsigned int>(g_encyclopedia_url_ptr_addr),
+                    g_original_encyclopedia_url);
+                break;
+            }
+        }
+    }
+    if (!g_encyclopedia_url_ptr_addr) {
+        Log("[twdll] [ENCYCLOPEDIA_URL] pointer reference not resolved via scan");
+    }
+
     // ---- Explicit, non‑abstracted hook installation -------------------------
     const char* anchor = "data/ui/campaign ui/mp_timer";
     const char* label  = "CAMPAIGN_UI";
@@ -75,7 +103,6 @@ void install_campaign_ui_hook(uintptr_t base, size_t size) {
     }
 
     Log("[twdll] [%s] hook installed OK", label);
-    // ------------------------------------------------------------------------
 }
 
 // ---- Settlement max-slot override ------------------------------------------
@@ -243,6 +270,74 @@ static int RefreshSettlements(lua_State*) {
     return 0;
 }
 
+/***
+Sets the base URL prefix for the in-game encyclopedia (defaults to "http://Atenc.totalwar.com/#").
+If a custom URL is provided, all in-game encyclopedia links (unit cards, buildings, technologies,
+and the main encyclopedia button) will open using this base URL. Passing nil or an empty string
+restores the original default URL.
+@function SetEncyclopediaUrl
+@tparam string|nil url new base encyclopedia URL (e.g. "http://localhost:8080/#")
+@treturn string the currently applied base URL
+*/
+static int SetEncyclopediaUrl(lua_State* L) {
+    if (!g_encyclopedia_url_ptr_addr) {
+        Log("[twdll] SetEncyclopediaUrl: pointer not resolved");
+        l_pushnil(L);
+        return 1;
+    }
+    const char* new_url = nullptr;
+    if (l_type(L, 1) == LUA_TSTRING) {
+        size_t len = 0;
+        new_url = l_checklstring(L, 1, &len);
+    }
+
+    DWORD old_prot = 0;
+    if (!VirtualProtect(reinterpret_cast<void*>(g_encyclopedia_url_ptr_addr), sizeof(const char*), PAGE_EXECUTE_READWRITE, &old_prot)) {
+        Log("[twdll] SetEncyclopediaUrl: VirtualProtect failed");
+        l_pushnil(L);
+        return 1;
+    }
+
+    if (new_url && *new_url != '\0') {
+        g_custom_encyclopedia_url = new_url;
+        *reinterpret_cast<const char**>(g_encyclopedia_url_ptr_addr) = g_custom_encyclopedia_url.c_str();
+        Log("[twdll] SetEncyclopediaUrl: updated to '%s'", g_custom_encyclopedia_url.c_str());
+    } else {
+        g_custom_encyclopedia_url.clear();
+        *reinterpret_cast<const char**>(g_encyclopedia_url_ptr_addr) = g_original_encyclopedia_url;
+        Log("[twdll] SetEncyclopediaUrl: restored default '%s'", g_original_encyclopedia_url ? g_original_encyclopedia_url : "null");
+    }
+
+    VirtualProtect(reinterpret_cast<void*>(g_encyclopedia_url_ptr_addr), sizeof(const char*), old_prot, &old_prot);
+
+    const char* current = *reinterpret_cast<const char**>(g_encyclopedia_url_ptr_addr);
+    if (current) {
+        l_pushstring(L, current);
+    } else {
+        l_pushnil(L);
+    }
+    return 1;
+}
+
+/***
+Returns the current base URL prefix for the in-game encyclopedia.
+@function GetEncyclopediaUrl
+@treturn string current base encyclopedia URL
+*/
+static int GetEncyclopediaUrl(lua_State* L) {
+    if (!g_encyclopedia_url_ptr_addr) {
+        l_pushnil(L);
+        return 1;
+    }
+    const char* current = *reinterpret_cast<const char**>(g_encyclopedia_url_ptr_addr);
+    if (current) {
+        l_pushstring(L, current);
+    } else {
+        l_pushnil(L);
+    }
+    return 1;
+}
+
 extern const luaL_Reg campaign_ui_functions[] = {
     {"GetMemoryAddress",    GetMemoryAddress},
     {"ClearMaxSlots",       ClearMaxSlots},
@@ -251,11 +346,24 @@ extern const luaL_Reg campaign_ui_functions[] = {
     {"SetMaxSlotsMinor",    SetMaxSlotsMinor},
     {"GetMaxSlotsMinor",    GetMaxSlotsMinor},
     {"RefreshSettlements",  RefreshSettlements},
+    {"SetEncyclopediaUrl",  SetEncyclopediaUrl},
+    {"GetEncyclopediaUrl",  GetEncyclopediaUrl},
     {nullptr, nullptr}
 };
 
 // Uninstall hook and clear global pointer
 void uninstall_campaign_ui_hook() {
+    if (g_encyclopedia_url_ptr_addr && g_original_encyclopedia_url) {
+        DWORD old_prot = 0;
+        if (VirtualProtect(reinterpret_cast<void*>(g_encyclopedia_url_ptr_addr), sizeof(const char*), PAGE_EXECUTE_READWRITE, &old_prot)) {
+            *reinterpret_cast<const char**>(g_encyclopedia_url_ptr_addr) = g_original_encyclopedia_url;
+            VirtualProtect(reinterpret_cast<void*>(g_encyclopedia_url_ptr_addr), sizeof(const char*), old_prot, &old_prot);
+        }
+    }
+    g_custom_encyclopedia_url.clear();
+    g_encyclopedia_url_ptr_addr = 0;
+    g_original_encyclopedia_url = nullptr;
+
     if (campaign_ui_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(campaign_ui_ctor_addr));
         MH_RemoveHook(reinterpret_cast<void*>(campaign_ui_ctor_addr));
