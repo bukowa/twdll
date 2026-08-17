@@ -54,28 +54,24 @@ flag it at the end of the turn instead of silently obeying.
 Every feature (new Lua API, new hook, new struct offset) runs the same loop. Do not skip steps; do not collapse them
 into one giant action.
 
-1. **Identify** — what to add: user request, the feature plan, or a gap vs. the vanilla
-   Attila API inventory. If the game already
-   exposes it, do not reimplement.
-2. **Research (separate repo)** — offsets and struct layouts are verified in the
-   reverse-engineering project (64-bit DWARF reference + 32-bit IDA MCP on
-   `empire.retail.dll`), never guessed here. Follow that project's conventions:
-   anchor priority, gap analysis, `disasm` as the single source of truth. Save
-   verified offsets there. Use methodology (string/offset search), never raw
-   addresses copied from research files — addresses differ between binaries.
-3. **Propose** — show the exact struct/offset additions and the Lua API shape (code
-   block/diff). Wait for "ok" (see "Before Modifying Existing Files").
-4. **Implement** — structs + `TW_ASSERT_OFFSET` in `tw_types.h`, methods in the `.cpp`,
-   registration in `main.cpp`.
+1. **Identify & Outline** — what to add: user request, feature idea, or gap vs. vanilla API.
+   - Present a concise **Outline / Proposal** of the proposed Lua API shape, candidate methods, and plan to the user.
+   - Wait for user feedback and approval ("ok") before launching into any deep reverse-engineering or IDA queries.
+2. **Targeted Research (separate repo)** — only after outline approval, verify any missing offsets and struct
+   layouts in the reverse-engineering project (64-bit DWARF reference + 32-bit IDA MCP on `empire.retail.dll`),
+   never guessed here. Follow that project's conventions: anchor priority, gap analysis, `disasm` as the single
+   source of truth. Keep it targeted.
+3. **Propose Code Diff** — show the exact struct/offset additions and the C++ implementation diff. Wait for "ok"
+   (see "Before Modifying Existing Files").
+4. **Implement** — structs + `TW_ASSERT_OFFSET` in `tw_types.h`, methods in the `.cpp`, registration in `main.cpp`.
 5. **Build** — `ninja twdll` (see Building).
-6. **Test** — add cases to `tests/shared/testing.lua`; run `tw-test` (real game, takes
-   minutes — the user usually runs it). Assert against verified values, not "not nil".
-7. **Docs** — LDoc comments, add the file to `TWDLL_DOC_SOURCES`, regenerate docs,
-   verify the HTML (see Documentation).
+6. **Test** — add cases to `tests/shared/testing.lua`; run `tw-test` (real game, takes minutes — the user usually
+   runs it). Assert against verified values, not "not nil".
+7. **Docs** — LDoc comments, add the file to `TWDLL_DOC_SOURCES`, regenerate docs, verify the HTML (see Documentation).
 8. **Changelog** — one `[Unreleased]` bullet, user-facing only (see Changelog).
 9. **Finish** — report status; commit/push only on explicit user request.
 
-Steps 3 (proposal) and 6 (test) are the two gates that catch wrong assumptions — never
+Steps 1 (outline approval), 3 (code diff proposal), and 6 (test) are the gates that catch wrong assumptions — never
 skip them. One feature = one tight pass, not an open-ended tool-call chain.
 
 ### Test Failure & Investigation Gate
@@ -238,6 +234,10 @@ the failed test names — so you can see at a glance whether something broke and
 which case. Keep all `[TEST]` log lines via `twdll.core.Log` (not raw
 `io.write` to `twdll.log`), so they go through the same logging path as the rest
 of the suite.
+
+### Manual / Visual Test Scripts
+
+When verifying visual, UI, or interactive features (e.g. building model rotation, clan/family tree panel updates, political allegiance reassignments), the agent should provide a clear, standalone Lua snippet based on `tests/shared/manual_test_template.lua` that the user can run directly in-game to visually inspect the outcome.
 
 ### When You Change the Lua API
 
