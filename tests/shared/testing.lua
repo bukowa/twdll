@@ -971,34 +971,52 @@ local function run_twdll_tests()
 
         -- ======================================================
         -- TEST: Character Political Party (Get/SetPoliticalParty)
+        -- Character cqi=212 starts in the primary/ruler party and
+        -- is changed to the secondary (non-primary) party at the end.
         -- ======================================================
         twdll.core.Log("[TEST] --- Test: Character Political Party ---")
-        if char and type(char.GetPoliticalParty) == "function" and type(char.SetPoliticalParty) == "function" then
-            local char_party = char:GetPoliticalParty()
-            twdll.core.Log(string.format("[TEST] Character initial political party: %s",
-                char_party and char_party:GetKey() or "nil"))
+        local char_212 = nil
+        local all_chars_212 = game:model():world():faction_by_key(faction):character_list()
+        for i = 0, all_chars_212:num_items() - 1 do
+            local c = all_chars_212:item_at(i)
+            if c:cqi() == 212 then
+                char_212 = c
+                break
+            end
+        end
+
+        if char_212 and type(char_212.GetPoliticalParty) == "function" and type(char_212.SetPoliticalParty) == "function" then
+            local char_party = char_212:GetPoliticalParty()
+            twdll.core.Log(string.format("[TEST] Character cqi=212 initial political party: %s (IsPrimary=%s)",
+                char_party and char_party:GetKey() or "nil",
+                tostring(char_party and char_party:IsPrimary())))
             report("character GetPoliticalParty valid", char_party ~= nil)
+            report("character initial party is primary", char_party ~= nil and char_party:IsPrimary() == true)
 
             if char_party and hun_faction and type(hun_faction.GetPoliticalParties) == "function" then
                 local parties = hun_faction:GetPoliticalParties()
                 if parties and parties:num_items() >= 2 then
                     local p0 = parties:item_at(0)
                     local p1 = parties:item_at(1)
-                    local target_party = (char_party:GetKey() == p0:GetKey()) and p1 or p0
+                    local primary_party = p0:IsPrimary() and p0 or p1
+                    local secondary_party = (primary_party == p0) and p1 or p0
 
-                    -- Set by userdata
-                    local set_ud_ok = char:SetPoliticalParty(target_party)
+                    -- Set to secondary party via userdata
+                    local set_ud_ok = char_212:SetPoliticalParty(secondary_party)
                     report("character SetPoliticalParty (userdata) return true", set_ud_ok == true)
-                    local after_ud = char:GetPoliticalParty()
-                    report("character GetPoliticalParty matches after SetPoliticalParty (userdata)",
-                        after_ud ~= nil and after_ud:GetKey() == target_party:GetKey())
+                    local after_ud = char_212:GetPoliticalParty()
+                    report("character GetPoliticalParty matches secondary after SetPoliticalParty (userdata)",
+                        after_ud ~= nil and after_ud:GetKey() == secondary_party:GetKey() and after_ud:IsPrimary() == false)
 
-                    -- Set by key string
-                    local set_str_ok = char:SetPoliticalParty(char_party:GetKey())
+                    -- Set to secondary party via key string and keep it as secondary
+                    local set_str_ok = char_212:SetPoliticalParty(secondary_party:GetKey())
                     report("character SetPoliticalParty (key string) return true", set_str_ok == true)
-                    local after_str = char:GetPoliticalParty()
-                    report("character GetPoliticalParty matches after SetPoliticalParty (key string)",
-                        after_str ~= nil and after_str:GetKey() == char_party:GetKey())
+                    local final_party = char_212:GetPoliticalParty()
+                    report("character GetPoliticalParty matches secondary after SetPoliticalParty (key string)",
+                        final_party ~= nil and final_party:GetKey() == secondary_party:GetKey() and final_party:IsPrimary() == false)
+                    twdll.core.Log(string.format("[TEST] Character cqi=212 final political party: %s (IsPrimary=%s)",
+                        final_party and final_party:GetKey() or "nil",
+                        tostring(final_party and final_party:IsPrimary())))
                 else
                     twdll.core.Log("[TEST] Character SetPoliticalParty: SKIPPED (not enough faction parties)")
                     record_skip()
@@ -1008,7 +1026,7 @@ local function run_twdll_tests()
                 record_skip()
             end
         else
-            twdll.core.Log("[TEST] Character Political Party: SKIPPED (methods not found)")
+            twdll.core.Log("[TEST] Character Political Party: SKIPPED (character 212 or methods not found)")
             record_skip()
         end
 
