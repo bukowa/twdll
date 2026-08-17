@@ -8,6 +8,7 @@
 #include <windows.h>
 
 using twdll::TW_Character;
+using twdll::TW_CharacterDetails;
 using twdll::TW_GeneralBodyguardDetails;
 using twdll::TW_CampaignModel;
 using twdll::TW_CampaignEnv;
@@ -17,8 +18,8 @@ using twdll::TW_Databases;
 constexpr size_t CHAR_PTR = twdll::TW_PtrOffset<TW_Character>::value;
 
 namespace Props {
-    static twdll::Property ActionPoints {&TW_Character::action_points,      CHAR_PTR, "character"};
-    static twdll::Property Influence    {&TW_Character::political_gravitas, CHAR_PTR, "character"};
+    static twdll::Property ActionPoints {&TW_Character::action_points,            CHAR_PTR, "character"};
+    static twdll::Property Influence    {&TW_CharacterDetails::political_gravitas, CHAR_PTR, "character", {offsetof(TW_Character, details)}};
 }
 
 /***
@@ -107,10 +108,10 @@ static int SetDefaultBodyGuard(lua_State* L) {
         return 1;
     }
 
-    ch->m_initial_general_bodyguard_details.m_unit = record;
+    ch->details.m_initial_general_bodyguard_details.m_unit = record;
     uint16_t num_men = static_cast<uint16_t>(*reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(record) + 0x28));
-    ch->m_initial_general_bodyguard_details.m_men = num_men;
-    ch->m_initial_general_bodyguard_details.m_men_in_fully_replenished = num_men;
+    ch->details.m_initial_general_bodyguard_details.m_men = num_men;
+    ch->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = num_men;
 
     Log("[twdll] SetDefaultBodyGuard: character=0x%08X record=0x%08X key='%s'",
         reinterpret_cast<uintptr_t>(ch),
@@ -130,7 +131,7 @@ Returns the character's campaign political party, or nil if none.
 */
 static int GetPoliticalParty(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
-    if (!ch || !ch->m_political_party) {
+    if (!ch || !ch->details.m_political_party) {
         l_pushnil(L);
         return 1;
     }
@@ -148,7 +149,7 @@ static int GetPoliticalParty(lua_State* L) {
                 char* node   = *reinterpret_cast<char**>(bucket);
                 while (node && node != fake) {
                     auto* party = reinterpret_cast<twdll::TW_CampaignPoliticalParty*>(node + 0xC);
-                    if (party->m_party_record == ch->m_political_party) {
+                    if (party->m_party_record == ch->details.m_political_party) {
                         found = party;
                         break;
                     }
@@ -239,7 +240,7 @@ static int SetPoliticalParty(lua_State* L) {
         return 1;
     }
 
-    ch->m_political_party = record;
+    ch->details.m_political_party = record;
     Log("[twdll] SetPoliticalParty: character 0x%08X party set to 0x%08X",
         reinterpret_cast<uintptr_t>(ch), reinterpret_cast<uintptr_t>(record));
     l_pushboolean(L, 1);

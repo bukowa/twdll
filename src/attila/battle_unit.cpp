@@ -4,14 +4,15 @@
 #include "tw_types.h"
 
 using twdll::TW_BattleUnit;
+using twdll::TW_LandStats;
 
 constexpr size_t BATTLE_UNIT_PTR = twdll::TW_PtrOffset<TW_BattleUnit>::value;
 
 namespace Props {
-    static twdll::Getter<int, TW_BattleUnit> ChargeBonus {twdll::offset_tag, offsetof(TW_BattleUnit, stats.charge_bonus),  BATTLE_UNIT_PTR, "battle_unit"};
-    static twdll::Getter<int, TW_BattleUnit> MeleeAttack {twdll::offset_tag, offsetof(TW_BattleUnit, stats.melee_attack),  BATTLE_UNIT_PTR, "battle_unit"};
-    static twdll::Getter<int, TW_BattleUnit> BaseMorale  {twdll::offset_tag, offsetof(TW_BattleUnit, stats.morale),        BATTLE_UNIT_PTR, "battle_unit"};
-    static twdll::Getter<int, TW_BattleUnit> MeleeDefence{twdll::offset_tag, offsetof(TW_BattleUnit, stats.melee_defence), BATTLE_UNIT_PTR, "battle_unit"};
+    static twdll::Getter ChargeBonus {&TW_LandStats::charge_bonus,  BATTLE_UNIT_PTR, "battle_unit", {offsetof(TW_BattleUnit, stats)}};
+    static twdll::Getter MeleeAttack {&TW_LandStats::melee_attack,  BATTLE_UNIT_PTR, "battle_unit", {offsetof(TW_BattleUnit, stats)}};
+    static twdll::Getter BaseMorale  {&TW_LandStats::morale,        BATTLE_UNIT_PTR, "battle_unit", {offsetof(TW_BattleUnit, stats)}};
+    static twdll::Getter MeleeDefence{&TW_LandStats::melee_defence, BATTLE_UNIT_PTR, "battle_unit", {offsetof(TW_BattleUnit, stats)}};
 }
 
 static int GetMemoryAddress   (lua_State* L) { return tw_mem_address(L, "battle_unit", BATTLE_UNIT_PTR); }

@@ -27,37 +27,26 @@ static int GetKey(lua_State* L) {
     return 1;
 }
 
+constexpr size_t PARTY_PTR = twdll::TW_PtrOffset<TW_CampaignPoliticalParty>::value;
+
+namespace Props {
+    static twdll::Getter Senators{&TW_CampaignPoliticalParty::m_senators, PARTY_PTR, "political_party"};
+    static twdll::Getter Power   {&TW_CampaignPoliticalParty::m_power,    PARTY_PTR, "political_party"};
+}
+
 /***
 Returns the number of senators currently held by the party.
 @function GetSenators
 @treturn integer number of senators
 */
-static int GetSenators(lua_State* L) {
-    auto* party = twdll::tw_unwrap<TW_CampaignPoliticalParty>(L, 1);
-    if (!party) {
-        Log("[twdll] GetSenators: null party");
-        l_pushnil(L);
-        return 1;
-    }
-    l_pushinteger(L, party->m_senators);
-    return 1;
-}
+static int GetSenators(lua_State* L) { return Props::Senators.get(L); }
 
 /***
 Returns the current political power of the party as a float.
 @function GetPower
 @treturn number political power
 */
-static int GetPower(lua_State* L) {
-    auto* party = twdll::tw_unwrap<TW_CampaignPoliticalParty>(L, 1);
-    if (!party) {
-        Log("[twdll] GetPower: null party");
-        l_pushnil(L);
-        return 1;
-    }
-    l_pushnumber(L, party->m_power);
-    return 1;
-}
+static int GetPower(lua_State* L) { return Props::Power.get(L); }
 
 /***
 Returns whether this party is the faction's primary (leading) party.

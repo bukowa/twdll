@@ -25,7 +25,7 @@ void push_political_party_list(lua_State* L,
 constexpr size_t FACTION_PTR = twdll::TW_PtrOffset<TW_Faction>::value;
 
 namespace Props {
-    static twdll::Property<int, TW_Faction> Treasury{&TW_Faction::treasury, FACTION_PTR, "faction"};
+    static twdll::Property Treasury{&TW_Faction::treasury, FACTION_PTR, "faction"};
 }
 
 /***
