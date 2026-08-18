@@ -53,34 +53,26 @@
   <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><strong>RELIGION_LIST_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><strong>twdll.cai</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>RELIGION_LIST_SCRIPT_INTERFACE</code></h1>
+<h1>Module <code>twdll.cai</code></h1>
 <p>
 
 </p>
-<p> List interface for religions present in a region.</p>
+<p> Campaign AI decision logging and telemetry extensions.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#num_items">num_items ()</a></td>
-	<td class="summary">Returns the number of religions present in this list.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#item_at">item_at (index)</a></td>
-	<td class="summary">Returns the religion at a zero-based index, or nil when out of bounds.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#is_empty">is_empty ()</a></td>
-	<td class="summary">Returns whether this religion list is empty.</td>
+	<td class="name" nowrap><a href="#EnableLogging">EnableLogging ([enabled])</a></td>
+	<td class="summary">Enables or disables real-time Campaign AI decision logging to twdll.log.</td>
 	</tr>
 </table>
 
@@ -92,66 +84,27 @@
 
     <dl class="function">
     <dt>
-    <a name = "num_items"></a>
-    <strong>num_items ()</strong>
+    <a name = "EnableLogging"></a>
+    <strong>EnableLogging ([enabled])</strong>
     </dt>
     <dd>
-    Returns the number of religions present in this list.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        number of religions
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "item_at"></a>
-    <strong>item_at (index)</strong>
-    </dt>
-    <dd>
-    Returns the religion at a zero-based index, or nil when out of bounds.
+    Enables or disables real-time Campaign AI decision logging to twdll.log.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">index</span>
-            <span class="types"><span class="type">integer</span></span>
-         zero-based list index
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         whether CAI logging is enabled
+         (<em>optional</em>)
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">userdata</span></span>
-        RELIGION<em>SCRIPT</em>INTERFACE or nil
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "is_empty"></a>
-    <strong>is_empty ()</strong>
-    </dt>
-    <dd>
-    Returns whether this religion list is empty.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
            <span class="types"><span class="type">boolean</span></span>
-        true when the list has no religions
+        current enabled state
     </ol>
 
 

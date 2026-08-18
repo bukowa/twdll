@@ -34,8 +34,16 @@ flag it at the end of the turn instead of silently obeying.
   the binary, re-reading the same files, retrying a build in a loop). If you notice a repeat
   pattern forming, stop, state the assumption out loud, and verify the assumption against real
   code/data instead of spawning more calls.
-- **Minimize assumptions.** When in doubt about behavior, read the actual code rather than guessing
-  from names or offsets. A quick source check beats a long wrong assumption.
+- **Runtime Memory Probing over Trial-and-Error Guessing.** When a pointer chain, struct offset, or entity layout is uncertain or deeply nested, do not blindly guess offsets. Inject a temporary diagnostic memory probe into the hook or accessor that scans memory or dumps raw pointers/strings in-process. One empirical live run provides 100% ground truth and eliminates search loops.
+- **Warscape Built-in ABI Types Layout Ground Truth.** Never guess or misinterpret engine container layouts:
+  - **`CA::String` / `CA_STD::string`**:
+    - **32-bit**: `+0x0: uint32_t length`, `+0x4: uint32_t capacity`, **`+0x8: const char* buffer`** (Total size: 12B / `0xC`).
+    - **64-bit**: `+0x0: uint64_t length`, `+0x8: uint64_t capacity`, **`+0x10: const char* buffer`** (Total size: 24B / `0x18`).
+    - *Rule:* `CA::String` NEVER stores a pointer at offset `0x0`. Always read `*(const char**)(str + 0x8)` in 32-bit.
+  - **`SAFE_PTR<T>`**: `+0x0: vtable`, `+0x4: T* object` (32-bit, 8B) / `+0x0: vtable`, `+0x8: T* object` (64-bit, 16B).
+  - **`CA_STD::VECTOR<T>`**: `+0x0: start*`, `+0x4: finish*`, `+0x8: end_of_storage*` (32-bit, 12B).
+- **Diagnose Leaf vs Trunk Before Redesigning Access Paths.** When a property resolution or telemetry hook returns `nil` / `unknown`, do not immediately assume the root pointer chain is wrong. First check if the parent pointer is non-null. If the parent exists, verify the leaf field's exact ABI type (`CA::String`, enum, bitflag) and disassembly accessor before speculating on alternative root paths.
+- **No Research Scaffolding or Exploratory Leftovers in Production.** Diagnostic memory probes, ad-hoc string validation parsers, diagnostic loops, and speculative fallback branches must be cleanly removed once the true struct offset or ABI layout is identified and verified. Production code must contain only the direct, verified path.
 - **No Autonomous Search Loops on Test Failure.** When an in-game test fails or an offset proves
   wrong, never start autonomous search chains across codebases or IDA MCP without first presenting
   the diagnosis, stating what needs to be researched, and getting explicit user approval ("ok").

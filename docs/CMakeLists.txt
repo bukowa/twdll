@@ -28,6 +28,7 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/slot.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/religion.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/religion_list.cpp"
+        "${PROJECT_SOURCE_DIR}/src/attila/cai/cai_core.cpp"
     )
 elseif(TW_GAME STREQUAL "rome2")
     set(TWDLL_DOC_SOURCES

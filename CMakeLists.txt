@@ -30,7 +30,7 @@ set(TWDLL_COMMON_SOURCES
 )
 
 # Game-specific sources (struct layouts, Lua signatures)
-file(GLOB TWDLL_GAME_SOURCES CONFIGURE_DEPENDS "src/${TW_GAME}/*.cpp")
+file(GLOB_RECURSE TWDLL_GAME_SOURCES CONFIGURE_DEPENDS "src/${TW_GAME}/*.cpp")
 
 # ── Library target ────────────────────────────────────────────────────────────
 add_library(twdll SHARED

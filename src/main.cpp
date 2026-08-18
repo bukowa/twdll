@@ -13,6 +13,7 @@ extern const luaL_Reg model_functions[];
 extern const luaL_Reg world_functions[];
 extern const luaL_Reg battle_functions[];
 extern const luaL_Reg campaign_ui_functions[];
+extern const luaL_Reg cai_functions_export[];
 extern const luaL_Reg twdll_core[];
 
 extern void register_character_methods(lua_State *L);
@@ -118,6 +119,10 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     l_register(L, "twdll_campaign_ui", campaign_ui_functions);
     l_setfield(L, -2, "campaign_ui");
 
+    l_register(L, "twdll_cai", cai_functions_export);
+    l_setfield(L, -2, "cai");
+
     Log("[twdll] luaopen_twdll: done");
     return 1;
 }
+

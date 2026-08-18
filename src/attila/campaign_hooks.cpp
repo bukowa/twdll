@@ -10,11 +10,13 @@ extern void install_campaign_ui_hook(uintptr_t base, size_t size);
 extern void install_settlement_slots_hook(uintptr_t base, size_t size);
 extern void install_model_hook(uintptr_t base, size_t size);
 extern void install_battle_hook();
+extern void install_cai_hooks(uintptr_t base, size_t size);
 extern void uninstall_world_hook();
 extern void uninstall_campaign_ui_hook();
 extern void uninstall_settlement_slots_hook();
 extern void uninstall_model_hook();
 extern void uninstall_battle_hook();
+extern void uninstall_cai_hooks();
 
 static const char* TARGET_MODULE = "empire.retail.dll";
 
@@ -47,6 +49,7 @@ void install_campaign_hooks() {
     install_settlement_slots_hook(base, size);
     install_model_hook(base, size);
     install_battle_hook();
+    install_cai_hooks(base, size);
 
     Log("[twdll] install_campaign_hooks: done");
 }
@@ -59,6 +62,7 @@ void uninstall_campaign_hooks() {
     uninstall_settlement_slots_hook();
     uninstall_model_hook();
     uninstall_battle_hook();
+    uninstall_cai_hooks();
     // Optionally deinitialize MinHook if no longer needed.
     MH_Uninitialize();
     Log("[twdll] uninstall_campaign_hooks: done");

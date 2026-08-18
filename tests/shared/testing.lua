@@ -1121,6 +1121,26 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 18: twdll.cai (Campaign AI Telemetry)
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 18: twdll.cai telemetry ---")
+        if type(twdll.cai) == "table" and type(twdll.cai.EnableLogging) == "function" then
+            local prev_state = twdll.cai.EnableLogging()
+            twdll.core.Log(string.format("[TEST] twdll.cai.EnableLogging initial state: %s", tostring(prev_state)))
+
+            local state_false = twdll.cai.EnableLogging(false)
+            local state_true = twdll.cai.EnableLogging(true)
+
+            local cai_ok = (state_false == false) and (state_true == true)
+            report("twdll.cai.EnableLogging toggle", cai_ok)
+            twdll.core.Log(string.format("[TEST] twdll.cai telemetry toggle: %s", cai_ok and "OK" or "FAILED"))
+        else
+            twdll.core.Log("[TEST] twdll.cai module: FAILED (missing table or EnableLogging function)")
+            report("twdll.cai module", false)
+        end
+
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")
