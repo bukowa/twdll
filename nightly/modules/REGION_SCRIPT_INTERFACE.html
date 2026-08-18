@@ -52,6 +52,8 @@
   <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -86,6 +88,14 @@
 	<tr>
 	<td class="name" nowrap><a href="#SetGrowthPoints">SetGrowthPoints (value)</a></td>
 	<td class="summary">Sets the number of growth points for the region (accumulated growth).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetReligionList">GetReligionList ()</a></td>
+	<td class="summary">Returns the list of religions present in this region.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetReligionProportion">GetReligionProportion (religion_key)</a></td>
+	<td class="summary">Returns the raw proportion (0.0 to 1.0) of a specific religion in this region.</td>
 	</tr>
 </table>
 
@@ -193,6 +203,53 @@
         </li>
     </ul>
 
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetReligionList"></a>
+    <strong>GetReligionList ()</strong>
+    </dt>
+    <dd>
+    Returns the list of religions present in this region.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">userdata</span></span>
+        RELIGION<em>LIST</em>SCRIPT_INTERFACE
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetReligionProportion"></a>
+    <strong>GetReligionProportion (religion_key)</strong>
+    </dt>
+    <dd>
+    Returns the raw proportion (0.0 to 1.0) of a specific religion in this region.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">religion_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database key of the religion
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        religion proportion (0.0 to 1.0), or 0.0 if not present
+    </ol>
 
 
 
