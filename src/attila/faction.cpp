@@ -172,13 +172,13 @@ static int SetFactionLeader(lua_State* L) {
 Returns a list interface for the faction's campaign political parties.
 Use `num_items()` and zero-based `item_at(index)` to iterate it.
 Each party exposes GetKey(), GetSenators(), GetPower() and IsPrimary().
-@function GetPoliticalParties
+@function GetPoliticalPartyList
 @treturn userdata POLITICAL_PARTY_LIST_SCRIPT_INTERFACE
 */
-static int GetPoliticalParties(lua_State* L) {
+static int GetPoliticalPartyList(lua_State* L) {
     auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
     if (!faction) {
-        Log("[twdll] GetPoliticalParties: null faction");
+        Log("[twdll] GetPoliticalPartyList: null faction");
         l_pushnil(L);
         return 1;
     }
@@ -265,7 +265,9 @@ static const luaL_Reg faction_methods[] = {
     {"SetFactionLeader",  SetFactionLeader},
     {"SetCapital",        SetCapital},
     {"InstantlyResearchTechnology", InstantlyResearchTechnology},
-    {"GetPoliticalParties", GetPoliticalParties},
+    {"GetPoliticalPartyList", GetPoliticalPartyList},
+    {"GetPoliticalParties",   GetPoliticalPartyList},
+    {"political_party_list",  GetPoliticalPartyList},
     {"GetPoliticalParty", GetPoliticalParty},
     {"GetPrimaryParty",   GetPrimaryParty},
     {"HasPoliticalParties", HasPoliticalParties},

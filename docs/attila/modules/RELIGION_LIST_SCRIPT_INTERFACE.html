@@ -51,39 +51,35 @@
   <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><strong>SLOT_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><strong>RELIGION_LIST_SCRIPT_INTERFACE</strong></li>
 </ul>
 
 </div>
 
 <div id="content">
 
-<h1>Module <code>SLOT_SCRIPT_INTERFACE</code></h1>
+<h1>Module <code>RELIGION_LIST_SCRIPT_INTERFACE</code></h1>
 <p>
 
 </p>
-<p> Extensions to the game's settlement slot object.</p>
+<p> List interface for religions present in a region.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the slot object as a hexadecimal string.</td>
+	<td class="name" nowrap><a href="#num_items">num_items ()</a></td>
+	<td class="summary">Returns the number of religions present in this list.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetBuildingRotation">GetBuildingRotation ()</a></td>
-	<td class="summary">Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).</td>
+	<td class="name" nowrap><a href="#item_at">item_at (index)</a></td>
+	<td class="summary">Returns the religion at a zero-based index, or nil when out of bounds.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetBuildingRotation">SetBuildingRotation (rotation)</a></td>
-	<td class="summary">Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#Refresh">Refresh ()</a></td>
-	<td class="summary">Forces an immediate visual refresh of settlement building models on the campaign map.</td>
+	<td class="name" nowrap><a href="#is_empty">is_empty ()</a></td>
+	<td class="summary">Returns whether this religion list is empty.</td>
 	</tr>
 </table>
 
@@ -95,31 +91,11 @@
 
     <dl class="function">
     <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
+    <a name = "num_items"></a>
+    <strong>num_items ()</strong>
     </dt>
     <dd>
-    Returns the memory address of the slot object as a hexadecimal string.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetBuildingRotation"></a>
-    <strong>GetBuildingRotation ()</strong>
-    </dt>
-    <dd>
-    Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).
+    Returns the number of religions present in this list.
 
 
 
@@ -127,7 +103,7 @@
     <ol>
 
            <span class="types"><span class="type">integer</span></span>
-        rotation index (0..5)
+        number of religions
     </ol>
 
 
@@ -135,36 +111,47 @@
 
 </dd>
     <dt>
-    <a name = "SetBuildingRotation"></a>
-    <strong>SetBuildingRotation (rotation)</strong>
+    <a name = "item_at"></a>
+    <strong>item_at (index)</strong>
     </dt>
     <dd>
-    Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).
-Persisted across save/load. Call <code>twdll.campaign_ui.RefreshSettlements()</code> or <code>slot:Refresh()</code> to apply visual changes on the campaign map.
+    Returns the religion at a zero-based index, or nil when out of bounds.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">rotation</span>
+        <li><span class="parameter">index</span>
             <span class="types"><span class="type">integer</span></span>
-         new rotation index (0..5)
+         zero-based list index
         </li>
     </ul>
 
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">userdata</span></span>
+        RELIGION<em>SCRIPT</em>INTERFACE or nil
+    </ol>
 
 
 
 
 </dd>
     <dt>
-    <a name = "Refresh"></a>
-    <strong>Refresh ()</strong>
+    <a name = "is_empty"></a>
+    <strong>is_empty ()</strong>
     </dt>
     <dd>
-    Forces an immediate visual refresh of settlement building models on the campaign map.
+    Returns whether this religion list is empty.
 
 
 
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true when the list has no religions
+    </ol>
 
 
 

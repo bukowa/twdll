@@ -355,9 +355,29 @@ struct TW_RegionSlot {
     void* m_slot_manager;     // 0x1C8
 };
 
+// EMPIREUTILITY::RELIGION_RECORD (32-bit layout, size 0x28)
+// Verified via disasm of sub_10848EE0 / sub_100DBCB0
+struct TW_ReligionRecord {
+    TW_CAString m_key;            // 0x00 (m_len @0, m_pad @4, m_data @8)
+    void*       m_onscreen;       // 0x0C (const CA::UniString*)
+    int32_t     m_convertibility; // 0x10
+    TW_CAString m_icon_path;      // 0x14
+    uint32_t    m_colour;         // 0x20
+    int32_t     m_sort_order;     // 0x24
+};
+
+// std::pair<const RELIGION_RECORD*, float> (32-bit layout, size 0x8)
+// Verified via disasm of PROVINCE::majority_religion_proportion (sub_10BA28D0)
+struct TW_ReligionProportion {
+    const TW_ReligionRecord* m_religion;   // 0x00
+    float                    m_proportion; // 0x04 (raw float 0.0 .. 1.0)
+};
+
 struct TW_Region {
     char           pad_00[0x50];
-    TW_RegionData* m_region_data;   // 0x50
+    TW_RegionData* m_region_data;        // 0x50
+    char           pad_54[0x88];
+    TW_VectorNcc   m_religion_breakdown; // 0xDC (m_size @0xE0, m_elements @0xE4)
 };
 
 // EMPIRECAMPAIGN::CAMPAIGN_MODEL — selected fields (32-bit Attila layout).
@@ -473,6 +493,11 @@ TW_ASSERT_OFFSET(TW_PROVINCE_DEVELOPMENT,     m_development_points,  0x4);
 TW_ASSERT_OFFSET(TW_PROVINCE_DEVELOPMENT,     m_accumulated_growth,  0x8);
 TW_ASSERT_OFFSET(TW_FACTION_PROVINCE_MANAGER, m_province_development, 0x23C);
 TW_ASSERT_OFFSET(TW_Region,        m_region_data,            0x50);
+TW_ASSERT_OFFSET(TW_Region,        m_religion_breakdown,     0xDC);
+TW_ASSERT_OFFSET(TW_ReligionRecord, m_key,                    0x0);
+TW_ASSERT_OFFSET(TW_ReligionRecord, m_icon_path,              0x14);
+TW_ASSERT_OFFSET(TW_ReligionProportion, m_religion,           0x0);
+TW_ASSERT_OFFSET(TW_ReligionProportion, m_proportion,         0x4);
 TW_ASSERT_OFFSET(TW_RegionData,    m_theatre,                0x94);
 TW_ASSERT_OFFSET(TW_CampaignModel, m_campaign_env,           0x10F0);
 TW_ASSERT_OFFSET(TW_CampaignEnv,   m_game_core,              0x30);

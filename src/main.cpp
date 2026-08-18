@@ -23,6 +23,8 @@ extern void register_region_methods(lua_State *L);
 extern void register_slot_methods(lua_State *L);
 extern void register_political_party_methods(lua_State *L);
 extern void register_political_party_list_methods(lua_State *L);
+extern void register_religion_methods(lua_State *L);
+extern void register_religion_list_methods(lua_State *L);
 
 static bool g_is_initialized = false;
 
@@ -101,6 +103,8 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     l_setfield(L, -2, "region");
     register_region_methods(L);
     register_slot_methods(L);
+    register_religion_methods(L);
+    register_religion_list_methods(L);
 
     l_register(L, "twdll_model", model_functions);
     l_setfield(L, -2, "model");

@@ -79,16 +79,69 @@ static int SetGrowthPoints(lua_State* L) {
     return 0;
 }
 
+void push_religion_list(lua_State* L, const twdll::TW_ReligionProportion* items, int count);
+
+/***
+Returns the list of religions present in this region.
+@function GetReligionList
+@treturn userdata RELIGION_LIST_SCRIPT_INTERFACE
+*/
+static int GetReligionList(lua_State* L) {
+    auto* region = twdll::tw_unwrap<TW_Region>(L, 1);
+    if (!region) {
+        push_religion_list(L, nullptr, 0);
+        return 1;
+    }
+    auto* elements = reinterpret_cast<const twdll::TW_ReligionProportion*>(region->m_religion_breakdown.m_elements);
+    int count = static_cast<int>(region->m_religion_breakdown.m_size);
+    push_religion_list(L, elements, count);
+    return 1;
+}
+
+/***
+Returns the raw proportion (0.0 to 1.0) of a specific religion in this region.
+@function GetReligionProportion
+@tparam string religion_key database key of the religion
+@treturn number religion proportion (0.0 to 1.0), or 0.0 if not present
+*/
+static int GetReligionProportion(lua_State* L) {
+    auto* region = twdll::tw_unwrap<TW_Region>(L, 1);
+    if (!region || l_type(L, 2) != LUA_TSTRING) {
+        l_pushnumber(L, 0.0f);
+        return 1;
+    }
+    const char* key = l_checklstring(L, 2, nullptr);
+    if (!key) {
+        l_pushnumber(L, 0.0f);
+        return 1;
+    }
+    auto* elements = reinterpret_cast<const twdll::TW_ReligionProportion*>(region->m_religion_breakdown.m_elements);
+    int count = static_cast<int>(region->m_religion_breakdown.m_size);
+    for (int i = 0; i < count; ++i) {
+        if (elements[i].m_religion && elements[i].m_religion->m_key.m_data &&
+            std::strcmp(elements[i].m_religion->m_key.m_data, key) == 0) {
+            l_pushnumber(L, elements[i].m_proportion);
+            return 1;
+        }
+    }
+    l_pushnumber(L, 0.0f);
+    return 1;
+}
+
 extern const luaL_Reg region_functions[] = {
     {nullptr, nullptr}
 };
 
 static const luaL_Reg region_methods[] = {
-    {"GetMemoryAddress",    GetMemoryAddress},
+    {"GetMemoryAddress",      GetMemoryAddress},
     {"GetPopulationSurplus",  GetPopulationSurplus},
     {"SetPopulationSurplus",  SetPopulationSurplus},
-    {"GetGrowthPoints",  GetGrowthPoints},
-    {"SetGrowthPoints",  SetGrowthPoints},
+    {"GetGrowthPoints",       GetGrowthPoints},
+    {"SetGrowthPoints",       SetGrowthPoints},
+    {"GetReligionList",       GetReligionList},
+    {"GetReligions",          GetReligionList},
+    {"religion_list",         GetReligionList},
+    {"GetReligionProportion", GetReligionProportion},
     {nullptr, nullptr}
 };
 

@@ -98,6 +98,10 @@ When a test fails, crashes, or returns unexpected values (`nil`, wrong values, a
 - **Do not document functions that are not registered** — LDoc only for active Lua API.
 - **Do not use raw memory helpers in accessor functions** — they are reserved for diagnostic Lua functions only.
 - **Do not write comments or log messages in any language other than English.**
+- **Do not name list-returning methods inconsistently** — any method returning a `*_LIST_SCRIPT_INTERFACE`
+  userdata MUST follow the `Get<Thing>List` naming convention (e.g. `GetReligionList`, `GetPoliticalPartyList`,
+  `GetCandidateList`, `GetFamilyMemberList`), matching the native Total War list convention (`character_list()`,
+  `region_list()`, `faction_list()`). Never name it as a bare plural (e.g. `GetReligions` or `GetPoliticalParties`) without the `List` suffix.
 
 ## Before Modifying Existing Files
 
@@ -122,6 +126,12 @@ Use `snake_case` for internal install-time machinery (hook install/uninstall hel
 trampolines, byte patches) — never `PascalCase`. `PascalCase` is reserved for Lua-exposed
 functions and the MinHook naked stubs (`Hooked<Ctor>`). Global singletons are `g_<thing>`. This
 keeps "install-time plumbing" visually distinct from the Lua API surface.
+
+### Lua API Naming Conventions
+
+- **List Interface Return Methods**: Functions that return a list interface (`*_LIST_SCRIPT_INTERFACE`)
+  must always be named `Get<Thing>List` in `PascalCase` (and optionally provide a `snake_case` alias
+  `get_<thing>_list` / `<thing>_list`). Example: `region:GetReligionList()`, `faction:GetPoliticalPartyList()`.
 
 ---
 

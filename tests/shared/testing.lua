@@ -692,7 +692,7 @@ local function run_twdll_tests()
                 for i = 0, fl:num_items() - 1 do
                     local cand = fl:item_at(i)
                     if cand ~= nil and not cand:is_null_interface() then
-                        local parties = cand:GetPoliticalParties()
+                        local parties = cand:GetPoliticalPartyList()
                         local n = type(parties) == "userdata" and parties:num_items() or 0
                         if cand:name() == "att_fact_hunni" then
                             hunni = { f = cand, parties = parties, n = n }
@@ -726,12 +726,13 @@ local function run_twdll_tests()
                         ["att_politics_hunni_council"] = { senators = 720, power_pct = 30, primary = false },
                     }
 
-                    -- GetPoliticalParties: exactly the two known parties
+                    -- GetPoliticalPartyList: exactly the two known parties + alias check
                     local list_ok = type(parties) == "userdata"
                         and parties:num_items() == 2
                         and not parties:is_empty()
                         and parties:item_at(-1) == nil
                         and parties:item_at(999) == nil
+                        and f:GetPoliticalParties():num_items() == 2
                     report("PoliticalParties list", list_ok)
 
                     -- per-party data against hardcoded values
@@ -1048,6 +1049,76 @@ local function run_twdll_tests()
         report("campaign_ui SetEncyclopediaUrl returns new url", set_res == test_custom_url)
         local read_back_url = twdll.campaign_ui.GetEncyclopediaUrl()
         report("campaign_ui GetEncyclopediaUrl matches custom url", read_back_url == test_custom_url)
+
+        -- ======================================================
+        -- TEST: Region Religions & Religion Proportion API
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test: Region Religions & Religion Proportion ---")
+        do
+            local region = game:model():world():region_manager():region_by_key("att_reg_scandza_hafn")
+            if region == nil or region:is_null_interface() then
+                twdll.core.Log("[TEST] Region Religions: SKIPPED (region att_reg_scandza_hafn not found)")
+                record_skip()
+            else
+                if type(region.GetReligionList) ~= "function" or type(region.GetReligionProportion) ~= "function" then
+                    twdll.core.Log("[TEST] Region Religions: FAILED (methods not registered)")
+                    report("region religion methods registered", false)
+                else
+                    report("region religion methods registered", true)
+
+                    local religions = region:GetReligionList()
+                    local is_ud = type(religions) == "userdata"
+                    local num_items = is_ud and religions:num_items() or 0
+                    twdll.core.Log(string.format("[TEST] Region att_reg_scandza_hafn religions count: %d", num_items))
+
+                    local list_valid = is_ud and num_items > 0 and not religions:is_empty() and region:GetReligions():num_items() == num_items
+                    report("Region GetReligionList valid", list_valid)
+                    report("Region religion list is_empty false", religions:is_empty() == false)
+
+                    local sum_proportion = 0.0
+                    local found_majority = false
+                    local majority_key = region:majority_religion()
+                    local aliases_ok = true
+
+                    for i = 0, num_items - 1 do
+                        local rel = religions:item_at(i)
+                        if rel ~= nil then
+                            local r_key = rel:GetKey()
+                            local r_prop = rel:GetProportion()
+                            local r_icon = rel:GetIconPath()
+
+                            -- Test aliases (lowercase)
+                            if rel:key() ~= r_key or rel:proportion() ~= r_prop or rel:icon_path() ~= r_icon then
+                                aliases_ok = false
+                            end
+
+                            sum_proportion = sum_proportion + r_prop
+                            twdll.core.Log(string.format("[TEST]   religion[%d]: key='%s', proportion=%.4f, icon='%s'", i, tostring(r_key), r_prop, tostring(r_icon)))
+                            if r_key == majority_key then
+                                found_majority = true
+                            end
+
+                            local direct_prop = region:GetReligionProportion(r_key)
+                            if math.abs(direct_prop - r_prop) > 0.001 then
+                                twdll.core.Log(string.format("[TEST]   mismatch: GetReligionProportion('%s') = %.4f vs rel:GetProportion() = %.4f", r_key, direct_prop, r_prop))
+                            end
+                        end
+                    end
+
+                    report("Region religion methods and aliases match", aliases_ok)
+
+                    local sum_ok = math.abs(sum_proportion - 1.0) < 0.05
+                    twdll.core.Log(string.format("[TEST] Total religion proportion sum: %.4f (sum_ok=%s)", sum_proportion, tostring(sum_ok)))
+                    report("Region religion proportions sum to 1.0", sum_ok)
+                    report("Region majority religion present in list", found_majority)
+
+                    report("Region religion list out of bounds nil", religions:item_at(-1) == nil and religions:item_at(999) == nil)
+
+                    local fake_prop = region:GetReligionProportion("non_existent_religion_key")
+                    report("Region non-existent religion proportion is 0", fake_prop == 0.0)
+                end
+            end
+        end
 
         -- ======================================================
         -- SUMMARY

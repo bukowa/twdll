@@ -51,8 +51,8 @@
   <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><strong>SLOT_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><strong>RELIGION_SCRIPT_INTERFACE</strong></li>
   <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
 </ul>
 
@@ -60,30 +60,26 @@
 
 <div id="content">
 
-<h1>Module <code>SLOT_SCRIPT_INTERFACE</code></h1>
+<h1>Module <code>RELIGION_SCRIPT_INTERFACE</code></h1>
 <p>
 
 </p>
-<p> Extensions to the game's settlement slot object.</p>
+<p> Script interface for a religion entry in a region.</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the slot object as a hexadecimal string.</td>
+	<td class="name" nowrap><a href="#GetKey">GetKey ()</a></td>
+	<td class="summary">Returns the database key of this religion (e.g.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetBuildingRotation">GetBuildingRotation ()</a></td>
-	<td class="summary">Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).</td>
+	<td class="name" nowrap><a href="#GetProportion">GetProportion ()</a></td>
+	<td class="summary">Returns the proportion of this religion in the region as a raw float (0.0 to 1.0).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetBuildingRotation">SetBuildingRotation (rotation)</a></td>
-	<td class="summary">Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#Refresh">Refresh ()</a></td>
-	<td class="summary">Forces an immediate visual refresh of settlement building models on the campaign map.</td>
+	<td class="name" nowrap><a href="#GetIconPath">GetIconPath ()</a></td>
+	<td class="summary">Returns the UI icon path for this religion.</td>
 	</tr>
 </table>
 
@@ -95,11 +91,11 @@
 
     <dl class="function">
     <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
+    <a name = "GetKey"></a>
+    <strong>GetKey ()</strong>
     </dt>
     <dd>
-    Returns the memory address of the slot object as a hexadecimal string.
+    Returns the database key of this religion (e.g.  "att<em>rel</em>chr_catholic").
 
 
 
@@ -107,7 +103,7 @@
     <ol>
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
+        religion database key
     </ol>
 
 
@@ -115,19 +111,19 @@
 
 </dd>
     <dt>
-    <a name = "GetBuildingRotation"></a>
-    <strong>GetBuildingRotation ()</strong>
+    <a name = "GetProportion"></a>
+    <strong>GetProportion ()</strong>
     </dt>
     <dd>
-    Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).
+    Returns the proportion of this religion in the region as a raw float (0.0 to 1.0).
 
 
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">integer</span></span>
-        rotation index (0..5)
+           <span class="types"><span class="type">number</span></span>
+        religion proportion (0.0 to 1.0)
     </ol>
 
 
@@ -135,36 +131,20 @@
 
 </dd>
     <dt>
-    <a name = "SetBuildingRotation"></a>
-    <strong>SetBuildingRotation (rotation)</strong>
+    <a name = "GetIconPath"></a>
+    <strong>GetIconPath ()</strong>
     </dt>
     <dd>
-    Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).
-Persisted across save/load. Call <code>twdll.campaign_ui.RefreshSettlements()</code> or <code>slot:Refresh()</code> to apply visual changes on the campaign map.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">rotation</span>
-            <span class="types"><span class="type">integer</span></span>
-         new rotation index (0..5)
-        </li>
-    </ul>
+    Returns the UI icon path for this religion.
 
 
 
+    <h3>Returns:</h3>
+    <ol>
 
-
-</dd>
-    <dt>
-    <a name = "Refresh"></a>
-    <strong>Refresh ()</strong>
-    </dt>
-    <dd>
-    Forces an immediate visual refresh of settlement building models on the campaign map.
-
-
-
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        icon path
+    </ol>
 
 
 
