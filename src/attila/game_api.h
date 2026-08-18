@@ -14,6 +14,11 @@ extern FnFactionProvinceManager g_faction_province_manager;
 
 extern void* g_campaign_model;
 
+// CHARACTER_DETAILS::portrait_path (sub_107DC9E0)
+// (this=CHARACTER_DETAILS*, out_str=void*, campaign_model=void*) -> out_str
+using FnResolvePortraitPath = void*(__thiscall*)(void* details, void* out_str, void* campaign_model);
+extern FnResolvePortraitPath g_resolve_portrait_path;
+
 // ── Technology research (instantly_research_technology) ──────────────────────
 // 32-bit analogs of the 64-bit FACTION_TECHNOLOGY_MANAGER instant-research
 // path (research/ structures_faction_substructs.md + plan_6_features_twdll.md):

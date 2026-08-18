@@ -167,6 +167,65 @@ struct TW_Faction {
 //   0x107f8a7d  mov eax, [edx+8]     ; experience score -> [ecx+324h]
 //   0x107f8a86  mov al, [edx+0Ch]    ; experience level -> [ecx+328h]
 //   0x107f8a8f  mov eax, [edx+10h]   ; experience progress -> [ecx+32Ch]
+
+// EMPIREUTILITY::CAMPAIGN_CHARACTER_ART_SETS_CAMPAIGN_GROUP_RECORD
+struct TW_CampaignCharacterArtSetsCampaignGroupRecord {
+    TW_CAString m_key;   // 0x00 (e.g. "main")
+};
+
+// EMPIREUTILITY::CAMPAIGN_CHARACTER_ART_SET_RECORD (size 0x44)
+// Verified via 64-bit DWARF & 32-bit DB loader (sub_10E1AE60 / sub_10EFC250)
+struct TW_CampaignCharacterArtSetRecord {
+    TW_CAString m_agent_type;   // 0x00
+    TW_CAString m_art_set_id;   // 0x0C (e.g. "att_cult_barbarian")
+    TW_CAString m_culture;      // 0x18
+    TW_CAString m_subculture;   // 0x24
+    TW_CAString m_faction;      // 0x30
+    bool        m_is_custom;    // 0x3C
+    bool        m_is_male;      // 0x3D
+    char        pad_3E[2];
+    TW_CampaignCharacterArtSetsCampaignGroupRecord* m_group; // 0x40
+};
+
+// EMPIRECAMPAIGN::CHARACTER_ART_SET (size 0x20)
+// Verified via 64-bit DWARF (0x1587a00) and gap analysis
+struct TW_CharacterArtSet {
+    bool          m_aging_set;          // 0x00
+    bool          m_seasonal_set;       // 0x01
+    bool          m_levelling_set;      // 0x02
+    bool          m_health_set;         // 0x03
+    bool          m_religion_set;       // 0x04
+    bool          m_faction_leader_set; // 0x05
+    char          pad_06[2];
+    char          m_art_set_map[0x18];  // 0x08 (CA_STD::UNORDERED_MAP<String, CHARACTER_ART*>)
+    TW_CampaignCharacterArtSetRecord* m_art_set_record; // 0x20
+};
+
+// EMPIRECAMPAIGN::PORTRAIT_CAMERA_SETTINGS (size 0x2C)
+// Verified via CHARACTER_DETAILS + 0x354 (sub_107DC9E0 @ cmp [ebp+354h], 0)
+struct TW_PortraitCameraSettings {
+    float       m_camera_distance;       // 0x00
+    float       m_theta;                 // 0x04
+    float       m_phi;                   // 0x08
+    float       m_fov;                   // 0x0C
+    void*       m_portrait_infos_start;  // 0x10
+    int         m_portrait_infos_size;   // 0x14
+    void*       m_portrait_infos_end;    // 0x18
+    uint32_t    m_unique_id;             // 0x1C
+    TW_CAString m_unique_id_string;      // 0x20 (e.g. "att_general_barbarian_01")
+};
+
+// EMPIRECAMPAIGN::CHARACTER_DETAILS_ART_SET_INFO (size 0x40)
+// Embedded in CHARACTER_DETAILS at offset 0xAC (= CHARACTER + 0x2B0)
+struct TW_CharacterDetailsArtSetInfo {
+    TW_CAString         m_faction_key;          // 0x00
+    TW_CAString         m_culture_key;          // 0x0C
+    TW_CAString         m_subculture_key;       // 0x18
+    TW_CAString         m_agent_key;            // 0x24
+    TW_CAString         m_art_set_to_allocate;  // 0x30
+    TW_CharacterArtSet* m_art_set;              // 0x3C
+};
+
 struct TW_GeneralBodyguardDetails {
     void*    m_unit;                      // 0x00 (MAIN_UNIT_RECORD*)
     uint16_t m_men;                       // 0x04
@@ -178,15 +237,19 @@ struct TW_GeneralBodyguardDetails {
 };
 
 struct TW_CharacterDetails {
-    char             pad_00[0x4];
-    TW_FamilyMember* family_member;       // 0x04  (= CHARACTER+0x208)
-    char             pad_08[0x2E4];
-    void*            m_political_party;   // 0x2EC (= CHARACTER+0x4F0, const POLITICAL_PARTY_RECORD*)
-    char             pad_2F0[0x4];
-    int              political_gravitas;  // 0x2F4 (= CHARACTER+0x4F8, CA::card32)
-                                          //         verified: sub_107DC770 @ mov eax,[ecx+2F4h]
-    char             pad_2F8[0x24];
-    TW_GeneralBodyguardDetails m_initial_general_bodyguard_details; // 0x31C (= CHARACTER+0x520)
+    char                          pad_00[0x4];
+    TW_FamilyMember*              family_member;       // 0x04  (= CHARACTER+0x208)
+    char                          pad_08[0xA4];
+    TW_CharacterDetailsArtSetInfo m_art_set_info;      // 0xAC  (= CHARACTER+0x2B0)
+    char                          pad_EC[0x200];
+    void*                         m_political_party;   // 0x2EC (= CHARACTER+0x4F0, const POLITICAL_PARTY_RECORD*)
+    char                          pad_2F0[0x4];
+    int                           political_gravitas;  // 0x2F4 (= CHARACTER+0x4F8, CA::card32)
+                                                       //         verified: sub_107DC770 @ mov eax,[ecx+2F4h]
+    char                          pad_2F8[0x24];
+    TW_GeneralBodyguardDetails    m_initial_general_bodyguard_details; // 0x31C (= CHARACTER+0x520)
+    char                          pad_330[0x24];
+    TW_PortraitCameraSettings*    m_portrait_camera_settings;          // 0x354 (= CHARACTER+0x558)
 };
 
 struct TW_Character {
@@ -454,9 +517,42 @@ TW_ASSERT_OFFSET(TW_Character,        action_points,                        0x14
 TW_ASSERT_OFFSET(TW_Character,        commanded_unit_link,                  0x1DC);
 TW_ASSERT_OFFSET(TW_Character,        details,                              0x204);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  family_member,                        0x4);
+TW_ASSERT_OFFSET(TW_CharacterDetails,  m_art_set_info,                       0xAC);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  m_political_party,                    0x2EC);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  political_gravitas,                   0x2F4);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  m_initial_general_bodyguard_details,  0x31C);
+TW_ASSERT_OFFSET(TW_CharacterDetails,  m_portrait_camera_settings,          0x354);
+
+TW_ASSERT_OFFSET(TW_CharacterDetailsArtSetInfo, m_faction_key,          0x00);
+TW_ASSERT_OFFSET(TW_CharacterDetailsArtSetInfo, m_culture_key,          0x0C);
+TW_ASSERT_OFFSET(TW_CharacterDetailsArtSetInfo, m_subculture_key,       0x18);
+TW_ASSERT_OFFSET(TW_CharacterDetailsArtSetInfo, m_agent_key,            0x24);
+TW_ASSERT_OFFSET(TW_CharacterDetailsArtSetInfo, m_art_set_to_allocate,  0x30);
+TW_ASSERT_OFFSET(TW_CharacterDetailsArtSetInfo, m_art_set,              0x3C);
+
+TW_ASSERT_OFFSET(TW_CampaignCharacterArtSetRecord, m_agent_type,   0x00);
+TW_ASSERT_OFFSET(TW_CampaignCharacterArtSetRecord, m_art_set_id,    0x0C);
+TW_ASSERT_OFFSET(TW_CampaignCharacterArtSetRecord, m_culture,       0x18);
+TW_ASSERT_OFFSET(TW_CampaignCharacterArtSetRecord, m_subculture,    0x24);
+TW_ASSERT_OFFSET(TW_CampaignCharacterArtSetRecord, m_faction,       0x30);
+TW_ASSERT_OFFSET(TW_CampaignCharacterArtSetRecord, m_is_custom,     0x3C);
+TW_ASSERT_OFFSET(TW_CampaignCharacterArtSetRecord, m_is_male,       0x3D);
+TW_ASSERT_OFFSET(TW_CampaignCharacterArtSetRecord, m_group,         0x40);
+
+TW_ASSERT_OFFSET(TW_CharacterArtSet, m_aging_set,          0x00);
+TW_ASSERT_OFFSET(TW_CharacterArtSet, m_seasonal_set,       0x01);
+TW_ASSERT_OFFSET(TW_CharacterArtSet, m_levelling_set,      0x02);
+TW_ASSERT_OFFSET(TW_CharacterArtSet, m_health_set,         0x03);
+TW_ASSERT_OFFSET(TW_CharacterArtSet, m_religion_set,       0x04);
+TW_ASSERT_OFFSET(TW_CharacterArtSet, m_faction_leader_set, 0x05);
+TW_ASSERT_OFFSET(TW_CharacterArtSet, m_art_set_record,     0x20);
+
+TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_camera_distance,  0x00);
+TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_theta,            0x04);
+TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_phi,              0x08);
+TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_fov,              0x0C);
+TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_unique_id,        0x1C);
+TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_unique_id_string, 0x20);
 TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);
 TW_ASSERT_OFFSET(TW_MilitaryForce, recruitment_queue_size,  0x45C);
 TW_ASSERT_OFFSET(TW_Unit,          m_force_link,            0x38);
@@ -547,6 +643,7 @@ TW_PTR_OFFSET(TW_RegionSlot,    0x8);
 TW_PTR_OFFSET(TW_Settlement,    0x8);
 TW_PTR_OFFSET(TW_PoliticalPartyRecord,   0x8);
 TW_PTR_OFFSET(TW_CampaignPoliticalParty, 0x8);
+TW_PTR_OFFSET(TW_CharacterDetailsArtSetInfo, 0x8);
 
 template<typename T> T * tw_unwrap(lua_State* L, int slot) {
     void** ud = static_cast<void**>(l_touserdata(L, slot));

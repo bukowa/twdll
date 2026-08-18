@@ -1139,6 +1139,83 @@ local function run_twdll_tests()
             report("twdll.cai module", false)
         end
 
+        -- ======================================================
+        -- TEST 19: Character ArtSet and Portrait API (ARTSET_SCRIPT_INTERFACE)
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 19: Character ArtSet and Portrait API ---")
+        local test_char = nil
+        local char_list = game:model():world():faction_by_key(faction):character_list()
+        for i = 0, char_list:num_items() - 1 do
+            local c = char_list:item_at(i)
+            if c:cqi() == 204 then
+                test_char = c
+                break
+            end
+        end
+
+        if not test_char then
+            twdll.core.Log("[TEST] Character ArtSet: SKIPPED (character cqi 204 not found)")
+            record_skip()
+        else
+            local art_set = test_char:GetArtSet()
+            local art_set_alias = test_char:ArtSet()
+            twdll.core.Log(string.format("[TEST] character cqi=%d GetArtSet()=%s ArtSet()=%s",
+                test_char:cqi(), tostring(art_set), tostring(art_set_alias)))
+
+            local art_set_ok = (art_set ~= nil) and (type(art_set) == "userdata")
+            report("character:GetArtSet returns userdata", art_set_ok)
+            report("character:ArtSet alias matches GetArtSet", art_set_alias ~= nil and type(art_set_alias) == "userdata")
+
+            if art_set then
+                local key = art_set:GetKey()
+                local key_alias = art_set:GetId()
+                local culture = art_set:GetCulture()
+                local subculture = art_set:GetSubculture()
+                local char_faction = art_set:GetFaction()
+                local agent = art_set:GetAgent()
+                local to_allocate = art_set:GetArtSetToAllocate()
+                local group = art_set:GetGroup()
+                local portrait_path = art_set:GetPortraitPath()
+                local settings_id = art_set:GetSettingsId()
+                local is_custom = art_set:IsCustom()
+                local is_male = art_set:IsMale()
+                local has_aging = art_set:HasAging()
+                local has_seasonal = art_set:HasSeasonal()
+                local has_levelling = art_set:HasLevelling()
+                local has_health = art_set:HasHealth()
+                local has_religion = art_set:HasReligion()
+                local is_faction_leader = art_set:IsFactionLeaderSet()
+
+                twdll.core.Log(string.format("[TEST] ArtSet Key: '%s' (GetId: '%s') Group: '%s'", tostring(key), tostring(key_alias), tostring(group)))
+                twdll.core.Log(string.format("[TEST] ArtSet Culture: '%s' Subculture: '%s' Faction: '%s' Agent: '%s' ToAllocate: '%s'",
+                    tostring(culture), tostring(subculture), tostring(char_faction), tostring(agent), tostring(to_allocate)))
+                twdll.core.Log(string.format("[TEST] Portrait Path: '%s'", tostring(portrait_path)))
+                twdll.core.Log(string.format("[TEST] Settings ID: '%s'", tostring(settings_id)))
+                twdll.core.Log(string.format("[TEST] Flags: custom=%s male=%s aging=%s seasonal=%s levelling=%s health=%s religion=%s fl=%s",
+                    tostring(is_custom), tostring(is_male), tostring(has_aging), tostring(has_seasonal),
+                    tostring(has_levelling), tostring(has_health), tostring(has_religion), tostring(is_faction_leader)))
+
+                report("art_set:GetKey", key == "att_huns_general_01")
+                report("art_set:GetId alias", key_alias == "att_huns_general_01")
+                report("art_set:GetCulture", culture == "att_cult_nomadic")
+                report("art_set:GetSubculture", subculture == "att_sub_cult_nomadic_hunnic")
+                report("art_set:GetFaction", char_faction == "att_fact_hunni")
+                report("art_set:GetAgent", agent == "general")
+                report("art_set:GetArtSetToAllocate returns string", type(to_allocate) == "string")
+                report("art_set:GetGroup returns string", type(group) == "string")
+                report("art_set:GetSettingsId", settings_id == "att_huns_general_010")
+                report("art_set:GetPortraitPath", portrait_path == "UI/Portraits/Portholes/att_cult_nomadic/att_frontend_faction_leader_huns_0.png")
+                report("art_set:IsCustom", is_custom == true)
+                report("art_set:IsMale", is_male == true)
+                report("art_set:HasAging", has_aging == true)
+                report("art_set:HasSeasonal", has_seasonal == false)
+                report("art_set:HasLevelling", has_levelling == true)
+                report("art_set:HasHealth returns boolean", type(has_health) == "boolean")
+                report("art_set:HasReligion returns boolean", type(has_religion) == "boolean")
+                report("art_set:IsFactionLeaderSet returns boolean", type(is_faction_leader) == "boolean")
+            end
+        end
+
 
         -- ======================================================
         -- SUMMARY

@@ -25,6 +25,7 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/political_party.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/political_party_list.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/character.cpp"
+        "${PROJECT_SOURCE_DIR}/src/attila/art_set.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/slot.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/religion.cpp"
         "${PROJECT_SOURCE_DIR}/src/attila/religion_list.cpp"

@@ -199,6 +199,23 @@ static int SetPoliticalParty(lua_State* L) {
     return 1;
 }
 
+void push_art_set(lua_State* L, twdll::TW_CharacterDetailsArtSetInfo* art_info);
+
+/***
+Returns the ARTSET_SCRIPT_INTERFACE for this character, or nil if none.
+@function GetArtSet
+@treturn userdata ARTSET_SCRIPT_INTERFACE or nil
+*/
+static int GetArtSet(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushnil(L);
+        return 1;
+    }
+    push_art_set(L, &ch->details.m_art_set_info);
+    return 1;
+}
+
 extern const luaL_Reg character_functions[] = {
     {nullptr, nullptr}
 };
@@ -212,6 +229,8 @@ static const luaL_Reg character_methods[] = {
     {"SetDefaultBodyGuard",   SetDefaultBodyGuard},
     {"GetPoliticalParty",     GetPoliticalParty},
     {"SetPoliticalParty",     SetPoliticalParty},
+    {"GetArtSet",             GetArtSet},
+    {"ArtSet",                GetArtSet},
     {nullptr, nullptr}
 };
 

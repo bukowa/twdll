@@ -40,10 +40,13 @@
 // CAMPAIGN_BUILDING_DISPLAY::update_animation @ 0x10B1A790
 // Reads force_settlement_refresh tweak @ offset 0x17 from entry (mov ecx, &tweak).
 #define UPDATE_ANIMATION_SIG "51 56 8B F1 8B 86 ? ? ? ? 8B 48"
+// CHARACTER_DETAILS::portrait_path @ 0x107DC9E0
+#define RESOLVE_PORTRAIT_PATH_SIG "83 EC 08 55 8B E9 56 83 BD 54 03 00 00 00 0F 84"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
 FnFactionProvinceManager g_faction_province_manager = nullptr;
+FnResolvePortraitPath    g_resolve_portrait_path    = nullptr;
 uintptr_t          g_reinf_cap_insn_addr = 0;
 uintptr_t          g_battle_ctor_addr    = 0;
 uintptr_t          g_battle_dtor_addr    = 0;
@@ -72,6 +75,7 @@ void refresh_settlements_display() {
 }
 
 const TW_GameSigInfo g_game_signatures[] = {
+    {"CHARACTER_DETAILS::portrait_path", (void**)&g_resolve_portrait_path, RESOLVE_PORTRAIT_PATH_SIG},
     {"FACTION::new_faction_leader",     (void**)&g_new_faction_leader, NEW_FACTION_LEADER_SIG},
     {"UNIT::disband_units",             (void**)&g_disband_units,      DISBAND_UNITS_SIG},
     {"REGION::faction_province_manager", (void**)&g_faction_province_manager, FACTION_PROVINCE_MANAGER_SIG},

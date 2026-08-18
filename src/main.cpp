@@ -17,6 +17,7 @@ extern const luaL_Reg cai_functions_export[];
 extern const luaL_Reg twdll_core[];
 
 extern void register_character_methods(lua_State *L);
+extern void register_art_set_methods(lua_State *L);
 extern void register_faction_methods(lua_State *L);
 extern void register_unit_methods(lua_State *L);
 extern void register_military_force_methods(lua_State *L);
@@ -85,6 +86,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     l_register(L, "twdll_character", character_functions);
     l_setfield(L, -2, "character");
     register_character_methods(L);
+    register_art_set_methods(L);
 
     l_register(L, "twdll_unit", unit_functions);
     l_setfield(L, -2, "unit");

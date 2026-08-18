@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `GetArtSet()` (and `ArtSet()`) returning an `ARTSET_SCRIPT_INTERFACE` userdata for character art sets and portrait data (`GetKey`, `GetCulture`, `GetSubculture`, `GetFaction`, `GetAgent`, `GetArtSetToAllocate`, `GetGroup`, `IsCustom`, `IsMale`, `HasAging`, `HasSeasonal`, `HasLevelling`, `HasHealth`, `HasReligion`, `IsFactionLeaderSet`, `GetPortraitPath`, `GetSettingsId`).
 - Added `twdll.cai.EnableLogging([enabled])` — enables or disables real-time Campaign AI decision logging and telemetry to `twdll.log`, capturing settlement occupation choices (`OCCUPY`, `SACK`, `RAZE`, `LOOT`, etc.) and decision bitmasks.
 - Added `REGION_SCRIPT_INTERFACE:GetReligionList()` returning a `RELIGION_LIST_SCRIPT_INTERFACE` list of all religions present in the region, and `REGION_SCRIPT_INTERFACE:GetReligionProportion(religion_key)` returning the raw float proportion (0.0 to 1.0) of a specific religion. Added `RELIGION_SCRIPT_INTERFACE` (`GetKey`, `GetProportion`, `GetIconPath`) representing individual religion entries.
 - Added `twdll.campaign_ui.SetEncyclopediaUrl(url)` and `twdll.campaign_ui.GetEncyclopediaUrl()` — dynamically gets or sets the base URL prefix for the in-game encyclopedia (e.g. redirecting in-game encyclopedia buttons to a custom local or web server), with automatic restoration of the game's default URL when passed `nil` or an empty string.
