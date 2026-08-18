@@ -155,6 +155,7 @@ local function run_twdll_tests()
             else
                 local src_unit = ul:item_at(src_index)
                 local men_before = src_unit:GetNumMen()
+                local max_before = src_unit:GetMaxNumMen()
                 local ok = src_unit:ConvertUnit("att_merc_ger_agathyrsi_warriors")
                 if ok ~= true then
                     twdll.core.Log("[TEST] ConvertUnit: FAILED (returned " .. tostring(ok) .. ")")
@@ -162,10 +163,12 @@ local function run_twdll_tests()
                 else
                     local unit_after = char:military_force():unit_list():item_at(src_index)
                     local men_after = unit_after:GetNumMen()
+                    local max_after = unit_after:GetMaxNumMen()
                     local key_after = unit_after:unit_key()
-                    twdll.core.Log("[TEST] ConvertUnit: men " .. tostring(men_before) ..
-                        " -> " .. tostring(men_after) .. ", key '" .. tostring(key_after) .. "'")
-                    if men_after == men_before and key_after == "att_merc_ger_agathyrsi_warriors" then
+                    local expected_men = (men_before >= max_before) and max_after or math.floor((men_before / max_before) * max_after + 0.5)
+                    twdll.core.Log("[TEST] ConvertUnit: men " .. tostring(men_before) .. "/" .. tostring(max_before) ..
+                        " -> " .. tostring(men_after) .. "/" .. tostring(max_after) .. " (expected " .. tostring(expected_men) .. "), key '" .. tostring(key_after) .. "'")
+                    if men_after == expected_men and key_after == "att_merc_ger_agathyrsi_warriors" then
                         twdll.core.Log("[TEST] ConvertUnit: OK")
                         report("ConvertUnit", true)
                     else

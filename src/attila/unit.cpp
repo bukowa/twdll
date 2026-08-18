@@ -10,6 +10,8 @@ using twdll::TW_CampaignEnv;
 using twdll::TW_GameCore;
 using twdll::TW_Databases;
 
+using twdll::TW_Character;
+
 constexpr size_t UNIT_PTR = twdll::TW_PtrOffset<TW_Unit>::value;
 
 namespace Props {
@@ -70,9 +72,11 @@ static int SetActionPoints  (lua_State* L) { return Props::ActionPoints.set(L); 
 /***
 Replaces the unit with a new unit of the given type, in the same army, using
 the engine's own unit conversion path (the same one used for religion and
-technology upgrades). The new unit keeps the old unit's men count, experience
-and combat statistics. The old unit object is destroyed in the process, so the
-original unit reference is no longer valid afterwards.
+technology upgrades). The new unit preserves the old unit's health proportion
+(men count scaled to the new unit size), experience and combat statistics. If the
+unit is a general's bodyguard, the character's persistent bodyguard snapshot is
+also updated. The old unit object is destroyed in the process, so the original unit
+reference is no longer valid afterwards.
 @function ConvertUnit
 @tparam string unit_key the unit record key (e.g. "att_inf_melee_spear_att")
 @treturn boolean true if the unit was converted, false otherwise
@@ -130,13 +134,47 @@ static int ConvertUnit(lua_State* L) {
         return 1;
     }
 
+    int old_num_men = unit->num_men;
+    int old_max_num_men = unit->max_num_men;
+
     Log("[twdll] ConvertUnit: unit=0x%08X force=0x%08X record=0x%08X key='%s'",
         reinterpret_cast<uintptr_t>(unit),
         reinterpret_cast<uintptr_t>(force),
         reinterpret_cast<uintptr_t>(record), key);
 
-    void* new_unit = g_convert_unit(unit, force, record);
-    l_pushboolean(L, new_unit != nullptr);
+    auto* new_unit = static_cast<TW_Unit*>(g_convert_unit(unit, force, record));
+    if (!new_unit) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    // Proportional soldier count scaling:
+    if (old_max_num_men > 0 && new_unit->max_num_men > 0) {
+        if (old_num_men >= old_max_num_men) {
+            new_unit->num_men = new_unit->max_num_men;
+        } else {
+            float ratio = static_cast<float>(old_num_men) / static_cast<float>(old_max_num_men);
+            int scaled_men = static_cast<int>(ratio * new_unit->max_num_men + 0.5f);
+            if (scaled_men < 1 && old_num_men > 0) scaled_men = 1;
+            if (scaled_men > new_unit->max_num_men) scaled_men = new_unit->max_num_men;
+            new_unit->num_men = scaled_men;
+        }
+    }
+
+    // If this unit is a general's bodyguard, synchronise the character's persistent snapshot:
+    void* commander_link = *reinterpret_cast<void**>(reinterpret_cast<char*>(new_unit) + 0x114);
+    if (commander_link) {
+        auto* commander = *reinterpret_cast<TW_Character**>(commander_link);
+        if (commander) {
+            commander->details.m_initial_general_bodyguard_details.m_unit = record;
+            commander->details.m_initial_general_bodyguard_details.m_men = static_cast<uint16_t>(new_unit->num_men);
+            commander->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = static_cast<uint16_t>(new_unit->max_num_men);
+            Log("[twdll] ConvertUnit: updated commander=0x%08X bodyguard snapshot (men=%d/%d)",
+                reinterpret_cast<uintptr_t>(commander), new_unit->num_men, new_unit->max_num_men);
+        }
+    }
+
+    l_pushboolean(L, 1);
     return 1;
 }
 
