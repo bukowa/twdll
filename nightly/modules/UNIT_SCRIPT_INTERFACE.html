@@ -260,9 +260,11 @@ technology upgrades).</td>
     <dd>
     Replaces the unit with a new unit of the given type, in the same army, using
 the engine's own unit conversion path (the same one used for religion and
-technology upgrades).  The new unit keeps the old unit's men count, experience
-and combat statistics. The old unit object is destroyed in the process, so the
-original unit reference is no longer valid afterwards.
+technology upgrades).  The new unit preserves the old unit's health proportion
+(men count scaled to the new unit size), experience and combat statistics. If the
+unit is a general's bodyguard, the character's persistent bodyguard snapshot is
+also updated. The old unit object is destroyed in the process, so the original unit
+reference is no longer valid afterwards.
 
 
     <h3>Parameters:</h3>
