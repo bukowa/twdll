@@ -13,17 +13,17 @@ typedef int (__thiscall *fn_make_occupation_decision)(
 static fn_make_occupation_decision orig_make_occupation_decision = nullptr;
 
 static const char* OCCUPATION_DECISION_NAMES[12] = {
-    "OCCUPY",
-    "COLONISE",
-    "SACK",
     "LOOT",
+    "SACK",
     "RAZE",
+    "OCCUPY",
     "LIBERATE",
     "VASSALISE",
-    "VARIANT_7",
-    "VARIANT_8",
-    "VARIANT_9",
-    "VARIANT_10",
+    "RAZE_WITHOUT_OCCUPY",
+    "COLONISE",
+    "DO_NOTHING",
+    "RESETTLE",
+    "GIFT_TO_ANOTHER_FACTION",
     "NONE"
 };
 
