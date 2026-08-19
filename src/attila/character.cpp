@@ -200,6 +200,7 @@ static int SetPoliticalParty(lua_State* L) {
 }
 
 void push_art_set(lua_State* L, twdll::TW_CharacterDetailsArtSetInfo* art_info);
+bool SetCharacterArtSet(twdll::TW_CharacterDetailsArtSetInfo* info, const char* art_set_key);
 
 /***
 Returns the ARTSET_SCRIPT_INTERFACE for this character, or nil if none.
@@ -213,6 +214,24 @@ static int GetArtSet(lua_State* L) {
         return 1;
     }
     push_art_set(L, &ch->details.m_art_set_info);
+    return 1;
+}
+
+/***
+Sets the art set for this character, updating all 3D models (campaign, battle, politician) and 2D portraits.
+@function SetArtSet
+@tparam string art_set_key art set ID key (e.g. "att_huns_general_01")
+@treturn boolean true on success, false on failure
+*/
+static int SetArtSet(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    const char* key = l_checkstring(L, 2);
+    bool ok = SetCharacterArtSet(&ch->details.m_art_set_info, key);
+    l_pushboolean(L, ok ? 1 : 0);
     return 1;
 }
 
@@ -230,7 +249,7 @@ static const luaL_Reg character_methods[] = {
     {"GetPoliticalParty",     GetPoliticalParty},
     {"SetPoliticalParty",     SetPoliticalParty},
     {"GetArtSet",             GetArtSet},
-    {"ArtSet",                GetArtSet},
+    {"SetArtSet",             SetArtSet},
     {nullptr, nullptr}
 };
 

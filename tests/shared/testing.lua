@@ -1169,22 +1169,18 @@ local function run_twdll_tests()
             record_skip()
         else
             local art_set = test_char:GetArtSet()
-            local art_set_alias = test_char:ArtSet()
-            twdll.core.Log(string.format("[TEST] character cqi=%d GetArtSet()=%s ArtSet()=%s",
-                test_char:cqi(), tostring(art_set), tostring(art_set_alias)))
+            twdll.core.Log(string.format("[TEST] character cqi=%d GetArtSet()=%s",
+                test_char:cqi(), tostring(art_set)))
 
             local art_set_ok = (art_set ~= nil) and (type(art_set) == "userdata")
             report("character:GetArtSet returns userdata", art_set_ok)
-            report("character:ArtSet alias matches GetArtSet", art_set_alias ~= nil and type(art_set_alias) == "userdata")
 
             if art_set then
                 local key = art_set:GetKey()
-                local key_alias = art_set:GetId()
                 local culture = art_set:GetCulture()
                 local subculture = art_set:GetSubculture()
                 local char_faction = art_set:GetFaction()
                 local agent = art_set:GetAgent()
-                local to_allocate = art_set:GetArtSetToAllocate()
                 local group = art_set:GetGroup()
                 local portrait_path = art_set:GetPortraitPath()
                 local settings_id = art_set:GetSettingsId()
@@ -1197,9 +1193,9 @@ local function run_twdll_tests()
                 local has_religion = art_set:HasReligion()
                 local is_faction_leader = art_set:IsFactionLeaderSet()
 
-                twdll.core.Log(string.format("[TEST] ArtSet Key: '%s' (GetId: '%s') Group: '%s'", tostring(key), tostring(key_alias), tostring(group)))
-                twdll.core.Log(string.format("[TEST] ArtSet Culture: '%s' Subculture: '%s' Faction: '%s' Agent: '%s' ToAllocate: '%s'",
-                    tostring(culture), tostring(subculture), tostring(char_faction), tostring(agent), tostring(to_allocate)))
+                twdll.core.Log(string.format("[TEST] ArtSet Key: '%s' Group: '%s'", tostring(key), tostring(group)))
+                twdll.core.Log(string.format("[TEST] ArtSet Culture: '%s' Subculture: '%s' Faction: '%s' Agent: '%s'",
+                    tostring(culture), tostring(subculture), tostring(char_faction), tostring(agent)))
                 twdll.core.Log(string.format("[TEST] Portrait Path: '%s'", tostring(portrait_path)))
                 twdll.core.Log(string.format("[TEST] Settings ID: '%s'", tostring(settings_id)))
                 twdll.core.Log(string.format("[TEST] Flags: custom=%s male=%s aging=%s seasonal=%s levelling=%s health=%s religion=%s fl=%s",
@@ -1207,12 +1203,10 @@ local function run_twdll_tests()
                     tostring(has_levelling), tostring(has_health), tostring(has_religion), tostring(is_faction_leader)))
 
                 report("art_set:GetKey", key == "att_huns_general_01")
-                report("art_set:GetId alias", key_alias == "att_huns_general_01")
                 report("art_set:GetCulture", culture == "att_cult_nomadic")
                 report("art_set:GetSubculture", subculture == "att_sub_cult_nomadic_hunnic")
                 report("art_set:GetFaction", char_faction == "att_fact_hunni")
                 report("art_set:GetAgent", agent == "general")
-                report("art_set:GetArtSetToAllocate returns string", type(to_allocate) == "string")
                 report("art_set:GetGroup returns string", type(group) == "string")
                 report("art_set:GetSettingsId", settings_id == "att_huns_general_010")
                 report("art_set:GetPortraitPath", portrait_path == "UI/Portraits/Portholes/att_cult_nomadic/att_frontend_faction_leader_huns_0.png")
@@ -1224,6 +1218,45 @@ local function run_twdll_tests()
                 report("art_set:HasHealth returns boolean", type(has_health) == "boolean")
                 report("art_set:HasReligion returns boolean", type(has_religion) == "boolean")
                 report("art_set:IsFactionLeaderSet returns boolean", type(is_faction_leader) == "boolean")
+
+                -- Find distinct valid ArtSets from other male generals in the faction
+                local candidate_keys = {}
+                local seen_keys = {}
+                seen_keys[key] = true
+                local char_list = hun_faction:character_list()
+                if char_list then
+                    for i = 0, char_list:num_items() - 1 do
+                        local cand = char_list:item_at(i)
+                        if cand and not cand:is_null_interface() and cand:cqi() ~= test_char:cqi() then
+                            local cand_art = cand:GetArtSet()
+                            if cand_art and cand_art:GetKey() ~= "" and cand_art:IsMale() and cand_art:GetAgent() == "general" then
+                                local k = cand_art:GetKey()
+                                if not seen_keys[k] then
+                                    seen_keys[k] = true
+                                    table.insert(candidate_keys, k)
+                                end
+                            end
+                        end
+                    end
+                end
+                if #candidate_keys == 0 then
+                    table.insert(candidate_keys, "att_general_nomadic_16")
+                end
+
+                -- Perform multiple sequential ArtSet swaps to stress-test stability and live updates
+                for idx, target_key in ipairs(candidate_keys) do
+                    local swap_ok = test_char:SetArtSet(target_key)
+                    twdll.core.Log(string.format("[TEST] Swap %d: SetArtSet('%s') -> %s", idx, target_key, tostring(swap_ok)))
+                    report(string.format("character:SetArtSet swap %d (%s)", idx, target_key), swap_ok == true)
+
+                    local curr_art = test_char:GetArtSet()
+                    local curr_key = curr_art and curr_art:GetKey() or nil
+                    local curr_portrait = curr_art and curr_art:GetPortraitPath() or nil
+                    local curr_culture = curr_art and curr_art:GetCulture() or nil
+                    twdll.core.Log(string.format("[TEST]   -> active key: '%s' | culture: '%s' | portrait: '%s'",
+                        tostring(curr_key), tostring(curr_culture), tostring(curr_portrait)))
+                    report(string.format("character:SetArtSet verified key swap %d", idx), curr_key == target_key)
+                end
             end
         end
 

@@ -19,6 +19,15 @@ extern void* g_campaign_model;
 using FnResolvePortraitPath = void*(__thiscall*)(void* details, void* out_str, void* campaign_model);
 extern FnResolvePortraitPath g_resolve_portrait_path;
 
+// CA::String::operator=(const char* src) (sub_100DBD40)
+using FnCaStringAssign = void*(__thiscall*)(void* str, const char* src);
+extern FnCaStringAssign g_ca_string_assign;
+
+// CHARACTER_DETAILS_ART_SET_INFO::update_art_set (sub_107F83D0)
+// (this=CHARACTER_DETAILS_ART_SET_INFO*, details=CHARACTER_DETAILS*, campaign_model=CAMPAIGN_MODEL*)
+using FnUpdateArtSet = int(__thiscall*)(void* art_info, void* details, void* campaign_model);
+extern FnUpdateArtSet g_update_art_set;
+
 // ── Technology research (instantly_research_technology) ──────────────────────
 // 32-bit analogs of the 64-bit FACTION_TECHNOLOGY_MANAGER instant-research
 // path (research/ structures_faction_substructs.md + plan_6_features_twdll.md):

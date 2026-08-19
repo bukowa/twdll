@@ -23,6 +23,7 @@ extern "C" {
 #define l_setmetatable  lua_setmetatable
 #define l_setfield      lua_setfield
 #define l_checklstring  luaL_checklstring
+#define l_checkstring   luaL_checkstring
 #define l_register      luaL_register
 #define l_createtable   lua_createtable
 #define l_touserdata    lua_touserdata
@@ -119,6 +120,7 @@ extern lua_settop_t        g_game_lua_settop;
 #define l_setmetatable  g_game_lua_setmetatable
 #define l_setfield      g_game_lua_setfield
 #define l_checklstring  g_game_luaL_checklstring
+#define l_checkstring(L, n) g_game_luaL_checklstring(L, n, nullptr)
 #define l_register      g_game_luaL_register
 #define l_createtable   g_game_lua_createtable
 #define l_touserdata    g_game_lua_touserdata

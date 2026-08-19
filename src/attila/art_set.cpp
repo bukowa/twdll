@@ -104,21 +104,6 @@ static int GetAgent(lua_State* L) {
 }
 
 /***
-Returns the target art set to allocate key.
-@function GetArtSetToAllocate
-@treturn string art set key
-*/
-static int GetArtSetToAllocate(lua_State* L) {
-    auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
-    if (!info || !info->m_art_set_to_allocate.m_data) {
-        l_pushstring(L, "");
-        return 1;
-    }
-    l_pushstring(L, info->m_art_set_to_allocate.m_data);
-    return 1;
-}
-
-/***
 Returns whether this art set is a custom override.
 @function IsCustom
 @treturn boolean true if custom art set
@@ -258,14 +243,23 @@ static int GetGroup(lua_State* L) {
     return 1;
 }
 
+bool SetCharacterArtSet(TW_CharacterDetailsArtSetInfo* info, const char* art_set_key) {
+    if (!info || !art_set_key || !g_update_art_set || !g_ca_string_assign || !g_campaign_model) return false;
+    auto* details = GetDetailsFromArtInfo(info);
+    if (!details) return false;
+    g_ca_string_assign(&info->m_art_set_to_allocate, art_set_key);
+    info->m_art_set = nullptr;
+    g_update_art_set(info, details, g_campaign_model);
+    Log("[twdll] SetCharacterArtSet: art_set_to_allocate set to '%s' (re-allocated)", art_set_key);
+    return true;
+}
+
 static const luaL_Reg art_set_methods[] = {
     {"GetKey",               GetKey},
-    {"GetId",                GetKey},
     {"GetCulture",           GetCulture},
     {"GetSubculture",        GetSubculture},
     {"GetFaction",           GetFaction},
     {"GetAgent",             GetAgent},
-    {"GetArtSetToAllocate",  GetArtSetToAllocate},
     {"GetGroup",             GetGroup},
     {"IsCustom",             IsCustom},
     {"IsMale",               IsMale},
@@ -282,7 +276,7 @@ static const luaL_Reg art_set_methods[] = {
 
 void register_art_set_methods(lua_State* L) {
     l_newmetatable(L, kArtSetMetatable);
-    l_createtable(L, 0, 18);
+    l_createtable(L, 0, 16);
     for (const luaL_Reg* f = art_set_methods; f->name; ++f) {
         l_pushstring(L, f->name);
         l_pushcclosure(L, f->func, 0);
