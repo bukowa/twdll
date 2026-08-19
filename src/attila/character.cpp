@@ -235,6 +235,142 @@ static int SetArtSet(lua_State* L) {
     return 1;
 }
 
+/***
+Adds the specified character trait to this character using the engine's native command queue.
+@function AddTrait
+@tparam string trait_key the trait record key (e.g. "att_trait_all_personality_brave")
+@tparam[opt=false] boolean show_message whether to show the on-screen event message
+@treturn boolean true on success, false otherwise
+*/
+static int AddTrait(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    const char* trait_key = l_checkstring(L, 2);
+    int points = 1;
+    bool show_msg = false;
+    if (l_type(L, 3) == LUA_TNUMBER) {
+        points = static_cast<int>(l_tointeger(L, 3));
+        show_msg = (l_type(L, 4) == LUA_TBOOLEAN);
+    } else if (l_type(L, 3) == LUA_TBOOLEAN) {
+        show_msg = true;
+    }
+
+    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
+    if (!hMod) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    twdll::TW_CAString str{};
+    str.m_len = static_cast<uint32_t>(strlen(trait_key));
+    str.m_pad = str.m_len;
+    str.m_data = trait_key;
+
+    using FnAddTrait = int(__thiscall*)(void* ch, const twdll::TW_CAString* trait_str, int points, int show_msg);
+    auto fnAddTrait = reinterpret_cast<FnAddTrait>(
+        reinterpret_cast<uintptr_t>(hMod) + 0x00797900);
+
+    fnAddTrait(ch, &str, points, show_msg ? 1 : 0);
+    Log("[twdll] char:AddTrait: added trait '%s' to character 0x%08X", trait_key, reinterpret_cast<uintptr_t>(ch));
+    l_pushboolean(L, 1);
+    return 1;
+}
+
+/***
+Removes the specified trait from this character and recalculates active character bonus effects.
+@function RemoveTrait
+@tparam string trait_key the trait record key to remove
+@treturn boolean true if the trait was found and removed, false otherwise
+*/
+static int RemoveTrait(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    const char* trait_key = l_checkstring(L, 2);
+    auto* traits = &ch->details.traits;
+    if (!traits || !traits->m_elements || traits->m_size == 0) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    for (uint32_t i = 0; i < traits->m_size; ++i) {
+        auto& entry = traits->m_elements[i];
+        if (entry.m_record) {
+            auto* char_trait_rec = *reinterpret_cast<const char* const*>(entry.m_record);
+            if (char_trait_rec) {
+                const char* key = *reinterpret_cast<const char* const*>(char_trait_rec + 0x8);
+                if (key && strcmp(key, trait_key) == 0) {
+                    if (entry.m_level_record && traits->_vptr) {
+                        using FnOnRemoveLevel = void(__thiscall*)(void*, void*);
+                        auto* vtbl = static_cast<FnOnRemoveLevel*>(traits->_vptr);
+                        if (vtbl) {
+                            vtbl[0](traits, entry.m_level_record);
+                        }
+                    }
+                    for (uint32_t j = i; j + 1 < traits->m_size; ++j) {
+                        traits->m_elements[j] = traits->m_elements[j + 1];
+                    }
+                    traits->m_size--;
+
+                    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
+                    if (hMod) {
+                        using FnSetEffectList = void(__thiscall*)(void*);
+                        auto fnSetEffectList = reinterpret_cast<FnSetEffectList>(
+                            reinterpret_cast<uintptr_t>(hMod) + 0x00728750);
+                        fnSetEffectList(traits);
+                    }
+
+                    Log("[twdll] char:RemoveTrait: removed trait '%s'", trait_key);
+                    l_pushboolean(L, 1);
+                    return 1;
+                }
+            }
+        }
+    }
+
+    l_pushboolean(L, 0);
+    return 1;
+}
+
+/***
+Returns a list of all trait keys currently present on this character.
+@function GetTraitList
+@treturn table array of trait key strings (e.g. {"att_trait_all_personality_brave", ...})
+*/
+static int GetTraitList(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_newtable(L);
+        return 1;
+    }
+    auto* traits = &ch->details.traits;
+    l_newtable(L);
+    if (!traits || !traits->m_elements || traits->m_size == 0) {
+        return 1;
+    }
+    int idx = 1;
+    for (uint32_t i = 0; i < traits->m_size; ++i) {
+        const auto& entry = traits->m_elements[i];
+        if (entry.m_record) {
+            auto* char_trait_rec = *reinterpret_cast<const char* const*>(entry.m_record);
+            if (char_trait_rec) {
+                const char* key = *reinterpret_cast<const char* const*>(char_trait_rec + 0x8);
+                if (key && key[0] != '\0') {
+                    l_pushinteger(L, idx++);
+                    l_pushstring(L, key);
+                    l_settable(L, -3);
+                }
+            }
+        }
+    }
+    return 1;
+}
+
 extern const luaL_Reg character_functions[] = {
     {nullptr, nullptr}
 };
@@ -250,6 +386,9 @@ static const luaL_Reg character_methods[] = {
     {"SetPoliticalParty",     SetPoliticalParty},
     {"GetArtSet",             GetArtSet},
     {"SetArtSet",             SetArtSet},
+    {"AddTrait",              AddTrait},
+    {"RemoveTrait",           RemoveTrait},
+    {"GetTraitList",          GetTraitList},
     {nullptr, nullptr}
 };
 

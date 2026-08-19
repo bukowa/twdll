@@ -36,6 +36,8 @@ extern "C" {
 #define l_pushvalue     lua_pushvalue
 #define l_pcall         lua_pcall
 #define l_loadstring    luaB_loadstring
+#define l_getglobal     lua_getglobal
+#define l_newtable      lua_newtable
 
 #else
 // ── Production mode — function pointers resolved from the game binary ────────
@@ -137,6 +139,8 @@ extern lua_settop_t        g_game_lua_settop;
 #define l_type          g_game_lua_type
 #define l_settop        g_game_lua_settop
 #define l_pop(L, n)     g_game_lua_settop(L, -(n)-1)
+#define l_getglobal(L, s) g_game_lua_getfield(L, LUA_GLOBALSINDEX, s)
+#define l_newtable(L)   g_game_lua_createtable(L, 0, 0)
 
 // Signature scan descriptor — used by lua_api.cpp + per-game lua_sigs.cpp
 struct TW_SignatureInfo {

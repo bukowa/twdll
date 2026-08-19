@@ -89,7 +89,10 @@ local function run_twdll_tests()
             local c = chars:item_at(i)
             if c:military_force() ~= nil then
                 char = c
-                twdll.core.Log(string.format("[TEST] picked character cqi=%d (first with a military force)", c:cqi()))
+                local fname = (type(c.get_forename) == "function") and tostring(c:get_forename()) or "unknown"
+                local sname = (type(c.get_surname) == "function") and tostring(c:get_surname()) or ""
+                local stype = (type(c.character_subtype_key) == "function") and tostring(c:character_subtype_key()) or ""
+                twdll.core.Log(string.format("[TEST] picked character cqi=%d name='%s %s' subtype='%s' (first with a military force)", c:cqi(), fname, sname, stype))
                 break
             end
         end
@@ -1388,6 +1391,169 @@ local function run_twdll_tests()
                         report("force:SetIntegrity restored initial value", math.abs(restored_val - initial_integrity) < 0.01)
                     else
                         twdll.core.Log("[TEST] Force has no integrity tracker: SKIPPING value tests")
+                        record_skip()
+                    end
+                end
+            end
+        end
+
+        -- ======================================================
+        -- TEST 22: World Max Character Traits Limit API
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 22: World Max Character Traits Limit API ---")
+        do
+            if type(twdll.world.GetMaxTraits) ~= "function" or type(twdll.world.SetMaxTraits) ~= "function" then
+                twdll.core.Log("[TEST] Max Traits API: FAILED (methods not found)")
+                report("world max traits methods registered", false)
+            else
+                report("world max traits methods registered", true)
+
+                local initial_max_traits = twdll.world.GetMaxTraits()
+                twdll.core.Log(string.format("[TEST] Initial GetMaxTraits() = %s", tostring(initial_max_traits)))
+                report("twdll.world.GetMaxTraits returns number", type(initial_max_traits) == "number")
+                report("twdll.world.GetMaxTraits initial value is 10", initial_max_traits == 10)
+
+                -- Test setting to 30
+                twdll.world.SetMaxTraits(30)
+                local modified_traits = twdll.world.GetMaxTraits()
+                twdll.core.Log(string.format("[TEST] GetMaxTraits() after SetMaxTraits(30) = %s", tostring(modified_traits)))
+                report("twdll.world.SetMaxTraits(30) verified", modified_traits == 30)
+
+                -- Test minimum clamp
+                twdll.world.SetMaxTraits(0)
+                local clamped_traits = twdll.world.GetMaxTraits()
+                report("twdll.world.SetMaxTraits clamps < 1 to 1", clamped_traits == 1)
+
+                -- Restore default 10
+                twdll.world.SetMaxTraits(10)
+                local restored_traits = twdll.world.GetMaxTraits()
+                report("twdll.world.SetMaxTraits restored to 10", restored_traits == 10)
+            end
+        end
+
+        -- ======================================================
+        -- TEST 23: Character Trait Manipulation API (AddTrait, RemoveTrait, GetTraitList)
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 23: Character Trait Manipulation API ---")
+        do
+            local test_char = char
+            if not test_char then
+                local chars = game:model():world():faction_by_key(faction):character_list()
+                if chars:num_items() > 0 then
+                    test_char = chars:item_at(0)
+                end
+            end
+
+            if not test_char then
+                twdll.core.Log("[TEST] Character Trait API: SKIPPED (no character found)")
+                record_skip()
+            else
+                if type(test_char.AddTrait) ~= "function" or type(test_char.RemoveTrait) ~= "function" or type(test_char.GetTraitList) ~= "function" then
+                    twdll.core.Log("[TEST] Character Trait API: FAILED (methods not found on character)")
+                    report("character trait methods registered", false)
+                else
+                    report("character trait methods registered", true)
+
+                    local fname = (type(test_char.get_forename) == "function") and tostring(test_char:get_forename()) or "unknown"
+                    local sname = (type(test_char.get_surname) == "function") and tostring(test_char:get_surname()) or ""
+                    twdll.core.Log(string.format("[TEST] Testing traits on character cqi=%d ('%s %s')", test_char:cqi(), fname, sname))
+
+                    -- 1. Inspect initial traits
+                    local initial_traits = test_char:GetTraitList()
+                    twdll.core.Log(string.format("[TEST] Initial trait count via GetTraitList: %d", #initial_traits))
+                    report("char:GetTraitList returns table", type(initial_traits) == "table")
+                    for i, t in ipairs(initial_traits) do
+                        twdll.core.Log(string.format("[TEST]   Trait [%d]: %s", i, tostring(t)))
+                    end
+
+                    if #initial_traits > 0 then
+                        -- 2. Test RemoveTrait on a real verified trait
+                        local trait_to_remove = initial_traits[#initial_traits]
+                        twdll.core.Log(string.format("[TEST] Selected trait to remove: %s", tostring(trait_to_remove)))
+                        local removed = test_char:RemoveTrait(trait_to_remove)
+                        twdll.core.Log(string.format("[TEST] char:RemoveTrait('%s') result = %s", tostring(trait_to_remove), tostring(removed)))
+                        report("char:RemoveTrait returned true", removed == true)
+
+                        -- 3. Verify trait is gone from GetTraitList
+                        local after_remove_traits = test_char:GetTraitList()
+                        local still_present = false
+                        for _, t in ipairs(after_remove_traits) do
+                            if t == trait_to_remove then still_present = true break end
+                        end
+                        report("char:RemoveTrait verified absent from GetTraitList", not still_present)
+                        report("char:GetTraitList count decremented by 1", #after_remove_traits == #initial_traits - 1)
+
+                        -- 4. Test AddTrait to restore the verified trait
+                        local added = test_char:AddTrait(trait_to_remove, 1, false)
+                        twdll.core.Log(string.format("[TEST] char:AddTrait('%s') result = %s", tostring(trait_to_remove), tostring(added)))
+                        report("char:AddTrait returned true", added == true)
+
+                        -- ======================================================
+                        -- 5. Test Exceeding Vanilla 10-Trait Cap (> 10 traits)
+                        -- ======================================================
+                        twdll.core.Log("[TEST] --- Testing Trait Limit Increase (> 10 traits) ---")
+                        twdll.world.SetMaxTraits(20)
+
+                        -- Harvest valid trait keys from characters across the campaign world
+                        local trait_pool = {}
+                        local seen_traits = {}
+                        for _, tk in ipairs(test_char:GetTraitList()) do
+                            seen_traits[tk] = true
+                        end
+
+                        local all_factions = game:model():world():faction_list()
+                        for fi = 0, all_factions:num_items() - 1 do
+                            local f_obj = all_factions:item_at(fi)
+                            local fc_list = f_obj:character_list()
+                            for ci = 0, fc_list:num_items() - 1 do
+                                local fc = fc_list:item_at(ci)
+                                local ctraits = fc:GetTraitList()
+                                for _, tk in ipairs(ctraits) do
+                                    if not seen_traits[tk] then
+                                        seen_traits[tk] = true
+                                        table.insert(trait_pool, tk)
+                                    end
+                                end
+                            end
+                            if #trait_pool >= 20 then break end
+                        end
+
+                        twdll.core.Log(string.format("[TEST] Harvested %d valid candidate traits from campaign world", #trait_pool))
+
+                        -- Add traits until we exceed 10 (target: 14 traits)
+                        local current_traits = test_char:GetTraitList()
+                        local target_count = 14
+                        for _, new_trait in ipairs(trait_pool) do
+                            if #current_traits >= target_count then break end
+                            test_char:AddTrait(new_trait, 1, false)
+                            current_traits = test_char:GetTraitList()
+                        end
+
+                        local final_traits = test_char:GetTraitList()
+                        twdll.core.Log(string.format("[TEST] Character trait count after expansion: %d (exceeds vanilla 10 cap!)", #final_traits))
+                        report("character trait count exceeds vanilla cap of 10", #final_traits > 10)
+                        report("character reached target trait count (14)", #final_traits >= 14)
+
+                        twdll.core.Log("[TEST] === Character Final Trait List (Visual Inspection) ===")
+                        for i, t in ipairs(final_traits) do
+                            twdll.core.Log(string.format("[TEST]   [%02d] %s", i, tostring(t)))
+                        end
+
+                        -- ======================================================
+                        -- 6. Remove ALL traits (Visual verification: character will have 0 traits in game)
+                        -- ======================================================
+                        twdll.core.Log("[TEST] --- Removing ALL traits from character (Clean Slate Test) ---")
+                        local traits_to_clean = test_char:GetTraitList()
+                        twdll.core.Log(string.format("[TEST] Purging all %d traits from character...", #traits_to_clean))
+                        for _, tk in ipairs(traits_to_clean) do
+                            test_char:RemoveTrait(tk)
+                        end
+
+                        local empty_traits = test_char:GetTraitList()
+                        twdll.core.Log(string.format("[TEST] Character trait count after total purge: %d", #empty_traits))
+                        report("all traits successfully removed (count == 0)", #empty_traits == 0)
+                    else
+                        twdll.core.Log("[TEST] Character has 0 traits: SKIPPING remove/add cycle")
                         record_skip()
                     end
                 end

@@ -66,6 +66,7 @@ FnConvertUnit          g_convert_unit           = nullptr;
 
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
+const uintptr_t OFFSET_MAX_TRAITS     = 0x2188610;
 
 void refresh_settlements_display() {
     if (!g_force_settlement_refresh_addr && g_update_animation_addr) {

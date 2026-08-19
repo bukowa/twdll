@@ -253,6 +253,35 @@ static int GetReinforcementCap(lua_State* L) {
     return 1;
 }
 
+/***
+Gets the maximum number of traits a character can have at any one time (vanilla default is 10).
+@function GetMaxTraits
+@treturn integer maximum trait count
+*/
+static int GetMaxTraits(lua_State* L) {
+    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
+        l_pushinteger(L, *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_TRAITS));
+        return 1;
+    }
+    l_pushnil(L);
+    return 1;
+}
+
+/***
+Sets the maximum number of traits a character can have at any one time.
+@function SetMaxTraits
+@tparam integer val new maximum trait count (e.g. 20, 30, 50)
+*/
+static int SetMaxTraits(lua_State* L) {
+    int val = static_cast<int>(l_tointeger(L, 1));
+    if (val < 1) val = 1;
+    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
+        *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_TRAITS) = val;
+        Log("[twdll] SetMaxTraits: %d", val);
+    }
+    return 0;
+}
+
 extern const luaL_Reg world_functions[] = {
     {"GetMemoryAddress",    GetMemoryAddress},
     {"GetFactionCount",     GetFactionCount},
@@ -262,6 +291,8 @@ extern const luaL_Reg world_functions[] = {
     {"SetMaxUnitsInNavy",   SetMaxUnitsInNavy},
     {"GetReinforcementCap", GetReinforcementCap},
     {"SetReinforcementCap", SetReinforcementCap},
+    {"GetMaxTraits",        GetMaxTraits},
+    {"SetMaxTraits",        SetMaxTraits},
     {nullptr, nullptr}
 };
 

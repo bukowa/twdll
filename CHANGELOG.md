@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `AddTrait(trait_key, [show_message])`, `RemoveTrait(trait_key)`, and `GetTraitList()` — dynamically adds traits (via native command queue), removes traits and cleanly recalculates active stat bonuses and effect bundles, and returns a Lua array of all trait key strings currently present on the character.
+- Added `twdll.world.GetMaxTraits()` and `twdll.world.SetMaxTraits(val)` — dynamically gets or sets the maximum character trait cap (vanilla hardcap of 10), enabling characters to acquire and display more traits across all trait acquisition systems.
 - Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `GetIntegrity()`, `SetIntegrity(value)`, and `HasIntegrity()` — dynamically gets, sets (with clamping between 0.0 and 100.0), or checks army integrity in real time.
 - Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `Disband()` — disbands (permanently removes) this unit from its military force using the engine's native disband path.
 - Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `DisbandUnits(...)` — disbands one or more units from the military force, accepting either `UNIT_SCRIPT_INTERFACE` objects or integer unit indices (0-indexed) as varargs.

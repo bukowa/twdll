@@ -105,6 +105,14 @@ after the call.</td>
 	<td class="summary">Returns the currently applied reinforcement cap, or nil if the game default is
 in effect.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxTraits">GetMaxTraits ()</a></td>
+	<td class="summary">Gets the maximum number of traits a character can have at any one time (vanilla default is 10).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxTraits">SetMaxTraits (val)</a></td>
+	<td class="summary">Sets the maximum number of traits a character can have at any one time.</td>
+	</tr>
 </table>
 
 <br/>
@@ -275,6 +283,47 @@ in effect.
            <span class="types"><span class="type">integer</span></span>
         current cap value
     </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetMaxTraits"></a>
+    <strong>GetMaxTraits ()</strong>
+    </dt>
+    <dd>
+    Gets the maximum number of traits a character can have at any one time (vanilla default is 10).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum trait count
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetMaxTraits"></a>
+    <strong>SetMaxTraits (val)</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of traits a character can have at any one time.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">val</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum trait count (e.g. 20, 30, 50)
+        </li>
+    </ul>
+
 
 
 

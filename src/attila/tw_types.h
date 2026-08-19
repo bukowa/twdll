@@ -236,12 +236,30 @@ struct TW_GeneralBodyguardDetails {
     float    m_experience_progress;       // 0x10
 };
 
+struct TW_TraitEntry {
+    void*    m_record;       // 0x00 (const TRAIT_INFO_RECORD*)
+    void*    m_level_record; // 0x04 (const CHARACTER_TRAIT_LEVEL_RECORD*)
+    int32_t  m_points;       // 0x08
+};
+
+struct TW_Traits {
+    void*           _vptr;      // 0x00
+    void*           m_capacity; // 0x04
+    uint32_t        m_size;     // 0x08
+    TW_TraitEntry*  m_elements; // 0x0C
+    char            pad_10[0x18]; // 0x10 m_effects (CAMPAIGN_EFFECT_LIST)
+};
+static_assert(sizeof(TW_TraitEntry) == 12, "TW_TraitEntry size must be 12");
+static_assert(sizeof(TW_Traits) == 0x28, "TW_Traits size must be 0x28");
+
 struct TW_CharacterDetails {
     char                          pad_00[0x4];
     TW_FamilyMember*              family_member;       // 0x04  (= CHARACTER+0x208)
     char                          pad_08[0xA4];
     TW_CharacterDetailsArtSetInfo m_art_set_info;      // 0xAC  (= CHARACTER+0x2B0)
-    char                          pad_EC[0x200];
+    char                          pad_EC[0x18];
+    TW_Traits                     traits;              // 0x104 (= CHARACTER+0x308)
+    char                          pad_12C[0x1C0];
     void*                         m_political_party;   // 0x2EC (= CHARACTER+0x4F0, const POLITICAL_PARTY_RECORD*)
     char                          pad_2F0[0x4];
     int                           political_gravitas;  // 0x2F4 (= CHARACTER+0x4F8, CA::card32)
@@ -629,6 +647,9 @@ TW_ASSERT_OFFSET(TW_SettlementExpansionSlot, m_rotation,              0x08);
 TW_ASSERT_OFFSET(TW_SettlementExpansionManager, m_slots,              0x14);
 TW_ASSERT_OFFSET(TW_Settlement, m_settlement_expansion_manager,       0x1A8);
 TW_ASSERT_OFFSET(TW_RegionSlot, m_slot_manager,                       0x1C8);
+TW_ASSERT_OFFSET(TW_CharacterDetails, traits,                         0x104);
+TW_ASSERT_OFFSET(TW_Traits, m_size,                                   0x8);
+TW_ASSERT_OFFSET(TW_Traits, m_elements,                               0xC);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.
