@@ -83,6 +83,18 @@
 	<td class="name" nowrap><a href="#DisbandUnits">DisbandUnits (...)</a></td>
 	<td class="summary">Disbands (permanently removes) one or more units from this military force.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetIntegrity">GetIntegrity ()</a></td>
+	<td class="summary">Returns the current integrity (army morale) value between 0.0 and 100.0, or nil if none.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetIntegrity">SetIntegrity (value)</a></td>
+	<td class="summary">Sets the integrity (army morale) value, clamped between 0.0 and 100.0.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#HasIntegrity">HasIntegrity ()</a></td>
+	<td class="summary">Returns whether this military force uses the integrity / army morale system.</td>
+	</tr>
 </table>
 
 <br/>
@@ -153,6 +165,73 @@ Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit<e
 
            <span class="types"><span class="type">boolean</span></span>
         true if units were successfully disbanded, false otherwise
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetIntegrity"></a>
+    <strong>GetIntegrity ()</strong>
+    </dt>
+    <dd>
+    Returns the current integrity (army morale) value between 0.0 and 100.0, or nil if none.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        integrity value (0.0 to 100.0) or nil
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetIntegrity"></a>
+    <strong>SetIntegrity (value)</strong>
+    </dt>
+    <dd>
+    Sets the integrity (army morale) value, clamped between 0.0 and 100.0.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">number</span></span>
+         new integrity value (0.0 to 100.0)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "HasIntegrity"></a>
+    <strong>HasIntegrity ()</strong>
+    </dt>
+    <dd>
+    Returns whether this military force uses the integrity / army morale system.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the force has integrity tracking
     </ol>
 
 
