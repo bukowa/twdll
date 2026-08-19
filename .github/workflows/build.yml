@@ -213,6 +213,7 @@ jobs:
           cd ..
           echo "docs_name=${DOCS_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
           sha256sum "${ARCHIVE_NAME}" "${DOCS_ARCHIVE_NAME}" > SHA256SUMS.txt
+          unzip -q -j "${ARCHIVE_NAME}" "twdll_attila.dll"
 
       - name: Generate Artifact Attestation
         uses: actions/attest@v4
@@ -220,6 +221,7 @@ jobs:
           subject-path: |
             ${{ steps.archive.outputs.name }}
             ${{ steps.archive.outputs.docs_name }}
+            twdll_attila.dll
 
       - name: VirusTotal Scan
         id: vt
@@ -227,7 +229,9 @@ jobs:
         uses: crazy-max/ghaction-virustotal@v5
         with:
           vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
-          files: ${{ steps.archive.outputs.name }}
+          files: |
+            ${{ steps.archive.outputs.name }}
+            twdll_attila.dll
           request_rate: 4
 
       - name: Extract Changelog Entry
@@ -320,6 +324,9 @@ jobs:
       - name: Create ZIP archive with source code
         run: zip -q -r source-code.zip . -x ".git/*" -x "**/.git/*" -x "*.zip"
 
+      - name: Extract binaries for direct attestation and scanning
+        run: unzip -q -j "${{ steps.archive.outputs.name }}" "twdll_attila.dll"
+
       - name: Compute SHA-256 checksums
         run: sha256sum "${{ steps.archive.outputs.name }}" "${{ steps.archive.outputs.docs_name }}" source-code.zip > SHA256SUMS.txt
 
@@ -330,6 +337,7 @@ jobs:
             ${{ steps.archive.outputs.name }}
             ${{ steps.archive.outputs.docs_name }}
             source-code.zip
+            twdll_attila.dll
 
       - name: VirusTotal Scan
         id: vt
@@ -337,7 +345,9 @@ jobs:
         uses: crazy-max/ghaction-virustotal@v5
         with:
           vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
-          files: ${{ steps.archive.outputs.name }}
+          files: |
+            ${{ steps.archive.outputs.name }}
+            twdll_attila.dll
           request_rate: 4
 
       - name: Prepare Release Notes
