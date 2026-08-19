@@ -87,6 +87,7 @@ jobs:
           # Copy-Item -Path "build\ci-rome2\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_rome2.pdb"  # Rome 2 frozen
           Copy-Item -Path "build\ci-attila\twdll.dll"  -Destination "${{env.STAGING_DIR}}\twdll_attila.dll"
           Copy-Item -Path "build\ci-attila\twdll.pdb"  -Destination "${{env.STAGING_DIR}}\twdll_attila.pdb"
+          Get-ChildItem -Path "${{env.STAGING_DIR}}" -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content -Path "${{env.STAGING_DIR}}\SHA256SUMS.txt"
         shell: pwsh
 
       - name: Create Release ZIP Archive
@@ -207,6 +208,7 @@ jobs:
           zip -q -r "../${DOCS_ARCHIVE_NAME}" .
           cd ..
           echo "docs_name=${DOCS_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
+          sha256sum "${ARCHIVE_NAME}" "${DOCS_ARCHIVE_NAME}" > SHA256SUMS.txt
 
       - name: Extract Changelog Entry
         id: changelog
@@ -226,6 +228,12 @@ jobs:
           echo "---" >> $GITHUB_ENV
           echo "## Changelog" >> $GITHUB_ENV
           echo "$CHANGELOG_BODY" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "---" >> $GITHUB_ENV
+          echo "### SHA-256 Checksums" >> $GITHUB_ENV
+          echo '```' >> $GITHUB_ENV
+          cat SHA256SUMS.txt >> $GITHUB_ENV
+          echo '```' >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Create GitHub Release and Upload Assets
@@ -235,6 +243,7 @@ jobs:
           files: |
             ${{ steps.archive.outputs.name }}
             ${{ steps.archive.outputs.docs_name }}
+            SHA256SUMS.txt
 
   # ===============================================================
   # JOB 4: Publish the Dev Build (Nightly)
@@ -282,6 +291,9 @@ jobs:
       - name: Create ZIP archive with source code
         run: zip -q -r source-code.zip . -x ".git/*" -x "**/.git/*" -x "*.zip"
 
+      - name: Compute SHA-256 checksums
+        run: sha256sum "${{ steps.archive.outputs.name }}" "${{ steps.archive.outputs.docs_name }}" source-code.zip > SHA256SUMS.txt
+
       - name: Prepare Release Notes
         id: prep_notes
         run: |
@@ -294,6 +306,12 @@ jobs:
             echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
             echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.docs_name }})**"
             echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
+            echo ""
+            echo "---"
+            echo "### SHA-256 Checksums"
+            echo '```'
+            cat SHA256SUMS.txt
+            echo '```'
             echo ""
             echo "---"
             echo "## Unreleased Changes"
@@ -310,4 +328,4 @@ jobs:
           gh release edit nightly --title "Dev Build (from master)" --notes-file release_notes.md
       - name: Upload/Overwrite Release Assets (using gh CLI)
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-        run: gh release upload nightly ${{ steps.archive.outputs.name }} ${{ steps.archive.outputs.docs_name }} source-code.zip --clobber
+        run: gh release upload nightly ${{ steps.archive.outputs.name }} ${{ steps.archive.outputs.docs_name }} source-code.zip SHA256SUMS.txt --clobber
