@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.29)
-project(libtwdll LANGUAGES C CXX)
+project(libtwdll LANGUAGES C CXX RC)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +22,7 @@ message(STATUS "Building for game: ${TW_GAME}")
 # Common sources shared across all games
 set(TWDLL_COMMON_SOURCES
     src/main.cpp
+    src/twdll.rc
     src/common/log.cpp
     src/common/lua_api.cpp
     src/common/lua_core.cpp
