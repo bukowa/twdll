@@ -212,8 +212,8 @@ jobs:
           zip -q -r "../${DOCS_ARCHIVE_NAME}" .
           cd ..
           echo "docs_name=${DOCS_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
-          sha256sum "${ARCHIVE_NAME}" "${DOCS_ARCHIVE_NAME}" > SHA256SUMS.txt
-          unzip -q -j "${ARCHIVE_NAME}" "twdll_attila.dll"
+          unzip -q -j "${ARCHIVE_NAME}" "twdll_attila.dll" "twdll_attila.pdb"
+          sha256sum "${ARCHIVE_NAME}" "${DOCS_ARCHIVE_NAME}" twdll_attila.dll twdll_attila.pdb > SHA256SUMS.txt
 
       - name: Generate Artifact Attestation
         uses: actions/attest@v4
@@ -222,6 +222,7 @@ jobs:
             ${{ steps.archive.outputs.name }}
             ${{ steps.archive.outputs.docs_name }}
             twdll_attila.dll
+            twdll_attila.pdb
 
       - name: VirusTotal Scan
         id: vt
@@ -244,14 +245,14 @@ jobs:
             echo "::error::Changelog entry for version '$VERSION' not found!"
             exit 1
           fi
+          DLL_HASH=$(sha256sum twdll_attila.dll | awk '{print $1}')
           echo "body<<EOF" >> $GITHUB_ENV
           echo "## Quick Download" >> $GITHUB_ENV
           echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**" >> $GITHUB_ENV
           echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.docs_name }})**" >> $GITHUB_ENV
           echo "**Security Attestation: [Verified Sigstore Attestation](https://github.com/${{ github.repository }}/attestations)**" >> $GITHUB_ENV
-          VT_URL=$(echo "${{ steps.vt.outputs.analysis }}" | grep -o 'https://[^ ]*' | head -n 1)
-          if [ -n "$VT_URL" ]; then
-            echo "**VirusTotal Scan: [Multi-AV Report]($VT_URL)**" >> $GITHUB_ENV
+          if [ -n "$VIRUSTOTAL_API_KEY" ]; then
+            echo "**VirusTotal Scan (DLL): [Multi-AV Report](https://www.virustotal.com/gui/file/${DLL_HASH})**" >> $GITHUB_ENV
           fi
           echo "" >> $GITHUB_ENV
           echo "---" >> $GITHUB_ENV
@@ -325,10 +326,10 @@ jobs:
         run: zip -q -r source-code.zip . -x ".git/*" -x "**/.git/*" -x "*.zip"
 
       - name: Extract binaries for direct attestation and scanning
-        run: unzip -q -j "${{ steps.archive.outputs.name }}" "twdll_attila.dll"
+        run: unzip -q -j "${{ steps.archive.outputs.name }}" "twdll_attila.dll" "twdll_attila.pdb"
 
       - name: Compute SHA-256 checksums
-        run: sha256sum "${{ steps.archive.outputs.name }}" "${{ steps.archive.outputs.docs_name }}" source-code.zip > SHA256SUMS.txt
+        run: sha256sum "${{ steps.archive.outputs.name }}" "${{ steps.archive.outputs.docs_name }}" source-code.zip twdll_attila.dll twdll_attila.pdb > SHA256SUMS.txt
 
       - name: Generate Artifact Attestation
         uses: actions/attest@v4
@@ -338,6 +339,7 @@ jobs:
             ${{ steps.archive.outputs.docs_name }}
             source-code.zip
             twdll_attila.dll
+            twdll_attila.pdb
 
       - name: VirusTotal Scan
         id: vt
@@ -355,6 +357,7 @@ jobs:
         run: |
           sed -i 's/\r$//' CHANGELOG.md
           CHANGELOG_BODY=$(awk 'BEGIN{hdr="## [Unreleased]"} index($0, hdr) == 1 {f=1;next} f && /^## \[/{f=0} f' CHANGELOG.md)
+          DLL_HASH=$(sha256sum twdll_attila.dll | awk '{print $1}')
           {
             echo "This is the latest development build from the **master** branch. Assets are automatically updated on every push."
             echo ""
@@ -363,9 +366,8 @@ jobs:
             echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.docs_name }})**"
             echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
             echo "**Security Attestation: [Verified Sigstore Attestation](https://github.com/${{ github.repository }}/attestations)**"
-            VT_URL=$(echo "${{ steps.vt.outputs.analysis }}" | grep -o 'https://[^ ]*' | head -n 1)
-            if [ -n "$VT_URL" ]; then
-              echo "**VirusTotal Scan: [Multi-AV Report]($VT_URL)**"
+            if [ -n "$VIRUSTOTAL_API_KEY" ]; then
+              echo "**VirusTotal Scan (DLL): [Multi-AV Report](https://www.virustotal.com/gui/file/${DLL_HASH})**"
             fi
             echo ""
             echo "---"
