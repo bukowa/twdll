@@ -179,6 +179,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -209,6 +211,22 @@ jobs:
           cd ..
           echo "docs_name=${DOCS_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
           sha256sum "${ARCHIVE_NAME}" "${DOCS_ARCHIVE_NAME}" > SHA256SUMS.txt
+
+      - name: Generate Artifact Attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ steps.archive.outputs.name }}
+            ${{ steps.archive.outputs.docs_name }}
+
+      - name: VirusTotal Scan
+        id: vt
+        if: ${{ secrets.VIRUSTOTAL_API_KEY != '' }}
+        uses: crazy-max/ghaction-virustotal@v5
+        with:
+          vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
+          files: ${{ steps.archive.outputs.name }}
+          request_rate: 4
 
       - name: Extract Changelog Entry
         id: changelog
@@ -255,6 +273,8 @@ jobs:
     permissions:
       contents: write
       actions: write
+      id-token: write
+      attestations: write
     steps:
       - name: Cancel previous nightly runs
         uses: styfle/cancel-workflow-action@0.12.1
@@ -293,6 +313,23 @@ jobs:
 
       - name: Compute SHA-256 checksums
         run: sha256sum "${{ steps.archive.outputs.name }}" "${{ steps.archive.outputs.docs_name }}" source-code.zip > SHA256SUMS.txt
+
+      - name: Generate Artifact Attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ steps.archive.outputs.name }}
+            ${{ steps.archive.outputs.docs_name }}
+            source-code.zip
+
+      - name: VirusTotal Scan
+        id: vt
+        if: ${{ secrets.VIRUSTOTAL_API_KEY != '' }}
+        uses: crazy-max/ghaction-virustotal@v5
+        with:
+          vt_api_key: ${{ secrets.VIRUSTOTAL_API_KEY }}
+          files: ${{ steps.archive.outputs.name }}
+          request_rate: 4
 
       - name: Prepare Release Notes
         id: prep_notes
