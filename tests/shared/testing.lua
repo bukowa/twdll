@@ -22,6 +22,17 @@ local function run_twdll_tests()
         end
         local function record_skip() skipped = skipped + 1 end
 
+        -- Verify twdll.core.Log handles arbitrary types (nil, boolean, number, table) without errors
+        local log_test_ok = pcall(function()
+            twdll.core.Log("[TEST] twdll.core.Log multi-type test:", nil, true, 123, { test = 1 })
+        end)
+        if log_test_ok then
+            twdll.core.Log("[TEST] twdll.core.Log multi-type: OK")
+            report("twdll.core.Log multi-type", true)
+        else
+            report("twdll.core.Log multi-type", false)
+        end
+
         -- ======================================================
         -- TEST 1: Verify WORLD and CAMPAIGN_UI singleton hooks
         -- ======================================================
