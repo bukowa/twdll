@@ -114,6 +114,18 @@ receive this unit type as their default bodyguard.</td>
 	<td class="name" nowrap><a href="#SetArtSet">SetArtSet (art_set_key)</a></td>
 	<td class="summary">Sets the art set for this character, updating all 3D models (campaign, battle, politician) and 2D portraits.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#AddTrait">AddTrait (trait_key[, show_message=false])</a></td>
+	<td class="summary">Adds the specified character trait to this character using the engine's native command queue.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#RemoveTrait">RemoveTrait (trait_key)</a></td>
+	<td class="summary">Removes the specified trait from this character and recalculates active character bonus effects.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetTraitList">GetTraitList ()</a></td>
+	<td class="summary">Returns a list of all trait keys currently present on this character.</td>
+	</tr>
 </table>
 
 <br/>
@@ -346,6 +358,85 @@ CAMPAIGN<em>POLITICAL</em>PARTY userdata or a party record key string.
 
            <span class="types"><span class="type">boolean</span></span>
         true on success, false on failure
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "AddTrait"></a>
+    <strong>AddTrait (trait_key[, show_message=false])</strong>
+    </dt>
+    <dd>
+    Adds the specified character trait to this character using the engine's native command queue.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">trait_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the trait record key (e.g. "att<em>trait</em>all<em>personality</em>brave")
+        </li>
+        <li><span class="parameter">show_message</span>
+            <span class="types"><span class="type">boolean</span></span>
+         whether to show the on-screen event message
+         (<em>default</em> false)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "RemoveTrait"></a>
+    <strong>RemoveTrait (trait_key)</strong>
+    </dt>
+    <dd>
+    Removes the specified trait from this character and recalculates active character bonus effects.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">trait_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the trait record key to remove
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the trait was found and removed, false otherwise
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetTraitList"></a>
+    <strong>GetTraitList ()</strong>
+    </dt>
+    <dd>
+    Returns a list of all trait keys currently present on this character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+        array of trait key strings (e.g. {"att<em>trait</em>all<em>personality</em>brave", ...})
     </ol>
 
 
