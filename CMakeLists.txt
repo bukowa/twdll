@@ -19,21 +19,32 @@ set_property(CACHE TW_GAME PROPERTY STRINGS rome2 attila)
 message(STATUS "Building for game: ${TW_GAME}")
 
 # ── Source files ──────────────────────────────────────────────────────────────
-# Common sources shared across all games
-set(TWDLL_COMMON_SOURCES
-    src/main.cpp
-    src/common/log.cpp
-    src/common/lua_api.cpp
-    src/common/lua_core.cpp
-    src/common/game_api.cpp
-    src/common/signature_scanner.cpp
-)
-
-# Game-specific sources (struct layouts, Lua signatures)
-file(GLOB_RECURSE TWDLL_GAME_SOURCES CONFIGURE_DEPENDS "src/${TW_GAME}/*.cpp")
+if(TW_GAME STREQUAL "attila")
+    set(TWDLL_ENTRY_SOURCE src/main.cpp)
+    set(TWDLL_COMMON_SOURCES
+        src/common/log.cpp
+        src/common/lua_api.cpp
+        src/common/lua_core.cpp
+        src/common/game_api.cpp
+        src/common/signature_scanner.cpp
+    )
+    file(GLOB_RECURSE TWDLL_GAME_SOURCES CONFIGURE_DEPENDS "src/attila/*.cpp")
+elseif(TW_GAME STREQUAL "rome2")
+    set(TWDLL_ENTRY_SOURCE src/main_rome2.cpp)
+    set(TWDLL_COMMON_SOURCES
+        src/common/log.cpp
+        src/common/lua_api.cpp
+        src/common/signature_scanner.cpp
+    )
+    set(TWDLL_GAME_SOURCES
+        src/rome2/campaign_hooks.cpp
+        src/rome2/lua_sigs.cpp
+    )
+endif()
 
 # ── Library target ────────────────────────────────────────────────────────────
 add_library(twdll SHARED
+    ${TWDLL_ENTRY_SOURCE}
     ${TWDLL_COMMON_SOURCES}
     ${TWDLL_GAME_SOURCES}
 )
