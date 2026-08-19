@@ -2,6 +2,8 @@
 
 ![Build](https://github.com/bukowa/twdll/actions/workflows/build.yml/badge.svg)
 ![CodeQL](https://github.com/bukowa/twdll/actions/workflows/codeql-analysis.yml/badge.svg)
+[![Attestations](https://img.shields.io/badge/Sigstore-Attested-success?logo=github)](https://github.com/bukowa/twdll/attestations)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Chat-5865F2?logo=discord&logoColor=white)](https://discord.gg/6vm2M94vhX)
 
 Run custom C++ code inside Total War: Attila's Lua engine. (Rome 2 support is frozen.)
@@ -102,3 +104,16 @@ Questions and ideas go in [Issues](https://github.com/bukowa/twdll/issues) or on
 2. Commit and push to master
 3. Create git tag: `git tag v1.0.0 && git push origin v1.0.0`
 4. GitHub Actions builds and releases automatically
+
+## Security & Verification
+
+All `twdll` binaries are built on public GitHub Actions runners and cryptographically signed using **GitHub Artifact Attestations (Sigstore)** with published SHA-256 checksums.
+
+### Verify Provenance & Integrity
+You can verify that your downloaded binary matches the exact open-source commit built by GitHub:
+```bash
+gh attestation verify libtwdll-nightly.zip --repo bukowa/twdll
+```
+
+- **Public Attestation Log:** [github.com/bukowa/twdll/attestations](https://github.com/bukowa/twdll/attestations)
+- **Multi-AV Reports:** Automated VirusTotal scans are linked on each [Release page](https://github.com/bukowa/twdll/releases).
