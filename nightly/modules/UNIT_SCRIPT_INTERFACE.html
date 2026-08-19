@@ -105,6 +105,10 @@
 the engine's own unit conversion path (the same one used for religion and
 technology upgrades).</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Disband">Disband ()</a></td>
+	<td class="summary">Disbands (permanently removes) this unit from its military force.</td>
+	</tr>
 </table>
 
 <br/>
@@ -284,6 +288,28 @@ reference is no longer valid afterwards.
 
            <span class="types"><span class="type">boolean</span></span>
         true if the unit was converted, false otherwise
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "Disband"></a>
+    <strong>Disband ()</strong>
+    </dt>
+    <dd>
+    Disbands (permanently removes) this unit from its military force.  This mirrors the game's
+own UNIT::disband_units path, so the unit is fully removed from the world and all
+bookkeeping (events, dirty flags, force teardown) runs correctly. Save/load safe.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if successfully disbanded, false otherwise
     </ol>
 
 
