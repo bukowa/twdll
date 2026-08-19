@@ -244,6 +244,7 @@ jobs:
           echo "## Quick Download" >> $GITHUB_ENV
           echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.name }})**" >> $GITHUB_ENV
           echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.archive.outputs.docs_name }})**" >> $GITHUB_ENV
+          echo "**Security Attestation: [🛡️ Verified Sigstore Attestation](https://github.com/${{ github.repository }}/attestations)**" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           echo "---" >> $GITHUB_ENV
           echo "## Changelog" >> $GITHUB_ENV
@@ -347,6 +348,7 @@ jobs:
             echo "**Binaries Pack: [\`${{ steps.archive.outputs.name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.name }})**"
             echo "**Documentation: [\`${{ steps.archive.outputs.docs_name }}\`](https://github.com/${{ github.repository }}/releases/download/nightly/${{ steps.archive.outputs.docs_name }})**"
             echo "**Source Code: [\`source-code.zip\`](https://github.com/${{ github.repository }}/releases/download/nightly/source-code.zip)**"
+            echo "**Security Attestation: [🛡️ Verified Sigstore Attestation](https://github.com/${{ github.repository }}/attestations)**"
             echo ""
             echo "---"
             echo "### SHA-256 Checksums"
