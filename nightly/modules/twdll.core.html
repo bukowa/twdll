@@ -72,8 +72,8 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#Log">Log (msg)</a></td>
-	<td class="summary">Log a message to twdll.log.</td>
+	<td class="name" nowrap><a href="#Log">Log (...)</a></td>
+	<td class="summary">Log a message or arbitrary values to twdll.log.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GameBuild">GameBuild ()</a></td>
@@ -90,17 +90,18 @@
     <dl class="function">
     <dt>
     <a name = "Log"></a>
-    <strong>Log (msg)</strong>
+    <strong>Log (...)</strong>
     </dt>
     <dd>
-    Log a message to twdll.log.
+    Log a message or arbitrary values to twdll.log.
+ Accepts any number of arguments of any type, converting them via Lua tostring.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">msg</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         message to log
+        <li><span class="parameter">...</span>
+            <span class="types"><span class="type">any</span></span>
+         values to log
         </li>
     </ul>
 
