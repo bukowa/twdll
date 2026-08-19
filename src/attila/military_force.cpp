@@ -102,6 +102,54 @@ static int DisbandUnits(lua_State* L) {
     return 1;
 }
 
+/***
+Returns the current integrity (army morale) value between 0.0 and 100.0, or nil if none.
+@function GetIntegrity
+@treturn number integrity value (0.0 to 100.0) or nil
+*/
+static int GetIntegrity(lua_State* L) {
+    auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);
+    if (!force || !force->m_morale) {
+        l_pushnil(L);
+        return 1;
+    }
+    l_pushnumber(L, force->m_morale->m_morale);
+    return 1;
+}
+
+/***
+Sets the integrity (army morale) value, clamped between 0.0 and 100.0.
+@function SetIntegrity
+@tparam number value new integrity value (0.0 to 100.0)
+@treturn boolean true on success, false otherwise
+*/
+static int SetIntegrity(lua_State* L) {
+    auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);
+    if (!force || !force->m_morale) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    float val = static_cast<float>(l_tonumber(L, 2));
+    if (val < 0.0f) val = 0.0f;
+    if (val > 100.0f) val = 100.0f;
+    force->m_morale->m_morale = val;
+    Log("[twdll] force:SetIntegrity: force=0x%08X integrity set to %.2f",
+        reinterpret_cast<uintptr_t>(force), val);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
+/***
+Returns whether this military force uses the integrity / army morale system.
+@function HasIntegrity
+@treturn boolean true if the force has integrity tracking
+*/
+static int HasIntegrity(lua_State* L) {
+    auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);
+    l_pushboolean(L, (force && force->m_morale) ? 1 : 0);
+    return 1;
+}
+
 extern const luaL_Reg military_force_functions[] = {
     {nullptr, nullptr}
 };
@@ -110,6 +158,9 @@ static const luaL_Reg military_force_methods[] = {
     {"GetMemoryAddress",        GetMemoryAddress},
     {"GetRecruitmentQueueSize", GetRecruitmentQueueSize},
     {"DisbandUnits",            DisbandUnits},
+    {"GetIntegrity",            GetIntegrity},
+    {"SetIntegrity",            SetIntegrity},
+    {"HasIntegrity",            HasIntegrity},
     {nullptr, nullptr}
 };
 

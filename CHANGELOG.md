@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `GetIntegrity()`, `SetIntegrity(value)`, and `HasIntegrity()` — dynamically gets, sets (with clamping between 0.0 and 100.0), or checks army integrity in real time.
 - Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `Disband()` — disbands (permanently removes) this unit from its military force using the engine's native disband path.
 - Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `DisbandUnits(...)` — disbands one or more units from the military force, accepting either `UNIT_SCRIPT_INTERFACE` objects or integer unit indices (0-indexed) as varargs.
 - Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `SetArtSet(art_set_key)` — dynamically changes the character's visual master bundle (Campaign VMD, Battle VMD, Politician VMD, and 2D portraits) in real time, persisted across turns and save/load.

@@ -267,9 +267,16 @@ struct TW_World {
     int  faction_count;    // 0x50
 };
 
+struct TW_MilitaryForceMorale {
+    float m_morale;   // 0x00 (0.0 to 100.0)
+};
+
 struct TW_MilitaryForce {
-    char pad_00[0x45C];
-    int  recruitment_queue_size;  // 0x45C
+    char                    pad_00[0x3E0];
+    void*                   m_morale_vtable;   // 0x3E0 (SAFE_PTR vtable)
+    TW_MilitaryForceMorale* m_morale;          // 0x3E4 (SAFE_PTR object)
+    char                    pad_3E8[0x74];
+    int                     recruitment_queue_size;  // 0x45C
 };
 
 struct TW_Unit {
@@ -554,6 +561,8 @@ TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_fov,              0x0C);
 TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_unique_id,        0x1C);
 TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_unique_id_string, 0x20);
 TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);
+TW_ASSERT_OFFSET(TW_MilitaryForceMorale, m_morale,          0x00);
+TW_ASSERT_OFFSET(TW_MilitaryForce, m_morale,                0x3E4);
 TW_ASSERT_OFFSET(TW_MilitaryForce, recruitment_queue_size,  0x45C);
 TW_ASSERT_OFFSET(TW_Unit,          m_force_link,            0x38);
 TW_ASSERT_OFFSET(TW_Unit,          num_men,                 0x44);

@@ -1331,6 +1331,70 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 21: Military Force Integrity / Morale API
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 21: Military Force Integrity / Morale API ---")
+        do
+            local test_force = nil
+            local chars = game:model():world():faction_by_key(faction):character_list()
+            for i = 0, chars:num_items() - 1 do
+                local c = chars:item_at(i)
+                if c:military_force() and not c:military_force():is_null_interface() then
+                    test_force = c:military_force()
+                    break
+                end
+            end
+
+            if not test_force then
+                twdll.core.Log("[TEST] Military Force Integrity: SKIPPED (no military force found)")
+                record_skip()
+            else
+                if type(test_force.GetIntegrity) ~= "function" or type(test_force.SetIntegrity) ~= "function" then
+                    twdll.core.Log("[TEST] Military Force Integrity: FAILED (methods not registered)")
+                    report("force integrity methods registered", false)
+                else
+                    report("force integrity methods registered", true)
+
+                    local has_integrity = test_force:HasIntegrity()
+                    twdll.core.Log(string.format("[TEST] Force cqi=%d HasIntegrity() = %s", test_force:command_queue_index(), tostring(has_integrity)))
+                    report("force:HasIntegrity returns boolean", type(has_integrity) == "boolean")
+
+                    if has_integrity then
+                        local initial_integrity = test_force:GetIntegrity()
+                        twdll.core.Log(string.format("[TEST] Initial integrity = %s", tostring(initial_integrity)))
+                        report("force:GetIntegrity returns number in [0, 100]", type(initial_integrity) == "number" and initial_integrity >= 0.0 and initial_integrity <= 100.0)
+
+                        -- Test setting integrity (e.g. 75.0)
+                        local set_ok = test_force:SetIntegrity(75.0)
+                        twdll.core.Log(string.format("[TEST] SetIntegrity(75.0) -> %s", tostring(set_ok)))
+                        report("force:SetIntegrity(75.0) returns true", set_ok == true)
+
+                        local after_set = test_force:GetIntegrity()
+                        twdll.core.Log(string.format("[TEST] Integrity after SetIntegrity(75.0) = %s", tostring(after_set)))
+                        report("force:GetIntegrity verified 75.0", math.abs(after_set - 75.0) < 0.01)
+
+                        -- Test clamping (over 100 and below 0)
+                        test_force:SetIntegrity(150.0)
+                        local clamped_max = test_force:GetIntegrity()
+                        report("force:SetIntegrity clamps upper to 100", math.abs(clamped_max - 100.0) < 0.01)
+
+                        test_force:SetIntegrity(-10.0)
+                        local clamped_min = test_force:GetIntegrity()
+                        report("force:SetIntegrity clamps lower to 0", math.abs(clamped_min - 0.0) < 0.01)
+
+                        -- Restore initial integrity
+                        test_force:SetIntegrity(initial_integrity)
+                        local restored_val = test_force:GetIntegrity()
+                        report("force:SetIntegrity restored initial value", math.abs(restored_val - initial_integrity) < 0.01)
+                    else
+                        twdll.core.Log("[TEST] Force has no integrity tracker: SKIPPING value tests")
+                        record_skip()
+                    end
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")
