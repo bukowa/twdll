@@ -4,7 +4,10 @@
 #include "game_api.h"
 #include "tw_types.h"
 
+#include <vector>
+
 using twdll::TW_MilitaryForce;
+using twdll::TW_Unit;
 
 constexpr size_t MIL_FORCE_PTR = twdll::TW_PtrOffset<TW_MilitaryForce>::value;
 
@@ -26,6 +29,79 @@ Returns the number of units in the recruitment queue.
 */
 static int GetRecruitmentQueueSize (lua_State* L) { return Props::RecruitmentQueueSize.get(L); }
 
+/***
+Disbands (permanently removes) one or more units from this military force.
+Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit_list:item_at), passed as varargs.
+@function DisbandUnits
+@param ... unit userdata or integer indices to disband
+@treturn boolean true if units were successfully disbanded, false otherwise
+*/
+static int DisbandUnits(lua_State* L) {
+    if (!g_disband_units || !g_campaign_model) {
+        Log("[twdll] force:DisbandUnits: signatures or campaign model not ready");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);
+    if (!force) {
+        Log("[twdll] force:DisbandUnits: null force");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    std::vector<void*> units_to_disband;
+
+    auto resolve_unit_from_index = [&](int unit_idx) -> TW_Unit* {
+        l_getfield(L, 1, "unit_list");
+        l_pushvalue(L, 1);
+        TW_Unit* result_unit = nullptr;
+        if (l_pcall(L, 1, 1, 0) == 0 && l_type(L, -1) == LUA_TUSERDATA) {
+            l_getfield(L, -1, "item_at");
+            l_pushvalue(L, -2);
+            l_pushinteger(L, unit_idx);
+            if (l_pcall(L, 2, 1, 0) == 0 && l_type(L, -1) == LUA_TUSERDATA) {
+                result_unit = twdll::tw_unwrap<TW_Unit>(L, -1);
+            }
+            l_pop(L, 1);
+        }
+        l_pop(L, 1);
+        return result_unit;
+    };
+
+    int arg_idx = 2;
+    while (l_type(L, arg_idx) != LUA_TNONE) {
+        int t = l_type(L, arg_idx);
+        if (t == LUA_TUSERDATA) {
+            auto* u = twdll::tw_unwrap<TW_Unit>(L, arg_idx);
+            if (u) units_to_disband.push_back(u);
+        } else if (t == LUA_TNUMBER) {
+            int unit_idx = static_cast<int>(l_tointeger(L, arg_idx));
+            auto* u = resolve_unit_from_index(unit_idx);
+            if (u) units_to_disband.push_back(u);
+            else Log("[twdll] force:DisbandUnits: could not resolve unit at index %d", unit_idx);
+        }
+        ++arg_idx;
+    }
+
+    if (units_to_disband.empty()) {
+        Log("[twdll] force:DisbandUnits: no valid units to disband");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    void* vec[3] = {
+        reinterpret_cast<void*>(units_to_disband.size()),
+        reinterpret_cast<void*>(units_to_disband.size()),
+        units_to_disband.data()
+    };
+    Log("[twdll] force:DisbandUnits: force=0x%08X disbanding %d units",
+        reinterpret_cast<uintptr_t>(force), static_cast<int>(units_to_disband.size()));
+    g_disband_units(vec, g_campaign_model);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
 extern const luaL_Reg military_force_functions[] = {
     {nullptr, nullptr}
 };
@@ -33,6 +109,7 @@ extern const luaL_Reg military_force_functions[] = {
 static const luaL_Reg military_force_methods[] = {
     {"GetMemoryAddress",        GetMemoryAddress},
     {"GetRecruitmentQueueSize", GetRecruitmentQueueSize},
+    {"DisbandUnits",            DisbandUnits},
     {nullptr, nullptr}
 };
 

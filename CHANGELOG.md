@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `Disband()` — disbands (permanently removes) this unit from its military force using the engine's native disband path.
+- Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `DisbandUnits(...)` — disbands one or more units from the military force, accepting either `UNIT_SCRIPT_INTERFACE` objects or integer unit indices (0-indexed) as varargs.
 - Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `SetArtSet(art_set_key)` — dynamically changes the character's visual master bundle (Campaign VMD, Battle VMD, Politician VMD, and 2D portraits) in real time, persisted across turns and save/load.
 - Extended the game's character interface (`CHARACTER_SCRIPT_INTERFACE`) with `GetArtSet()` returning an `ARTSET_SCRIPT_INTERFACE` userdata for character art sets and portrait data (`GetKey`, `GetCulture`, `GetSubculture`, `GetFaction`, `GetAgent`, `GetGroup`, `IsCustom`, `IsMale`, `HasAging`, `HasSeasonal`, `HasLevelling`, `HasHealth`, `HasReligion`, `IsFactionLeaderSet`, `GetPortraitPath`, `GetSettingsId`).
 - Added `twdll.cai.EnableLogging([enabled])` — enables or disables real-time Campaign AI decision logging and telemetry to `twdll.log`, capturing settlement occupation choices (`OCCUPY`, `SACK`, `RAZE`, `LOOT`, etc.) and decision bitmasks.

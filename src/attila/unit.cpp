@@ -178,6 +178,37 @@ static int ConvertUnit(lua_State* L) {
     return 1;
 }
 
+/***
+Disbands (permanently removes) this unit from its military force. This mirrors the game's
+own UNIT::disband_units path, so the unit is fully removed from the world and all
+bookkeeping (events, dirty flags, force teardown) runs correctly. Save/load safe.
+@function Disband
+@treturn boolean true if successfully disbanded, false otherwise
+*/
+static int Disband(lua_State* L) {
+    if (!g_disband_units || !g_campaign_model) {
+        Log("[twdll] unit:Disband: signatures or campaign model not ready");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    auto* unit = twdll::tw_unwrap<TW_Unit>(L, 1);
+    if (!unit) {
+        Log("[twdll] unit:Disband: null unit");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    void* elems[1] = { unit };
+    void* vec[3] = {
+        reinterpret_cast<void*>(static_cast<size_t>(1)),
+        reinterpret_cast<void*>(static_cast<size_t>(1)),
+        elems
+    };
+    Log("[twdll] unit:Disband: unit=0x%08X", reinterpret_cast<uintptr_t>(unit));
+    g_disband_units(vec, g_campaign_model);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
 extern const luaL_Reg unit_functions[] = {
     {nullptr, nullptr}
 };
@@ -191,6 +222,7 @@ static const luaL_Reg unit_methods[] = {
     {"GetActionPoints",   GetActionPoints},
     {"SetActionPoints",   SetActionPoints},
     {"ConvertUnit",       ConvertUnit},
+    {"Disband",           Disband},
     {nullptr, nullptr}
 };
 

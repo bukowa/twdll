@@ -1260,6 +1260,75 @@ local function run_twdll_tests()
             end
         end
 
+        -- ======================================================
+        -- TEST 20: Disband Unit & Military Force DisbandUnits
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 20: Disband Unit & Military Force DisbandUnits ---")
+        do
+            local target_char = nil
+            local chars = game:model():world():faction_by_key(faction):character_list()
+            for i = 0, chars:num_items() - 1 do
+                local c = chars:item_at(i)
+                if c:military_force() and not c:military_force():is_null_interface() then
+                    local ul = c:military_force():unit_list()
+                    if ul and ul:num_items() >= 3 then
+                        target_char = c
+                        break
+                    end
+                end
+            end
+
+            if not target_char then
+                twdll.core.Log("[TEST] Disband tests: SKIPPED (no military force with at least 3 units found)")
+                record_skip()
+            else
+                local force = target_char:military_force()
+                local initial_count = force:unit_list():num_items()
+                twdll.core.Log(string.format("[TEST] Force cqi=%d initial unit count: %d", force:command_queue_index(), initial_count))
+
+                -- Test 20a: unit:Disband() on the last unit in the force
+                local last_unit = force:unit_list():item_at(initial_count - 1)
+                local last_unit_ok = (last_unit ~= nil and not last_unit:is_null_interface())
+                if last_unit_ok and type(last_unit.Disband) == "function" then
+                    local disband_ok = last_unit:Disband()
+                    twdll.core.Log(string.format("[TEST] unit:Disband() -> %s", tostring(disband_ok)))
+                    report("unit:Disband returns true", disband_ok == true)
+
+                    local count_after_unit = force:unit_list():num_items()
+                    report("unit:Disband decreases unit count by 1", count_after_unit == initial_count - 1)
+
+                    -- Test 20b: force:DisbandUnits(index) using integer index (last unit)
+                    if type(force.DisbandUnits) == "function" and count_after_unit >= 2 then
+                        local idx_to_disband = count_after_unit - 1
+                        local force_disband_idx_ok = force:DisbandUnits(idx_to_disband)
+                        twdll.core.Log(string.format("[TEST] force:DisbandUnits(%d) -> %s", idx_to_disband, tostring(force_disband_idx_ok)))
+                        report("force:DisbandUnits(index) returns true", force_disband_idx_ok == true)
+
+                        local count_after_idx = force:unit_list():num_items()
+                        report("force:DisbandUnits(index) decreases unit count", count_after_idx == count_after_unit - 1)
+
+                        -- Test 20c: force:DisbandUnits(unit_ud) using userdata
+                        local next_last = force:unit_list():item_at(count_after_idx - 1)
+                        if next_last and not next_last:is_null_interface() and count_after_idx >= 2 then
+                            local force_disband_ud_ok = force:DisbandUnits(next_last)
+                            twdll.core.Log(string.format("[TEST] force:DisbandUnits(unit_ud) -> %s", tostring(force_disband_ud_ok)))
+                            report("force:DisbandUnits(userdata) returns true", force_disband_ud_ok == true)
+
+                            local count_after_ud = force:unit_list():num_items()
+                            report("force:DisbandUnits(userdata) decreases unit count", count_after_ud == count_after_idx - 1)
+                        else
+                            record_skip()
+                        end
+                    else
+                        twdll.core.Log("[TEST] force:DisbandUnits(index): FAILED (method not found or not enough units)")
+                        report("force:DisbandUnits method registered", false)
+                    end
+                else
+                    twdll.core.Log("[TEST] unit:Disband: FAILED (method not found or null unit)")
+                    report("unit:Disband method registered", false)
+                end
+            end
+        end
 
         -- ======================================================
         -- SUMMARY

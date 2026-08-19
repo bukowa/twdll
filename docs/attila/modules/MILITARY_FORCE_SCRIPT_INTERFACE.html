@@ -79,6 +79,10 @@
 	<td class="name" nowrap><a href="#GetRecruitmentQueueSize">GetRecruitmentQueueSize ()</a></td>
 	<td class="summary">Returns the number of units in the recruitment queue.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#DisbandUnits">DisbandUnits (...)</a></td>
+	<td class="summary">Disbands (permanently removes) one or more units from this military force.</td>
+	</tr>
 </table>
 
 <br/>
@@ -122,6 +126,33 @@
 
            <span class="types"><span class="type">integer</span></span>
         number of units
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "DisbandUnits"></a>
+    <strong>DisbandUnits (...)</strong>
+    </dt>
+    <dd>
+    Disbands (permanently removes) one or more units from this military force.
+Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit<em>list:item</em>at), passed as varargs.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">...</span>
+         unit userdata or integer indices to disband
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if units were successfully disbanded, false otherwise
     </ol>
 
 
