@@ -154,7 +154,9 @@ struct TW_Faction {
     void* m_home_theatre;           // 0x898
     char  pad_89C[0x98];
     void* m_faction_technology_manager;  // 0x934  verified via disasm: mov eax,[ecx+934h] @ sub_10705560
-    char  pad_938[0x7F4];
+    char  pad_938[0x5A8];
+    void* m_character_recruitment_pool;  // 0xEE0  (CHARACTER_RECRUITMENT_POOL_MANAGER*)
+    char  pad_EE4[0x248];
     TW_CampaignPolitics m_politics; // 0x112C verified via disasm: lea ecx,[ebx+112Ch]; push ebx; call sub_10BF27C0 @ 0x106c2140
 };
 
@@ -518,7 +520,9 @@ struct TW_Databases {
     TW_DatabaseTable* main_units;        // 0x1000 (MAIN_UNITS_TABLE)
     char              pad_1004[0x164];
     TW_DatabaseTable* loyalty_factors;   // 0x1168 (LOYALTY_FACTORS_TABLE)
-    char              pad_116C[0x498];
+    char              pad_116C[0x3C0];
+    TW_DatabaseTable* agents;            // 0x152C (AGENTS_TABLE)
+    char              pad_1530[0xD4];
     TW_DatabaseTable* technologies;      // 0x1604 (TECHNOLOGIES_TABLE)
 
     static TW_Databases* get() {
@@ -541,7 +545,9 @@ TW_ASSERT_OFFSET(TW_Faction,       m_home_region,            0x890);
 TW_ASSERT_OFFSET(TW_Faction,       m_original_home_region,   0x894);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_theatre,           0x898);
 TW_ASSERT_OFFSET(TW_Faction,       m_faction_technology_manager, 0x934);
+TW_ASSERT_OFFSET(TW_Faction,       m_character_recruitment_pool, 0xEE0);
 TW_ASSERT_OFFSET(TW_Faction,       m_politics,               0x112C);
+TW_ASSERT_OFFSET(TW_Databases,     agents,                   0x152C);
 TW_ASSERT_OFFSET(TW_Character,        action_points,                        0x14);
 TW_ASSERT_OFFSET(TW_Character,        commanded_unit_link,                  0x1DC);
 TW_ASSERT_OFFSET(TW_Character,        details,                              0x204);

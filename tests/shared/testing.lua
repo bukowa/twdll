@@ -1671,6 +1671,84 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 26: Faction Create Agent API (CreateAgent)
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 26: Faction Create Agent ---")
+        do
+            local ere_fac = game:model():world():faction_by_key("att_fact_eastern_roman_empire")
+            if type(ere_fac.CreateAgent) ~= "function" then
+                twdll.core.Log("[TEST] CreateAgent: FAILED (method not registered)")
+                report("faction CreateAgent method registered", false)
+            else
+                report("faction CreateAgent method registered", true)
+
+                local initial_char_count = ere_fac:character_list():num_items()
+                twdll.core.Log(string.format("[TEST] Initial ERE character count: %d", initial_char_count))
+
+                local initial_cqis = {}
+                for i = 0, initial_char_count - 1 do
+                    initial_cqis[ere_fac:character_list():item_at(i):cqi()] = true
+                end
+
+                -- 1. Test spawning a champion in ERE capital settlement
+                local capital_settlement = ere_fac:home_region():settlement()
+                local create_champ_ok = ere_fac:CreateAgent("champion", capital_settlement)
+                twdll.core.Log(string.format("[TEST] ere_fac:CreateAgent('champion', settlement) -> %s", tostring(create_champ_ok)))
+                report("ere_fac:CreateAgent('champion', settlement) returns true", create_champ_ok == true)
+
+                local spawned_champ = nil
+                for i = 0, ere_fac:character_list():num_items() - 1 do
+                    local c = ere_fac:character_list():item_at(i)
+                    if not initial_cqis[c:cqi()] then
+                        spawned_champ = c
+                        initial_cqis[c:cqi()] = true
+                        break
+                    end
+                end
+
+                report("spawned champion character object resolved", spawned_champ ~= nil)
+                if spawned_champ then
+                    twdll.core.Log(string.format("[TEST] Spawned Champion: cqi=%d, is_champion=%s, pos=(%d, %d), region='%s'",
+                        spawned_champ:cqi(), tostring(spawned_champ:character_type("champion")),
+                        spawned_champ:logical_position_x(), spawned_champ:logical_position_y(),
+                        spawned_champ:has_region() and spawned_champ:region():name() or "none"))
+                    report("spawned champion has type 'champion'", spawned_champ:character_type("champion") == true)
+                    report("spawned champion in capital region", spawned_champ:has_region() and spawned_champ:region():name() == ere_fac:home_region():name())
+                end
+
+                -- 2. Test spawning a dignitary using map coordinates (x, y)
+                local target_x = 516
+                local target_y = 381
+                local create_dig_ok = ere_fac:CreateAgent("dignitary", target_x, target_y)
+                twdll.core.Log(string.format("[TEST] ere_fac:CreateAgent('dignitary', %d, %d) -> %s", target_x, target_y, tostring(create_dig_ok)))
+                report("ere_fac:CreateAgent('dignitary', x, y) returns true", create_dig_ok == true)
+
+                local spawned_dig = nil
+                for i = 0, ere_fac:character_list():num_items() - 1 do
+                    local c = ere_fac:character_list():item_at(i)
+                    if not initial_cqis[c:cqi()] then
+                        spawned_dig = c
+                        initial_cqis[c:cqi()] = true
+                        break
+                    end
+                end
+
+                report("spawned dignitary character object resolved", spawned_dig ~= nil)
+                if spawned_dig then
+                    twdll.core.Log(string.format("[TEST] Spawned Dignitary: cqi=%d, is_dignitary=%s, pos=(%d, %d), region='%s'",
+                        spawned_dig:cqi(), tostring(spawned_dig:character_type("dignitary")),
+                        spawned_dig:logical_position_x(), spawned_dig:logical_position_y(),
+                        spawned_dig:has_region() and spawned_dig:region():name() or "none"))
+                    report("spawned dignitary has type 'dignitary'", spawned_dig:character_type("dignitary") == true)
+                end
+
+                local final_char_count = ere_fac:character_list():num_items()
+                twdll.core.Log(string.format("[TEST] Final ERE Character count: %d (started with %d)", final_char_count, initial_char_count))
+                report("faction character count increased by 2", final_char_count == initial_char_count + 2)
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

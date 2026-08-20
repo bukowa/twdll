@@ -1,5 +1,6 @@
 /// @module FACTION_SCRIPT_INTERFACE
 /// Extensions to the game's faction object.
+#include <windows.h>
 #include "../common/tw.h"
 #include "game_api.h"
 #include "tw_types.h"
@@ -8,6 +9,7 @@
 using twdll::TW_Faction;
 using twdll::TW_Character;
 using twdll::TW_Region;
+using twdll::TW_Settlement;
 using twdll::TW_CampaignModel;
 using twdll::TW_CampaignEnv;
 using twdll::TW_GameCore;
@@ -254,6 +256,111 @@ static int HasPoliticalParties(lua_State* L) {
     return 1;
 }
 
+/***
+Creates and spawns a new agent character on the campaign map for this faction in the current tick.
+
+Supports two calling styles:
+- **Settlement**: `faction:CreateAgent(agent_key, settlement)` — spawns the agent on the campaign map adjacent to the specified settlement.
+- **Map coordinates**: `faction:CreateAgent(agent_key, x, y)` — spawns the agent at or adjacent to the specified map coordinates.
+
+@function CreateAgent
+@tparam string agent_key database key of the agent (e.g. `"champion"`, `"spy"`, `"dignitary"`, `"priest"`)
+@tparam[opt] userdata|number settlement_or_x `SETTLEMENT_SCRIPT_INTERFACE` object or map X coordinate (defaults to faction capital)
+@tparam[opt] number y map Y coordinate (required when `settlement_or_x` is an X coordinate)
+@treturn boolean true on success, false otherwise
+@usage
+-- Example 1: Spawn a champion next to a settlement
+local capital = faction:home_region():settlement()
+faction:CreateAgent("champion", capital)
+
+-- Example 2: Spawn a dignitary at specific map coordinates (x, y)
+faction:CreateAgent("dignitary", 516, 381)
+*/
+static int CreateAgent(lua_State* L) {
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    if (!faction) {
+        Log("[twdll] faction:CreateAgent: null faction");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    if (l_type(L, 2) != LUA_TSTRING) {
+        Log("[twdll] faction:CreateAgent: agent_key must be a string");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    const char* agent_key = l_checkstring(L, 2);
+
+    void* pool_mgr = faction->m_character_recruitment_pool;
+    if (!pool_mgr) {
+        Log("[twdll] faction:CreateAgent: recruitment pool manager is null");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto* dbs = TW_Databases::get();
+    if (!dbs || !dbs->agents) {
+        Log("[twdll] faction:CreateAgent: agents database table is null");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    void* agent_rec = dbs->agents->find_record(agent_key);
+    if (!agent_rec) {
+        Log("[twdll] faction:CreateAgent: agent record '%s' not found in database", agent_key);
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    void* optional_settlement = nullptr;
+    uint32_t logical_pos = 0;
+    uint32_t* p_optional_position = nullptr;
+
+    if (l_type(L, 3) == LUA_TNUMBER && l_type(L, 4) == LUA_TNUMBER) {
+        uint16_t x = static_cast<uint16_t>(l_tonumber(L, 3));
+        uint16_t y = static_cast<uint16_t>(l_tonumber(L, 4));
+        logical_pos = (static_cast<uint32_t>(y) << 16) | static_cast<uint32_t>(x);
+        p_optional_position = &logical_pos;
+    } else if (l_type(L, 3) == LUA_TUSERDATA) {
+        optional_settlement = twdll::tw_unwrap<TW_Settlement>(L, 3);
+    }
+
+    if (!optional_settlement && !p_optional_position) {
+        optional_settlement = faction->m_home_region;
+    }
+
+    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
+    if (!hMod) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    using FnSpawnAgent = void(__thiscall*)(
+        void* recruitment_pool_mgr,
+        void* agent_record,
+        uint32_t* optional_position,
+        void* optional_settlement,
+        void* optional_military_force,
+        void* script_id_ca_string,
+        unsigned int character_type
+    );
+    auto fnSpawnAgent = reinterpret_cast<FnSpawnAgent>(
+        reinterpret_cast<uintptr_t>(hMod) + 0x007F2CF0);
+
+    struct { uint32_t len; uint32_t cap; const char* buf; } empty_id = { 0, 0, "" };
+
+    __try {
+        fnSpawnAgent(pool_mgr, agent_rec, p_optional_position, optional_settlement, nullptr, &empty_id, 3);
+        Log("[twdll] faction:CreateAgent: agent '%s' spawned successfully for faction 0x%08X",
+            agent_key, reinterpret_cast<uintptr_t>(faction));
+        l_pushboolean(L, 1);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Log("[twdll] faction:CreateAgent: caught SEH exception 0x%08X in engine spawn call", GetExceptionCode());
+        l_pushboolean(L, 0);
+    }
+    return 1;
+}
+
 extern const luaL_Reg faction_functions[] = {
     {nullptr, nullptr}
 };
@@ -271,6 +378,7 @@ static const luaL_Reg faction_methods[] = {
     {"GetPoliticalParty", GetPoliticalParty},
     {"GetPrimaryParty",   GetPrimaryParty},
     {"HasPoliticalParties", HasPoliticalParties},
+    {"CreateAgent",       CreateAgent},
     {nullptr, nullptr}
 };
 

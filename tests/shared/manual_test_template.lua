@@ -1,8 +1,8 @@
 -- manual_test_template.lua
--- Template for manual / visual in-game test scripts.
--- Use this template when creating standalone Lua scripts for manual in-game testing.
+-- Template for manual / visual in-game test scripts (e.g. executed via Scriptum).
+-- In Scriptum / in-game Lua environment, twdll is already loaded into _G.script_env.twdll:
 
-twdll = package.loadlib('twdll', "luaopen_twdll")()
+twdll = _G.script_env and _G.script_env.twdll or package.loadlib('twdll', "luaopen_twdll")()
 
 local scripting_string = "lua_scripts.episodicscripting"
 local scripting = require(scripting_string)
