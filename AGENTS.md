@@ -79,7 +79,7 @@ into one giant action.
    runs it). Assert against verified values, not "not nil".
 7. **Docs** — LDoc comments, add the file to `TWDLL_DOC_SOURCES`, regenerate docs, verify the HTML (see Documentation).
 8. **Changelog** — one `[Unreleased]` bullet, user-facing only (see Changelog).
-9. **Finish** — report status; commit/push only on explicit user request.
+9. **Finish** — report status; commit/push only on explicit user request using Conventional Commits format (see Git Commit Conventions).
 
 Steps 1 (outline approval), 3 (code diff proposal), and 6 (test) are the gates that catch wrong assumptions — never
 skip them. One feature = one tight pass, not an open-ended tool-call chain.
@@ -214,6 +214,25 @@ Every registered Lua module must have a generated docs page:
 - **Strict Parameter Fidelity & Verification**: Every changelog bullet MUST strictly match the exact method signatures, argument types, and real behavior implemented in C++ and documented in LDoc. Never speculate, generalize, or list unsupported parameters or targets (e.g. claiming a function spawns in a "region" or "military force" when the code only accepts settlements or coordinates). Always cross-check the C++ binding code before writing or editing changelog entries.
 - Keep entries small — a feature is one or a few bullets, not a dump of everything touched.
 - Commit the changelog together with the code change (same intent as the docs/commit rule).
+
+---
+
+## Git Commit Conventions
+
+When committing changes on user request, always follow the **Conventional Commits** standard:
+- Format: `<type>(<scope>): <short description in lowercase>`
+- **Types**:
+  - `feat`: New feature, API method, or hook
+  - `fix`: Bug fix, wrong offset correction, or crash resolution
+  - `docs`: Documentation updates, LDoc comments, or changelog formatting
+  - `refactor`: Code restructuring without changing external behavior
+  - `test`: Test suite additions or fixes
+  - `chore`: Build scripts, CMake configuration, or maintenance tasks
+- **Scopes**: Component or subsystem name (e.g. `attila`, `character`, `faction`, `security`, `cai`, `core`, `changelog`)
+- **Examples**:
+  - `feat(security): add host process validation to prevent execution outside Attila.exe`
+  - `feat(character): implement TransferToFaction method with army replenishment`
+  - `docs(changelog): format signatures consistently and strip internal C++ details`
 
 ---
 
