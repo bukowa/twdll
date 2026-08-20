@@ -35,7 +35,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - `twdll.core.Log` now accepts any number of arguments of any Lua data type (e.g. `nil`, numbers, booleans, tables, userdata), automatically converting them via Lua's `tostring` similar to standard `print(...)`.
-- `GetInfluence` / `SetInfluence` replace the stale `GetGravitas` / `SetGravitas` (Rome 2 offset) and the incorrectly-modelled `GetAmbition` / `SetAmbition`. Only influence is exposed for now; loyalty and ambition require further research.
+- `GetInfluence` / `SetInfluence` replace the legacy Rome 2 character methods (`GetGravitas` / `SetGravitas` and `GetAmbition` / `SetAmbition`).
 
 ## [0.9.0] - 2026-08-06
 
