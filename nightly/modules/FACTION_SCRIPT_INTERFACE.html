@@ -112,6 +112,10 @@ game's own internal path for finishing a technology.</td>
 	<td class="name" nowrap><a href="#HasPoliticalParties">HasPoliticalParties ()</a></td>
 	<td class="summary">Returns whether the faction has any campaign political parties.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#CreateAgent">CreateAgent (agent_key[, settlement_or_x[, y]])</a></td>
+	<td class="summary">Creates and spawns a new agent character on the campaign map for this faction in the current tick.</td>
+	</tr>
 </table>
 
 <br/>
@@ -358,6 +362,56 @@ Each party exposes GetKey(), GetSenators(), GetPower() and IsPrimary().
 
 
 
+
+</dd>
+    <dt>
+    <a name = "CreateAgent"></a>
+    <strong>CreateAgent (agent_key[, settlement_or_x[, y]])</strong>
+    </dt>
+    <dd>
+    Creates and spawns a new agent character on the campaign map for this faction in the current tick. </p>
+
+<p>Supports two calling styles:
+- <strong>Settlement</strong>: <code>faction:CreateAgent(agent_key, settlement)</code> — spawns the agent on the campaign map adjacent to the specified settlement.
+- <strong>Map coordinates</strong>: <code>faction:CreateAgent(agent_key, x, y)</code> — spawns the agent at or adjacent to the specified map coordinates.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">agent_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database key of the agent (e.g. <code>&quot;champion&quot;</code>, <code>&quot;spy&quot;</code>, <code>&quot;dignitary&quot;</code>, <code>&quot;priest&quot;</code>)
+        </li>
+        <li><span class="parameter">settlement_or_x</span>
+            <span class="types"><span class="type">userdata</span> or <span class="type">number</span></span>
+         <code>SETTLEMENT_SCRIPT_INTERFACE</code> object or map X coordinate (defaults to faction capital)
+         (<em>optional</em>)
+        </li>
+        <li><span class="parameter">y</span>
+            <span class="types"><span class="type">number</span></span>
+         map Y coordinate (required when <code>settlement_or_x</code> is an X coordinate)
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Example 1: Spawn a champion next to a settlement
+</span><span class="keyword">local</span> capital = faction:<span class="function-name">home_region</span>():<span class="function-name">settlement</span>()
+faction:<span class="function-name">CreateAgent</span>(<span class="string">"champion"</span>, capital)
+
+<span class="comment">-- Example 2: Spawn a dignitary at specific map coordinates (x, y)
+</span>faction:<span class="function-name">CreateAgent</span>(<span class="string">"dignitary"</span>, <span class="number">516</span>, <span class="number">381</span>)</pre>
+    </ul>
 
 </dd>
 </dl>
