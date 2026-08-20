@@ -126,6 +126,23 @@ receive this unit type as their default bodyguard.</td>
 	<td class="name" nowrap><a href="#GetTraitList">GetTraitList ()</a></td>
 	<td class="summary">Returns a list of all trait keys currently present on this character.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetLoyalty">GetLoyalty ()</a></td>
+	<td class="summary">Gets the current calculated total loyalty of the character (0 to 10), taking into account
+ruler authority, gravitas difference, marriage, ministerial offices, traits, and direct modifiers.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetLoyaltyModifier">GetLoyaltyModifier ()</a></td>
+	<td class="summary">Gets the direct loyalty modifier value (Factor 26 at offset +0x4C8) for this character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetLoyaltyModifier">SetLoyaltyModifier (value)</a></td>
+	<td class="summary">Sets the direct loyalty modifier value (Factor 26 at offset +0x4C8) for this character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetLoyaltyFactorList">GetLoyaltyFactorList ()</a></td>
+	<td class="summary">Returns a table breakdown of all active loyalty factors contributing to this character's loyalty.</td>
+	</tr>
 </table>
 
 <br/>
@@ -437,6 +454,98 @@ CAMPAIGN<em>POLITICAL</em>PARTY userdata or a party record key string.
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
         array of trait key strings (e.g. {"att<em>trait</em>all<em>personality</em>brave", ...})
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetLoyalty"></a>
+    <strong>GetLoyalty ()</strong>
+    </dt>
+    <dd>
+    Gets the current calculated total loyalty of the character (0 to 10), taking into account
+ruler authority, gravitas difference, marriage, ministerial offices, traits, and direct modifiers.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        total loyalty level clamped between 0 and 10
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetLoyaltyModifier"></a>
+    <strong>GetLoyaltyModifier ()</strong>
+    </dt>
+    <dd>
+    Gets the direct loyalty modifier value (Factor 26 at offset +0x4C8) for this character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        loyalty modifier value
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetLoyaltyModifier"></a>
+    <strong>SetLoyaltyModifier (value)</strong>
+    </dt>
+    <dd>
+    Sets the direct loyalty modifier value (Factor 26 at offset +0x4C8) for this character.
+This value is directly added to the character's 32 loyalty factor sum during loyalty evaluation.
+To permanently zero out or prime a character for rebellion/defection, call:
+  char:SetLoyaltyModifier(-100) or char:SetLoyaltyModifier(-char:GetLoyalty())
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new modifier value (-128 to 127)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetLoyaltyFactorList"></a>
+    <strong>GetLoyaltyFactorList ()</strong>
+    </dt>
+    <dd>
+    Returns a table breakdown of all active loyalty factors contributing to this character's loyalty.
+Each key is the genuine database key from loyalty<em>factors</em>tables and its integer point value.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+        map of db<em>factor</em>key -> integer point value for all non-zero factors
     </ol>
 
 

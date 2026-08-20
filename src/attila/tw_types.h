@@ -259,7 +259,9 @@ struct TW_CharacterDetails {
     TW_CharacterDetailsArtSetInfo m_art_set_info;      // 0xAC  (= CHARACTER+0x2B0)
     char                          pad_EC[0x18];
     TW_Traits                     traits;              // 0x104 (= CHARACTER+0x308)
-    char                          pad_12C[0x1C0];
+    char                          pad_12C[0x198];
+    int8_t                        m_loyalty_modifier;  // 0x2C4 (= CHARACTER+0x4C8, direct loyalty modifier)
+    char                          pad_2C5[0x27];
     void*                         m_political_party;   // 0x2EC (= CHARACTER+0x4F0, const POLITICAL_PARTY_RECORD*)
     char                          pad_2F0[0x4];
     int                           political_gravitas;  // 0x2F4 (= CHARACTER+0x4F8, CA::card32)
@@ -514,7 +516,9 @@ struct TW_Databases {
     TW_DatabaseTable* political_parties; // 0xF18  (POLITICAL_PARTIES_TABLE)
     char              pad_F1C[0xE4];
     TW_DatabaseTable* main_units;        // 0x1000 (MAIN_UNITS_TABLE)
-    char              pad_1004[0x600];
+    char              pad_1004[0x164];
+    TW_DatabaseTable* loyalty_factors;   // 0x1168 (LOYALTY_FACTORS_TABLE)
+    char              pad_116C[0x498];
     TW_DatabaseTable* technologies;      // 0x1604 (TECHNOLOGIES_TABLE)
 
     static TW_Databases* get() {
@@ -543,6 +547,7 @@ TW_ASSERT_OFFSET(TW_Character,        commanded_unit_link,                  0x1D
 TW_ASSERT_OFFSET(TW_Character,        details,                              0x204);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  family_member,                        0x4);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  m_art_set_info,                       0xAC);
+TW_ASSERT_OFFSET(TW_CharacterDetails,  m_loyalty_modifier,                   0x2C4);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  m_political_party,                    0x2EC);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  political_gravitas,                   0x2F4);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  m_initial_general_bodyguard_details,  0x31C);
@@ -627,6 +632,7 @@ TW_ASSERT_OFFSET(TW_CampaignEnv,   m_game_core,              0x30);
 TW_ASSERT_OFFSET(TW_GameCore,      m_databases,              0x10);
 TW_ASSERT_OFFSET(TW_Databases,     political_parties,        0xF18);
 TW_ASSERT_OFFSET(TW_Databases,     main_units,               0x1000);
+TW_ASSERT_OFFSET(TW_Databases,     loyalty_factors,          0x1168);
 TW_ASSERT_OFFSET(TW_Databases,     technologies,             0x1604);
 TW_ASSERT_OFFSET(TW_PoliticalPartyRecord, m_key,            0x0);
 TW_ASSERT_OFFSET(TW_PoliticalPartyRecord, m_initial_power,   0x44);

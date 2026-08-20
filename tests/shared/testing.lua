@@ -1561,6 +1561,74 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 24: Character Loyalty API (GetLoyalty, GetLoyaltyModifier, SetLoyaltyModifier, GetLoyaltyFactorList)
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 24: Character Loyalty API ---")
+        do
+            local test_char = char
+            if not test_char then
+                local chars = game:model():world():faction_by_key(faction):character_list()
+                if chars:num_items() > 0 then
+                    test_char = chars:item_at(0)
+                end
+            end
+
+            if not test_char then
+                twdll.core.Log("[TEST] Character Loyalty API: SKIPPED (no character found)")
+                record_skip()
+            else
+                if type(test_char.GetLoyalty) ~= "function" or type(test_char.GetLoyaltyModifier) ~= "function"
+                   or type(test_char.SetLoyaltyModifier) ~= "function" or type(test_char.GetLoyaltyFactorList) ~= "function" then
+                    twdll.core.Log("[TEST] Character Loyalty API: FAILED (methods not registered)")
+                    report("character loyalty methods registered", false)
+                else
+                    report("character loyalty methods registered", true)
+
+                    local initial_loyalty = test_char:GetLoyalty()
+                    local initial_mod = test_char:GetLoyaltyModifier()
+                    twdll.core.Log(string.format("[TEST] Character cqi=%d initial loyalty = %d/10, modifier = %+d",
+                        test_char:cqi(), initial_loyalty, initial_mod))
+                    report("char:GetLoyalty returns integer in [0, 10]", type(initial_loyalty) == "number" and initial_loyalty >= 0 and initial_loyalty <= 10)
+                    report("char:GetLoyaltyModifier returns integer", type(initial_mod) == "number")
+
+                    -- Inspect loyalty factors
+                    local factors = test_char:GetLoyaltyFactorList()
+                    twdll.core.Log("[TEST] === Active Loyalty Factors ===")
+                    local factor_count = 0
+                    for k, v in pairs(factors) do
+                        factor_count = factor_count + 1
+                        twdll.core.Log(string.format("[TEST]   Factor '%s' = %+d", tostring(k), v))
+                    end
+                    twdll.core.Log(string.format("[TEST] Total active loyalty factors: %d", factor_count))
+                    report("char:GetLoyaltyFactorList returns table", type(factors) == "table")
+
+                    -- Test setting negative modifier (-10)
+                    local set_neg_ok = test_char:SetLoyaltyModifier(-10)
+                    report("char:SetLoyaltyModifier(-10) returns true", set_neg_ok == true)
+                    report("char:GetLoyaltyModifier verifies -10", test_char:GetLoyaltyModifier() == -10)
+                    local low_loyalty = test_char:GetLoyalty()
+                    twdll.core.Log(string.format("[TEST] Loyalty after modifier -10 = %d/10", low_loyalty))
+                    report("loyalty decreased or clamped at 0 with negative modifier", low_loyalty <= initial_loyalty)
+
+                    -- Test setting positive modifier (+10)
+                    local set_pos_ok = test_char:SetLoyaltyModifier(10)
+                    report("char:SetLoyaltyModifier(10) returns true", set_pos_ok == true)
+                    report("char:GetLoyaltyModifier verifies 10", test_char:GetLoyaltyModifier() == 10)
+                    local high_loyalty = test_char:GetLoyalty()
+                    twdll.core.Log(string.format("[TEST] Loyalty after modifier +10 = %d/10", high_loyalty))
+                    report("loyalty increased or clamped at 10 with positive modifier", high_loyalty >= initial_loyalty)
+
+                    -- Finally, set character loyalty to 0 (-100 modifier) to observe in-game state
+                    twdll.core.Log(string.format("[TEST] Priming character cqi=%d to 0 loyalty (modifier = -100)...", test_char:cqi()))
+                    test_char:SetLoyaltyModifier(-100)
+                    local zero_loyalty = test_char:GetLoyalty()
+                    twdll.core.Log(string.format("[TEST] Final character loyalty = %d/10 (modifier = %d)", zero_loyalty, test_char:GetLoyaltyModifier()))
+                    report("character final loyalty is 0", zero_loyalty == 0)
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

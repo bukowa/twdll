@@ -371,6 +371,120 @@ static int GetTraitList(lua_State* L) {
     return 1;
 }
 
+/***
+Gets the current calculated total loyalty of the character (0 to 10), taking into account
+ruler authority, gravitas difference, marriage, ministerial offices, traits, and direct modifiers.
+@function GetLoyalty
+@treturn integer total loyalty level clamped between 0 and 10
+*/
+static int GetLoyalty(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushinteger(L, 0);
+        return 1;
+    }
+    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
+    if (!hMod) {
+        l_pushinteger(L, 0);
+        return 1;
+    }
+    using FnGetLoyalty = int(__thiscall*)(void*);
+    auto fnGetLoyalty = reinterpret_cast<FnGetLoyalty>(
+        reinterpret_cast<uintptr_t>(hMod) + 0x007C5920);
+    l_pushinteger(L, fnGetLoyalty(ch));
+    return 1;
+}
+
+/***
+Gets the direct loyalty modifier value (Factor 26 at offset +0x4C8) for this character.
+@function GetLoyaltyModifier
+@treturn integer loyalty modifier value
+*/
+static int GetLoyaltyModifier(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushinteger(L, 0);
+        return 1;
+    }
+    l_pushinteger(L, static_cast<int>(ch->details.m_loyalty_modifier));
+    return 1;
+}
+
+/***
+Sets the direct loyalty modifier value (Factor 26 at offset +0x4C8) for this character.
+This value is directly added to the character's 32 loyalty factor sum during loyalty evaluation.
+To permanently zero out or prime a character for rebellion/defection, call:
+  char:SetLoyaltyModifier(-100) or char:SetLoyaltyModifier(-char:GetLoyalty())
+@function SetLoyaltyModifier
+@tparam integer value new modifier value (-128 to 127)
+@treturn boolean true on success, false otherwise
+*/
+static int SetLoyaltyModifier(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    int val = static_cast<int>(l_tointeger(L, 2));
+    if (val < -128) val = -128;
+    if (val > 127) val = 127;
+    ch->details.m_loyalty_modifier = static_cast<int8_t>(val);
+
+    Log("[twdll] char:SetLoyaltyModifier: character 0x%08X modifier set to %d",
+        reinterpret_cast<uintptr_t>(ch), val);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
+/***
+Returns a table breakdown of all active loyalty factors contributing to this character's loyalty.
+Each key is the genuine database key from loyalty_factors_tables and its integer point value.
+@function GetLoyaltyFactorList
+@treturn table map of db_factor_key -> integer point value for all non-zero factors
+*/
+static int GetLoyaltyFactorList(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    l_newtable(L);
+    if (!ch) return 1;
+
+    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
+    if (!hMod) return 1;
+
+    int8_t factors[32]{};
+    using FnGetFactors = void*(__thiscall*)(void*, void*);
+    auto fnGetFactors = reinterpret_cast<FnGetFactors>(
+        reinterpret_cast<uintptr_t>(hMod) + 0x007C5A00);
+
+    fnGetFactors(ch, factors);
+
+    auto* dbs = TW_Databases::get();
+    void** factor_records = nullptr;
+    uint32_t factor_count = 0;
+    if (dbs && dbs->loyalty_factors) {
+        factor_records = *reinterpret_cast<void***>(reinterpret_cast<uintptr_t>(dbs->loyalty_factors) + 0x0C);
+        factor_count = *reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(dbs->loyalty_factors) + 0x08);
+    }
+
+    for (int i = 0; i < 32; ++i) {
+        if (factors[i] != 0) {
+            const char* key = nullptr;
+            if (factor_records && static_cast<uint32_t>(i) < factor_count && factor_records[i]) {
+                key = *reinterpret_cast<const char* const*>(reinterpret_cast<uintptr_t>(factor_records[i]) + 0x08);
+            }
+            if (key && key[0] != '\0') {
+                l_pushstring(L, key);
+            } else {
+                char fallback[32];
+                snprintf(fallback, sizeof(fallback), "factor_%d", i);
+                l_pushstring(L, fallback);
+            }
+            l_pushinteger(L, static_cast<int>(factors[i]));
+            l_settable(L, -3);
+        }
+    }
+    return 1;
+}
+
 extern const luaL_Reg character_functions[] = {
     {nullptr, nullptr}
 };
@@ -389,6 +503,10 @@ static const luaL_Reg character_methods[] = {
     {"AddTrait",              AddTrait},
     {"RemoveTrait",           RemoveTrait},
     {"GetTraitList",          GetTraitList},
+    {"GetLoyalty",            GetLoyalty},
+    {"GetLoyaltyModifier",    GetLoyaltyModifier},
+    {"SetLoyaltyModifier",    SetLoyaltyModifier},
+    {"GetLoyaltyFactorList",  GetLoyaltyFactorList},
     {nullptr, nullptr}
 };
 

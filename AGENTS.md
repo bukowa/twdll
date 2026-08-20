@@ -111,6 +111,9 @@ When a test fails, crashes, or returns unexpected values (`nil`, wrong values, a
   userdata MUST follow the `Get<Thing>List` naming convention (e.g. `GetReligionList`, `GetPoliticalPartyList`,
   `GetCandidateList`, `GetFamilyMemberList`), matching the native Total War list convention (`character_list()`,
   `region_list()`, `faction_list()`). Never name it as a bare plural (e.g. `GetReligions` or `GetPoliticalParties`) without the `List` suffix.
+- **Do not create aliases** — never create `snake_case`, alternative names, or duplicate method registrations
+  for Lua-exposed functions unless explicitly requested by the user. Every function must have exactly ONE canonical
+  `PascalCase` name (e.g. `InstantDefect`, `GetLoyalty`, `SetLoyalty`, `GetReligionList`, `AddTrait`, `RemoveTrait`).
 
 ## Before Modifying Existing Files
 
@@ -138,9 +141,11 @@ keeps "install-time plumbing" visually distinct from the Lua API surface.
 
 ### Lua API Naming Conventions
 
+- **Canonical PascalCase Only (No Aliases)**: Every function registered in Lua MUST have exactly ONE canonical `PascalCase`
+  name (e.g. `InstantDefect`, `GetLoyalty`, `SetLoyalty`, `AddTrait`, `RemoveTrait`, `GetTraitList`). Never register
+  unrequested `snake_case` aliases or duplicate wrappers.
 - **List Interface Return Methods**: Functions that return a list interface (`*_LIST_SCRIPT_INTERFACE`)
-  must always be named `Get<Thing>List` in `PascalCase` (and optionally provide a `snake_case` alias
-  `get_<thing>_list` / `<thing>_list`). Example: `region:GetReligionList()`, `faction:GetPoliticalPartyList()`.
+  must always be named `Get<Thing>List` in `PascalCase` (e.g. `region:GetReligionList()`, `faction:GetPoliticalPartyList()`).
 
 ---
 
