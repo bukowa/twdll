@@ -130,6 +130,14 @@ Questions and ideas go in [Issues](https://github.com/bukowa/twdll/issues) or on
 3. Create git tag: `git tag v1.0.0 && git push origin v1.0.0`
 4. GitHub Actions builds and releases automatically
 
+## Credits & Acknowledgements
+
+This project would not have been possible without the immense work, research, and support of many individuals, modding teams, and tool creators across the Total War and reverse-engineering communities.
+
+Special thanks to **Jake Armitage**, **Valerius**, **Irishbandito**, **Divide et Impera (DeI)**, **Medieval Kingdoms 1212 AD (MK1212)**, **The Dawnless Days (TDD)**, **Para Bellum**, **M2TWEOP Maintainers**, **Frodo (RPFM)**, **Taw (etwng)**, **daniu (PFM)**, **Da Modding Den**, **TW Modders Agora**, **Creative Assembly**, **Hex-Rays**, **NSA Ghidra**, **Tsuda Kageyu (MinHook)**, and the entire Total War modding community.
+
+See [**`CREDITS.md`**](CREDITS.md) for the full list of acknowledgements and the [**GitHub Contributors Graph**](https://github.com/bukowa/twdll/graphs/contributors).
+
 ## Security & Verification
 
 All `twdll` binaries are built on public GitHub Actions runners and cryptographically signed using **GitHub Artifact Attestations (Sigstore)** with published SHA-256 checksums.
