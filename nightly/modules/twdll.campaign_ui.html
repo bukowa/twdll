@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><strong>twdll.campaign_ui</strong></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><strong>twdll.campaign_ui</strong></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,42 +72,40 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#ClearMaxSlots">ClearMaxSlots ()</a></td>
+	<td class="summary">Clears custom settlement slot UI limits and restores the vanilla game defaults (6 for major, 4 for minor).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetEncyclopediaUrl">GetEncyclopediaUrl ()</a></td>
+	<td class="summary">Returns the currently active base URL prefix for the in-game encyclopedia.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxSlotsMajor">GetMaxSlotsMajor ()</a></td>
+	<td class="summary">Returns the currently configured major settlement slot display override, or nil if using the game default (6).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxSlotsMinor">GetMaxSlotsMinor ()</a></td>
+	<td class="summary">Returns the currently configured minor settlement slot display override, or nil if using the game default (4).</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
 	<td class="summary">Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetMaxSlotsMajor">SetMaxSlotsMajor (slots)</a></td>
-	<td class="summary">Overrides the maximum number of building slots shown on the main (capital)
-settlement card in the settlement panel.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetMaxSlotsMinor">SetMaxSlotsMinor (slots)</a></td>
-	<td class="summary">Overrides the maximum number of building slots shown on the minor settlement
-cards in the settlement panel.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMaxSlotsMajor">GetMaxSlotsMajor ()</a></td>
-	<td class="summary">Returns the currently configured major-slot override, or nil if none is set.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMaxSlotsMinor">GetMaxSlotsMinor ()</a></td>
-	<td class="summary">Returns the currently configured minor-slot override, or nil if none is set.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#ClearMaxSlots">ClearMaxSlots ()</a></td>
-	<td class="summary">Restores the game default max-slot count (4, or 6 for the main settlement card).</td>
-	</tr>
-	<tr>
 	<td class="name" nowrap><a href="#RefreshSettlements">RefreshSettlements ()</a></td>
-	<td class="summary">Forces an immediate visual refresh of all settlement building models on the campaign map.</td>
+	<td class="summary">Forces an immediate visual re-render of all settlement building models across the campaign map.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetEncyclopediaUrl">SetEncyclopediaUrl (url)</a></td>
-	<td class="summary">Sets the base URL prefix for the in-game encyclopedia (defaults to "http://Atenc.totalwar.com/#").</td>
+	<td class="summary">Sets the base URL prefix for the in-game encyclopedia (defaults to <code>&quot;http://Atenc.totalwar.com/#&quot;</code>).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetEncyclopediaUrl">GetEncyclopediaUrl ()</a></td>
-	<td class="summary">Returns the current base URL prefix for the in-game encyclopedia.</td>
+	<td class="name" nowrap><a href="#SetMaxSlotsMajor">SetMaxSlotsMajor (slots)</a></td>
+	<td class="summary">Overrides the maximum number of building slots displayed on major (provincial capital) settlement cards.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxSlotsMinor">SetMaxSlotsMinor (slots)</a></td>
+	<td class="summary">Overrides the maximum number of building slots displayed on minor settlement cards in the settlement panel.</td>
 	</tr>
 </table>
 
@@ -119,179 +117,21 @@ cards in the settlement panel.</td>
 
     <dl class="function">
     <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
-    </dt>
-    <dd>
-    Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678"), or nil if not yet initialised
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMaxSlotsMajor"></a>
-    <strong>SetMaxSlotsMajor (slots)</strong>
-    </dt>
-    <dd>
-    Overrides the maximum number of building slots shown on the main (capital)
-settlement card in the settlement panel.  Clamped to 1..20. Applies from the
-next panel open/refresh onwards. Values below 1 are rejected (no-op).
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">slots</span>
-            <span class="types"><span class="type">number</span></span>
-         max slot count to display
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">number</span></span>
-        the applied value, or nil if rejected
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMaxSlotsMinor"></a>
-    <strong>SetMaxSlotsMinor (slots)</strong>
-    </dt>
-    <dd>
-    Overrides the maximum number of building slots shown on the minor settlement
-cards in the settlement panel.  Clamped to 1..20. Applies from the next panel
-open/refresh onwards. Values below 1 are rejected (no-op).
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">slots</span>
-            <span class="types"><span class="type">number</span></span>
-         max slot count to display
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">number</span></span>
-        the applied value, or nil if rejected
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMaxSlotsMajor"></a>
-    <strong>GetMaxSlotsMajor ()</strong>
-    </dt>
-    <dd>
-    Returns the currently configured major-slot override, or nil if none is set.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
-        slots
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMaxSlotsMinor"></a>
-    <strong>GetMaxSlotsMinor ()</strong>
-    </dt>
-    <dd>
-    Returns the currently configured minor-slot override, or nil if none is set.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
-        slots
-    </ol>
-
-
-
-
-</dd>
-    <dt>
     <a name = "ClearMaxSlots"></a>
     <strong>ClearMaxSlots ()</strong>
     </dt>
     <dd>
-    Restores the game default max-slot count (4, or 6 for the main settlement card).
+    Clears custom settlement slot UI limits and restores the vanilla game defaults (6 for major, 4 for minor).
 
 
 
 
 
 
-
-</dd>
-    <dt>
-    <a name = "RefreshSettlements"></a>
-    <strong>RefreshSettlements ()</strong>
-    </dt>
-    <dd>
-    Forces an immediate visual refresh of all settlement building models on the campaign map.
-
-
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetEncyclopediaUrl"></a>
-    <strong>SetEncyclopediaUrl (url)</strong>
-    </dt>
-    <dd>
-    Sets the base URL prefix for the in-game encyclopedia (defaults to "http://Atenc.totalwar.com/#").
-If a custom URL is provided, all in-game encyclopedia links (unit cards, buildings, technologies,
-and the main encyclopedia button) will open using this base URL. Passing nil or an empty string
-restores the original default URL.
-
-
-    <h3>Parameters:</h3>
+    <h3>Usage:</h3>
     <ul>
-        <li><span class="parameter">url</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">nil</span></span>
-         new base encyclopedia URL (e.g. "http://localhost:8080/#")
-        </li>
+        <pre class="example">twdll.campaign_ui.<span class="function-name">ClearMaxSlots</span>()</pre>
     </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        the currently applied base URL
-    </ol>
-
-
-
 
 </dd>
     <dt>
@@ -299,7 +139,7 @@ restores the original default URL.
     <strong>GetEncyclopediaUrl ()</strong>
     </dt>
     <dd>
-    Returns the current base URL prefix for the in-game encyclopedia.
+    Returns the currently active base URL prefix for the in-game encyclopedia.
 
 
 
@@ -312,6 +152,203 @@ restores the original default URL.
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> enc_url = twdll.campaign_ui.<span class="function-name">GetEncyclopediaUrl</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMaxSlotsMajor"></a>
+    <strong>GetMaxSlotsMajor ()</strong>
+    </dt>
+    <dd>
+    Returns the currently configured major settlement slot display override, or nil if using the game default (6).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        configured max slots, or nil if default
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> major_slots = twdll.campaign_ui.<span class="function-name">GetMaxSlotsMajor</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMaxSlotsMinor"></a>
+    <strong>GetMaxSlotsMinor ()</strong>
+    </dt>
+    <dd>
+    Returns the currently configured minor settlement slot display override, or nil if using the game default (4).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        configured max slots, or nil if default
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> minor_slots = twdll.campaign_ui.<span class="function-name">GetMaxSlotsMinor</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">nil</span></span>
+        memory address (e.g. "0x12345678"), or nil if not yet initialised
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = twdll.campaign_ui.<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "RefreshSettlements"></a>
+    <strong>RefreshSettlements ()</strong>
+    </dt>
+    <dd>
+    Forces an immediate visual re-render of all settlement building models across the campaign map.
+
+
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.campaign_ui.<span class="function-name">RefreshSettlements</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetEncyclopediaUrl"></a>
+    <strong>SetEncyclopediaUrl (url)</strong>
+    </dt>
+    <dd>
+    Sets the base URL prefix for the in-game encyclopedia (defaults to <code>&quot;http://Atenc.totalwar.com/#&quot;</code>).
+All in-game encyclopedia hyperlinks (unit cards, building tree, tech tree, faction help)
+will open using this base URL. Passing nil or an empty string restores the vanilla URL.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">url</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">nil</span></span>
+         new base encyclopedia URL (e.g. <code>&quot;http://localhost:8080/#&quot;</code>), or nil to restore default
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        the currently applied base URL
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Point encyclopedia to a local offline documentation server:
+</span>twdll.campaign_ui.<span class="function-name">SetEncyclopediaUrl</span>(<span class="string">"http://localhost:8080/#"</span>)
+
+<span class="comment">-- Restore default official web URL:
+</span>twdll.campaign_ui.<span class="function-name">SetEncyclopediaUrl</span>(<span class="keyword">nil</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMaxSlotsMajor"></a>
+    <strong>SetMaxSlotsMajor (slots)</strong>
+    </dt>
+    <dd>
+    Overrides the maximum number of building slots displayed on major (provincial capital) settlement cards.
+Clamped between 1 and 20. Applies from the next panel open/refresh onwards.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">slots</span>
+            <span class="types"><span class="type">integer</span></span>
+         max slot count to display (1 to 20)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        applied override value, or nil if invalid
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Show up to 8 slots for provincial capitals:
+</span>twdll.campaign_ui.<span class="function-name">SetMaxSlotsMajor</span>(<span class="number">8</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMaxSlotsMinor"></a>
+    <strong>SetMaxSlotsMinor (slots)</strong>
+    </dt>
+    <dd>
+    Overrides the maximum number of building slots displayed on minor settlement cards in the settlement panel.
+Clamped between 1 and 20. Applies from the next panel open/refresh onwards.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">slots</span>
+            <span class="types"><span class="type">integer</span></span>
+         max slot count to display (1 to 20)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        applied override value, or nil if invalid
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Show up to 6 slots for minor settlements:
+</span>twdll.campaign_ui.<span class="function-name">SetMaxSlotsMinor</span>(<span class="number">6</span>)</pre>
+    </ul>
 
 </dd>
 </dl>

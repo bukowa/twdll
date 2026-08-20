@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><strong>FACTION_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><strong>FACTION_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,20 +72,32 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#CreateAgent">CreateAgent (agent_key[, settlement_or_x[, y]])</a></td>
+	<td class="summary">Creates and spawns a new agent character on the campaign map for this faction in the current tick.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the faction object as a hexadecimal string.</td>
+	<td class="summary">Memory address of the faction object in hexadecimal format.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetPoliticalParty">GetPoliticalParty (party_key)</a></td>
+	<td class="summary">Retrieves the political party in this faction matching the given record key.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetPoliticalPartyList">GetPoliticalPartyList ()</a></td>
+	<td class="summary">List interface (<a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html#">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a>) for the faction's campaign political parties.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetPrimaryParty">GetPrimaryParty ()</a></td>
+	<td class="summary">Primary (leading / ruling) political party of the faction.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetTreasury">GetTreasury ()</a></td>
-	<td class="summary">Gets the amount of gold (treasury) for the faction.</td>
+	<td class="summary">Amount of gold in the faction's treasury.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetTreasury">SetTreasury (value)</a></td>
-	<td class="summary">Sets the amount of gold (treasury) for the faction.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetCapital">SetCapital (region)</a></td>
-	<td class="summary">Makes the given region the faction's capital.</td>
+	<td class="name" nowrap><a href="#HasPoliticalParties">HasPoliticalParties ()</a></td>
+	<td class="summary">Checks whether the faction participates in the campaign politics system and has political parties.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#InstantlyResearchTechnology">InstantlyResearchTechnology (technology_key)</a></td>
@@ -93,28 +105,16 @@
 game's own internal path for finishing a technology.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age]])</a></td>
+	<td class="name" nowrap><a href="#SetCapital">SetCapital (region)</a></td>
+	<td class="summary">Makes the specified region the faction's primary capital / home region.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age=false]])</a></td>
 	<td class="summary">Sets a new leader for the faction.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetPoliticalPartyList">GetPoliticalPartyList ()</a></td>
-	<td class="summary">Returns a list interface for the faction's campaign political parties.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetPoliticalParty">GetPoliticalParty (party_key)</a></td>
-	<td class="summary">Returns the faction's political party with the given record key, or nil.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetPrimaryParty">GetPrimaryParty ()</a></td>
-	<td class="summary">Returns the faction's primary (leading) political party, or nil.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#HasPoliticalParties">HasPoliticalParties ()</a></td>
-	<td class="summary">Returns whether the faction has any campaign political parties.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#CreateAgent">CreateAgent (agent_key[, settlement_or_x[, y]])</a></td>
-	<td class="summary">Creates and spawns a new agent character on the campaign map for this faction in the current tick.</td>
+	<td class="name" nowrap><a href="#SetTreasury">SetTreasury (value)</a></td>
+	<td class="summary">Sets the amount of gold in the faction's treasury.</td>
 	</tr>
 </table>
 
@@ -125,245 +125,6 @@ game's own internal path for finishing a technology.</td>
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
-    <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
-    </dt>
-    <dd>
-    Returns the memory address of the faction object as a hexadecimal string.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetTreasury"></a>
-    <strong>GetTreasury ()</strong>
-    </dt>
-    <dd>
-    Gets the amount of gold (treasury) for the faction.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        amount of gold
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetTreasury"></a>
-    <strong>SetTreasury (value)</strong>
-    </dt>
-    <dd>
-    Sets the amount of gold (treasury) for the faction.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new amount of gold
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetCapital"></a>
-    <strong>SetCapital (region)</strong>
-    </dt>
-    <dd>
-    Makes the given region the faction's capital.
-Works even if the faction currently has no home region: the fields are
-set exactly as the engine does in FACTION::attach<em>to</em>region, including the
-original home region and home theatre when they are not yet assigned.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">region</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the region to become the new capital
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "InstantlyResearchTechnology"></a>
-    <strong>InstantlyResearchTechnology (technology_key)</strong>
-    </dt>
-    <dd>
-    Instantly completes research of the given technology for the faction, using the
-game's own internal path for finishing a technology.  This is exactly what the
-engine does when a tech completes, so events, achievements and unit upgrades
-fire normally, and parent prerequisites are completed automatically.
-Note: this differs from the game's built-in <code>cm:unlock_technology</code>, which only
-makes a technology selectable and never actually finishes the research.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">technology_key</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         the technology record key (e.g. "att<em>tech</em>military_barracks")
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">boolean</span></span>
-        true if the technology was found and completed
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetFactionLeader"></a>
-    <strong>SetFactionLeader (new_character[, old_character[, heir_coming_of_age]])</strong>
-    </dt>
-    <dd>
-    Sets a new leader for the faction.
-If <code>old_character</code> is provided, the game fires a succession event. If <code>heir_coming_of_age</code>
-is true, fires <code>faction_succession_heir_comes_of_age</code> instead of the default succession event.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">new_character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the character to become the new leader
-        </li>
-        <li><span class="parameter">old_character</span>
-            <span class="types"><span class="type">userdata</span></span>
-         the outgoing leader (triggers succession event if provided)
-         (<em>optional</em>)
-        </li>
-        <li><span class="parameter">heir_coming_of_age</span>
-            <span class="types"><span class="type">boolean</span></span>
-         fire the heir-comes-of-age event variant (default false)
-         (<em>optional</em>)
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetPoliticalPartyList"></a>
-    <strong>GetPoliticalPartyList ()</strong>
-    </dt>
-    <dd>
-    Returns a list interface for the faction's campaign political parties.
-Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to iterate it.
-Each party exposes GetKey(), GetSenators(), GetPower() and IsPrimary().
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">userdata</span></span>
-        POLITICAL<em>PARTY</em>LIST<em>SCRIPT</em>INTERFACE
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetPoliticalParty"></a>
-    <strong>GetPoliticalParty (party_key)</strong>
-    </dt>
-    <dd>
-    Returns the faction's political party with the given record key, or nil.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">party_key</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         the party record key (e.g. "att<em>political</em>party<em>romans</em>1")
-        </li>
-    </ul>
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">userdata</span></span>
-        CAMPAIGN<em>POLITICAL</em>PARTY or nil
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetPrimaryParty"></a>
-    <strong>GetPrimaryParty ()</strong>
-    </dt>
-    <dd>
-    Returns the faction's primary (leading) political party, or nil.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">userdata</span></span>
-        CAMPAIGN<em>POLITICAL</em>PARTY or nil
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "HasPoliticalParties"></a>
-    <strong>HasPoliticalParties ()</strong>
-    </dt>
-    <dd>
-    Returns whether the faction has any campaign political parties.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">boolean</span></span>
-        true if the faction has at least one party
-    </ol>
-
-
-
-
-</dd>
     <dt>
     <a name = "CreateAgent"></a>
     <strong>CreateAgent (agent_key[, settlement_or_x[, y]])</strong>
@@ -411,6 +172,328 @@ faction:<span class="function-name">CreateAgent</span>(<span class="string">"cha
 
 <span class="comment">-- Example 2: Spawn a dignitary at specific map coordinates (x, y)
 </span>faction:<span class="function-name">CreateAgent</span>(<span class="string">"dignitary"</span>, <span class="number">516</span>, <span class="number">381</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Memory address of the faction object in hexadecimal format.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = faction:<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPoliticalParty"></a>
+    <strong>GetPoliticalParty (party_key)</strong>
+    </dt>
+    <dd>
+    Retrieves the political party in this faction matching the given record key.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">party_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the party record key from <code>political_parties_tables</code> (e.g. <code>&quot;att_politics_hunni_ruler&quot;</code>, <code>&quot;att_politics_hunni_council&quot;</code>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</span> or <span class="type">nil</span></span>
+        political party object, or nil if not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> party = faction:<span class="function-name">GetPoliticalParty</span>(<span class="string">"att_politics_hunni_ruler"</span>)
+<span class="keyword">if</span> party <span class="keyword">then</span>
+    twdll.core.<span class="function-name">Log</span>(<span class="string">"Found party with senators:"</span>, party:<span class="function-name">GetSenators</span>())
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPoliticalPartyList"></a>
+    <strong>GetPoliticalPartyList ()</strong>
+    </dt>
+    <dd>
+    List interface (<a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html#">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a>) for the faction's campaign political parties.
+Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to iterate the parties.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</span></span>
+        list interface for the faction's campaign political parties
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> party_list = faction:<span class="function-name">GetPoliticalPartyList</span>()
+<span class="keyword">for</span> i = <span class="number">0</span>, party_list:<span class="function-name">num_items</span>() - <span class="number">1</span> <span class="keyword">do</span>
+    <span class="keyword">local</span> party = party_list:<span class="function-name">item_at</span>(i)
+    twdll.core.<span class="function-name">Log</span>(<span class="global">string</span>.<span class="function-name">format</span>(<span class="string">"Party [%s]: Senators=%d, Power=%.1f%%, Primary=%s"</span>,
+        party:<span class="function-name">GetKey</span>(), party:<span class="function-name">GetSenators</span>(), party:<span class="function-name">GetPower</span>() * <span class="number">100</span>, <span class="global">tostring</span>(party:<span class="function-name">IsPrimary</span>())))
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPrimaryParty"></a>
+    <strong>GetPrimaryParty ()</strong>
+    </dt>
+    <dd>
+    Primary (leading / ruling) political party of the faction.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</span> or <span class="type">nil</span></span>
+        primary political party object, or nil if none
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> ruler_party = faction:<span class="function-name">GetPrimaryParty</span>()
+<span class="keyword">if</span> ruler_party <span class="keyword">then</span>
+    twdll.core.<span class="function-name">Log</span>(<span class="string">"Ruling party key:"</span>, ruler_party:<span class="function-name">GetKey</span>(), <span class="string">"Senators:"</span>, ruler_party:<span class="function-name">GetSenators</span>())
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetTreasury"></a>
+    <strong>GetTreasury ()</strong>
+    </dt>
+    <dd>
+    Amount of gold in the faction's treasury.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        current treasury gold amount
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> gold = faction:<span class="function-name">GetTreasury</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "HasPoliticalParties"></a>
+    <strong>HasPoliticalParties ()</strong>
+    </dt>
+    <dd>
+    Checks whether the faction participates in the campaign politics system and has political parties.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the faction has at least one political party, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> faction:<span class="function-name">HasPoliticalParties</span>() <span class="keyword">then</span>
+    <span class="keyword">local</span> parties = faction:<span class="function-name">GetPoliticalPartyList</span>()
+    twdll.core.<span class="function-name">Log</span>(<span class="string">"Faction has politics with party count:"</span>, parties:<span class="function-name">num_items</span>())
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "InstantlyResearchTechnology"></a>
+    <strong>InstantlyResearchTechnology (technology_key)</strong>
+    </dt>
+    <dd>
+    Instantly completes research of the given technology for the faction, using the
+game's own internal path for finishing a technology. </p>
+
+<p>This triggers all native engine completion mechanics:
+- Fires research completion campaign events.
+- Grants technology-related campaign achievements.
+- Applies unit upgrades and building unlocks immediately.
+- Completes parent prerequisites automatically.</p>
+
+<p>Note: this differs from the game's built-in <code>cm:unlock_technology</code>, which only
+makes a technology selectable in the UI and never actually finishes research.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key from <code>technologies_tables</code> (e.g. <code>&quot;att_tech_military_barracks&quot;</code>, <code>&quot;att_hunnic_military_combat_at_distance&quot;</code>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the technology was found and completed, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> ok = faction:<span class="function-name">InstantlyResearchTechnology</span>(<span class="string">"att_hunnic_military_combat_at_distance"</span>)
+<span class="keyword">if</span> ok <span class="keyword">then</span>
+    twdll.core.<span class="function-name">Log</span>(<span class="string">"Technology researched instantly!"</span>)
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetCapital"></a>
+    <strong>SetCapital (region)</strong>
+    </dt>
+    <dd>
+    Makes the specified region the faction's primary capital / home region. </p>
+
+<p>Works even if the faction currently has no home region (e.g. horde settling): properly assigns
+the faction's capital, original home region, and home theatre.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">region</span>
+            <span class="types"><span class="type">REGION_SCRIPT_INTERFACE</span></span>
+         the region to become the new capital
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> region = game:<span class="function-name">model</span>():<span class="function-name">world</span>():<span class="function-name">region_manager</span>():<span class="function-name">region_by_key</span>(<span class="string">"att_reg_scandza_hafn"</span>)
+faction:<span class="function-name">SetCapital</span>(region)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetFactionLeader"></a>
+    <strong>SetFactionLeader (new_character[, old_character[, heir_coming_of_age=false]])</strong>
+    </dt>
+    <dd>
+    Sets a new leader for the faction. </p>
+
+<p>Supports three operational modes:
+1. <strong>Silent swap</strong> (<code>faction:SetFactionLeader(new_char)</code>): changes the faction leader immediately without firing succession events or modifying political stability.
+2. <strong>Standard succession</strong> (<code>faction:SetFactionLeader(new_char, old_char)</code>): triggers the standard <code>faction_succession</code> (or <code>faction_succession_regency</code>) campaign event.
+3. <strong>Heir coming of age</strong> (<code>faction:SetFactionLeader(new_char, old_char, true)</code>): triggers the <code>faction_succession_heir_comes_of_age</code> campaign event.</p>
+
+<p>Automatically resets the new leader's heir status and aligns political party leadership.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">new_character</span>
+            <span class="types"><span class="type">CHARACTER_SCRIPT_INTERFACE</span></span>
+         the character to become the new leader
+        </li>
+        <li><span class="parameter">old_character</span>
+            <span class="types"><span class="type">CHARACTER_SCRIPT_INTERFACE</span></span>
+         the outgoing leader (triggers succession event if provided)
+         (<em>optional</em>)
+        </li>
+        <li><span class="parameter">heir_coming_of_age</span>
+            <span class="types"><span class="type">boolean</span></span>
+         fire the heir-comes-of-age event variant (default: false)
+         (<em>default</em> false)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Mode 1: Silent swap without event popup:
+</span>faction:<span class="function-name">SetFactionLeader</span>(new_general)
+
+<span class="comment">-- Mode 2: Standard succession with in-game succession event:
+</span><span class="keyword">local</span> old_leader = faction:<span class="function-name">faction_leader</span>()
+faction:<span class="function-name">SetFactionLeader</span>(new_general, old_leader)
+
+<span class="comment">-- Mode 3: Heir coming of age succession:
+</span>faction:<span class="function-name">SetFactionLeader</span>(heir_general, old_leader, <span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetTreasury"></a>
+    <strong>SetTreasury (value)</strong>
+    </dt>
+    <dd>
+    Sets the amount of gold in the faction's treasury.
+Persisted natively in savegames and immediately available for building and recruitment.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new gold amount
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Give faction 50,000 gold:
+</span>faction:<span class="function-name">SetTreasury</span>(<span class="number">50000</span>)</pre>
     </ul>
 
 </dd>

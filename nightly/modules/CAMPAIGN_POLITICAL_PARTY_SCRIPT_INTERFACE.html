@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><strong>CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><strong>CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -73,23 +73,23 @@
 <table class="function_list">
 	<tr>
 	<td class="name" nowrap><a href="#GetKey">GetKey ()</a></td>
-	<td class="summary">Returns the party's record key string (e.g.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetSenators">GetSenators ()</a></td>
-	<td class="summary">Returns the number of senators currently held by the party.</td>
+	<td class="summary">Database record key string of the political party from <code>political_parties_tables</code> (e.g.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetPower">GetPower ()</a></td>
-	<td class="summary">Returns the current political power of the party as a float.</td>
+	<td class="summary">Current political power of the party as a normalized proportion (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetSenators">GetSenators ()</a></td>
+	<td class="summary">Number of senators currently supporting this political party.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#IsPrimary">IsPrimary ()</a></td>
-	<td class="summary">Returns whether this party is the faction's primary (leading) party.</td>
+	<td class="summary">Checks whether this political party is the faction's primary (ruling) party.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetPrimary">SetPrimary ()</a></td>
-	<td class="summary">Sets this party as the faction's primary (leading) party.</td>
+	<td class="summary">Sets this party as the faction's primary (ruling) party.</td>
 	</tr>
 </table>
 
@@ -105,7 +105,7 @@
     <strong>GetKey ()</strong>
     </dt>
     <dd>
-    Returns the party's record key string (e.g.  "att<em>political</em>party<em>romans</em>1").
+    Database record key string of the political party from <code>political_parties_tables</code> (e.g.  <code>&quot;att_politics_hunni_ruler&quot;</code>).
 
 
 
@@ -118,6 +118,37 @@
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = party:<span class="function-name">GetKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPower"></a>
+    <strong>GetPower ()</strong>
+    </dt>
+    <dd>
+    Current political power of the party as a normalized proportion (e.g.  <code>0.70</code> for 70% senate dominance).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        political power proportion (0.0 to 1.0)
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> power_pct = party:<span class="function-name">GetPower</span>() * <span class="number">100</span>
+<span class="keyword">if</span> power_pct &gt;= <span class="number">60.0</span> <span class="keyword">then</span>
+    <span class="comment">-- Ruling party enjoys high political dominance
+</span><span class="keyword">end</span></pre>
+    </ul>
 
 </dd>
     <dt>
@@ -125,7 +156,7 @@
     <strong>GetSenators ()</strong>
     </dt>
     <dd>
-    Returns the number of senators currently held by the party.
+    Number of senators currently supporting this political party.
 
 
 
@@ -138,26 +169,10 @@
 
 
 
-
-</dd>
-    <dt>
-    <a name = "GetPower"></a>
-    <strong>GetPower ()</strong>
-    </dt>
-    <dd>
-    Returns the current political power of the party as a float.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">number</span></span>
-        political power
-    </ol>
-
-
-
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> senators = party:<span class="function-name">GetSenators</span>()</pre>
+    </ul>
 
 </dd>
     <dt>
@@ -165,7 +180,7 @@
     <strong>IsPrimary ()</strong>
     </dt>
     <dd>
-    Returns whether this party is the faction's primary (leading) party.
+    Checks whether this political party is the faction's primary (ruling) party.
 
 
 
@@ -173,11 +188,17 @@
     <ol>
 
            <span class="types"><span class="type">boolean</span></span>
-        true if this is the primary party
+        true if this is the primary ruling party, false otherwise
     </ol>
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> party:<span class="function-name">IsPrimary</span>() <span class="keyword">then</span>
+    <span class="comment">-- Party is the head of the faction
+</span><span class="keyword">end</span></pre>
+    </ul>
 
 </dd>
     <dt>
@@ -185,13 +206,13 @@
     <strong>SetPrimary ()</strong>
     </dt>
     <dd>
-    Sets this party as the faction's primary (leading) party. </p>
+    Sets this party as the faction's primary (ruling) party. </p>
 
-<p>NOTE: This method sets the faction's <code>m_primary_party</code> record pointer directly.
+<p>NOTE: This method directly assigns the ruling political party of the faction.
 It does not automatically cascade allegiance changes to existing family members
-or the faction leader. Changing the primary party without synchronizing character
-allegiances can cause UI display conflicts in the Clan / Family Tree panel (where
-characters belonging to other parties appear under 'Other Houses').
+or the faction leader. To avoid visual conflicts in the Clan / Family Tree UI
+(where family members belonging to other parties appear under 'Other Houses'),
+reassign characters using <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetPoliticalParty">CHARACTER_SCRIPT_INTERFACE:SetPoliticalParty</a>.
 
 
 
@@ -204,6 +225,13 @@ characters belonging to other parties appear under 'Other Houses').
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> opposition = faction:<span class="function-name">GetPoliticalParty</span>(<span class="string">"att_politics_hunni_council"</span>)
+<span class="keyword">if</span> opposition <span class="keyword">and</span> <span class="keyword">not</span> opposition:<span class="function-name">IsPrimary</span>() <span class="keyword">then</span>
+    opposition:<span class="function-name">SetPrimary</span>()
+<span class="keyword">end</span></pre>
+    </ul>
 
 </dd>
 </dl>

@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><strong>RELIGION_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><strong>RELIGION_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,16 +72,16 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#GetIconPath">GetIconPath ()</a></td>
+	<td class="summary">UI icon image path for this religion.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetKey">GetKey ()</a></td>
-	<td class="summary">Returns the database key of this religion (e.g.</td>
+	<td class="summary">Database record key of this religion from <code>religions_tables</code> (e.g.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetProportion">GetProportion ()</a></td>
-	<td class="summary">Returns the proportion of this religion in the region as a raw float (0.0 to 1.0).</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetIconPath">GetIconPath ()</a></td>
-	<td class="summary">Returns the UI icon path for this religion.</td>
+	<td class="summary">Proportion of this religion in the region as a normalized float (0.0 to 1.0).</td>
 	</tr>
 </table>
 
@@ -93,11 +93,35 @@
 
     <dl class="function">
     <dt>
+    <a name = "GetIconPath"></a>
+    <strong>GetIconPath ()</strong>
+    </dt>
+    <dd>
+    UI icon image path for this religion.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        icon file path (e.g. <code>&quot;UI/Religions/att_rel_chr_catholic.png&quot;</code>)
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> icon = rel:<span class="function-name">GetIconPath</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "GetKey"></a>
     <strong>GetKey ()</strong>
     </dt>
     <dd>
-    Returns the database key of this religion (e.g.  "att<em>rel</em>chr_catholic").
+    Database record key of this religion from <code>religions_tables</code> (e.g.  <code>&quot;att_rel_chr_catholic&quot;</code>).
 
 
 
@@ -110,6 +134,10 @@
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = rel:<span class="function-name">GetKey</span>()</pre>
+    </ul>
 
 </dd>
     <dt>
@@ -117,7 +145,7 @@
     <strong>GetProportion ()</strong>
     </dt>
     <dd>
-    Returns the proportion of this religion in the region as a raw float (0.0 to 1.0).
+    Proportion of this religion in the region as a normalized float (0.0 to 1.0).
 
 
 
@@ -130,26 +158,11 @@
 
 
 
-
-</dd>
-    <dt>
-    <a name = "GetIconPath"></a>
-    <strong>GetIconPath ()</strong>
-    </dt>
-    <dd>
-    Returns the UI icon path for this religion.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        icon path
-    </ol>
-
-
-
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> pct = rel:<span class="function-name">GetProportion</span>() * <span class="number">100</span>
+<span class="comment">-- e.g. 75.0 for 75%</span></pre>
+    </ul>
 
 </dd>
 </dl>

@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><strong>UNIT_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><strong>UNIT_SCRIPT_INTERFACE</strong></li>
 </ul>
 
 </div>
@@ -72,42 +72,40 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the unit object as a hexadecimal string.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetNumMen">GetNumMen ()</a></td>
-	<td class="summary">Gets the current number of men in the unit.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetNumMen">SetNumMen (value)</a></td>
-	<td class="summary">Sets the current number of men in the unit.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMaxNumMen">GetMaxNumMen ()</a></td>
-	<td class="summary">Gets the maximum number of men the unit can have.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetMaxNumMen">SetMaxNumMen (value)</a></td>
-	<td class="summary">Sets the maximum number of men the unit can have.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetActionPoints">GetActionPoints ()</a></td>
-	<td class="summary">Gets the action points remaining for the unit.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetActionPoints">SetActionPoints (value)</a></td>
-	<td class="summary">Sets the action points for the unit.</td>
-	</tr>
-	<tr>
 	<td class="name" nowrap><a href="#ConvertUnit">ConvertUnit (unit_key)</a></td>
-	<td class="summary">Replaces the unit with a new unit of the given type, in the same army, using
-the engine's own unit conversion path (the same one used for religion and
-technology upgrades).</td>
+	<td class="summary">Replaces the unit with a new unit type in the same military force (matching the engine upgrade path).</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#Disband">Disband ()</a></td>
-	<td class="summary">Disbands (permanently removes) this unit from its military force.</td>
+	<td class="summary">Disbands and removes this unit from its military force.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetActionPoints">GetActionPoints ()</a></td>
+	<td class="summary">Remaining movement action points for this unit.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxNumMen">GetMaxNumMen ()</a></td>
+	<td class="summary">Maximum soldier capacity (full strength count) for this unit.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Memory address of the unit object in hexadecimal format.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetNumMen">GetNumMen ()</a></td>
+	<td class="summary">Current number of surviving soldiers in the unit.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetActionPoints">SetActionPoints (value)</a></td>
+	<td class="summary">Sets the movement action points for this unit.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxNumMen">SetMaxNumMen (value)</a></td>
+	<td class="summary">Sets the maximum soldier capacity (full strength count) for this unit.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetNumMen">SetNumMen (value)</a></td>
+	<td class="summary">Sets the number of surviving soldiers in the unit.</td>
 	</tr>
 </table>
 
@@ -119,167 +117,24 @@ technology upgrades).</td>
 
     <dl class="function">
     <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
-    </dt>
-    <dd>
-    Returns the memory address of the unit object as a hexadecimal string.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetNumMen"></a>
-    <strong>GetNumMen ()</strong>
-    </dt>
-    <dd>
-    Gets the current number of men in the unit.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        current number of men
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetNumMen"></a>
-    <strong>SetNumMen (value)</strong>
-    </dt>
-    <dd>
-    Sets the current number of men in the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new number of men
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMaxNumMen"></a>
-    <strong>GetMaxNumMen ()</strong>
-    </dt>
-    <dd>
-    Gets the maximum number of men the unit can have.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        maximum number of men
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMaxNumMen"></a>
-    <strong>SetMaxNumMen (value)</strong>
-    </dt>
-    <dd>
-    Sets the maximum number of men the unit can have.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new maximum number of men
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetActionPoints"></a>
-    <strong>GetActionPoints ()</strong>
-    </dt>
-    <dd>
-    Gets the action points remaining for the unit.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        action points
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetActionPoints"></a>
-    <strong>SetActionPoints (value)</strong>
-    </dt>
-    <dd>
-    Sets the action points for the unit.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new action points
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
     <a name = "ConvertUnit"></a>
     <strong>ConvertUnit (unit_key)</strong>
     </dt>
     <dd>
-    Replaces the unit with a new unit of the given type, in the same army, using
-the engine's own unit conversion path (the same one used for religion and
-technology upgrades).  The new unit preserves the old unit's health proportion
-(men count scaled to the new unit size), experience and combat statistics. If the
-unit is a general's bodyguard, the character's persistent bodyguard snapshot is
-also updated. The old unit object is destroyed in the process, so the original unit
-reference is no longer valid afterwards.
+    Replaces the unit with a new unit type in the same military force (matching the engine upgrade path). </p>
+
+<p>Key mechanics:
+- Scales soldier count proportionally to the new unit's max capacity.
+- Preserves experience chevron rank, battle kills, and combat statistics.
+- If the unit is a general's bodyguard, synchronises the commander's bodyguard record.
+- <strong>Note</strong>: Destroys the old unit object; retrieve the replacement from the force's unit list.
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">unit_key</span>
             <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         the unit record key (e.g. "att<em>inf</em>melee<em>spear</em>att")
+         the unit record key from <code>main_units_tables</code> (e.g. <code>&quot;att_merc_ger_agathyrsi_warriors&quot;</code>, <code>&quot;att_inf_melee_spear_att&quot;</code>)
         </li>
     </ul>
 
@@ -292,6 +147,16 @@ reference is no longer valid afterwards.
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Upgrade or convert a unit in an army:
+</span><span class="keyword">local</span> unit = force:<span class="function-name">unit_list</span>():<span class="function-name">item_at</span>(<span class="number">0</span>)
+<span class="keyword">local</span> ok = unit:<span class="function-name">ConvertUnit</span>(<span class="string">"att_merc_ger_agathyrsi_warriors"</span>)
+<span class="keyword">if</span> ok <span class="keyword">then</span>
+    <span class="comment">-- Note: 'unit' is now invalid; fetch the updated unit from force:unit_list()
+</span>    <span class="keyword">local</span> updated_unit = force:<span class="function-name">unit_list</span>():<span class="function-name">item_at</span>(<span class="number">0</span>)
+<span class="keyword">end</span></pre>
+    </ul>
 
 </dd>
     <dt>
@@ -299,9 +164,9 @@ reference is no longer valid afterwards.
     <strong>Disband ()</strong>
     </dt>
     <dd>
-    Disbands (permanently removes) this unit from its military force.  This mirrors the game's
-own UNIT::disband_units path, so the unit is fully removed from the world and all
-bookkeeping (events, dirty flags, force teardown) runs correctly. Save/load safe.
+    Disbands and removes this unit from its military force. </p>
+
+<p>Updates campaign force state, unit counts, and UI bookkeeping in a single transaction. Save/load safe.
 
 
 
@@ -314,6 +179,211 @@ bookkeeping (events, dirty flags, force teardown) runs correctly. Save/load safe
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> unit = force:<span class="function-name">unit_list</span>():<span class="function-name">item_at</span>(force:<span class="function-name">unit_list</span>():<span class="function-name">num_items</span>() - <span class="number">1</span>)
+<span class="keyword">local</span> ok = unit:<span class="function-name">Disband</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetActionPoints"></a>
+    <strong>GetActionPoints ()</strong>
+    </dt>
+    <dd>
+    Remaining movement action points for this unit.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        action points
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> ap = unit:<span class="function-name">GetActionPoints</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMaxNumMen"></a>
+    <strong>GetMaxNumMen ()</strong>
+    </dt>
+    <dd>
+    Maximum soldier capacity (full strength count) for this unit.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum number of men
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> max_men = unit:<span class="function-name">GetMaxNumMen</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Memory address of the unit object in hexadecimal format.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = unit:<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetNumMen"></a>
+    <strong>GetNumMen ()</strong>
+    </dt>
+    <dd>
+    Current number of surviving soldiers in the unit.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        current number of men
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> men = unit:<span class="function-name">GetNumMen</span>()
+<span class="keyword">local</span> max_men = unit:<span class="function-name">GetMaxNumMen</span>()
+<span class="keyword">if</span> men &lt; max_men * <span class="number">0.5</span> <span class="keyword">then</span>
+    <span class="comment">-- Unit is below 50% strength and heavily depleted
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetActionPoints"></a>
+    <strong>SetActionPoints (value)</strong>
+    </dt>
+    <dd>
+    Sets the movement action points for this unit.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new action points
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Reset unit action points:
+</span>unit:<span class="function-name">SetActionPoints</span>(<span class="number">100</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMaxNumMen"></a>
+    <strong>SetMaxNumMen (value)</strong>
+    </dt>
+    <dd>
+    Sets the maximum soldier capacity (full strength count) for this unit.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum number of men
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Increase unit max strength cap to 150:
+</span>unit:<span class="function-name">SetMaxNumMen</span>(<span class="number">150</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetNumMen"></a>
+    <strong>SetNumMen (value)</strong>
+    </dt>
+    <dd>
+    Sets the number of surviving soldiers in the unit.
+Immediately updates the unit's health bar and strength percentage.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new number of men (clamped between 0 and <code>max_num_men</code>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Replenish unit immediately to full strength:
+</span>unit:<span class="function-name">SetNumMen</span>(unit:<span class="function-name">GetMaxNumMen</span>())
+
+<span class="comment">-- Or set specific casualty count after an event:
+</span>unit:<span class="function-name">SetNumMen</span>(<span class="number">20</span>)</pre>
+    </ul>
 
 </dd>
 </dl>
