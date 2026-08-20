@@ -1742,11 +1742,11 @@ local function run_twdll_tests()
                     report("character 3 faction changed to rebels", test_char3:faction():name() == rebel_fac:name())
                 end
 
-                -- Variation 4: Native Hunnic Family Tree General Transfer (Specific general cqi=212)
+                -- Variation 4: Native Hunnic Family Tree General Transfer (Specific general cqi=208)
                 local hun_family_char = nil
                 for i = 0, w_fac:character_list():num_items() - 1 do
                     local c = w_fac:character_list():item_at(i)
-                    if c:cqi() == 212 then
+                    if c:cqi() == 208 then
                         hun_family_char = c
                         break
                     end
@@ -1837,6 +1837,131 @@ local function run_twdll_tests()
                 local final_char_count = ere_fac:character_list():num_items()
                 twdll.core.Log(string.format("[TEST] Final ERE Character count: %d (started with %d)", final_char_count, initial_char_count))
                 report("faction character count increased by 2", final_char_count == initial_char_count + 2)
+            end
+        end
+
+        -- ======================================================
+        -- TEST: Character Names, Localisation Keys, and Immortality API
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test: Character Names, Localisation Keys, and Immortality API ---")
+        do
+            local f = game:model():world():faction_by_key(faction)
+            local char = f and f:faction_leader() or nil
+            if not char then
+                twdll.core.Log("[TEST] Character Names: SKIPPED (no faction leader)")
+                record_skip()
+            else
+                -- 1. Verify method registrations
+                report("GetForenameKey method registered", type(char.GetForenameKey) == "function")
+                report("SetForenameKey method registered", type(char.SetForenameKey) == "function")
+                report("GetFamilyNameKey method registered", type(char.GetFamilyNameKey) == "function")
+                report("SetFamilyNameKey method registered", type(char.SetFamilyNameKey) == "function")
+                report("GetClanNameKey method registered", type(char.GetClanNameKey) == "function")
+                report("SetClanNameKey method registered", type(char.SetClanNameKey) == "function")
+                report("GetOtherNameKey method registered", type(char.GetOtherNameKey) == "function")
+                report("SetOtherNameKey method registered", type(char.SetOtherNameKey) == "function")
+
+                -- 2. Initial state reading
+                local initial_fullname = char:GetFullName()
+                local initial_fn = char:GetForename()
+                local initial_fn_key = char:GetForenameKey()
+                twdll.core.Log(string.format("[TEST] Initial FullName: '%s', Forename: '%s', ForenameKey: '%s'",
+                    tostring(initial_fullname), tostring(initial_fn), tostring(initial_fn_key)))
+                report("GetFullName returns string", type(initial_fullname) == "string")
+                report("GetForename returns string", type(initial_fn) == "string")
+                report("GetForenameKey returns string", type(initial_fn_key) == "string")
+
+                -- 3. Cross-Test: Custom Text vs DB Localisation Key switching
+                -- 3a. Setting custom forename clears DB key
+                local set_fn_ok = char:SetForename("Witch-king")
+                local fn_after_custom = char:GetForename()
+                local fn_key_after_custom = char:GetForenameKey()
+                twdll.core.Log(string.format("[TEST] SetForename('Witch-king') -> Forename: '%s', ForenameKey: '%s'",
+                    tostring(fn_after_custom), tostring(fn_key_after_custom)))
+                report("SetForename returns true", set_fn_ok == true)
+                report("GetForename matches custom name", fn_after_custom == "Witch-king")
+                report("GetForenameKey is empty after custom text", fn_key_after_custom == "")
+
+                -- 3b. Setting DB key clears custom text and switches mode
+                local set_fn_key_ok = char:SetForenameKey("names_name_custom_test_1001")
+                local fn_key_after_key = char:GetForenameKey()
+                local fn_after_key = char:GetForename()
+                twdll.core.Log(string.format("[TEST] SetForenameKey('names_name_custom_test_1001') -> ForenameKey: '%s', Forename: '%s'",
+                    tostring(fn_key_after_key), tostring(fn_after_key)))
+                report("SetForenameKey returns true", set_fn_key_ok == true)
+                report("GetForenameKey matches set key", fn_key_after_key == "names_name_custom_test_1001")
+                report("GetForename returns key string as fallback", fn_after_key == "names_name_custom_test_1001")
+
+                -- 4. Cross-Test: Slot Independence (modifying one slot never mutates other slots)
+                -- 4a. Initialize all 4 slots with distinct names
+                char:SetForename("Aragorn")
+                char:SetClanName("Dunadan")
+                char:SetFamilyName("Telcontar")
+                char:SetOtherName("Elessar")
+
+                report("Forename initialized to Aragorn", char:GetForename() == "Aragorn")
+                report("ClanName initialized to Dunadan", char:GetClanName() == "Dunadan")
+                report("FamilyName initialized to Telcontar", char:GetFamilyName() == "Telcontar")
+                report("OtherName initialized to Elessar", char:GetOtherName() == "Elessar")
+                report("GetFullName matches initial 4-slot composite", char:GetFullName() == "Aragorn Dunadan Telcontar Elessar")
+
+                -- 4b. Mutate ONLY FamilyName -> verify Forename, ClanName, OtherName are unchanged
+                char:SetFamilyName("Isildur")
+                report("FamilyName updated to Isildur", char:GetFamilyName() == "Isildur")
+                report("Forename untouched after FamilyName change", char:GetForename() == "Aragorn")
+                report("ClanName untouched after FamilyName change", char:GetClanName() == "Dunadan")
+                report("OtherName untouched after FamilyName change", char:GetOtherName() == "Elessar")
+
+                -- 4c. Mutate ONLY ClanName -> verify Forename, FamilyName, OtherName are unchanged
+                char:SetClanName("Ranger")
+                report("ClanName updated to Ranger", char:GetClanName() == "Ranger")
+                report("Forename untouched after ClanName change", char:GetForename() == "Aragorn")
+                report("FamilyName untouched after ClanName change", char:GetFamilyName() == "Isildur")
+                report("OtherName untouched after ClanName change", char:GetOtherName() == "Elessar")
+
+                -- 4d. Mutate ONLY OtherName -> verify Forename, ClanName, FamilyName are unchanged
+                char:SetOtherName("Strider")
+                report("OtherName updated to Strider", char:GetOtherName() == "Strider")
+                report("Forename untouched after OtherName change", char:GetForename() == "Aragorn")
+                report("ClanName untouched after OtherName change", char:GetClanName() == "Ranger")
+                report("FamilyName untouched after OtherName change", char:GetFamilyName() == "Isildur")
+
+                -- 4e. Verify Composite Full Name after targeted slot mutations
+                local composite_full = char:GetFullName()
+                twdll.core.Log(string.format("[TEST] Composite FullName: '%s'", tostring(composite_full)))
+                report("GetFullName matches mutated composite order", composite_full == "Aragorn Ranger Isildur Strider")
+
+                -- 5. Cross-Test: DB Localisation Keys on all slots
+                local set_fam_key_ok = char:SetFamilyNameKey("names_name_fam_key_2002")
+                local set_clan_key_ok = char:SetClanNameKey("names_name_clan_key_3003")
+                local set_on_key_ok = char:SetOtherNameKey("names_titles_other_key_4004")
+
+                report("SetFamilyNameKey returns true", set_fam_key_ok == true)
+                report("GetFamilyNameKey matches set key", char:GetFamilyNameKey() == "names_name_fam_key_2002")
+                report("SetClanNameKey returns true", set_clan_key_ok == true)
+                report("GetClanNameKey matches set key", char:GetClanNameKey() == "names_name_clan_key_3003")
+                report("SetOtherNameKey returns true", set_on_key_ok == true)
+                report("GetOtherNameKey matches set key", char:GetOtherNameKey() == "names_titles_other_key_4004")
+
+                -- 6. Immortality & Resurrection Turns
+                local imm_before = char:IsImmortal()
+                twdll.core.Log(string.format("[TEST] Initial IsImmortal: %s", tostring(imm_before)))
+                report("IsImmortal returns boolean", type(imm_before) == "boolean")
+
+                local set_imm_ok = char:SetImmortal(true)
+                local imm_after = char:IsImmortal()
+                twdll.core.Log(string.format("[TEST] SetImmortal(true) -> %s (IsImmortal: %s)", tostring(set_imm_ok), tostring(imm_after)))
+                report("SetImmortal returns true", set_imm_ok == true)
+                report("IsImmortal matches set true", imm_after == true)
+
+                char:SetResurrectionTurns(5)
+                local res_turns = char:GetResurrectionTurns()
+                twdll.core.Log(string.format("[TEST] SetResurrectionTurns(5) -> GetResurrectionTurns: %d", res_turns))
+                report("GetResurrectionTurns matches 5", res_turns == 5)
+
+                -- Restore health and immortality
+                char:SetResurrectionTurns(0)
+                char:SetImmortal(imm_before)
             end
         end
 

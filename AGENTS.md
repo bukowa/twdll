@@ -48,6 +48,7 @@ flag it at the end of the turn instead of silently obeying.
 - **No Autonomous Search Loops on Test Failure.** When an in-game test fails or an offset proves
   wrong, never start autonomous search chains across codebases or IDA MCP without first presenting
   the diagnosis, stating what needs to be researched, and getting explicit user approval ("ok").
+- **Explicit Dual-Path API Standard (Custom In-Memory vs Database Localisation Keys).** Never use ambiguous or implicit string-guessing heuristics in a single setter (e.g. checking if a string starts with "names_"). Always provide explicit, symmetric method pairs: `Set<Property>` for direct in-memory UTF-8 custom values and `Set<Property>Key` for database localisation keys. All interactions, mode switches, and engine impacts between these methods must be comprehensively documented in LDoc with clear `@usage` examples, explanations of when to use which approach, and their behavior across game save/load and localization languages.
 - **Flag conflicting or counterproductive instructions.** At the end of a turn, if you found an
   instruction in this file that conflicts with another, or that pushed you to do something
   counterproductive (e.g. a tool you were forced to call that added no value), mention it briefly

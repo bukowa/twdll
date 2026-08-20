@@ -6,6 +6,7 @@
 #include "game_api.h"
 #include "tw_types.h"
 #include <windows.h>
+#include <string>
 
 using twdll::TW_Character;
 using twdll::TW_CharacterDetails;
@@ -592,6 +593,498 @@ static int TransferToFaction(lua_State* L) {
     return 1;
 }
 
+// Character Name Component Types matching native CHARACTER_NAME slots:
+// 0 = Forename, 1 = Family Name, 2 = Clan Name, 3 = Other Name (Nickname/Title)
+enum NameType : uint32_t {
+    Forename   = 0,
+    FamilyName = 1,
+    ClanName   = 2,
+    OtherName  = 3,
+};
+
+// Converts a UTF-16 wide string buffer to a UTF-8 std::string.
+static std::string wide_to_utf8(const wchar_t* wstr, size_t len) {
+    if (!wstr || len == 0) return "";
+    int needed = WideCharToMultiByte(CP_UTF8, 0, wstr, static_cast<int>(len), nullptr, 0, nullptr, nullptr);
+    if (needed <= 0) return "";
+    std::string s(needed, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wstr, static_cast<int>(len), &s[0], needed, nullptr, nullptr);
+    return s;
+}
+
+// Finds the entry corresponding to 'type' within the character's 4 name slots,
+// or initializes the slot if it has not been configured yet.
+static twdll::TW_CharacterNameEntry* GetNameEntry(twdll::TW_CharacterName& name, uint32_t type) {
+    for (int i = 0; i < 4; ++i) {
+        if (name.m_entries[i].m_type == type) return &name.m_entries[i];
+    }
+    if (type < 4) {
+        name.m_entries[type].m_type = type;
+        return &name.m_entries[type];
+    }
+    return nullptr;
+}
+
+// Reads the resolved onscreen name string following the engine's rendering precedence:
+// 1. In-memory custom wide string (m_custom_string)
+// 2. Cached localized string pointer (m_localised_string)
+// 3. Raw database localisation key fallback (m_localisation_key)
+static std::string ReadNameSlot(const twdll::TW_CharacterNameEntry& entry) {
+    if (entry.m_localisation.m_custom_string.m_data && entry.m_localisation.m_custom_string.m_len > 0) {
+        return wide_to_utf8(reinterpret_cast<const wchar_t*>(entry.m_localisation.m_custom_string.m_data), entry.m_localisation.m_custom_string.m_len);
+    }
+    if (entry.m_localisation.m_localised_string) {
+        auto* unistr = reinterpret_cast<const twdll::TW_CAString*>(entry.m_localisation.m_localised_string);
+        if (unistr && unistr->m_data && unistr->m_len > 0) {
+            return wide_to_utf8(reinterpret_cast<const wchar_t*>(unistr->m_data), unistr->m_len);
+        }
+    }
+    if (entry.m_localisation.m_localisation_key.m_data && entry.m_localisation.m_localisation_key.m_len > 0) {
+        return std::string(entry.m_localisation.m_localisation_key.m_data, entry.m_localisation.m_localisation_key.m_len);
+    }
+    return "";
+}
+
+// Sets a custom in-memory text string (UTF-8) for a name slot.
+// Clears m_localisation_key and m_localised_string so the UI renders the custom UTF-16 string
+// directly across all campaign panels regardless of game language.
+static bool SetNameSlot(twdll::TW_CharacterNameEntry& entry, uint32_t type, const char* text, size_t text_len) {
+    entry.m_type = type;
+    entry.m_localisation.m_localisation_key.m_len = 0;
+    entry.m_localisation.m_localisation_key.m_data = nullptr;
+    entry.m_localisation.m_localised_string = nullptr;
+
+    if (!text || text_len == 0) {
+        entry.m_localisation.m_custom_string.m_len = 0;
+        entry.m_localisation.m_custom_string.m_data = nullptr;
+        return true;
+    }
+
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(text_len), nullptr, 0);
+    if (wlen <= 0) return false;
+
+    wchar_t* wbuf = new wchar_t[wlen + 1];
+    MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(text_len), wbuf, wlen);
+    wbuf[wlen] = L'\0';
+
+    entry.m_localisation.m_custom_string.m_len = static_cast<uint32_t>(wlen);
+    entry.m_localisation.m_custom_string.m_pad = static_cast<uint32_t>(wlen);
+    entry.m_localisation.m_custom_string.m_data = reinterpret_cast<const char*>(wbuf);
+    return true;
+}
+
+// Reads the raw database localisation key string (e.g. "names_name_12345") assigned to the slot.
+static std::string ReadNameKeySlot(const twdll::TW_CharacterNameEntry& entry) {
+    if (entry.m_localisation.m_localisation_key.m_data && entry.m_localisation.m_localisation_key.m_len > 0) {
+        return std::string(entry.m_localisation.m_localisation_key.m_data, entry.m_localisation.m_localisation_key.m_len);
+    }
+    return "";
+}
+
+// Sets a database localisation key (e.g. "names_name_12345") for a name slot.
+// Clears m_custom_string and m_localised_string so the engine dynamically resolves and translates
+// the key from the game's names.loc database table based on the player's active language.
+static bool SetNameKeySlot(twdll::TW_CharacterNameEntry& entry, uint32_t type, const char* key, size_t key_len) {
+    entry.m_type = type;
+    entry.m_localisation.m_custom_string.m_len = 0;
+    entry.m_localisation.m_custom_string.m_data = nullptr;
+    entry.m_localisation.m_localised_string = nullptr;
+
+    if (!key || key_len == 0) {
+        entry.m_localisation.m_localisation_key.m_len = 0;
+        entry.m_localisation.m_localisation_key.m_data = nullptr;
+        return true;
+    }
+
+    char* buf = new char[key_len + 1];
+    std::memcpy(buf, key, key_len);
+    buf[key_len] = '\0';
+
+    entry.m_localisation.m_localisation_key.m_len = static_cast<uint32_t>(key_len);
+    entry.m_localisation.m_localisation_key.m_pad = static_cast<uint32_t>(key_len);
+    entry.m_localisation.m_localisation_key.m_data = buf;
+    return true;
+}
+
+/***
+Returns the full formatted onscreen name of the character (combining non-empty forename, clan name, family name, and other name).
+Concatenates active name slots in native UI display order: `Forename [ClanName] [FamilyName] [OtherName]`.
+@function GetFullName
+@treturn string full composite name (e.g. "Witch-king NazgulClan Angmar the Nazgul")
+@usage local name = char:GetFullName()
+*/
+static int GetFullName(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushstring(L, "");
+        return 1;
+    }
+    static const uint32_t order[4] = {Forename, ClanName, FamilyName, OtherName};
+    std::string full;
+    for (int i = 0; i < 4; ++i) {
+        auto* entry = GetNameEntry(ch->details.m_name, order[i]);
+        if (entry) {
+            std::string part = ReadNameSlot(*entry);
+            if (!part.empty()) {
+                if (!full.empty()) full += " ";
+                full += part;
+            }
+        }
+    }
+    l_pushstring(L, full.c_str());
+    return 1;
+}
+
+/***
+Gets the active onscreen forename of the character.
+Returns custom text if set via @{SetForename}, or the translated string from the database if set via @{SetForenameKey}, or the database key as fallback.
+@function GetForename
+@treturn string forename string
+@usage local fn = char:GetForename()
+*/
+static int GetForename(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushstring(L, ""); return 1; }
+    auto* entry = GetNameEntry(ch->details.m_name, Forename);
+    l_pushstring(L, entry ? ReadNameSlot(*entry).c_str() : "");
+    return 1;
+}
+
+/***
+Sets the forename of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from `names.loc`, use @{SetForenameKey} instead.
+@function SetForename
+@tparam string name new custom forename text in UTF-8
+@treturn boolean true on success, false otherwise
+@usage char:SetForename("Witch-king")
+*/
+static int SetForename(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    size_t len = 0;
+    const char* text = l_checklstring(L, 2, &len);
+    auto* entry = GetNameEntry(ch->details.m_name, Forename);
+    bool ok = entry && SetNameSlot(*entry, Forename, text, len);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Gets the database localisation key for the character's forename (e.g. "names_name_12345").
+Returns the raw key string if assigned via database or @{SetForenameKey}, or an empty string if direct custom text was assigned via @{SetForename}.
+@function GetForenameKey
+@treturn string database localisation key string, or empty string if custom text is used
+@usage local key = char:GetForenameKey()
+*/
+static int GetForenameKey(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushstring(L, ""); return 1; }
+    auto* entry = GetNameEntry(ch->details.m_name, Forename);
+    l_pushstring(L, entry ? ReadNameKeySlot(*entry).c_str() : "");
+    return 1;
+}
+
+/***
+Sets the database localisation key for the character's forename (e.g. "names_name_12345").
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (`names.loc`) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use @{SetForename} instead.
+@function SetForenameKey
+@tparam string key database localisation key string
+@treturn boolean true on success, false otherwise
+@usage char:SetForenameKey("names_name_12345")
+*/
+static int SetForenameKey(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    size_t len = 0;
+    const char* key = l_checklstring(L, 2, &len);
+    auto* entry = GetNameEntry(ch->details.m_name, Forename);
+    bool ok = entry && SetNameKeySlot(*entry, Forename, key, len);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Gets the active onscreen family name (surname) of the character.
+Returns custom text if set via @{SetFamilyName}, or the translated string from the database if set via @{SetFamilyNameKey}, or the database key as fallback.
+@function GetFamilyName
+@treturn string family name string
+@usage local fam = char:GetFamilyName()
+*/
+static int GetFamilyName(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushstring(L, ""); return 1; }
+    auto* entry = GetNameEntry(ch->details.m_name, FamilyName);
+    l_pushstring(L, entry ? ReadNameSlot(*entry).c_str() : "");
+    return 1;
+}
+
+/***
+Sets the family name (surname) of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from `names.loc`, use @{SetFamilyNameKey} instead.
+@function SetFamilyName
+@tparam string name new custom family name text in UTF-8
+@treturn boolean true on success, false otherwise
+@usage char:SetFamilyName("Angmar")
+*/
+static int SetFamilyName(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    size_t len = 0;
+    const char* text = l_checklstring(L, 2, &len);
+    auto* entry = GetNameEntry(ch->details.m_name, FamilyName);
+    bool ok = entry && SetNameSlot(*entry, FamilyName, text, len);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Gets the database localisation key for the character's family name (e.g. "names_name_12345").
+Returns the raw key string if assigned via database or @{SetFamilyNameKey}, or an empty string if direct custom text was assigned via @{SetFamilyName}.
+@function GetFamilyNameKey
+@treturn string database localisation key string, or empty string if custom text is used
+@usage local key = char:GetFamilyNameKey()
+*/
+static int GetFamilyNameKey(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushstring(L, ""); return 1; }
+    auto* entry = GetNameEntry(ch->details.m_name, FamilyName);
+    l_pushstring(L, entry ? ReadNameKeySlot(*entry).c_str() : "");
+    return 1;
+}
+
+/***
+Sets the database localisation key for the character's family name (e.g. "names_name_12345").
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (`names.loc`) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use @{SetFamilyName} instead.
+@function SetFamilyNameKey
+@tparam string key database localisation key string
+@treturn boolean true on success, false otherwise
+@usage char:SetFamilyNameKey("names_name_12345")
+*/
+static int SetFamilyNameKey(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    size_t len = 0;
+    const char* key = l_checklstring(L, 2, &len);
+    auto* entry = GetNameEntry(ch->details.m_name, FamilyName);
+    bool ok = entry && SetNameKeySlot(*entry, FamilyName, key, len);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Gets the active onscreen clan name of the character.
+Returns custom text if set via @{SetClanName}, or the translated string from the database if set via @{SetClanNameKey}, or the database key as fallback.
+@function GetClanName
+@treturn string clan name string
+@usage local clan = char:GetClanName()
+*/
+static int GetClanName(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushstring(L, ""); return 1; }
+    auto* entry = GetNameEntry(ch->details.m_name, ClanName);
+    l_pushstring(L, entry ? ReadNameSlot(*entry).c_str() : "");
+    return 1;
+}
+
+/***
+Sets the clan name of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from `names.loc`, use @{SetClanNameKey} instead.
+@function SetClanName
+@tparam string name new custom clan name text in UTF-8
+@treturn boolean true on success, false otherwise
+@usage char:SetClanName("NazgulClan")
+*/
+static int SetClanName(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    size_t len = 0;
+    const char* text = l_checklstring(L, 2, &len);
+    auto* entry = GetNameEntry(ch->details.m_name, ClanName);
+    bool ok = entry && SetNameSlot(*entry, ClanName, text, len);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Gets the database localisation key for the character's clan name (e.g. "names_name_12345").
+Returns the raw key string if assigned via database or @{SetClanNameKey}, or an empty string if direct custom text was assigned via @{SetClanName}.
+@function GetClanNameKey
+@treturn string database localisation key string, or empty string if custom text is used
+@usage local key = char:GetClanNameKey()
+*/
+static int GetClanNameKey(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushstring(L, ""); return 1; }
+    auto* entry = GetNameEntry(ch->details.m_name, ClanName);
+    l_pushstring(L, entry ? ReadNameKeySlot(*entry).c_str() : "");
+    return 1;
+}
+
+/***
+Sets the database localisation key for the character's clan name (e.g. "names_name_12345").
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (`names.loc`) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use @{SetClanName} instead.
+@function SetClanNameKey
+@tparam string key database localisation key string
+@treturn boolean true on success, false otherwise
+@usage char:SetClanNameKey("names_name_12345")
+*/
+static int SetClanNameKey(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    size_t len = 0;
+    const char* key = l_checklstring(L, 2, &len);
+    auto* entry = GetNameEntry(ch->details.m_name, ClanName);
+    bool ok = entry && SetNameKeySlot(*entry, ClanName, key, len);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Gets the active onscreen other name (title / nickname) of the character.
+Returns custom text if set via @{SetOtherName}, or the translated string from the database if set via @{SetOtherNameKey}, or the database key as fallback.
+@function GetOtherName
+@treturn string other name string
+@usage local on = char:GetOtherName()
+*/
+static int GetOtherName(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushstring(L, ""); return 1; }
+    auto* entry = GetNameEntry(ch->details.m_name, OtherName);
+    l_pushstring(L, entry ? ReadNameSlot(*entry).c_str() : "");
+    return 1;
+}
+
+/***
+Sets the other name (title / nickname) of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from `names_titles_tables` / `names.loc`, use @{SetOtherNameKey} instead.
+@function SetOtherName
+@tparam string name new other name custom text (e.g. "the Nazgul")
+@treturn boolean true on success, false otherwise
+@usage char:SetOtherName("the Nazgul")
+*/
+static int SetOtherName(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    size_t len = 0;
+    const char* text = l_checklstring(L, 2, &len);
+    auto* entry = GetNameEntry(ch->details.m_name, OtherName);
+    bool ok = entry && SetNameSlot(*entry, OtherName, text, len);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Gets the database localisation key for the character's other name/title (e.g. "names_titles_the_great").
+Returns the raw key string if assigned via database or @{SetOtherNameKey}, or an empty string if direct custom text was assigned via @{SetOtherName}.
+@function GetOtherNameKey
+@treturn string database localisation key string, or empty string if custom text is used
+@usage local key = char:GetOtherNameKey()
+*/
+static int GetOtherNameKey(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushstring(L, ""); return 1; }
+    auto* entry = GetNameEntry(ch->details.m_name, OtherName);
+    l_pushstring(L, entry ? ReadNameKeySlot(*entry).c_str() : "");
+    return 1;
+}
+
+/***
+Sets the database localisation key for the character's other name/title (e.g. "names_titles_the_great").
+Clears any active custom in-memory text, allowing the game engine to translate the title dynamically from localized database files (`names.loc`) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use @{SetOtherName} instead.
+@function SetOtherNameKey
+@tparam string key database localisation key string
+@treturn boolean true on success, false otherwise
+@usage char:SetOtherNameKey("names_titles_the_great")
+*/
+static int SetOtherNameKey(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    size_t len = 0;
+    const char* key = l_checklstring(L, 2, &len);
+    auto* entry = GetNameEntry(ch->details.m_name, OtherName);
+    bool ok = entry && SetNameKeySlot(*entry, OtherName, key, len);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Checks if the character is flagged as immortal (will be wounded instead of dying).
+@function IsImmortal
+@treturn boolean true if immortal, false otherwise
+@usage local immortal = char:IsImmortal()
+*/
+static int IsImmortal(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    l_pushboolean(L, ch->details.m_is_immortal ? 1 : 0);
+    return 1;
+}
+
+static bool get_lua_bool(lua_State* state, int idx) {
+    if (l_type(state, idx) == LUA_TBOOLEAN) {
+        auto* pState = reinterpret_cast<uintptr_t*>(state);
+        auto* pVal = reinterpret_cast<uint32_t*>(pState[3] + 8 * (idx - 1));
+        return (pVal[0] != 0);
+    }
+    if (l_type(state, idx) == LUA_TNUMBER) {
+        return l_tointeger(state, idx) != 0;
+    }
+    return l_type(state, idx) != LUA_TNIL && l_type(state, idx) != LUA_TNONE;
+}
+
+/***
+Sets the immortality flag of the character.
+@function SetImmortal
+@tparam boolean immortal true to make immortal, false to make mortal
+@treturn boolean true on success, false otherwise
+@usage char:SetImmortal(true)
+*/
+static int SetImmortal(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    ch->details.m_is_immortal = get_lua_bool(L, 2);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
+/***
+Gets the turns remaining until resurrection for a wounded immortal character.
+@function GetResurrectionTurns
+@treturn integer turns to resurrection
+@usage local turns = char:GetResurrectionTurns()
+*/
+static int GetResurrectionTurns(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushinteger(L, 0); return 1; }
+    l_pushinteger(L, static_cast<int>(ch->details.m_turns_to_resurrection));
+    return 1;
+}
+
+/***
+Sets the turns remaining until resurrection for a wounded immortal character.
+@function SetResurrectionTurns
+@tparam integer turns resurrection countdown turns (0 for healthy/ready)
+@treturn boolean true on success, false otherwise
+@usage char:SetResurrectionTurns(3)
+*/
+static int SetResurrectionTurns(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) { l_pushboolean(L, 0); return 1; }
+    int turns = static_cast<int>(l_tointeger(L, 2));
+    if (turns < 0) turns = 0;
+    ch->details.m_turns_to_resurrection = static_cast<uint32_t>(turns);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
 extern const luaL_Reg character_functions[] = {
     {nullptr, nullptr}
 };
@@ -615,6 +1108,27 @@ static const luaL_Reg character_methods[] = {
     {"SetLoyaltyModifier",    SetLoyaltyModifier},
     {"GetLoyaltyFactorList",  GetLoyaltyFactorList},
     {"TransferToFaction",     TransferToFaction},
+    {"GetFullName",           GetFullName},
+    {"GetForename",           GetForename},
+    {"SetForename",           SetForename},
+    {"GetForenameKey",        GetForenameKey},
+    {"SetForenameKey",        SetForenameKey},
+    {"GetFamilyName",         GetFamilyName},
+    {"SetFamilyName",         SetFamilyName},
+    {"GetFamilyNameKey",      GetFamilyNameKey},
+    {"SetFamilyNameKey",      SetFamilyNameKey},
+    {"GetClanName",           GetClanName},
+    {"SetClanName",           SetClanName},
+    {"GetClanNameKey",        GetClanNameKey},
+    {"SetClanNameKey",        SetClanNameKey},
+    {"GetOtherName",          GetOtherName},
+    {"SetOtherName",          SetOtherName},
+    {"GetOtherNameKey",       GetOtherNameKey},
+    {"SetOtherNameKey",       SetOtherNameKey},
+    {"IsImmortal",            IsImmortal},
+    {"SetImmortal",           SetImmortal},
+    {"GetResurrectionTurns",  GetResurrectionTurns},
+    {"SetResurrectionTurns",  SetResurrectionTurns},
     {nullptr, nullptr}
 };
 

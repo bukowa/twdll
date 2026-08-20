@@ -254,10 +254,31 @@ struct TW_Traits {
 static_assert(sizeof(TW_TraitEntry) == 12, "TW_TraitEntry size must be 12");
 static_assert(sizeof(TW_Traits) == 0x28, "TW_Traits size must be 0x28");
 
+// EMPIRECAMPAIGN::CAMPAIGN_LOCALISATION (size 0x1C / 28B in 32-bit)
+struct TW_CampaignLocalisation {
+    TW_CAString m_localisation_key; // 0x00 (e.g. "names_name_12345")
+    void*       m_localised_string; // 0x0C (const CA::UniString* from DB loc cache)
+    TW_CAString m_custom_string;    // 0x10 (CA::UniString: len, cap, const wchar_t* data)
+};
+static_assert(sizeof(TW_CampaignLocalisation) == 0x1C, "TW_CampaignLocalisation size must be 0x1C");
+
+// EMPIRECAMPAIGN::CHARACTER_NAME element (pair<CAMPAIGN_LOCALISATION, NAME_TYPE>, size 0x20 / 32B in 32-bit)
+struct TW_CharacterNameEntry {
+    TW_CampaignLocalisation m_localisation; // 0x00
+    uint32_t                m_type;         // 0x1C (0=FORENAME, 1=FAMILY_NAME, 2=CLAN_NAME, 3=OTHER_NAME)
+};
+static_assert(sizeof(TW_CharacterNameEntry) == 0x20, "TW_CharacterNameEntry size must be 0x20");
+
+struct TW_CharacterName {
+    TW_CharacterNameEntry m_entries[4];     // 0x00 (Forename, FamilyName, ClanName, OtherName)
+};
+static_assert(sizeof(TW_CharacterName) == 0x80, "TW_CharacterName size must be 0x80");
+
 struct TW_CharacterDetails {
     char                          pad_00[0x4];
     TW_FamilyMember*              family_member;       // 0x04  (= CHARACTER+0x208)
-    char                          pad_08[0xA4];
+    TW_CharacterName              m_name;              // 0x08  (= CHARACTER+0x20C, size 0x80)
+    char                          pad_88[0x24];        // 0x88  m_dob (12B), m_death_date (12B), m_death_type (4B), pad (8B)
     TW_CharacterDetailsArtSetInfo m_art_set_info;      // 0xAC  (= CHARACTER+0x2B0)
     char                          pad_EC[0x18];
     TW_Traits                     traits;              // 0x104 (= CHARACTER+0x308)
@@ -270,7 +291,11 @@ struct TW_CharacterDetails {
                                                        //         verified: sub_107DC770 @ mov eax,[ecx+2F4h]
     char                          pad_2F8[0x24];
     TW_GeneralBodyguardDetails    m_initial_general_bodyguard_details; // 0x31C (= CHARACTER+0x520)
-    char                          pad_330[0x24];
+    char                          pad_330[0x18];
+    bool                          m_is_immortal;                       // 0x348 (= CHARACTER+0x54C)
+    char                          pad_349[3];
+    uint32_t                      m_turns_to_resurrection;             // 0x34C (= CHARACTER+0x550)
+    char                          pad_350[4];
     TW_PortraitCameraSettings*    m_portrait_camera_settings;          // 0x354 (= CHARACTER+0x558)
 };
 
@@ -660,6 +685,9 @@ TW_ASSERT_OFFSET(TW_SettlementExpansionManager, m_slots,              0x14);
 TW_ASSERT_OFFSET(TW_Settlement, m_settlement_expansion_manager,       0x1A8);
 TW_ASSERT_OFFSET(TW_RegionSlot, m_slot_manager,                       0x1C8);
 TW_ASSERT_OFFSET(TW_CharacterDetails, traits,                         0x104);
+TW_ASSERT_OFFSET(TW_CharacterDetails, m_name,                         0x08);
+TW_ASSERT_OFFSET(TW_CharacterDetails, m_is_immortal,                   0x348);
+TW_ASSERT_OFFSET(TW_CharacterDetails, m_turns_to_resurrection,         0x34C);
 TW_ASSERT_OFFSET(TW_Traits, m_size,                                   0x8);
 TW_ASSERT_OFFSET(TW_Traits, m_elements,                               0xC);
 
