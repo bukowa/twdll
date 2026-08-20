@@ -211,6 +211,7 @@ Every registered Lua module must have a generated docs page:
   No technical details: no memory offsets, byte signatures, structs, or engine internals.
 - Follow the file's existing style: `### Added` / `### Changed` / `### Fixed` / `### Removed`,
   one concise bullet per change.
+- **Strict Parameter Fidelity & Verification**: Every changelog bullet MUST strictly match the exact method signatures, argument types, and real behavior implemented in C++ and documented in LDoc. Never speculate, generalize, or list unsupported parameters or targets (e.g. claiming a function spawns in a "region" or "military force" when the code only accepts settlements or coordinates). Always cross-check the C++ binding code before writing or editing changelog entries.
 - Keep entries small — a feature is one or a few bullets, not a dump of everything touched.
 - Commit the changelog together with the code change (same intent as the docs/commit rule).
 
