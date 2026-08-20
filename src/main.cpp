@@ -2,6 +2,7 @@
 #include "common/tw.h"
 #include "common/campaign_hooks.h"
 #include "common/game_api.h"
+#include "attila/security.h"
 
 extern const luaL_Reg unit_functions[];
 extern const luaL_Reg character_functions[];
@@ -59,6 +60,11 @@ BOOL APIENTRY DllMain(const HMODULE hModule, const DWORD reason, LPVOID) {
 }
 
 extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
+    if (!is_valid_game_host()) {
+        Log("[twdll] Execution blocked: host process is not Attila.exe or missing empire.retail.dll");
+        return 0;
+    }
+
     Log("[twdll] luaopen_twdll: called");
 
     if (!g_is_initialized) {
