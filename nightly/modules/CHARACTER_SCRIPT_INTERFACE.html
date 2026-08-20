@@ -147,6 +147,90 @@ ruler authority, gravitas difference, marriage, ministerial offices, traits, and
 	<td class="name" nowrap><a href="#TransferToFaction">TransferToFaction (target_faction[, options])</a></td>
 	<td class="summary">Instantly transfers the character and their commanded military force to another faction in the current tick.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFullName">GetFullName ()</a></td>
+	<td class="summary">Returns the full formatted onscreen name of the character (combining non-empty forename, clan name, family name, and other name).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetForename">GetForename ()</a></td>
+	<td class="summary">Gets the active onscreen forename of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetForename">SetForename (name)</a></td>
+	<td class="summary">Sets the forename of the character as direct custom text (UTF-8).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetForenameKey">GetForenameKey ()</a></td>
+	<td class="summary">Gets the database localisation key for the character's forename (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetForenameKey">SetForenameKey (key)</a></td>
+	<td class="summary">Sets the database localisation key for the character's forename (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFamilyName">GetFamilyName ()</a></td>
+	<td class="summary">Gets the active onscreen family name (surname) of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFamilyName">SetFamilyName (name)</a></td>
+	<td class="summary">Sets the family name (surname) of the character as direct custom text (UTF-8).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFamilyNameKey">GetFamilyNameKey ()</a></td>
+	<td class="summary">Gets the database localisation key for the character's family name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFamilyNameKey">SetFamilyNameKey (key)</a></td>
+	<td class="summary">Sets the database localisation key for the character's family name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetClanName">GetClanName ()</a></td>
+	<td class="summary">Gets the active onscreen clan name of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetClanName">SetClanName (name)</a></td>
+	<td class="summary">Sets the clan name of the character as direct custom text (UTF-8).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetClanNameKey">GetClanNameKey ()</a></td>
+	<td class="summary">Gets the database localisation key for the character's clan name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetClanNameKey">SetClanNameKey (key)</a></td>
+	<td class="summary">Sets the database localisation key for the character's clan name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetOtherName">GetOtherName ()</a></td>
+	<td class="summary">Gets the active onscreen other name (title / nickname) of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetOtherName">SetOtherName (name)</a></td>
+	<td class="summary">Sets the other name (title / nickname) of the character as direct custom text (UTF-8).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetOtherNameKey">GetOtherNameKey ()</a></td>
+	<td class="summary">Gets the database localisation key for the character's other name/title (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetOtherNameKey">SetOtherNameKey (key)</a></td>
+	<td class="summary">Sets the database localisation key for the character's other name/title (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#IsImmortal">IsImmortal ()</a></td>
+	<td class="summary">Checks if the character is flagged as immortal (will be wounded instead of dying).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetImmortal">SetImmortal (immortal)</a></td>
+	<td class="summary">Sets the immortality flag of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetResurrectionTurns">GetResurrectionTurns ()</a></td>
+	<td class="summary">Gets the turns remaining until resurrection for a wounded immortal character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetResurrectionTurns">SetResurrectionTurns (turns)</a></td>
+	<td class="summary">Sets the turns remaining until resurrection for a wounded immortal character.</td>
+	</tr>
 </table>
 
 <br/>
@@ -605,6 +689,605 @@ Each key is the genuine database key from loyalty<em>factors</em>tables and its 
     replenish_units = <span class="keyword">true</span>,         <span class="comment">-- replenish all units to 100% strength (default: false)
 </span>    rebel_region = region           <span class="comment">-- bind as provincial rebel army in this region (default: nil)
 </span>})</pre></li>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetFullName"></a>
+    <strong>GetFullName ()</strong>
+    </dt>
+    <dd>
+    Returns the full formatted onscreen name of the character (combining non-empty forename, clan name, family name, and other name).
+Concatenates active name slots in native UI display order: <code>Forename [ClanName] [FamilyName] [OtherName]</code>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        full composite name (e.g. "Witch-king NazgulClan Angmar the Nazgul")
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> name = char:<span class="function-name">GetFullName</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetForename"></a>
+    <strong>GetForename ()</strong>
+    </dt>
+    <dd>
+    Gets the active onscreen forename of the character.
+Returns custom text if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForename">SetForename</a>, or the translated string from the database if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForenameKey">SetForenameKey</a>, or the database key as fallback.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        forename string
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> fn = char:<span class="function-name">GetForename</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetForename"></a>
+    <strong>SetForename (name)</strong>
+    </dt>
+    <dd>
+    Sets the forename of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from <code>names.loc</code>, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForenameKey">SetForenameKey</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         new custom forename text in UTF-8
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetForename</span>(<span class="string">"Witch-king"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetForenameKey"></a>
+    <strong>GetForenameKey ()</strong>
+    </dt>
+    <dd>
+    Gets the database localisation key for the character's forename (e.g.  "names<em>name</em>12345").
+Returns the raw key string if assigned via database or <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForenameKey">SetForenameKey</a>, or an empty string if direct custom text was assigned via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForename">SetForename</a>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        database localisation key string, or empty string if custom text is used
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = char:<span class="function-name">GetForenameKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetForenameKey"></a>
+    <strong>SetForenameKey (key)</strong>
+    </dt>
+    <dd>
+    Sets the database localisation key for the character's forename (e.g.  "names<em>name</em>12345").
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (<code>names.loc</code>) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForename">SetForename</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database localisation key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetForenameKey</span>(<span class="string">"names_name_12345"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetFamilyName"></a>
+    <strong>GetFamilyName ()</strong>
+    </dt>
+    <dd>
+    Gets the active onscreen family name (surname) of the character.
+Returns custom text if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyName">SetFamilyName</a>, or the translated string from the database if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyNameKey">SetFamilyNameKey</a>, or the database key as fallback.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        family name string
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> fam = char:<span class="function-name">GetFamilyName</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetFamilyName"></a>
+    <strong>SetFamilyName (name)</strong>
+    </dt>
+    <dd>
+    Sets the family name (surname) of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from <code>names.loc</code>, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyNameKey">SetFamilyNameKey</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         new custom family name text in UTF-8
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetFamilyName</span>(<span class="string">"Angmar"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetFamilyNameKey"></a>
+    <strong>GetFamilyNameKey ()</strong>
+    </dt>
+    <dd>
+    Gets the database localisation key for the character's family name (e.g.  "names<em>name</em>12345").
+Returns the raw key string if assigned via database or <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyNameKey">SetFamilyNameKey</a>, or an empty string if direct custom text was assigned via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyName">SetFamilyName</a>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        database localisation key string, or empty string if custom text is used
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = char:<span class="function-name">GetFamilyNameKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetFamilyNameKey"></a>
+    <strong>SetFamilyNameKey (key)</strong>
+    </dt>
+    <dd>
+    Sets the database localisation key for the character's family name (e.g.  "names<em>name</em>12345").
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (<code>names.loc</code>) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyName">SetFamilyName</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database localisation key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetFamilyNameKey</span>(<span class="string">"names_name_12345"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetClanName"></a>
+    <strong>GetClanName ()</strong>
+    </dt>
+    <dd>
+    Gets the active onscreen clan name of the character.
+Returns custom text if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanName">SetClanName</a>, or the translated string from the database if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanNameKey">SetClanNameKey</a>, or the database key as fallback.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        clan name string
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> clan = char:<span class="function-name">GetClanName</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetClanName"></a>
+    <strong>SetClanName (name)</strong>
+    </dt>
+    <dd>
+    Sets the clan name of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from <code>names.loc</code>, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanNameKey">SetClanNameKey</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         new custom clan name text in UTF-8
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetClanName</span>(<span class="string">"NazgulClan"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetClanNameKey"></a>
+    <strong>GetClanNameKey ()</strong>
+    </dt>
+    <dd>
+    Gets the database localisation key for the character's clan name (e.g.  "names<em>name</em>12345").
+Returns the raw key string if assigned via database or <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanNameKey">SetClanNameKey</a>, or an empty string if direct custom text was assigned via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanName">SetClanName</a>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        database localisation key string, or empty string if custom text is used
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = char:<span class="function-name">GetClanNameKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetClanNameKey"></a>
+    <strong>SetClanNameKey (key)</strong>
+    </dt>
+    <dd>
+    Sets the database localisation key for the character's clan name (e.g.  "names<em>name</em>12345").
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (<code>names.loc</code>) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanName">SetClanName</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database localisation key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetClanNameKey</span>(<span class="string">"names_name_12345"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetOtherName"></a>
+    <strong>GetOtherName ()</strong>
+    </dt>
+    <dd>
+    Gets the active onscreen other name (title / nickname) of the character.
+Returns custom text if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherName">SetOtherName</a>, or the translated string from the database if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherNameKey">SetOtherNameKey</a>, or the database key as fallback.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        other name string
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> on = char:<span class="function-name">GetOtherName</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetOtherName"></a>
+    <strong>SetOtherName (name)</strong>
+    </dt>
+    <dd>
+    Sets the other name (title / nickname) of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from <code>names_titles_tables</code> / <code>names.loc</code>, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherNameKey">SetOtherNameKey</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         new other name custom text (e.g. "the Nazgul")
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetOtherName</span>(<span class="string">"the Nazgul"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetOtherNameKey"></a>
+    <strong>GetOtherNameKey ()</strong>
+    </dt>
+    <dd>
+    Gets the database localisation key for the character's other name/title (e.g.  "names<em>titles</em>the_great").
+Returns the raw key string if assigned via database or <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherNameKey">SetOtherNameKey</a>, or an empty string if direct custom text was assigned via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherName">SetOtherName</a>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        database localisation key string, or empty string if custom text is used
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = char:<span class="function-name">GetOtherNameKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetOtherNameKey"></a>
+    <strong>SetOtherNameKey (key)</strong>
+    </dt>
+    <dd>
+    Sets the database localisation key for the character's other name/title (e.g.  "names<em>titles</em>the_great").
+Clears any active custom in-memory text, allowing the game engine to translate the title dynamically from localized database files (<code>names.loc</code>) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherName">SetOtherName</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database localisation key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetOtherNameKey</span>(<span class="string">"names_titles_the_great"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "IsImmortal"></a>
+    <strong>IsImmortal ()</strong>
+    </dt>
+    <dd>
+    Checks if the character is flagged as immortal (will be wounded instead of dying).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if immortal, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> immortal = char:<span class="function-name">IsImmortal</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetImmortal"></a>
+    <strong>SetImmortal (immortal)</strong>
+    </dt>
+    <dd>
+    Sets the immortality flag of the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">immortal</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to make immortal, false to make mortal
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetImmortal</span>(<span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetResurrectionTurns"></a>
+    <strong>GetResurrectionTurns ()</strong>
+    </dt>
+    <dd>
+    Gets the turns remaining until resurrection for a wounded immortal character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        turns to resurrection
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> turns = char:<span class="function-name">GetResurrectionTurns</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetResurrectionTurns"></a>
+    <strong>SetResurrectionTurns (turns)</strong>
+    </dt>
+    <dd>
+    Sets the turns remaining until resurrection for a wounded immortal character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">turns</span>
+            <span class="types"><span class="type">integer</span></span>
+         resurrection countdown turns (0 for healthy/ready)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetResurrectionTurns</span>(<span class="number">3</span>)</pre>
     </ul>
 
 </dd>
