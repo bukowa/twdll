@@ -39,6 +39,22 @@ add_library(twdll SHARED
     ${TWDLL_GAME_SOURCES}
 )
 
+# ── Git Commit SHA ────────────────────────────────────────────────────────────
+execute_process(
+    COMMAND git rev-parse HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE TWDLL_BUILD_SHA
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT TWDLL_BUILD_SHA)
+    set(TWDLL_BUILD_SHA "unknown")
+endif()
+
+target_compile_definitions(twdll PRIVATE
+    TWDLL_BUILD_SHA="${TWDLL_BUILD_SHA}"
+)
+
 target_include_directories(twdll PRIVATE src)
 target_link_libraries(twdll PRIVATE minhook)
 

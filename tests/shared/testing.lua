@@ -33,6 +33,17 @@ local function run_twdll_tests()
             report("twdll.core.Log multi-type", false)
         end
 
+        -- Verify twdll.core.GetBuildSha returns a valid string
+        local build_sha = twdll.core.GetBuildSha and twdll.core.GetBuildSha()
+        twdll.core.Log("[TEST] twdll.core.GetBuildSha = " .. tostring(build_sha))
+        if type(build_sha) == "string" and #build_sha >= 7 then
+            twdll.core.Log("[TEST] twdll.core.GetBuildSha: OK (" .. build_sha .. ")")
+            report("twdll.core.GetBuildSha", true)
+        else
+            twdll.core.Log("[TEST] twdll.core.GetBuildSha: FAILED")
+            report("twdll.core.GetBuildSha", false)
+        end
+
         -- ======================================================
         -- TEST 1: Verify WORLD and CAMPAIGN_UI singleton hooks
         -- ======================================================

@@ -37,8 +37,22 @@ static int script_GameBuild(lua_State* L) {
     return 1;
 }
 
+#ifndef TWDLL_BUILD_SHA
+#define TWDLL_BUILD_SHA "unknown"
+#endif
+
+/// Returns the git commit SHA hash from which the DLL was compiled.
+/// @function GetBuildSha
+/// @treturn string 40-character hexadecimal git commit SHA
+/// @usage local sha = twdll.core.GetBuildSha()
+static int script_GetBuildSha(lua_State* L) {
+    l_pushstring(L, TWDLL_BUILD_SHA);
+    return 1;
+}
+
 extern const luaL_Reg twdll_core[] = {
-    {"Log",       script_Log},
-    {"GameBuild", script_GameBuild},
+    {"Log",         script_Log},
+    {"GameBuild",   script_GameBuild},
+    {"GetBuildSha", script_GetBuildSha},
     {nullptr, nullptr}
 };
