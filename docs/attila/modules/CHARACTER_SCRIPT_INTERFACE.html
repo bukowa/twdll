@@ -144,7 +144,7 @@ ruler authority, gravitas difference, marriage, ministerial offices, traits, and
 	<td class="summary">Returns a table breakdown of all active loyalty factors contributing to this character's loyalty.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#TransferToFaction">TransferToFaction (target_faction[, region_or_replenish[, replenish_units=false[, bribed=false]]])</a></td>
+	<td class="name" nowrap><a href="#TransferToFaction">TransferToFaction (target_faction[, options])</a></td>
 	<td class="summary">Instantly transfers the character and their commanded military force to another faction in the current tick.</td>
 	</tr>
 </table>
@@ -558,32 +558,32 @@ Each key is the genuine database key from loyalty<em>factors</em>tables and its 
 </dd>
     <dt>
     <a name = "TransferToFaction"></a>
-    <strong>TransferToFaction (target_faction[, region_or_replenish[, replenish_units=false[, bribed=false]]])</strong>
+    <strong>TransferToFaction (target_faction[, options])</strong>
     </dt>
     <dd>
-    Instantly transfers the character and their commanded military force to another faction in the current tick.
+    Instantly transfers the character and their commanded military force to another faction in the current tick. </p>
+
+<p>Automatic engine side-effects:
+- Unassigns any active governorship or minister post held by the character.
+- Ends active trade commerce raids and updates trade routes.
+- Cancels pending political actions targeting this character.
+- Reassigns all units, recalculates senior unit commander, and re-sorts force containers.
+- Emits native events (<code>MILITARY_FORCE_FACTION_CHANGE</code>, <code>REPORT_CHARACTER_RENDER_DETAILS_CHANGE</code>, <code>CHARACTER_FACTION_CHANGE</code>).
+- Reloads character voiceover culture and lines if the receiving faction is human-controlled.
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">target_faction</span>
             <span class="types"><span class="type">userdata</span></span>
-         target FACTION<em>SCRIPT</em>INTERFACE
+         Target <a href="../modules/FACTION_SCRIPT_INTERFACE.html#">FACTION_SCRIPT_INTERFACE</a> receiving the character and their force.
         </li>
-        <li><span class="parameter">region_or_replenish</span>
-            <span class="types"><span class="type">userdata</span> or <span class="type">boolean</span></span>
-         REGION<em>SCRIPT</em>INTERFACE or boolean replenish_units if omitting region
+        <li><span class="parameter">options</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+         Optional table <code>{ replenish_units = false, rebel_region = nil }</code>:
+- <code>replenish_units</code> (boolean): if true, restores all units in the force to 100% full soldier capacity.
+- <code>rebel_region</code> (userdata): optional <a href="../modules/REGION_SCRIPT_INTERFACE.html#">REGION_SCRIPT_INTERFACE</a>. When provided, binds the force to this region's rebel manager (<code>force-&gt;m_rebel_manager</code>), marking it as a local provincial rebel army (<code>is_rebel_army = true</code>) with rebel AI objectives and unrest clearing upon defeat.
          (<em>optional</em>)
-        </li>
-        <li><span class="parameter">replenish_units</span>
-            <span class="types"><span class="type">boolean</span></span>
-         whether to instantly replenish all units in the force to 100% (defaults to false)
-         (<em>default</em> false)
-        </li>
-        <li><span class="parameter">bribed</span>
-            <span class="types"><span class="type">boolean</span></span>
-         whether the character was bribed (defaults to false)
-         (<em>default</em> false)
         </li>
     </ul>
 
@@ -596,6 +596,16 @@ Each key is the genuine database key from loyalty<em>factors</em>tables and its 
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <li><pre class="example"><span class="comment">-- Basic transfer:
+</span>char:<span class="function-name">TransferToFaction</span>(target_faction)</pre></li>
+        <li><pre class="example"> <span class="comment">-- Transfer with options:
+</span>char:<span class="function-name">TransferToFaction</span>(target_faction, {
+    replenish_units = <span class="keyword">true</span>,         <span class="comment">-- replenish all units to 100% strength (default: false)
+</span>    rebel_region = region           <span class="comment">-- bind as provincial rebel army in this region (default: nil)
+</span>})</pre></li>
+    </ul>
 
 </dd>
 </dl>

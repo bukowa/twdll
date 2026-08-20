@@ -1633,39 +1633,131 @@ local function run_twdll_tests()
         -- ======================================================
         twdll.core.Log("[TEST] --- Test 25: Character Transfer to Faction ---")
         do
-            local transfer_char = nil
-            local all_chars = game:model():world():faction_by_key(faction):character_list()
-            for i = 0, all_chars:num_items() - 1 do
-                local c = all_chars:item_at(i)
-                if c:cqi() == 212 or (c:cqi() ~= 204 and c:has_military_force()) then
-                    transfer_char = c
+            local w_fac = game:model():world():faction_by_key(faction)
+            local ere_fac = game:model():world():faction_by_key("att_fact_eastern_roman_empire")
+            local rebel_fac = nil
+            local all_facs = game:model():world():faction_list()
+            for i = 0, all_facs:num_items() - 1 do
+                local f = all_facs:item_at(i)
+                local fn = f:name()
+                if string.find(fn, "separatist") or string.find(fn, "rebel") then
+                    rebel_fac = f
                     break
                 end
             end
+            if not rebel_fac or rebel_fac:is_null_interface() then
+                rebel_fac = game:model():world():faction_by_key("att_fact_separatists_ere")
+            end
 
-            if not transfer_char then
-                twdll.core.Log("[TEST] TransferToFaction: SKIPPED (no non-leader character found)")
-                record_skip()
+            local p_char = w_fac:character_list():item_at(0)
+            local reg = p_char:has_region() and p_char:region() or (ere_fac:has_home_region() and ere_fac:home_region() or ere_fac:region_list():item_at(0))
+            local reg_name = reg:name()
+            local spawn_x = p_char:logical_position_x() + 2
+            local spawn_y = p_char:logical_position_y() + 2
+
+            local spawn_seq = 0
+            local function spawn_general_for_test(id_tag, target_fac_key)
+                spawn_seq = spawn_seq + 1
+                local target_f_key = target_fac_key or faction
+                local fac_obj = game:model():world():faction_by_key(target_f_key)
+                if not fac_obj or fac_obj:is_null_interface() then return nil end
+                local pre_chars = {}
+                for i = 0, fac_obj:character_list():num_items() - 1 do
+                    pre_chars[fac_obj:character_list():item_at(i):cqi()] = true
+                end
+                local tag = id_tag or ("twdll_gen_" .. tostring(spawn_seq))
+                local u_key = (target_f_key == "att_fact_eastern_roman_empire") and "att_rom_legio" or "att_merc_ger_agathyrsi_warriors"
+                local target_reg = (target_f_key == "att_fact_eastern_roman_empire" and ere_fac:has_home_region()) and ere_fac:home_region() or reg
+                local r_name = target_reg:name()
+                local s_x = (target_f_key == "att_fact_eastern_roman_empire" and target_reg:settlement()) and target_reg:settlement():logical_position_x() + 2 + spawn_seq or spawn_x + spawn_seq
+                local s_y = (target_f_key == "att_fact_eastern_roman_empire" and target_reg:settlement()) and target_reg:settlement():logical_position_y() + 2 + spawn_seq or spawn_y + spawn_seq
+                game:create_force(target_f_key, u_key, r_name, s_x, s_y, tag, false)
+                for i = 0, fac_obj:character_list():num_items() - 1 do
+                    local c = fac_obj:character_list():item_at(i)
+                    if not pre_chars[c:cqi()] and c:has_military_force() then
+                        return c
+                    end
+                end
+                -- Fallback to another non-leader general if create_force was queued asynchronously
+                for i = 0, fac_obj:character_list():num_items() - 1 do
+                    local c = fac_obj:character_list():item_at(i)
+                    if not c:is_faction_leader() and c:has_military_force() then
+                        return c
+                    end
+                end
+                return nil
+            end
+
+            local test_char1 = spawn_general_for_test("twdll_tf_1")
+            if not test_char1 or type(test_char1.TransferToFaction) ~= "function" then
+                twdll.core.Log("[TEST] TransferToFaction: FAILED (failed to spawn test character or method not registered)")
+                report("character TransferToFaction method registered", false)
             else
-                if type(transfer_char.TransferToFaction) ~= "function" then
-                    twdll.core.Log("[TEST] TransferToFaction: FAILED (method not registered)")
-                    report("character TransferToFaction method registered", false)
-                else
-                    report("character TransferToFaction method registered", true)
+                report("character TransferToFaction method registered", true)
 
-                    local initial_fac = transfer_char:faction():name()
-                    twdll.core.Log(string.format("[TEST] Character cqi=%d initial faction: '%s'", transfer_char:cqi(), tostring(initial_fac)))
+                -- Variation 1: Basic call without options table
+                local ok_1 = test_char1:TransferToFaction(ere_fac)
+                twdll.core.Log(string.format("[TEST] TransferToFaction basic call: %s", tostring(ok_1)))
+                report("TransferToFaction basic call returns true", ok_1 == true)
+                report("character 1 faction changed to ERE", test_char1:faction():name() == "att_fact_eastern_roman_empire")
 
-                    -- Test TransferToFaction to Eastern Roman Empire with replenish=true
-                    local target_fac = game:model():world():faction_by_key("att_fact_eastern_roman_empire")
-                    local char_region = transfer_char:region()
-                    local transfer_ok = transfer_char:TransferToFaction(target_fac, char_region, true)
-                    twdll.core.Log(string.format("[TEST] char:TransferToFaction(target_fac, region, true) -> %s", tostring(transfer_ok)))
-                    report("char:TransferToFaction returns true", transfer_ok == true)
+                -- Variation 2: Options Table with replenish_units = true
+                local test_char2 = spawn_general_for_test("twdll_tf_2")
+                if test_char2 then
+                    local force = test_char2:military_force()
+                    local u_list = force and force:unit_list()
+                    if u_list and u_list:num_items() > 0 then
+                        for ui = 0, u_list:num_items() - 1 do
+                            local u = u_list:item_at(ui)
+                            if type(u.SetNumMen) == "function" then
+                                u:SetNumMen(15)
+                            end
+                        end
+                        local sample_u = u_list:item_at(0)
+                        twdll.core.Log(string.format("[TEST] Force before transfer damaged: unit[0] men=%d/%d", sample_u:GetNumMen(), sample_u:GetMaxNumMen()))
+                        report("unit damaged before transfer (15 men)", sample_u:GetNumMen() == 15)
+                    end
 
-                    local new_fac = transfer_char:faction():name()
-                    twdll.core.Log(string.format("[TEST] Character cqi=%d new faction after transfer: '%s'", transfer_char:cqi(), tostring(new_fac)))
-                    report("character faction changed to target faction", new_fac == "att_fact_eastern_roman_empire")
+                    local ok_2 = test_char2:TransferToFaction(ere_fac, { replenish_units = true })
+                    twdll.core.Log(string.format("[TEST] TransferToFaction options table { replenish_units = true }: %s", tostring(ok_2)))
+                    report("TransferToFaction options table { replenish_units = true } returns true", ok_2 == true)
+                    report("character 2 faction changed to ERE", test_char2:faction():name() == "att_fact_eastern_roman_empire")
+
+                    if u_list and u_list:num_items() > 0 then
+                        local sample_u_after = u_list:item_at(0)
+                        local full_men = sample_u_after:GetNumMen()
+                        local max_men = sample_u_after:GetMaxNumMen()
+                        twdll.core.Log(string.format("[TEST] Force after transfer replenished: unit[0] men=%d/%d", full_men, max_men))
+                        report("unit fully replenished after transfer (men == max_men)", full_men == max_men and full_men > 15)
+                    end
+                end
+
+                -- Variation 3: Options Table with rebel_region (regional rebel army creation on settled ERE force)
+                local ere_home_reg = ere_fac:has_home_region() and ere_fac:home_region() or reg
+                local test_char3 = spawn_general_for_test("twdll_tf_3", "att_fact_eastern_roman_empire")
+                if test_char3 and rebel_fac and not rebel_fac:is_null_interface() then
+                    local ok_3 = test_char3:TransferToFaction(rebel_fac, { rebel_region = ere_home_reg, replenish_units = true })
+                    twdll.core.Log(string.format("[TEST] TransferToFaction options table { rebel_region, replenish_units }: %s", tostring(ok_3)))
+                    report("TransferToFaction options table { rebel_region } returns true", ok_3 == true)
+                    report("character 3 faction changed to rebels", test_char3:faction():name() == rebel_fac:name())
+                end
+
+                -- Variation 4: Native Hunnic Family Tree General Transfer (Specific general cqi=212)
+                local hun_family_char = nil
+                for i = 0, w_fac:character_list():num_items() - 1 do
+                    local c = w_fac:character_list():item_at(i)
+                    if c:cqi() == 212 then
+                        hun_family_char = c
+                        break
+                    end
+                end
+                if hun_family_char then
+                    local cqi = hun_family_char:cqi()
+                    twdll.core.Log(string.format("[TEST] Transferring native Hunnic starting general (cqi=%d) to ERE...", cqi))
+                    local ok_4 = hun_family_char:TransferToFaction(ere_fac)
+                    twdll.core.Log(string.format("[TEST] Hunnic family general (cqi=%d) TransferToFaction result: %s", cqi, tostring(ok_4)))
+                    report("Hunnic family general TransferToFaction returns true", ok_4 == true)
+                    report("Hunnic family general faction changed to ERE", hun_family_char:faction():name() == "att_fact_eastern_roman_empire")
                 end
             end
         end

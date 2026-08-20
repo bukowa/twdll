@@ -489,12 +489,28 @@ static int GetLoyaltyFactorList(lua_State* L) {
 
 /***
 Instantly transfers the character and their commanded military force to another faction in the current tick.
+
+Automatic engine side-effects:
+- Unassigns any active governorship or minister post held by the character.
+- Ends active trade commerce raids and updates trade routes.
+- Cancels pending political actions targeting this character.
+- Reassigns all units, recalculates senior unit commander, and re-sorts force containers.
+- Emits native events (`MILITARY_FORCE_FACTION_CHANGE`, `REPORT_CHARACTER_RENDER_DETAILS_CHANGE`, `CHARACTER_FACTION_CHANGE`).
+- Reloads character voiceover culture and lines if the receiving faction is human-controlled.
+
 @function TransferToFaction
-@tparam userdata target_faction target FACTION_SCRIPT_INTERFACE
-@tparam[opt] userdata|boolean region_or_replenish REGION_SCRIPT_INTERFACE or boolean replenish_units if omitting region
-@tparam[opt=false] boolean replenish_units whether to instantly replenish all units in the force to 100% (defaults to false)
-@tparam[opt=false] boolean bribed whether the character was bribed (defaults to false)
+@tparam userdata target_faction Target `FACTION_SCRIPT_INTERFACE` receiving the character and their force.
+@tparam[opt] table options Optional table `{ replenish_units = false, rebel_region = nil }`:
+- `replenish_units` (boolean): if true, restores all units in the force to 100% full soldier capacity.
+- `rebel_region` (userdata): optional `REGION_SCRIPT_INTERFACE`. When provided, binds the force to this region's rebel manager (`force->m_rebel_manager`), marking it as a local provincial rebel army (`is_rebel_army = true`) with rebel AI objectives and unrest clearing upon defeat.
 @treturn boolean true on success, false otherwise
+@usage -- Basic transfer:
+char:TransferToFaction(target_faction)
+@usage -- Transfer with options:
+char:TransferToFaction(target_faction, {
+    replenish_units = true,         -- replenish all units to 100% strength (default: false)
+    rebel_region = region           -- bind as provincial rebel army in this region (default: nil)
+})
 */
 static int TransferToFaction(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -528,7 +544,6 @@ static int TransferToFaction(lua_State* L) {
 
     void* rebel_region = nullptr;
     int replenish = 0;
-    int bribed = 0;
 
     auto get_bool = [](lua_State* state, int idx) -> int {
         if (l_type(state, idx) == LUA_TBOOLEAN) {
@@ -539,29 +554,36 @@ static int TransferToFaction(lua_State* L) {
         return 0;
     };
 
-    if (l_type(L, 3) == LUA_TBOOLEAN) {
-        replenish = get_bool(L, 3);
-        if (l_type(L, 4) == LUA_TBOOLEAN) {
-            bribed = get_bool(L, 4);
+    if (l_type(L, 3) == LUA_TTABLE) {
+        l_getfield(L, 3, "replenish_units");
+        if (l_type(L, -1) == LUA_TNIL) {
+            l_pop(L, 1);
+            l_getfield(L, 3, "replenish");
         }
-    } else if (l_type(L, 3) == LUA_TUSERDATA) {
-        rebel_region = twdll::tw_unwrap<TW_Region>(L, 3);
-        if (l_type(L, 4) == LUA_TBOOLEAN) {
-            replenish = get_bool(L, 4);
+        if (l_type(L, -1) == LUA_TBOOLEAN) {
+            replenish = get_bool(L, -1);
         }
-        if (l_type(L, 5) == LUA_TBOOLEAN) {
-            bribed = get_bool(L, 5);
+        l_pop(L, 1);
+
+        l_getfield(L, 3, "rebel_region");
+        if (l_type(L, -1) == LUA_TNIL) {
+            l_pop(L, 1);
+            l_getfield(L, 3, "region");
         }
+        if (l_type(L, -1) == LUA_TUSERDATA) {
+            rebel_region = twdll::tw_unwrap<TW_Region>(L, -1);
+        }
+        l_pop(L, 1);
     }
 
-    using FnReassignFaction = void(__thiscall*)(void* ch, void* target_fac, void* fac_rec, void* rebel_region, int replenish, int bribed, int flags);
+    using FnReassignFaction = void(__thiscall*)(void* ch, void* target_fac, void* fac_rec, void* rebel_region, int replenish, int bribed, int kill_faction_if_leader);
     auto fnReassignFaction = reinterpret_cast<FnReassignFaction>(
         reinterpret_cast<uintptr_t>(hMod) + 0x007E6400);
 
     __try {
-        fnReassignFaction(ch, target_faction, faction_rec, rebel_region, replenish, bribed, 0);
-        Log("[twdll] char:TransferToFaction: character 0x%08X successfully transferred to faction 0x%08X (replenish=%d, bribed=%d)",
-            reinterpret_cast<uintptr_t>(ch), reinterpret_cast<uintptr_t>(target_faction), replenish, bribed);
+        fnReassignFaction(ch, target_faction, faction_rec, rebel_region, replenish, 0, 0);
+        Log("[twdll] char:TransferToFaction: character 0x%08X successfully transferred to faction 0x%08X (replenish=%d, rebel_reg=0x%08X)",
+            reinterpret_cast<uintptr_t>(ch), reinterpret_cast<uintptr_t>(target_faction), replenish, reinterpret_cast<uintptr_t>(rebel_region));
         l_pushboolean(L, 1);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         Log("[twdll] char:TransferToFaction: caught SEH exception 0x%08X in engine call", GetExceptionCode());
