@@ -10,9 +10,9 @@ Run custom C++ code inside Total War: Attila's Lua engine. (Rome 2 support is fr
 
 ## Installation
 
-1. Download latest release from [Releases](https://github.com/bukowa/twdll/releases)
-2. Extract `twdll_attila.dll` to your game folder
-3. The DLL only activates when called by a mod
+1. Download the latest development build: [**`libtwdll-nightly.zip`**](https://github.com/bukowa/twdll/releases/download/nightly/libtwdll-nightly.zip) (or check all releases on the [Dev Build page](https://github.com/bukowa/twdll/releases/tag/nightly))
+2. Extract `twdll_attila.dll` into your Total War: Attila game root directory (where `Attila.exe` is located)
+3. The DLL is active and ready to be loaded by your mod script
 
 ## Usage
 
@@ -46,37 +46,45 @@ twdll.core.Log("Hello from C++!")
 
 ## Development
 
-### Requirements
-- Visual Studio 2022 (C++), 32-bit (x86) toolset
-- CMake 3.29+
-- Linux cross-compile: `clang-cl`, `lld-link`, Ninja, and [xwin](https://github.com/Jake-Shadle/xwin).
+### Building on Windows
 
-### Build
+#### Requirements
+- **Visual Studio 2022** (Desktop development with C++, 32-bit / x86 toolset)
+- **CMake** 3.29+
 
-## Windows
+#### Build
 ```sh
-# Attila (active)
+# Configure & build for Attila (active)
 cmake --preset attila
 cmake --build --preset attila
-
-# Rome 2 (frozen)
-# cmake --preset rome2
-# cmake --build --preset rome2
 ```
 
-## Linux (cross-compile)
+---
+
+### Cross-compiling on Linux
+
+You can build the 32-bit Windows DLL on Linux using Clang and MSVC headers/libraries packaged via `xwin`.
+
+#### Requirements
+- **Clang** (`clang-cl`, `lld-link`)
+- **Ninja**
+- **CMake** 3.29+
+- **[xwin](https://github.com/Jake-Shadle/xwin)** (to fetch MSVC CRT + Windows SDK)
+
+#### Build
 ```sh
-# Install MSVC CRT + Windows SDK once (default location ~/xwin)
+# 1. Download MSVC CRT + Windows SDK (one-time setup, defaults to ~/xwin)
 xwin --accept-license --arch x86 splat --output ~/xwin
 
-# Attila (active)
+# 2. Configure & build for Attila
 cmake -S . -B build -G Ninja \
   --toolchain cmake/clang-cross-x86.cmake \
   -DCMAKE_BUILD_TYPE=Release \
   -DTW_GAME=attila
+
 cmake --build build --target twdll
 ```
-Set `XWIN_ROOT` if you splatted somewhere other than `~/xwin`.
+> Set `XWIN_ROOT` environment variable if you splatted `xwin` somewhere other than `~/xwin`.
 
 ### Project Structure
 ```
