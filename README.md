@@ -47,10 +47,13 @@ twdll.core.Log("Hello from C++!")
 ## Development
 
 ### Requirements
-- Visual Studio 2022 (C++)
+- Visual Studio 2022 (C++), 32-bit (x86) toolset
 - CMake 3.29+
+- Linux cross-compile: `clang-cl`, `lld-link`, Ninja, and [xwin](https://github.com/Jake-Shadle/xwin).
 
 ### Build
+
+## Windows
 ```sh
 # Attila (active)
 cmake --preset attila
@@ -60,6 +63,20 @@ cmake --build --preset attila
 # cmake --preset rome2
 # cmake --build --preset rome2
 ```
+
+## Linux (cross-compile)
+```sh
+# Install MSVC CRT + Windows SDK once (default location ~/xwin)
+xwin --accept-license --arch x86 splat --output ~/xwin
+
+# Attila (active)
+cmake -S . -B build -G Ninja \
+  --toolchain cmake/clang-cross-x86.cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTW_GAME=attila
+cmake --build build --target twdll
+```
+Set `XWIN_ROOT` if you splatted somewhere other than `~/xwin`.
 
 ### Project Structure
 ```
