@@ -1629,6 +1629,48 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 25: Character Transfer to Faction (TransferToFaction)
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 25: Character Transfer to Faction ---")
+        do
+            local transfer_char = nil
+            local all_chars = game:model():world():faction_by_key(faction):character_list()
+            for i = 0, all_chars:num_items() - 1 do
+                local c = all_chars:item_at(i)
+                if c:cqi() == 212 or (c:cqi() ~= 204 and c:has_military_force()) then
+                    transfer_char = c
+                    break
+                end
+            end
+
+            if not transfer_char then
+                twdll.core.Log("[TEST] TransferToFaction: SKIPPED (no non-leader character found)")
+                record_skip()
+            else
+                if type(transfer_char.TransferToFaction) ~= "function" then
+                    twdll.core.Log("[TEST] TransferToFaction: FAILED (method not registered)")
+                    report("character TransferToFaction method registered", false)
+                else
+                    report("character TransferToFaction method registered", true)
+
+                    local initial_fac = transfer_char:faction():name()
+                    twdll.core.Log(string.format("[TEST] Character cqi=%d initial faction: '%s'", transfer_char:cqi(), tostring(initial_fac)))
+
+                    -- Test TransferToFaction to Eastern Roman Empire with replenish=true
+                    local target_fac = game:model():world():faction_by_key("att_fact_eastern_roman_empire")
+                    local char_region = transfer_char:region()
+                    local transfer_ok = transfer_char:TransferToFaction(target_fac, char_region, true)
+                    twdll.core.Log(string.format("[TEST] char:TransferToFaction(target_fac, region, true) -> %s", tostring(transfer_ok)))
+                    report("char:TransferToFaction returns true", transfer_ok == true)
+
+                    local new_fac = transfer_char:faction():name()
+                    twdll.core.Log(string.format("[TEST] Character cqi=%d new faction after transfer: '%s'", transfer_char:cqi(), tostring(new_fac)))
+                    report("character faction changed to target faction", new_fac == "att_fact_eastern_roman_empire")
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

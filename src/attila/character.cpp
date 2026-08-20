@@ -14,6 +14,8 @@ using twdll::TW_CampaignModel;
 using twdll::TW_CampaignEnv;
 using twdll::TW_GameCore;
 using twdll::TW_Databases;
+using twdll::TW_Faction;
+using twdll::TW_Region;
 
 constexpr size_t CHAR_PTR = twdll::TW_PtrOffset<TW_Character>::value;
 
@@ -485,6 +487,89 @@ static int GetLoyaltyFactorList(lua_State* L) {
     return 1;
 }
 
+/***
+Instantly transfers the character and their commanded military force to another faction in the current tick.
+@function TransferToFaction
+@tparam userdata target_faction target FACTION_SCRIPT_INTERFACE
+@tparam[opt] userdata|boolean region_or_replenish REGION_SCRIPT_INTERFACE or boolean replenish_units if omitting region
+@tparam[opt=false] boolean replenish_units whether to instantly replenish all units in the force to 100% (defaults to false)
+@tparam[opt=false] boolean bribed whether the character was bribed (defaults to false)
+@treturn boolean true on success, false otherwise
+*/
+static int TransferToFaction(lua_State* L) {
+    auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
+    if (!ch) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    TW_Faction* target_faction = nullptr;
+    if (l_type(L, 2) == LUA_TUSERDATA) {
+        target_faction = twdll::tw_unwrap<TW_Faction>(L, 2);
+    }
+
+    if (!target_faction) {
+        Log("[twdll] char:TransferToFaction: target faction could not be resolved");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
+    if (!hMod) {
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    using FnGetFactionRecord = void*(__thiscall*)(void* faction);
+    auto fnGetFactionRecord = reinterpret_cast<FnGetFactionRecord>(
+        reinterpret_cast<uintptr_t>(hMod) + 0x006FF720);
+
+    void* faction_rec = fnGetFactionRecord(target_faction);
+
+    void* rebel_region = nullptr;
+    int replenish = 0;
+    int bribed = 0;
+
+    auto get_bool = [](lua_State* state, int idx) -> int {
+        if (l_type(state, idx) == LUA_TBOOLEAN) {
+            auto* pState = reinterpret_cast<uintptr_t*>(state);
+            auto* pVal = reinterpret_cast<uint32_t*>(pState[3] + 8 * (idx - 1));
+            return (pVal[0] != 0) ? 1 : 0;
+        }
+        return 0;
+    };
+
+    if (l_type(L, 3) == LUA_TBOOLEAN) {
+        replenish = get_bool(L, 3);
+        if (l_type(L, 4) == LUA_TBOOLEAN) {
+            bribed = get_bool(L, 4);
+        }
+    } else if (l_type(L, 3) == LUA_TUSERDATA) {
+        rebel_region = twdll::tw_unwrap<TW_Region>(L, 3);
+        if (l_type(L, 4) == LUA_TBOOLEAN) {
+            replenish = get_bool(L, 4);
+        }
+        if (l_type(L, 5) == LUA_TBOOLEAN) {
+            bribed = get_bool(L, 5);
+        }
+    }
+
+    using FnReassignFaction = void(__thiscall*)(void* ch, void* target_fac, void* fac_rec, void* rebel_region, int replenish, int bribed, int flags);
+    auto fnReassignFaction = reinterpret_cast<FnReassignFaction>(
+        reinterpret_cast<uintptr_t>(hMod) + 0x007E6400);
+
+    __try {
+        fnReassignFaction(ch, target_faction, faction_rec, rebel_region, replenish, bribed, 0);
+        Log("[twdll] char:TransferToFaction: character 0x%08X successfully transferred to faction 0x%08X (replenish=%d, bribed=%d)",
+            reinterpret_cast<uintptr_t>(ch), reinterpret_cast<uintptr_t>(target_faction), replenish, bribed);
+        l_pushboolean(L, 1);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Log("[twdll] char:TransferToFaction: caught SEH exception 0x%08X in engine call", GetExceptionCode());
+        l_pushboolean(L, 0);
+    }
+    return 1;
+}
+
 extern const luaL_Reg character_functions[] = {
     {nullptr, nullptr}
 };
@@ -507,6 +592,7 @@ static const luaL_Reg character_methods[] = {
     {"GetLoyaltyModifier",    GetLoyaltyModifier},
     {"SetLoyaltyModifier",    SetLoyaltyModifier},
     {"GetLoyaltyFactorList",  GetLoyaltyFactorList},
+    {"TransferToFaction",     TransferToFaction},
     {nullptr, nullptr}
 };
 
