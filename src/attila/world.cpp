@@ -82,7 +82,9 @@ void install_world_hook(uintptr_t base, size_t size) {
 /***
 Returns the memory address of the WORLD singleton as a hexadecimal string.
 @function GetMemoryAddress
-@treturn string memory address (e.g. "0x12345678"), or nil if not yet initialised
+@treturn string|nil memory address (e.g. "0x12345678"), or nil if not yet initialised
+@usage
+local addr = twdll.world.GetMemoryAddress()
 */
 static int GetMemoryAddress(lua_State* L) {
     if (!g_world) { l_pushnil(L); return 1; }
@@ -95,16 +97,20 @@ static int GetMemoryAddress(lua_State* L) {
 static twdll::GlobalGetter<int, TW_World> FactionCount{&TW_World::faction_count, &g_world};
 
 /***
-Gets the number of factions in the current campaign.
+Gets the total number of factions existing in the current campaign world.
 @function GetFactionCount
-@treturn integer number of factions, or nil if not yet initialised
+@treturn integer|nil number of factions, or nil if not yet initialised
+@usage
+local total_factions = twdll.world.GetFactionCount()
 */
 static int GetFactionCount(lua_State* L) { return FactionCount.get(L); }
 
 /***
-Gets the maximum number of units allowed in an army.
+Gets the maximum number of units allowed per land army (vanilla default: 20).
 @function GetMaxUnitsInArmy
 @treturn integer maximum unit count
+@usage
+local max_army_units = twdll.world.GetMaxUnitsInArmy()
 */
 static int GetMaxUnitsInArmy(lua_State* L) {
     if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
@@ -116,9 +122,13 @@ static int GetMaxUnitsInArmy(lua_State* L) {
 }
 
 /***
-Sets the maximum number of units allowed in an army.
+Sets the maximum number of units allowed per land army.
+Affects recruitment limits, army stacking, and UI capacity.
 @function SetMaxUnitsInArmy
-@tparam integer val maximum unit count
+@tparam integer val new maximum unit count (e.g. 40)
+@usage
+-- Allow up to 40 units per land army:
+twdll.world.SetMaxUnitsInArmy(40)
 */
 static int SetMaxUnitsInArmy(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));
@@ -130,9 +140,11 @@ static int SetMaxUnitsInArmy(lua_State* L) {
 }
 
 /***
-Gets the maximum number of units allowed in a navy.
+Gets the maximum number of units allowed per naval fleet (vanilla default: 20).
 @function GetMaxUnitsInNavy
 @treturn integer maximum unit count
+@usage
+local max_navy_units = twdll.world.GetMaxUnitsInNavy()
 */
 static int GetMaxUnitsInNavy(lua_State* L) {
     if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
@@ -144,9 +156,13 @@ static int GetMaxUnitsInNavy(lua_State* L) {
 }
 
 /***
-Sets the maximum number of units allowed in a navy.
+Sets the maximum number of units allowed per naval fleet.
+Affects naval recruitment limits and fleet stacking.
 @function SetMaxUnitsInNavy
-@tparam integer val maximum unit count
+@tparam integer val new maximum unit count (e.g. 30)
+@usage
+-- Allow up to 30 ships per naval fleet:
+twdll.world.SetMaxUnitsInNavy(30)
 */
 static int SetMaxUnitsInNavy(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));
@@ -212,11 +228,17 @@ bool set_reinforcement_cap(bool restore_default, uint32_t max_units) {
 }
 
 /***
-Sets the reinforcement cap (max units per army in battle) for battles started
-after the call. Pass -1 to restore the game default (disable the override).
-Any value >= 0 is applied as-is.
+Sets the reinforcement cap (maximum concurrent units per army in tactical battles) for battles started
+after this call. Pass `-1` to restore the vanilla engine default.
+Any value `>= 0` is applied as an absolute cap.
 @function SetReinforcementCap
-@tparam integer max_units new cap value, or -1 to restore the default
+@tparam integer max_units new cap value (e.g. 40, 80), or -1 to restore the default
+@usage
+-- Allow up to 40 reinforcement units simultaneously in tactical battle:
+twdll.world.SetReinforcementCap(40)
+
+-- Restore vanilla behavior:
+twdll.world.SetReinforcementCap(-1)
 */
 static int SetReinforcementCap(lua_State* L) {
     if (l_type(L, 1) == LUA_TNIL || l_type(L, 1) == LUA_TNONE) {
@@ -235,10 +257,14 @@ static int SetReinforcementCap(lua_State* L) {
 }
 
 /***
-Returns the currently applied reinforcement cap, or nil if the game default is
-in effect.
+Returns the currently applied reinforcement cap override, or nil if the game default is in effect.
 @function GetReinforcementCap
-@treturn[opt] integer current cap value
+@treturn integer|nil current cap value, or nil if default
+@usage
+local cap = twdll.world.GetReinforcementCap()
+if cap then
+    -- An override is currently active
+end
 */
 static int GetReinforcementCap(lua_State* L) {
     if (!g_reinf_cap_insn_addr) { l_pushnil(L); return 1; }
@@ -254,9 +280,11 @@ static int GetReinforcementCap(lua_State* L) {
 }
 
 /***
-Gets the maximum number of traits a character can have at any one time (vanilla default is 10).
+Gets the maximum number of traits a character can hold simultaneously (vanilla default is 10).
 @function GetMaxTraits
 @treturn integer maximum trait count
+@usage
+local max_traits = twdll.world.GetMaxTraits()
 */
 static int GetMaxTraits(lua_State* L) {
     if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
@@ -268,9 +296,13 @@ static int GetMaxTraits(lua_State* L) {
 }
 
 /***
-Sets the maximum number of traits a character can have at any one time.
+Sets the maximum number of traits a character can hold simultaneously.
+Prevents new traits from being discarded when a character exceeds 10 traits.
 @function SetMaxTraits
 @tparam integer val new maximum trait count (e.g. 20, 30, 50)
+@usage
+-- Expand character trait limit to 30:
+twdll.world.SetMaxTraits(30)
 */
 static int SetMaxTraits(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));

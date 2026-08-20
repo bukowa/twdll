@@ -17,9 +17,11 @@ static ReligionUserdata* get_religion(lua_State* L) {
 }
 
 /***
-Returns the database key of this religion (e.g. "att_rel_chr_catholic").
+Database record key of this religion from `religions_tables` (e.g. `"att_rel_chr_catholic"`).
 @function GetKey
 @treturn string religion database key
+@usage
+local key = rel:GetKey()
 */
 static int GetKey(lua_State* L) {
     auto* rel = get_religion(L);
@@ -32,9 +34,12 @@ static int GetKey(lua_State* L) {
 }
 
 /***
-Returns the proportion of this religion in the region as a raw float (0.0 to 1.0).
+Proportion of this religion in the region as a normalized float (0.0 to 1.0).
 @function GetProportion
 @treturn number religion proportion (0.0 to 1.0)
+@usage
+local pct = rel:GetProportion() * 100
+-- e.g. 75.0 for 75%
 */
 static int GetProportion(lua_State* L) {
     auto* rel = get_religion(L);
@@ -47,9 +52,11 @@ static int GetProportion(lua_State* L) {
 }
 
 /***
-Returns the UI icon path for this religion.
+UI icon image path for this religion.
 @function GetIconPath
-@treturn string icon path
+@treturn string icon file path (e.g. `"UI/Religions/att_rel_chr_catholic.png"`)
+@usage
+local icon = rel:GetIconPath()
 */
 static int GetIconPath(lua_State* L) {
     auto* rel = get_religion(L);

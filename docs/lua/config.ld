@@ -8,6 +8,7 @@ twdll hooks game singletons (world, campaign UI, campaign model) on first load; 
 Not every function requires this: plain utilities (`twdll.core.Log`, `twdll.core.GameBuild`) and functions that read fixed module offsets work regardless of where they are called. This is how the current hook architecture works, not a permanent contract — it may change in the future.]]
 not_luadoc = true
 format = "markdown"
+sort = true
 dir = "docs/lua/doc"
 file = {}
 

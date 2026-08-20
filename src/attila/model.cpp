@@ -9,12 +9,14 @@
 using twdll::TW_Unit;
 
 /***
-Disbands (permanently removes) one or more units from the game. This mirrors
-the game's own UNIT::disband_units path, so each unit is fully removed from
-the world and all bookkeeping (events, dirty flags, force teardown) runs
-correctly. Unlike a bare container remove, this is save/load safe.
+Disbands and removes one or more units across any military forces in the campaign world in a single transaction.
+
+Handles full removal from the campaign world, updating army bookkeeping, disband events, and UI state.
 @function DisbandUnits
-@param units vararg userdata, one or more UNIT userdata values to disband
+@tparam UNIT_SCRIPT_INTERFACE ... one or more unit objects to disband
+@usage
+-- Disband arbitrary units across the campaign:
+twdll.model.DisbandUnits(unit1, unit2)
 */
 static int DisbandUnits(lua_State* L) {
     if (!g_disband_units) {

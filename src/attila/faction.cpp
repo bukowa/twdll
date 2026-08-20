@@ -31,33 +31,44 @@ namespace Props {
 }
 
 /***
-Returns the memory address of the faction object as a hexadecimal string.
+Memory address of the faction object in hexadecimal format.
 @function GetMemoryAddress
 @treturn string memory address (e.g. "0x12345678")
+@usage local addr = faction:GetMemoryAddress()
 */
 static int GetMemoryAddress    (lua_State* L) { return tw_mem_address(L, "faction", FACTION_PTR); }
 
 /***
-Gets the amount of gold (treasury) for the faction.
+Amount of gold in the faction's treasury.
 @function GetTreasury
-@treturn integer amount of gold
+@treturn integer current treasury gold amount
+@usage
+local gold = faction:GetTreasury()
 */
 static int GetTreasury      (lua_State* L) { return Props::Treasury.get(L); }
 
 /***
-Sets the amount of gold (treasury) for the faction.
+Sets the amount of gold in the faction's treasury.
+Persisted natively in savegames and immediately available for building and recruitment.
 @function SetTreasury
-@tparam integer value new amount of gold
+@tparam integer value new gold amount
+@treturn boolean true on success, false otherwise
+@usage
+-- Give faction 50,000 gold:
+faction:SetTreasury(50000)
 */
 static int SetTreasury      (lua_State* L) { return Props::Treasury.set(L); }
 
 /***
-Makes the given region the faction's capital.
-Works even if the faction currently has no home region: the fields are
-set exactly as the engine does in FACTION::attach_to_region, including the
-original home region and home theatre when they are not yet assigned.
+Makes the specified region the faction's primary capital / home region.
+
+Works even if the faction currently has no home region (e.g. horde settling): properly assigns
+the faction's capital, original home region, and home theatre.
 @function SetCapital
-@tparam userdata region the region to become the new capital
+@tparam REGION_SCRIPT_INTERFACE region the region to become the new capital
+@usage
+local region = game:model():world():region_manager():region_by_key("att_reg_scandza_hafn")
+faction:SetCapital(region)
 */
 static int SetCapital(lua_State* L) {
     auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
@@ -76,14 +87,24 @@ static int SetCapital(lua_State* L) {
 
 /***
 Instantly completes research of the given technology for the faction, using the
-game's own internal path for finishing a technology. This is exactly what the
-engine does when a tech completes, so events, achievements and unit upgrades
-fire normally, and parent prerequisites are completed automatically.
+game's own internal path for finishing a technology.
+
+This triggers all native engine completion mechanics:
+- Fires research completion campaign events.
+- Grants technology-related campaign achievements.
+- Applies unit upgrades and building unlocks immediately.
+- Completes parent prerequisites automatically.
+
 Note: this differs from the game's built-in `cm:unlock_technology`, which only
-makes a technology selectable and never actually finishes the research.
+makes a technology selectable in the UI and never actually finishes research.
 @function InstantlyResearchTechnology
-@tparam string technology_key the technology record key (e.g. "att_tech_military_barracks")
-@treturn boolean true if the technology was found and completed
+@tparam string technology_key the technology record key from `technologies_tables` (e.g. `"att_tech_military_barracks"`, `"att_hunnic_military_combat_at_distance"`)
+@treturn boolean true if the technology was found and completed, false otherwise
+@usage
+local ok = faction:InstantlyResearchTechnology("att_hunnic_military_combat_at_distance")
+if ok then
+    twdll.core.Log("Technology researched instantly!")
+end
 */
 static int InstantlyResearchTechnology(lua_State* L) {
     if (!g_instant_set_researched || !g_record_index) {
@@ -140,12 +161,27 @@ static int InstantlyResearchTechnology(lua_State* L) {
 
 /***
 Sets a new leader for the faction.
-If `old_character` is provided, the game fires a succession event. If `heir_coming_of_age`
-is true, fires `faction_succession_heir_comes_of_age` instead of the default succession event.
+
+Supports three operational modes:
+1. **Silent swap** (`faction:SetFactionLeader(new_char)`): changes the faction leader immediately without firing succession events or modifying political stability.
+2. **Standard succession** (`faction:SetFactionLeader(new_char, old_char)`): triggers the standard `faction_succession` (or `faction_succession_regency`) campaign event.
+3. **Heir coming of age** (`faction:SetFactionLeader(new_char, old_char, true)`): triggers the `faction_succession_heir_comes_of_age` campaign event.
+
+Automatically resets the new leader's heir status and aligns political party leadership.
 @function SetFactionLeader
-@tparam userdata new_character the character to become the new leader
-@tparam[opt] userdata old_character the outgoing leader (triggers succession event if provided)
-@tparam[opt] boolean heir_coming_of_age fire the heir-comes-of-age event variant (default false)
+@tparam CHARACTER_SCRIPT_INTERFACE new_character the character to become the new leader
+@tparam[opt] CHARACTER_SCRIPT_INTERFACE old_character the outgoing leader (triggers succession event if provided)
+@tparam[opt=false] boolean heir_coming_of_age fire the heir-comes-of-age event variant (default: false)
+@usage
+-- Mode 1: Silent swap without event popup:
+faction:SetFactionLeader(new_general)
+
+-- Mode 2: Standard succession with in-game succession event:
+local old_leader = faction:faction_leader()
+faction:SetFactionLeader(new_general, old_leader)
+
+-- Mode 3: Heir coming of age succession:
+faction:SetFactionLeader(heir_general, old_leader, true)
 */
 static int SetFactionLeader(lua_State* L) {
     auto* faction  = twdll::tw_unwrap<TW_Faction>(L, 1);
@@ -171,11 +207,17 @@ static int SetFactionLeader(lua_State* L) {
 }
 
 /***
-Returns a list interface for the faction's campaign political parties.
-Use `num_items()` and zero-based `item_at(index)` to iterate it.
-Each party exposes GetKey(), GetSenators(), GetPower() and IsPrimary().
+List interface (@{POLITICAL_PARTY_LIST_SCRIPT_INTERFACE}) for the faction's campaign political parties.
+Use `num_items()` and zero-based `item_at(index)` to iterate the parties.
 @function GetPoliticalPartyList
-@treturn userdata POLITICAL_PARTY_LIST_SCRIPT_INTERFACE
+@treturn POLITICAL_PARTY_LIST_SCRIPT_INTERFACE list interface for the faction's campaign political parties
+@usage
+local party_list = faction:GetPoliticalPartyList()
+for i = 0, party_list:num_items() - 1 do
+    local party = party_list:item_at(i)
+    twdll.core.Log(string.format("Party [%s]: Senators=%d, Power=%.1f%%, Primary=%s",
+        party:GetKey(), party:GetSenators(), party:GetPower() * 100, tostring(party:IsPrimary())))
+end
 */
 static int GetPoliticalPartyList(lua_State* L) {
     auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
@@ -197,10 +239,15 @@ static int GetPoliticalPartyList(lua_State* L) {
 }
 
 /***
-Returns the faction's political party with the given record key, or nil.
+Retrieves the political party in this faction matching the given record key.
 @function GetPoliticalParty
-@tparam string party_key the party record key (e.g. "att_political_party_romans_1")
-@treturn userdata CAMPAIGN_POLITICAL_PARTY or nil
+@tparam string party_key the party record key from `political_parties_tables` (e.g. `"att_politics_hunni_ruler"`, `"att_politics_hunni_council"`)
+@treturn CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE|nil political party object, or nil if not found
+@usage
+local party = faction:GetPoliticalParty("att_politics_hunni_ruler")
+if party then
+    twdll.core.Log("Found party with senators:", party:GetSenators())
+end
 */
 static int GetPoliticalParty(lua_State* L) {
     auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
@@ -220,9 +267,14 @@ static int GetPoliticalParty(lua_State* L) {
 }
 
 /***
-Returns the faction's primary (leading) political party, or nil.
+Primary (leading / ruling) political party of the faction.
 @function GetPrimaryParty
-@treturn userdata CAMPAIGN_POLITICAL_PARTY or nil
+@treturn CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE|nil primary political party object, or nil if none
+@usage
+local ruler_party = faction:GetPrimaryParty()
+if ruler_party then
+    twdll.core.Log("Ruling party key:", ruler_party:GetKey(), "Senators:", ruler_party:GetSenators())
+end
 */
 static int GetPrimaryParty(lua_State* L) {
     auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
@@ -241,9 +293,14 @@ static int GetPrimaryParty(lua_State* L) {
 }
 
 /***
-Returns whether the faction has any campaign political parties.
+Checks whether the faction participates in the campaign politics system and has political parties.
 @function HasPoliticalParties
-@treturn boolean true if the faction has at least one party
+@treturn boolean true if the faction has at least one political party, false otherwise
+@usage
+if faction:HasPoliticalParties() then
+    local parties = faction:GetPoliticalPartyList()
+    twdll.core.Log("Faction has politics with party count:", parties:num_items())
+end
 */
 static int HasPoliticalParties(lua_State* L) {
     auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);

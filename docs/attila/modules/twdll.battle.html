@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><strong>twdll.battle</strong></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -73,7 +73,7 @@
 <table class="function_list">
 	<tr>
 	<td class="name" nowrap><a href="#GetBattleInfo">GetBattleInfo ()</a></td>
-	<td class="summary">Returns live information about the current battle.</td>
+	<td class="summary">Returns live runtime telemetry and reinforcement structure about the current tactical battle.</td>
 	</tr>
 </table>
 
@@ -89,22 +89,43 @@
     <strong>GetBattleInfo ()</strong>
     </dt>
     <dd>
-    Returns live information about the current battle.  Returns nil while no battle
-is active (e.g. in the campaign). Inside a battle, returns a table with the
-battle object address, the reinforcements manager address, the reinforcement
-cap and the number of reinforcement armies currently waiting.
+    Returns live runtime telemetry and reinforcement structure about the current tactical battle.
+Returns nil while no battle is active (e.g. on the campaign map).</p>
+
+<p>When inside a battle, returns a table with fields:
+- <a href="../modules/twdll.battle.html">battle</a> (string): hexadecimal memory address of the <code>BATTLE</code> object.
+- <code>manager</code> (string|nil): hexadecimal memory address of <code>REINFORCEMENTS_MANAGER</code>.
+- <code>cap</code> (integer|nil): active maximum units per army in battle.
+- <code>size</code> (integer|nil): number of reinforcing armies currently queued.
 
 
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
-        battle info, or nil when no battle is active
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a> or <span class="type">nil</span></span>
+        table containing battle state, or nil when not in a tactical battle
     </ol>
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Example returned table:
+</span><span class="comment">-- {
+</span><span class="comment">--     ["battle"] = "0x2A4F8900",
+</span><span class="comment">--     ["manager"] = "0x2A4F8B40",
+</span><span class="comment">--     ["cap"] = 40,
+</span><span class="comment">--     ["size"] = 2
+</span><span class="comment">-- }
+</span>
+<span class="keyword">local</span> info = twdll.battle.<span class="function-name">GetBattleInfo</span>()
+<span class="keyword">if</span> info <span class="keyword">then</span>
+    <span class="keyword">if</span> info.size <span class="keyword">and</span> info.size &gt; <span class="number">0</span> <span class="keyword">then</span>
+        <span class="comment">-- Reinforcements are queued to enter the battlefield
+</span>    <span class="keyword">end</span>
+<span class="keyword">end</span></pre>
+    </ul>
 
 </dd>
 </dl>

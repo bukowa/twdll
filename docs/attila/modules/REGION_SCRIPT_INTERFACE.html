@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><strong>REGION_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><strong>REGION_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,32 +72,32 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#GetGrowthPoints">GetGrowthPoints ()</a></td>
+	<td class="summary">Accumulated province growth points progressing towards the next population surplus point.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the region object as a hexadecimal string.</td>
+	<td class="summary">Memory address of the region object in hexadecimal format.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetPopulationSurplus">GetPopulationSurplus ()</a></td>
-	<td class="summary">Gets the population surplus for the region (points used to expand settlement slots).</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetPopulationSurplus">SetPopulationSurplus (value)</a></td>
-	<td class="summary">Sets the population surplus for the region (points used to expand settlement slots).</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetGrowthPoints">GetGrowthPoints ()</a></td>
-	<td class="summary">Gets the number of growth points for the region (accumulated growth).</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetGrowthPoints">SetGrowthPoints (value)</a></td>
-	<td class="summary">Sets the number of growth points for the region (accumulated growth).</td>
+	<td class="summary">Province development population surplus points (used to unlock new building slots).</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetReligionList">GetReligionList ()</a></td>
-	<td class="summary">Returns the list of religions present in this region.</td>
+	<td class="summary">List interface (<a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html#">RELIGION_LIST_SCRIPT_INTERFACE</a>) containing all religious denominations present in this region.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetReligionProportion">GetReligionProportion (religion_key)</a></td>
-	<td class="summary">Returns the raw proportion (0.0 to 1.0) of a specific religion in this region.</td>
+	<td class="summary">Proportion of a specific religion in this region as a normalized float (0.0 to 1.0).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetGrowthPoints">SetGrowthPoints (value)</a></td>
+	<td class="summary">Sets the accumulated province growth points progressing towards the next population surplus point.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetPopulationSurplus">SetPopulationSurplus (value)</a></td>
+	<td class="summary">Sets the province development population surplus points (used to unlock new building slots).</td>
 	</tr>
 </table>
 
@@ -109,11 +109,35 @@
 
     <dl class="function">
     <dt>
+    <a name = "GetGrowthPoints"></a>
+    <strong>GetGrowthPoints ()</strong>
+    </dt>
+    <dd>
+    Accumulated province growth points progressing towards the next population surplus point.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        accumulated growth points
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> growth = region:<span class="function-name">GetGrowthPoints</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "GetMemoryAddress"></a>
     <strong>GetMemoryAddress ()</strong>
     </dt>
     <dd>
-    Returns the memory address of the region object as a hexadecimal string.
+    Memory address of the region object in hexadecimal format.
 
 
 
@@ -126,6 +150,10 @@
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = region:<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
 
 </dd>
     <dt>
@@ -133,7 +161,7 @@
     <strong>GetPopulationSurplus ()</strong>
     </dt>
     <dd>
-    Gets the population surplus for the region (points used to expand settlement slots).
+    Province development population surplus points (used to unlock new building slots).
 
 
 
@@ -141,73 +169,18 @@
     <ol>
 
            <span class="types"><span class="type">integer</span></span>
-        population surplus
+        population surplus points
     </ol>
 
 
 
-
-</dd>
-    <dt>
-    <a name = "SetPopulationSurplus"></a>
-    <strong>SetPopulationSurplus (value)</strong>
-    </dt>
-    <dd>
-    Sets the population surplus for the region (points used to expand settlement slots).
-
-
-    <h3>Parameters:</h3>
+    <h3>Usage:</h3>
     <ul>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new population surplus
-        </li>
+        <pre class="example"><span class="keyword">local</span> surplus = region:<span class="function-name">GetPopulationSurplus</span>()
+<span class="keyword">if</span> surplus &gt;= <span class="number">4</span> <span class="keyword">then</span>
+    <span class="comment">-- Province has enough surplus points to expand settlement slots
+</span><span class="keyword">end</span></pre>
     </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetGrowthPoints"></a>
-    <strong>GetGrowthPoints ()</strong>
-    </dt>
-    <dd>
-    Gets the number of growth points for the region (accumulated growth).
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        number of growth points
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetGrowthPoints"></a>
-    <strong>SetGrowthPoints (value)</strong>
-    </dt>
-    <dd>
-    Sets the number of growth points for the region (accumulated growth).
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">value</span>
-            <span class="types"><span class="type">integer</span></span>
-         new number of growth points
-        </li>
-    </ul>
-
-
-
-
 
 </dd>
     <dt>
@@ -215,19 +188,30 @@
     <strong>GetReligionList ()</strong>
     </dt>
     <dd>
-    Returns the list of religions present in this region.
+    List interface (<a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html#">RELIGION_LIST_SCRIPT_INTERFACE</a>) containing all religious denominations present in this region.
+Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to iterate through the breakdown.
 
 
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">userdata</span></span>
-        RELIGION<em>LIST</em>SCRIPT_INTERFACE
+           <span class="types"><span class="type">RELIGION_LIST_SCRIPT_INTERFACE</span></span>
+        list interface containing all religions present in this region
     </ol>
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> rel_list = region:<span class="function-name">GetReligionList</span>()
+<span class="keyword">for</span> i = <span class="number">0</span>, rel_list:<span class="function-name">num_items</span>() - <span class="number">1</span> <span class="keyword">do</span>
+    <span class="keyword">local</span> rel = rel_list:<span class="function-name">item_at</span>(i)
+    <span class="keyword">local</span> key = rel:<span class="function-name">GetKey</span>()
+    <span class="keyword">local</span> pct = rel:<span class="function-name">GetProportion</span>() * <span class="number">100</span>
+    <span class="comment">-- e.g. key = "att_rel_chr_catholic", pct = 75.0
+</span><span class="keyword">end</span></pre>
+    </ul>
 
 </dd>
     <dt>
@@ -235,14 +219,14 @@
     <strong>GetReligionProportion (religion_key)</strong>
     </dt>
     <dd>
-    Returns the raw proportion (0.0 to 1.0) of a specific religion in this region.
+    Proportion of a specific religion in this region as a normalized float (0.0 to 1.0).
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">religion_key</span>
             <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         database key of the religion
+         database key from <code>religions_tables</code> (e.g. <code>&quot;att_rel_chr_catholic&quot;</code>, <code>&quot;att_rel_pagan_germanic&quot;</code>)
         </li>
     </ul>
 
@@ -255,6 +239,65 @@
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> pagan_pct = region:<span class="function-name">GetReligionProportion</span>(<span class="string">"att_rel_pagan_germanic"</span>) * <span class="number">100</span>
+<span class="keyword">if</span> pagan_pct &gt; <span class="number">50.0</span> <span class="keyword">then</span>
+    <span class="comment">-- Paganism is the dominant majority religion in this region
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetGrowthPoints"></a>
+    <strong>SetGrowthPoints (value)</strong>
+    </dt>
+    <dd>
+    Sets the accumulated province growth points progressing towards the next population surplus point.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new growth points value
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">region:<span class="function-name">SetGrowthPoints</span>(<span class="number">500</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetPopulationSurplus"></a>
+    <strong>SetPopulationSurplus (value)</strong>
+    </dt>
+    <dd>
+    Sets the province development population surplus points (used to unlock new building slots).
+Persisted in savegames and immediately reflected in province development UI.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new population surplus value (>= 0)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Grant 5 population surplus points for fast slot expansion:
+</span>region:<span class="function-name">SetPopulationSurplus</span>(<span class="number">5</span>)</pre>
+    </ul>
 
 </dd>
 </dl>

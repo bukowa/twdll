@@ -182,7 +182,9 @@ void uninstall_settlement_slots_hook() {
 /***
 Returns the memory address of the CAMPAIGN_UI singleton as a hexadecimal string.
 @function GetMemoryAddress
-@treturn string memory address (e.g. "0x12345678"), or nil if not yet initialised
+@treturn string|nil memory address (e.g. "0x12345678"), or nil if not yet initialised
+@usage
+local addr = twdll.campaign_ui.GetMemoryAddress()
 */
 static int GetMemoryAddress(lua_State* L) {
     if (!g_campaign_ui) { l_pushnil(L); return 1; }
@@ -193,12 +195,14 @@ static int GetMemoryAddress(lua_State* L) {
 }
 
 /***
-Overrides the maximum number of building slots shown on the main (capital)
-settlement card in the settlement panel. Clamped to 1..20. Applies from the
-next panel open/refresh onwards. Values below 1 are rejected (no-op).
+Overrides the maximum number of building slots displayed on major (provincial capital) settlement cards.
+Clamped between 1 and 20. Applies from the next panel open/refresh onwards.
 @function SetMaxSlotsMajor
-@tparam number slots max slot count to display
-@treturn number the applied value, or nil if rejected
+@tparam integer slots max slot count to display (1 to 20)
+@treturn integer|nil applied override value, or nil if invalid
+@usage
+-- Show up to 8 slots for provincial capitals:
+twdll.campaign_ui.SetMaxSlotsMajor(8)
 */
 static int SetMaxSlotsMajor(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));
@@ -211,12 +215,14 @@ static int SetMaxSlotsMajor(lua_State* L) {
 }
 
 /***
-Overrides the maximum number of building slots shown on the minor settlement
-cards in the settlement panel. Clamped to 1..20. Applies from the next panel
-open/refresh onwards. Values below 1 are rejected (no-op).
+Overrides the maximum number of building slots displayed on minor settlement cards in the settlement panel.
+Clamped between 1 and 20. Applies from the next panel open/refresh onwards.
 @function SetMaxSlotsMinor
-@tparam number slots max slot count to display
-@treturn number the applied value, or nil if rejected
+@tparam integer slots max slot count to display (1 to 20)
+@treturn integer|nil applied override value, or nil if invalid
+@usage
+-- Show up to 6 slots for minor settlements:
+twdll.campaign_ui.SetMaxSlotsMinor(6)
 */
 static int SetMaxSlotsMinor(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));
@@ -229,9 +235,11 @@ static int SetMaxSlotsMinor(lua_State* L) {
 }
 
 /***
-Returns the currently configured major-slot override, or nil if none is set.
+Returns the currently configured major settlement slot display override, or nil if using the game default (6).
 @function GetMaxSlotsMajor
-@treturn number|nil slots
+@treturn integer|nil configured max slots, or nil if default
+@usage
+local major_slots = twdll.campaign_ui.GetMaxSlotsMajor()
 */
 static int GetMaxSlotsMajor(lua_State* L) {
     if (g_settlement_max_slots_override_major <= 0) { l_pushnil(L); return 1; }
@@ -240,9 +248,11 @@ static int GetMaxSlotsMajor(lua_State* L) {
 }
 
 /***
-Returns the currently configured minor-slot override, or nil if none is set.
+Returns the currently configured minor settlement slot display override, or nil if using the game default (4).
 @function GetMaxSlotsMinor
-@treturn number|nil slots
+@treturn integer|nil configured max slots, or nil if default
+@usage
+local minor_slots = twdll.campaign_ui.GetMaxSlotsMinor()
 */
 static int GetMaxSlotsMinor(lua_State* L) {
     if (g_settlement_max_slots_override_minor <= 0) { l_pushnil(L); return 1; }
@@ -251,8 +261,10 @@ static int GetMaxSlotsMinor(lua_State* L) {
 }
 
 /***
-Restores the game default max-slot count (4, or 6 for the main settlement card).
+Clears custom settlement slot UI limits and restores the vanilla game defaults (6 for major, 4 for minor).
 @function ClearMaxSlots
+@usage
+twdll.campaign_ui.ClearMaxSlots()
 */
 static int ClearMaxSlots(lua_State* L) {
     g_settlement_max_slots_override_major = 0;
@@ -262,8 +274,10 @@ static int ClearMaxSlots(lua_State* L) {
 }
 
 /***
-Forces an immediate visual refresh of all settlement building models on the campaign map.
+Forces an immediate visual re-render of all settlement building models across the campaign map.
 @function RefreshSettlements
+@usage
+twdll.campaign_ui.RefreshSettlements()
 */
 static int RefreshSettlements(lua_State*) {
     refresh_settlements_display();
@@ -271,13 +285,18 @@ static int RefreshSettlements(lua_State*) {
 }
 
 /***
-Sets the base URL prefix for the in-game encyclopedia (defaults to "http://Atenc.totalwar.com/#").
-If a custom URL is provided, all in-game encyclopedia links (unit cards, buildings, technologies,
-and the main encyclopedia button) will open using this base URL. Passing nil or an empty string
-restores the original default URL.
+Sets the base URL prefix for the in-game encyclopedia (defaults to `"http://Atenc.totalwar.com/#"`).
+All in-game encyclopedia hyperlinks (unit cards, building tree, tech tree, faction help)
+will open using this base URL. Passing nil or an empty string restores the vanilla URL.
 @function SetEncyclopediaUrl
-@tparam string|nil url new base encyclopedia URL (e.g. "http://localhost:8080/#")
+@tparam string|nil url new base encyclopedia URL (e.g. `"http://localhost:8080/#"`), or nil to restore default
 @treturn string the currently applied base URL
+@usage
+-- Point encyclopedia to a local offline documentation server:
+twdll.campaign_ui.SetEncyclopediaUrl("http://localhost:8080/#")
+
+-- Restore default official web URL:
+twdll.campaign_ui.SetEncyclopediaUrl(nil)
 */
 static int SetEncyclopediaUrl(lua_State* L) {
     if (!g_encyclopedia_url_ptr_addr) {
@@ -320,9 +339,11 @@ static int SetEncyclopediaUrl(lua_State* L) {
 }
 
 /***
-Returns the current base URL prefix for the in-game encyclopedia.
+Returns the currently active base URL prefix for the in-game encyclopedia.
 @function GetEncyclopediaUrl
 @treturn string current base encyclopedia URL
+@usage
+local enc_url = twdll.campaign_ui.GetEncyclopediaUrl()
 */
 static int GetEncyclopediaUrl(lua_State* L) {
     if (!g_encyclopedia_url_ptr_addr) {

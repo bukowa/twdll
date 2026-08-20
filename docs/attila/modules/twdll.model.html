@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><strong>twdll.model</strong></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><strong>twdll.model</strong></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,8 +72,8 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#DisbandUnits">DisbandUnits (units)</a></td>
-	<td class="summary">Disbands (permanently removes) one or more units from the game.</td>
+	<td class="name" nowrap><a href="#DisbandUnits">DisbandUnits (...)</a></td>
+	<td class="summary">Disbands and removes one or more units across any military forces in the campaign world in a single transaction.</td>
 	</tr>
 </table>
 
@@ -86,25 +86,30 @@
     <dl class="function">
     <dt>
     <a name = "DisbandUnits"></a>
-    <strong>DisbandUnits (units)</strong>
+    <strong>DisbandUnits (...)</strong>
     </dt>
     <dd>
-    Disbands (permanently removes) one or more units from the game.  This mirrors
-the game's own UNIT::disband_units path, so each unit is fully removed from
-the world and all bookkeeping (events, dirty flags, force teardown) runs
-correctly. Unlike a bare container remove, this is save/load safe.
+    Disbands and removes one or more units across any military forces in the campaign world in a single transaction. </p>
+
+<p>Handles full removal from the campaign world, updating army bookkeeping, disband events, and UI state.
 
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">units</span>
-         vararg userdata, one or more UNIT userdata values to disband
+        <li><span class="parameter">...</span>
+            <span class="types"><span class="type">UNIT_SCRIPT_INTERFACE</span></span>
+         one or more unit objects to disband
         </li>
     </ul>
 
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Disband arbitrary units across the campaign:
+</span>twdll.model.<span class="function-name">DisbandUnits</span>(unit1, unit2)</pre>
+    </ul>
 
 </dd>
 </dl>

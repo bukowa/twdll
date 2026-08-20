@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><strong>SLOT_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><strong>SLOT_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,20 +72,20 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the slot object as a hexadecimal string.</td>
-	</tr>
-	<tr>
 	<td class="name" nowrap><a href="#GetBuildingRotation">GetBuildingRotation ()</a></td>
-	<td class="summary">Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).</td>
+	<td class="summary">Building model 3D rotation step on the campaign map (0 to 5, in 60-degree increments: <code>0°</code>, <code>60°</code>, <code>120°</code>, <code>180°</code>, <code>240°</code>, <code>300°</code>).</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetBuildingRotation">SetBuildingRotation (rotation)</a></td>
-	<td class="summary">Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).</td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Memory address of the slot object in hexadecimal format.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#Refresh">Refresh ()</a></td>
-	<td class="summary">Forces an immediate visual refresh of settlement building models on the campaign map.</td>
+	<td class="summary">Forces an immediate visual refresh of settlement building 3D models on the campaign map.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetBuildingRotation">SetBuildingRotation (rotation)</a></td>
+	<td class="summary">Sets the building model 3D rotation step on the campaign map (0 to 5, representing 60-degree increments).</td>
 	</tr>
 </table>
 
@@ -97,11 +97,36 @@
 
     <dl class="function">
     <dt>
+    <a name = "GetBuildingRotation"></a>
+    <strong>GetBuildingRotation ()</strong>
+    </dt>
+    <dd>
+    Building model 3D rotation step on the campaign map (0 to 5, in 60-degree increments: <code>0°</code>, <code>60°</code>, <code>120°</code>, <code>180°</code>, <code>240°</code>, <code>300°</code>).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        rotation index (0 to 5)
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> rot = slot:<span class="function-name">GetBuildingRotation</span>()
+<span class="comment">-- rot is an integer 0..5 (0 = 0 deg, 1 = 60 deg, 2 = 120 deg, etc.)</span></pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "GetMemoryAddress"></a>
     <strong>GetMemoryAddress ()</strong>
     </dt>
     <dd>
-    Returns the memory address of the slot object as a hexadecimal string.
+    Memory address of the slot object in hexadecimal format.
 
 
 
@@ -114,48 +139,10 @@
 
 
 
-
-</dd>
-    <dt>
-    <a name = "GetBuildingRotation"></a>
-    <strong>GetBuildingRotation ()</strong>
-    </dt>
-    <dd>
-    Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        rotation index (0..5)
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetBuildingRotation"></a>
-    <strong>SetBuildingRotation (rotation)</strong>
-    </dt>
-    <dd>
-    Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).
-Persisted across save/load. Call <code>twdll.campaign_ui.RefreshSettlements()</code> or <code>slot:Refresh()</code> to apply visual changes on the campaign map.
-
-
-    <h3>Parameters:</h3>
+    <h3>Usage:</h3>
     <ul>
-        <li><span class="parameter">rotation</span>
-            <span class="types"><span class="type">integer</span></span>
-         new rotation index (0..5)
-        </li>
+        <pre class="example"><span class="keyword">local</span> addr = slot:<span class="function-name">GetMemoryAddress</span>()</pre>
     </ul>
-
-
-
-
 
 </dd>
     <dt>
@@ -163,13 +150,45 @@ Persisted across save/load. Call <code>twdll.campaign_ui.RefreshSettlements()</c
     <strong>Refresh ()</strong>
     </dt>
     <dd>
-    Forces an immediate visual refresh of settlement building models on the campaign map.
+    Forces an immediate visual refresh of settlement building 3D models on the campaign map.
 
 
 
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">slot:<span class="function-name">Refresh</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetBuildingRotation"></a>
+    <strong>SetBuildingRotation (rotation)</strong>
+    </dt>
+    <dd>
+    Sets the building model 3D rotation step on the campaign map (0 to 5, representing 60-degree increments).
+Persisted across save/load. Call <a href="../modules/SLOT_SCRIPT_INTERFACE.html#Refresh">Refresh</a> or <a href="../modules/twdll.campaign_ui.html#RefreshSettlements">twdll.campaign_ui.RefreshSettlements</a> to immediately update the visual 3D asset in-game.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">rotation</span>
+            <span class="types"><span class="type">integer</span></span>
+         new rotation index (0 to 5, modulo 6 applied automatically)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Rotate building by 180 degrees (step 3) and update visuals:
+</span>slot:<span class="function-name">SetBuildingRotation</span>(<span class="number">3</span>)
+slot:<span class="function-name">Refresh</span>()</pre>
+    </ul>
 
 </dd>
 </dl>

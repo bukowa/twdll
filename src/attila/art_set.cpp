@@ -26,9 +26,11 @@ static TW_CampaignCharacterArtSetRecord* GetRecord(TW_CharacterDetailsArtSetInfo
 }
 
 /***
-Returns the art set record key ID (e.g. "att_cult_barbarian").
+Art set record key ID from `campaign_character_art_sets_tables` (e.g. `"att_huns_general_01"`, `"att_general_nomadic_16"`).
 @function GetKey
 @treturn string art set record key
+@usage
+local art_key = art_set:GetKey()
 */
 static int GetKey(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -44,9 +46,11 @@ static int GetKey(lua_State* L) {
 }
 
 /***
-Returns the allocated culture key.
+Allocated culture key for this art set (e.g. `"att_cult_nomadic"`, `"att_cult_roman"`).
 @function GetCulture
-@treturn string culture key
+@treturn string culture database key
+@usage
+local culture = art_set:GetCulture()
 */
 static int GetCulture(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -59,9 +63,11 @@ static int GetCulture(lua_State* L) {
 }
 
 /***
-Returns the allocated subculture key.
+Allocated subculture key for this art set (e.g. `"att_sub_cult_nomadic_hunnic"`).
 @function GetSubculture
-@treturn string subculture key
+@treturn string subculture database key
+@usage
+local subculture = art_set:GetSubculture()
 */
 static int GetSubculture(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -74,9 +80,11 @@ static int GetSubculture(lua_State* L) {
 }
 
 /***
-Returns the allocated faction key.
+Allocated faction key for this art set (e.g. `"att_fact_hunni"`), or empty string if culture-wide.
 @function GetFaction
-@treturn string faction key
+@treturn string faction database key
+@usage
+local faction_key = art_set:GetFaction()
 */
 static int GetFaction(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -89,9 +97,13 @@ static int GetFaction(lua_State* L) {
 }
 
 /***
-Returns the allocated agent type key (e.g. "general", "champion").
+Allocated agent type key (e.g. `"general"`, `"champion"`, `"spy"`, `"dignitary"`).
 @function GetAgent
-@treturn string agent key
+@treturn string agent database key
+@usage
+if art_set:GetAgent() == "general" then
+    -- Art set is designed for army commanders
+end
 */
 static int GetAgent(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -104,9 +116,13 @@ static int GetAgent(lua_State* L) {
 }
 
 /***
-Returns whether this art set is a custom override.
+Checks whether this art set is a custom unique set (e.g. Attila or historical general).
 @function IsCustom
-@treturn boolean true if custom art set
+@treturn boolean true if this is a custom unique art set, false otherwise
+@usage
+if art_set:IsCustom() then
+    -- Unique historical art set
+end
 */
 static int IsCustom(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -116,9 +132,11 @@ static int IsCustom(lua_State* L) {
 }
 
 /***
-Returns whether this art set is male.
+Checks whether this art set represents a male character model.
 @function IsMale
-@treturn boolean true if male
+@treturn boolean true if male, false if female
+@usage
+local is_male = art_set:IsMale()
 */
 static int IsMale(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -128,9 +146,11 @@ static int IsMale(lua_State* L) {
 }
 
 /***
-Returns whether this art set supports aging variations.
+Checks whether this art set supports visual aging stages (young, middle-aged, old).
 @function HasAging
-@treturn boolean true if aging enabled
+@treturn boolean true if aging variations are enabled
+@usage
+local has_aging = art_set:HasAging()
 */
 static int HasAging(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -139,9 +159,11 @@ static int HasAging(lua_State* L) {
 }
 
 /***
-Returns whether this art set supports seasonal variations.
+Checks whether this art set supports seasonal visual variations (winter furs/gear).
 @function HasSeasonal
-@treturn boolean true if seasonal enabled
+@treturn boolean true if seasonal variations are enabled
+@usage
+local has_seasonal = art_set:HasSeasonal()
 */
 static int HasSeasonal(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -150,9 +172,11 @@ static int HasSeasonal(lua_State* L) {
 }
 
 /***
-Returns whether this art set supports levelling / rank variations.
+Checks whether this art set supports rank-based visual upgrades (improved armor/regalia with character rank).
 @function HasLevelling
-@treturn boolean true if levelling enabled
+@treturn boolean true if levelling variations are enabled
+@usage
+local has_levelling = art_set:HasLevelling()
 */
 static int HasLevelling(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -161,9 +185,11 @@ static int HasLevelling(lua_State* L) {
 }
 
 /***
-Returns whether this art set supports health variations.
+Checks whether this art set supports health/wound visual variations.
 @function HasHealth
-@treturn boolean true if health variation enabled
+@treturn boolean true if health variation is enabled
+@usage
+local has_health = art_set:HasHealth()
 */
 static int HasHealth(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -172,9 +198,11 @@ static int HasHealth(lua_State* L) {
 }
 
 /***
-Returns whether this art set supports religion variations.
+Checks whether this art set supports religious visual variations.
 @function HasReligion
-@treturn boolean true if religion variation enabled
+@treturn boolean true if religion variation is enabled
+@usage
+local has_religion = art_set:HasReligion()
 */
 static int HasReligion(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -183,9 +211,13 @@ static int HasReligion(lua_State* L) {
 }
 
 /***
-Returns whether this art set is specifically for faction leaders.
+Checks whether this art set is specifically configured for faction leaders (e.g. wearing crowns/diadems).
 @function IsFactionLeaderSet
-@treturn boolean true if faction leader set
+@treturn boolean true if configured as a faction leader art set
+@usage
+if art_set:IsFactionLeaderSet() then
+    -- Character wears regal faction leader visual assets
+end
 */
 static int IsFactionLeaderSet(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -194,9 +226,11 @@ static int IsFactionLeaderSet(lua_State* L) {
 }
 
 /***
-Returns the resolved 2D portrait diffuse PNG path for this character.
+Resolved 2D portrait diffuse PNG file path used by the UI.
 @function GetPortraitPath
-@treturn string portrait diffuse file path
+@treturn string portrait diffuse file path (e.g. `"UI/Portraits/Portholes/att_cult_nomadic/att_frontend_faction_leader_huns_0.png"`)
+@usage
+local png_path = art_set:GetPortraitPath()
 */
 static int GetPortraitPath(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -212,9 +246,11 @@ static int GetPortraitPath(lua_State* L) {
 }
 
 /***
-Returns the unique portrait settings ID string (e.g. "att_general_barbarian_01").
+Unique 3D portrait camera settings ID string (e.g. `"att_huns_general_010"`).
 @function GetSettingsId
 @treturn string portrait settings unique identifier
+@usage
+local cam_id = art_set:GetSettingsId()
 */
 static int GetSettingsId(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);
@@ -228,9 +264,11 @@ static int GetSettingsId(lua_State* L) {
 }
 
 /***
-Returns the campaign group key (e.g. "main"), or empty string if none.
+Campaign group key from `campaign_character_art_set_groups_tables` (e.g. `"main"`), or empty string if none.
 @function GetGroup
 @treturn string campaign group key
+@usage
+local group_key = art_set:GetGroup()
 */
 static int GetGroup(lua_State* L) {
     auto* info = twdll::tw_unwrap<TW_CharacterDetailsArtSetInfo>(L, 1);

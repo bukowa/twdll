@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><strong>twdll.core</strong></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><strong>twdll.core</strong></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,16 +72,16 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#Log">Log (...)</a></td>
-	<td class="summary">Log a message or arbitrary values to twdll.log.</td>
-	</tr>
-	<tr>
 	<td class="name" nowrap><a href="#GameBuild">GameBuild ()</a></td>
-	<td class="summary">Returns the game build name.</td>
+	<td class="summary">Returns the target game build name (e.g.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetBuildSha">GetBuildSha ()</a></td>
 	<td class="summary">Returns the git commit SHA hash from which the DLL was compiled.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Log">Log (...)</a></td>
+	<td class="summary">Log a message or arbitrary values to <code>twdll.log</code>.</td>
 	</tr>
 </table>
 
@@ -93,33 +93,11 @@
 
     <dl class="function">
     <dt>
-    <a name = "Log"></a>
-    <strong>Log (...)</strong>
-    </dt>
-    <dd>
-    Log a message or arbitrary values to twdll.log.
- Accepts any number of arguments of any type, converting them via Lua tostring.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">...</span>
-            <span class="types"><span class="type">any</span></span>
-         values to log
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
     <a name = "GameBuild"></a>
     <strong>GameBuild ()</strong>
     </dt>
     <dd>
-    Returns the game build name.
+    Returns the target game build name (e.g.  <code>&quot;Attila&quot;</code>).
 
 
 
@@ -127,11 +105,15 @@
     <ol>
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        game name (e.g. "Attila")
+        game name
     </ol>
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> game_name = twdll.core.<span class="function-name">GameBuild</span>()</pre>
+    </ul>
 
 </dd>
     <dt>
@@ -155,6 +137,32 @@
     <h3>Usage:</h3>
     <ul>
         <pre class="example"><span class="keyword">local</span> sha = twdll.core.<span class="function-name">GetBuildSha</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "Log"></a>
+    <strong>Log (...)</strong>
+    </dt>
+    <dd>
+    Log a message or arbitrary values to <code>twdll.log</code>.
+ Accepts any number of arguments of any type, converting them via Lua tostring.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">...</span>
+            <span class="types"><span class="type">any</span></span>
+         values to log
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.core.<span class="function-name">Log</span>(<span class="string">"Campaign initialized. Turn:"</span>, <span class="number">1</span>, <span class="string">"Faction:"</span>, faction:<span class="function-name">name</span>())</pre>
     </ul>
 
 </dd>

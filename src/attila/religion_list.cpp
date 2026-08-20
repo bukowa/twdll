@@ -20,9 +20,11 @@ static ReligionListUserdata* get_religion_list(lua_State* L) {
 }
 
 /***
-Returns the number of religions present in this list.
+Number of religious denominations in this list.
 @function num_items
 @treturn integer number of religions
+@usage
+local count = rel_list:num_items()
 */
 static int ReligionListNumItems(lua_State* L) {
     auto* list = get_religion_list(L);
@@ -31,10 +33,16 @@ static int ReligionListNumItems(lua_State* L) {
 }
 
 /***
-Returns the religion at a zero-based index, or nil when out of bounds.
+Retrieves the religion object (@{RELIGION_SCRIPT_INTERFACE}) at a zero-based index (`0` to `num_items() - 1`).
 @function item_at
 @tparam integer index zero-based list index
-@treturn userdata RELIGION_SCRIPT_INTERFACE or nil
+@treturn RELIGION_SCRIPT_INTERFACE|nil religion object, or nil when out of bounds
+@usage
+for i = 0, rel_list:num_items() - 1 do
+    local rel = rel_list:item_at(i)
+    local key = rel:GetKey()
+    local pct = rel:GetProportion() * 100
+end
 */
 static int ReligionListItemAt(lua_State* L) {
     auto* list = get_religion_list(L);
@@ -52,9 +60,13 @@ static int ReligionListItemAt(lua_State* L) {
 }
 
 /***
-Returns whether this religion list is empty.
+Checks whether this religion list is empty.
 @function is_empty
-@treturn boolean true when the list has no religions
+@treturn boolean true when the list has no religions, false otherwise
+@usage
+if not rel_list:is_empty() then
+    local dominant_rel = rel_list:item_at(0)
+end
 */
 static int ReligionListIsEmpty(lua_State* L) {
     auto* list = get_religion_list(L);

@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><strong>MILITARY_FORCE_SCRIPT_INTERFACE</strong></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><strong>MILITARY_FORCE_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,28 +72,28 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
-	<td class="summary">Returns the memory address of the military force object as a hexadecimal string.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetRecruitmentQueueSize">GetRecruitmentQueueSize ()</a></td>
-	<td class="summary">Returns the number of units in the recruitment queue.</td>
-	</tr>
-	<tr>
 	<td class="name" nowrap><a href="#DisbandUnits">DisbandUnits (...)</a></td>
-	<td class="summary">Disbands (permanently removes) one or more units from this military force.</td>
+	<td class="summary">Disbands one or more units from this military force in a single engine transaction.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetIntegrity">GetIntegrity ()</a></td>
-	<td class="summary">Returns the current integrity (army morale) value between 0.0 and 100.0, or nil if none.</td>
+	<td class="summary">Current integrity (army morale) value of the military force.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#SetIntegrity">SetIntegrity (value)</a></td>
-	<td class="summary">Sets the integrity (army morale) value, clamped between 0.0 and 100.0.</td>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Memory address of the military force object in hexadecimal format.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetRecruitmentQueueSize">GetRecruitmentQueueSize ()</a></td>
+	<td class="summary">Number of units currently in this military force's recruitment queue.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#HasIntegrity">HasIntegrity ()</a></td>
-	<td class="summary">Returns whether this military force uses the integrity / army morale system.</td>
+	<td class="summary">Checks whether this military force tracks integrity (army morale).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetIntegrity">SetIntegrity (value)</a></td>
+	<td class="summary">Sets the integrity (army morale) value for this military force, clamped between 0.0 and 100.0.</td>
 	</tr>
 </table>
 
@@ -105,58 +105,19 @@
 
     <dl class="function">
     <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
-    </dt>
-    <dd>
-    Returns the memory address of the military force object as a hexadecimal string.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678")
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetRecruitmentQueueSize"></a>
-    <strong>GetRecruitmentQueueSize ()</strong>
-    </dt>
-    <dd>
-    Returns the number of units in the recruitment queue.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        number of units
-    </ol>
-
-
-
-
-</dd>
-    <dt>
     <a name = "DisbandUnits"></a>
     <strong>DisbandUnits (...)</strong>
     </dt>
     <dd>
-    Disbands (permanently removes) one or more units from this military force.
-Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit<em>list:item</em>at), passed as varargs.
+    Disbands one or more units from this military force in a single engine transaction.
+Accepts UNIT userdata objects or zero-based list indices matching <code>unit_list:item_at</code>.
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">...</span>
-         unit userdata or integer indices to disband
+            <span class="types"><span class="type">UNIT_SCRIPT_INTERFACE</span> or <span class="type">integer</span></span>
+         unit objects or 0-based integer indices to disband
         </li>
     </ul>
 
@@ -169,6 +130,15 @@ Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit<e
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Option 1: Disband using unit userdata objects:
+</span><span class="keyword">local</span> ul = force:<span class="function-name">unit_list</span>()
+force:<span class="function-name">DisbandUnits</span>(ul:<span class="function-name">item_at</span>(<span class="number">0</span>), ul:<span class="function-name">item_at</span>(<span class="number">1</span>))
+
+<span class="comment">-- Option 2: Disband using 0-based list indices:
+</span>force:<span class="function-name">DisbandUnits</span>(<span class="number">0</span>, <span class="number">1</span>)</pre>
+    </ul>
 
 </dd>
     <dt>
@@ -176,19 +146,103 @@ Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit<e
     <strong>GetIntegrity ()</strong>
     </dt>
     <dd>
-    Returns the current integrity (army morale) value between 0.0 and 100.0, or nil if none.
+    Current integrity (army morale) value of the military force.
 
 
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">number</span></span>
-        integrity value (0.0 to 100.0) or nil
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        integrity value (0.0 to 100.0), or nil if the force has no integrity tracker
     </ol>
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> integrity = force:<span class="function-name">GetIntegrity</span>()
+<span class="keyword">if</span> integrity <span class="keyword">and</span> integrity &lt; <span class="number">25.0</span> <span class="keyword">then</span>
+    <span class="comment">-- Force is suffering from severe mutiny / desertion risks
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Memory address of the military force object in hexadecimal format.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = force:<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetRecruitmentQueueSize"></a>
+    <strong>GetRecruitmentQueueSize ()</strong>
+    </dt>
+    <dd>
+    Number of units currently in this military force's recruitment queue.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        queued unit count
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> queue_size = force:<span class="function-name">GetRecruitmentQueueSize</span>()
+<span class="keyword">if</span> queue_size &gt; <span class="number">0</span> <span class="keyword">then</span>
+    <span class="comment">-- Force is actively recruiting
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "HasIntegrity"></a>
+    <strong>HasIntegrity ()</strong>
+    </dt>
+    <dd>
+    Checks whether this military force tracks integrity (army morale).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the force has integrity tracking, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> force:<span class="function-name">HasIntegrity</span>() <span class="keyword">then</span>
+    <span class="keyword">local</span> morale = force:<span class="function-name">GetIntegrity</span>()
+<span class="keyword">end</span></pre>
+    </ul>
 
 </dd>
     <dt>
@@ -196,7 +250,7 @@ Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit<e
     <strong>SetIntegrity (value)</strong>
     </dt>
     <dd>
-    Sets the integrity (army morale) value, clamped between 0.0 and 100.0.
+    Sets the integrity (army morale) value for this military force, clamped between 0.0 and 100.0.
 
 
     <h3>Parameters:</h3>
@@ -216,26 +270,11 @@ Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit<e
 
 
 
-
-</dd>
-    <dt>
-    <a name = "HasIntegrity"></a>
-    <strong>HasIntegrity ()</strong>
-    </dt>
-    <dd>
-    Returns whether this military force uses the integrity / army morale system.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">boolean</span></span>
-        true if the force has integrity tracking
-    </ol>
-
-
-
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Restore army morale / integrity to 100%:
+</span>force:<span class="function-name">SetIntegrity</span>(<span class="number">100.0</span>)</pre>
+    </ul>
 
 </dd>
 </dl>

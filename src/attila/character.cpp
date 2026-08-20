@@ -26,37 +26,63 @@ namespace Props {
 }
 
 /***
-Returns the memory address of the character object as a hexadecimal string.
+Memory address of the character object in hexadecimal format.
 @function GetMemoryAddress
 @treturn string memory address (e.g. "0x12345678")
+@usage
+local addr = char:GetMemoryAddress()
 */
 static int GetMemoryAddress (lua_State* L) { return tw_mem_address(L, "character", CHAR_PTR); }
 
 /***
-Gets the current action points of the character.
+Current campaign action points remaining for the character.
 @function GetActionPoints
 @treturn integer action points
+@usage
+local ap = char:GetActionPoints()
+if ap < 20 then
+    -- Replenish movement points if army is exhausted:
+    char:SetActionPoints(100)
+end
 */
 static int GetActionPoints  (lua_State* L) { return Props::ActionPoints.get(L); }
 
 /***
-Sets the action points of the character.
+Sets the campaign action points for the character.
 @function SetActionPoints
-@tparam integer value new action points
+@tparam integer value new action points (e.g. 0 to immobilize, 100+ for full movement)
+@treturn boolean true on success, false otherwise
+@usage
+-- Immobilize character for one turn:
+char:SetActionPoints(0)
+
+-- Restore full movement range:
+char:SetActionPoints(100)
 */
 static int SetActionPoints  (lua_State* L) { return Props::ActionPoints.set(L); }
 
 /***
-Gets the political influence of the character (m_political_gravitas).
+Political influence / gravitas of the character.
+Used by the politics and senate simulation to evaluate political power and family standing.
 @function GetInfluence
-@treturn integer influence
+@treturn integer influence value
+@usage
+local gravitas = char:GetInfluence()
+if gravitas < 15 then
+    -- Character lacks gravitas to secure ministerial offices
+end
 */
 static int GetInfluence     (lua_State* L) { return Props::Influence.get(L); }
 
 /***
-Sets the political influence of the character (m_political_gravitas).
+Sets the political influence / gravitas of the character.
+Persisted in savegames. Directly modifies the character's political weight in the faction senate.
 @function SetInfluence
-@tparam integer value new influence
+@tparam integer value new influence value
+@treturn boolean true on success, false otherwise
+@usage
+-- Elevate character influence to qualify for high political office:
+char:SetInfluence(60)
 */
 static int SetInfluence     (lua_State* L) { return Props::Influence.set(L); }
 
@@ -64,12 +90,15 @@ static int SetInfluence     (lua_State* L) { return Props::Influence.set(L); }
 Overrides the default bodyguard unit record for a general so that whenever
 the general is recruited into an army (including re-recruitment after being
 wounded or disbanded, or through 'Replace this general' in the UI), they
-receive this unit type as their default bodyguard. The record is stored directly
-in the persistent GENERAL_BODYGUARD_DETAILS struct (serialised with savegames)
-and read by the recruitment panel as the pre-selected default choice.
+receive this unit type as their default bodyguard.
+
+Persisted natively in savegames and read by the recruitment panel as the pre-selected default choice.
 @function SetDefaultBodyGuard
-@tparam string unit_key unit record key (e.g. "att_rom_cav_general_guards")
+@tparam string unit_key unit record key from `main_units_tables` (e.g. `"att_rom_cav_general_guards"`, `"att_merc_ger_agathyrsi_warriors"`)
 @treturn boolean true if the record was found and applied, false otherwise
+@usage
+-- Assign an elite bodyguard to the general:
+local ok = char:SetDefaultBodyGuard("att_merc_ger_agathyrsi_warriors")
 */
 static int SetDefaultBodyGuard(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -114,9 +143,16 @@ static int SetDefaultBodyGuard(lua_State* L) {
 void push_campaign_political_party(lua_State* L, twdll::TW_CampaignPoliticalParty* party);
 
 /***
-Returns the character's campaign political party, or nil if none.
+Returns the character's political party (@{CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE}), or nil if none.
 @function GetPoliticalParty
-@treturn userdata CAMPAIGN_POLITICAL_PARTY or nil
+@treturn CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE|nil party object, or nil if none
+@usage
+local party = char:GetPoliticalParty()
+if party and not party:IsPrimary() then
+    -- Character belongs to an opposition house; reassign to the ruling party:
+    local ruler_party = faction:GetPrimaryParty()
+    char:SetPoliticalParty(ruler_party)
+end
 */
 static int GetPoliticalParty(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -146,11 +182,23 @@ static int GetPoliticalParty(lua_State* L) {
 }
 
 /***
-Sets the character's political party allegiance. Accepts either a
-CAMPAIGN_POLITICAL_PARTY userdata or a party record key string.
+Sets the character's political party allegiance.
+
+Supports two calling styles:
+- **Party userdata**: `char:SetPoliticalParty(party_obj)`
+- **Party record key string**: `char:SetPoliticalParty("att_politics_hunni_council")`
+
+Directly updates the character's party pointer in memory and updates family tree representation.
 @function SetPoliticalParty
-@tparam userdata|string party CAMPAIGN_POLITICAL_PARTY object or party record key (e.g. "att_political_party_romans_1")
+@tparam CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE|string party party object or party record key string
 @treturn boolean true if successfully set, false otherwise
+@usage
+-- Option 1: Assign via party userdata:
+local ruler_party = faction:GetPrimaryParty()
+char:SetPoliticalParty(ruler_party)
+
+-- Option 2: Assign via database record key:
+char:SetPoliticalParty("att_politics_hunni_council")
 */
 static int SetPoliticalParty(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -206,9 +254,19 @@ void push_art_set(lua_State* L, twdll::TW_CharacterDetailsArtSetInfo* art_info);
 bool SetCharacterArtSet(twdll::TW_CharacterDetailsArtSetInfo* info, const char* art_set_key);
 
 /***
-Returns the ARTSET_SCRIPT_INTERFACE for this character, or nil if none.
+Returns the @{ARTSET_SCRIPT_INTERFACE} for this character, or nil if none.
+Allows inspecting portrait paths, cultural variations, gender, aging, and faction leader flags.
 @function GetArtSet
-@treturn userdata ARTSET_SCRIPT_INTERFACE or nil
+@treturn ARTSET_SCRIPT_INTERFACE|nil character art set interface, or nil if none
+@usage
+local art_set = char:GetArtSet()
+if art_set then
+    local path = art_set:GetPortraitPath()
+    -- Sample path: "UI/Portraits/Portholes/att_cult_nomadic/att_frontend_faction_leader_huns_0.png"
+    if not art_set:IsMale() then
+        -- Process female character art set
+    end
+end
 */
 static int GetArtSet(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -221,10 +279,13 @@ static int GetArtSet(lua_State* L) {
 }
 
 /***
-Sets the art set for this character, updating all 3D models (campaign, battle, politician) and 2D portraits.
+Sets the art set for this character, immediately updating all 3D models (campaign map avatar, battle commander, politician panel) and 2D UI portholes/portraits.
 @function SetArtSet
-@tparam string art_set_key art set ID key (e.g. "att_huns_general_01")
+@tparam string art_set_key art set ID key from `campaign_character_art_sets_tables` (e.g. `"att_general_nomadic_16"`)
 @treturn boolean true on success, false on failure
+@usage
+-- Swap general appearance and portrait:
+char:SetArtSet("att_general_nomadic_16")
 */
 static int SetArtSet(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -240,10 +301,18 @@ static int SetArtSet(lua_State* L) {
 
 /***
 Adds the specified character trait to this character using the engine's native command queue.
+Automatically calculates and applies all associated trait effect bundles and attribute bonuses.
 @function AddTrait
-@tparam string trait_key the trait record key (e.g. "att_trait_all_personality_brave")
-@tparam[opt=false] boolean show_message whether to show the on-screen event message
+@tparam string trait_key the trait record key from `character_traits_tables` (e.g. `"att_trait_all_personality_brave"`)
+@tparam[opt=1] integer points trait level / points to grant (default: 1)
+@tparam[opt=false] boolean show_message whether to trigger the on-screen event notification message (default: false)
 @treturn boolean true on success, false otherwise
+@usage
+-- Add 1 point of brave trait silently:
+char:AddTrait("att_trait_all_personality_brave", 1, false)
+
+-- Add trait with on-screen notification:
+char:AddTrait("att_trait_all_personality_brave", 1, true)
 */
 static int AddTrait(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -283,10 +352,13 @@ static int AddTrait(lua_State* L) {
 }
 
 /***
-Removes the specified trait from this character and recalculates active character bonus effects.
+Removes the specified trait from this character and recalculates active character bonus effects and skill attributes.
 @function RemoveTrait
 @tparam string trait_key the trait record key to remove
 @treturn boolean true if the trait was found and removed, false otherwise
+@usage
+-- Remove a specific personality trait:
+local ok = char:RemoveTrait("att_trait_all_personality_brave")
 */
 static int RemoveTrait(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -341,9 +413,27 @@ static int RemoveTrait(lua_State* L) {
 }
 
 /***
-Returns a list of all trait keys currently present on this character.
+Returns a table array of all trait record keys currently present on this character.
 @function GetTraitList
-@treturn table array of trait key strings (e.g. {"att_trait_all_personality_brave", ...})
+@treturn table array of trait key strings (e.g. `{"att_trait_all_personality_brave", ...}`)
+@usage
+-- Sample returned table:
+-- {
+--     [1] = "att_trait_all_personality_brave",
+--     [2] = "att_trait_general_cavalry_commander",
+--     [3] = "att_trait_all_political_ambitious"
+-- }
+
+local traits = char:GetTraitList()
+
+-- Check if character has a specific trait:
+local is_brave = false
+for _, trait_key in ipairs(traits) do
+    if trait_key == "att_trait_all_personality_brave" then
+        is_brave = true
+        break
+    end
+end
 */
 static int GetTraitList(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -375,10 +465,15 @@ static int GetTraitList(lua_State* L) {
 }
 
 /***
-Gets the current calculated total loyalty of the character (0 to 10), taking into account
+Calculated total loyalty level of the character (0 to 10), taking into account
 ruler authority, gravitas difference, marriage, ministerial offices, traits, and direct modifiers.
 @function GetLoyalty
 @treturn integer total loyalty level clamped between 0 and 10
+@usage
+local loyalty = char:GetLoyalty()
+if loyalty <= 2 then
+    -- Character is dangerously disloyal and at imminent risk of civil war or rebellion
+end
 */
 static int GetLoyalty(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -399,9 +494,11 @@ static int GetLoyalty(lua_State* L) {
 }
 
 /***
-Gets the direct loyalty modifier value (Factor 26 at offset +0x4C8) for this character.
+Direct loyalty modifier value applied to this character.
 @function GetLoyaltyModifier
-@treturn integer loyalty modifier value
+@treturn integer loyalty modifier value (between -128 and 127)
+@usage
+local mod = char:GetLoyaltyModifier()
 */
 static int GetLoyaltyModifier(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -414,13 +511,18 @@ static int GetLoyaltyModifier(lua_State* L) {
 }
 
 /***
-Sets the direct loyalty modifier value (Factor 26 at offset +0x4C8) for this character.
-This value is directly added to the character's 32 loyalty factor sum during loyalty evaluation.
-To permanently zero out or prime a character for rebellion/defection, call:
-  char:SetLoyaltyModifier(-100) or char:SetLoyaltyModifier(-char:GetLoyalty())
+Sets a direct loyalty modifier on the character that directly alters their overall loyalty score.
+
+To permanently zero out loyalty or prime a character for rebellion/defection, pass a strong negative value (e.g. `-100`).
 @function SetLoyaltyModifier
 @tparam integer value new modifier value (-128 to 127)
 @treturn boolean true on success, false otherwise
+@usage
+-- Prime character for civil war / defection:
+char:SetLoyaltyModifier(-100)
+
+-- Reward character with a loyalty boost (+10):
+char:SetLoyaltyModifier(10)
 */
 static int SetLoyaltyModifier(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -440,10 +542,34 @@ static int SetLoyaltyModifier(lua_State* L) {
 }
 
 /***
-Returns a table breakdown of all active loyalty factors contributing to this character's loyalty.
-Each key is the genuine database key from loyalty_factors_tables and its integer point value.
+Returns a key-value dictionary table breakdown of all active loyalty factors contributing to this character's loyalty.
+Each key is the database identifier from `loyalty_factors_tables` mapped to its integer point value (positive for loyalty bonuses, negative for grievances and penalties).
 @function GetLoyaltyFactorList
-@treturn table map of db_factor_key -> integer point value for all non-zero factors
+@treturn table map of `[db_factor_key] = integer_point_value` for all active non-zero factors
+@usage
+-- Sample returned table:
+-- {
+--     ["att_loyalty_factor_leader_authority"] = 2,
+--     ["att_loyalty_factor_gravitas_difference"] = -3,
+--     ["att_loyalty_factor_office_held"] = 1,
+--     ["att_loyalty_factor_direct_modifier"] = -10
+-- }
+
+local factors = char:GetLoyaltyFactorList()
+
+-- Check a specific grievance penalty:
+local gravitas_penalty = factors["att_loyalty_factor_gravitas_difference"] or 0
+if gravitas_penalty < 0 then
+    -- Character resents the faction leader having lower gravitas
+end
+
+-- Sum total negative grievances:
+local total_grievances = 0
+for factor_key, points in pairs(factors) do
+    if points < 0 then
+        total_grievances = total_grievances + points
+    end
+end
 */
 static int GetLoyaltyFactorList(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
@@ -500,10 +626,10 @@ Automatic engine side-effects:
 - Reloads character voiceover culture and lines if the receiving faction is human-controlled.
 
 @function TransferToFaction
-@tparam userdata target_faction Target `FACTION_SCRIPT_INTERFACE` receiving the character and their force.
-@tparam[opt] table options Optional table `{ replenish_units = false, rebel_region = nil }`:
+@tparam FACTION_SCRIPT_INTERFACE target_faction target faction receiving the character and their force
+@tparam[opt] table options optional table `{ replenish_units = false, rebel_region = nil }`:
 - `replenish_units` (boolean): if true, restores all units in the force to 100% full soldier capacity.
-- `rebel_region` (userdata): optional `REGION_SCRIPT_INTERFACE`. When provided, binds the force to this region's rebel manager (`force->m_rebel_manager`), marking it as a local provincial rebel army (`is_rebel_army = true`) with rebel AI objectives and unrest clearing upon defeat.
+- `rebel_region` (@{REGION_SCRIPT_INTERFACE}|nil): optional region interface. When provided, binds the army to this region as a provincial rebel force with rebel AI objectives and unrest reduction upon defeat.
 @treturn boolean true on success, false otherwise
 @usage -- Basic transfer:
 char:TransferToFaction(target_faction)
@@ -736,7 +862,7 @@ static int GetFullName(lua_State* L) {
 }
 
 /***
-Gets the active onscreen forename of the character.
+Active onscreen forename of the character.
 Returns custom text if set via @{SetForename}, or the translated string from the database if set via @{SetForenameKey}, or the database key as fallback.
 @function GetForename
 @treturn string forename string
@@ -771,7 +897,7 @@ static int SetForename(lua_State* L) {
 }
 
 /***
-Gets the database localisation key for the character's forename (e.g. "names_name_12345").
+Database localisation key for the character's forename (e.g. `"names_name_12345"`).
 Returns the raw key string if assigned via database or @{SetForenameKey}, or an empty string if direct custom text was assigned via @{SetForename}.
 @function GetForenameKey
 @treturn string database localisation key string, or empty string if custom text is used
@@ -786,7 +912,7 @@ static int GetForenameKey(lua_State* L) {
 }
 
 /***
-Sets the database localisation key for the character's forename (e.g. "names_name_12345").
+Sets the database localisation key for the character's forename (e.g. `"names_name_12345"`).
 Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (`names.loc`) based on the player's active language. Persisted natively across turns and save/load.
 To assign arbitrary text without editing database files, use @{SetForename} instead.
 @function SetForenameKey
@@ -806,7 +932,7 @@ static int SetForenameKey(lua_State* L) {
 }
 
 /***
-Gets the active onscreen family name (surname) of the character.
+Active onscreen family name (surname) of the character.
 Returns custom text if set via @{SetFamilyName}, or the translated string from the database if set via @{SetFamilyNameKey}, or the database key as fallback.
 @function GetFamilyName
 @treturn string family name string
@@ -841,7 +967,7 @@ static int SetFamilyName(lua_State* L) {
 }
 
 /***
-Gets the database localisation key for the character's family name (e.g. "names_name_12345").
+Database localisation key for the character's family name (e.g. `"names_name_12345"`).
 Returns the raw key string if assigned via database or @{SetFamilyNameKey}, or an empty string if direct custom text was assigned via @{SetFamilyName}.
 @function GetFamilyNameKey
 @treturn string database localisation key string, or empty string if custom text is used
@@ -856,7 +982,7 @@ static int GetFamilyNameKey(lua_State* L) {
 }
 
 /***
-Sets the database localisation key for the character's family name (e.g. "names_name_12345").
+Sets the database localisation key for the character's family name (e.g. `"names_name_12345"`).
 Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (`names.loc`) based on the player's active language. Persisted natively across turns and save/load.
 To assign arbitrary text without editing database files, use @{SetFamilyName} instead.
 @function SetFamilyNameKey
@@ -876,7 +1002,7 @@ static int SetFamilyNameKey(lua_State* L) {
 }
 
 /***
-Gets the active onscreen clan name of the character.
+Active onscreen clan name of the character.
 Returns custom text if set via @{SetClanName}, or the translated string from the database if set via @{SetClanNameKey}, or the database key as fallback.
 @function GetClanName
 @treturn string clan name string
@@ -911,7 +1037,7 @@ static int SetClanName(lua_State* L) {
 }
 
 /***
-Gets the database localisation key for the character's clan name (e.g. "names_name_12345").
+Database localisation key for the character's clan name (e.g. `"names_name_12345"`).
 Returns the raw key string if assigned via database or @{SetClanNameKey}, or an empty string if direct custom text was assigned via @{SetClanName}.
 @function GetClanNameKey
 @treturn string database localisation key string, or empty string if custom text is used
@@ -926,7 +1052,7 @@ static int GetClanNameKey(lua_State* L) {
 }
 
 /***
-Sets the database localisation key for the character's clan name (e.g. "names_name_12345").
+Sets the database localisation key for the character's clan name (e.g. `"names_name_12345"`).
 Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (`names.loc`) based on the player's active language. Persisted natively across turns and save/load.
 To assign arbitrary text without editing database files, use @{SetClanName} instead.
 @function SetClanNameKey
@@ -946,7 +1072,7 @@ static int SetClanNameKey(lua_State* L) {
 }
 
 /***
-Gets the active onscreen other name (title / nickname) of the character.
+Active onscreen other name (title / nickname) of the character.
 Returns custom text if set via @{SetOtherName}, or the translated string from the database if set via @{SetOtherNameKey}, or the database key as fallback.
 @function GetOtherName
 @treturn string other name string
@@ -981,7 +1107,7 @@ static int SetOtherName(lua_State* L) {
 }
 
 /***
-Gets the database localisation key for the character's other name/title (e.g. "names_titles_the_great").
+Database localisation key for the character's other name/title (e.g. `"names_titles_the_great"`).
 Returns the raw key string if assigned via database or @{SetOtherNameKey}, or an empty string if direct custom text was assigned via @{SetOtherName}.
 @function GetOtherNameKey
 @treturn string database localisation key string, or empty string if custom text is used
@@ -996,7 +1122,7 @@ static int GetOtherNameKey(lua_State* L) {
 }
 
 /***
-Sets the database localisation key for the character's other name/title (e.g. "names_titles_the_great").
+Sets the database localisation key for the character's other name/title (e.g. `"names_titles_the_great"`).
 Clears any active custom in-memory text, allowing the game engine to translate the title dynamically from localized database files (`names.loc`) based on the player's active language. Persisted natively across turns and save/load.
 To assign arbitrary text without editing database files, use @{SetOtherName} instead.
 @function SetOtherNameKey
@@ -1016,7 +1142,7 @@ static int SetOtherNameKey(lua_State* L) {
 }
 
 /***
-Checks if the character is flagged as immortal (will be wounded instead of dying).
+Checks whether the character is flagged as immortal (will be wounded instead of dying).
 @function IsImmortal
 @treturn boolean true if immortal, false otherwise
 @usage local immortal = char:IsImmortal()
@@ -1056,7 +1182,7 @@ static int SetImmortal(lua_State* L) {
 }
 
 /***
-Gets the turns remaining until resurrection for a wounded immortal character.
+Turns remaining until resurrection for a wounded immortal character.
 @function GetResurrectionTurns
 @treturn integer turns to resurrection
 @usage local turns = char:GetResurrectionTurns()

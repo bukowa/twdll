@@ -35,6 +35,13 @@ function M.type_iterator (list,field,value)
       local ldoc = M.item_ldoc(fls[1])
       if ldoc and ldoc.sort then
          fls:sort(function(ia,ib)
+            if ia.type == "module" and ib.type == "module" then
+               local a_is_twdll = ia.name:sub(1, 6) == "twdll."
+               local b_is_twdll = ib.name:sub(1, 6) == "twdll."
+               if a_is_twdll ~= b_is_twdll then
+                  return a_is_twdll
+               end
+            end
             return ia.name < ib.name
          end)
       end

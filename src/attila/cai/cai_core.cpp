@@ -56,10 +56,22 @@ static bool get_boolean_arg(lua_State* L, int idx, bool default_val) {
 }
 
 /***
-Enables or disables real-time Campaign AI decision logging to twdll.log.
+Enables or disables real-time Campaign AI decision telemetry output to `twdll.log`.
+
+When enabled, logs the entire evaluating reasoning chain:
+- Faction context & persona.
+- Environmental drivers and strategic needs (food, squalor, threats).
+- Candidate option set with mathematical weights/probabilities.
+- Chosen decision outcome or explicit rejection reasons.
 @function EnableLogging
-@tparam[opt] boolean enabled whether CAI logging is enabled
+@tparam[opt] boolean enabled whether CAI telemetry logging is enabled
 @treturn boolean current enabled state
+@usage
+-- Enable Campaign AI telemetry output:
+twdll.cai.EnableLogging(true)
+
+-- Query current telemetry state:
+local is_logging = twdll.cai.EnableLogging()
 */
 static int EnableLogging(lua_State* L) {
     if (l_type(L, 1) == LUA_TBOOLEAN) {

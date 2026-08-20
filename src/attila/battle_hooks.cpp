@@ -138,12 +138,31 @@ void uninstall_battle_hook() {
 }
 
 /***
-Returns live information about the current battle. Returns nil while no battle
-is active (e.g. in the campaign). Inside a battle, returns a table with the
-battle object address, the reinforcements manager address, the reinforcement
-cap and the number of reinforcement armies currently waiting.
+Returns live runtime telemetry and reinforcement structure about the current tactical battle.
+Returns nil while no battle is active (e.g. on the campaign map).
+
+When inside a battle, returns a table with fields:
+- `battle` (string): hexadecimal memory address of the `BATTLE` object.
+- `manager` (string|nil): hexadecimal memory address of `REINFORCEMENTS_MANAGER`.
+- `cap` (integer|nil): active maximum units per army in battle.
+- `size` (integer|nil): number of reinforcing armies currently queued.
 @function GetBattleInfo
-@treturn[opt] table battle info, or nil when no battle is active
+@treturn table|nil table containing battle state, or nil when not in a tactical battle
+@usage
+-- Example returned table:
+-- {
+--     ["battle"] = "0x2A4F8900",
+--     ["manager"] = "0x2A4F8B40",
+--     ["cap"] = 40,
+--     ["size"] = 2
+-- }
+
+local info = twdll.battle.GetBattleInfo()
+if info then
+    if info.size and info.size > 0 then
+        -- Reinforcements are queued to enter the battlefield
+    end
+end
 */
 static int GetBattleInfo(lua_State* L) {
     if (!g_battle) {

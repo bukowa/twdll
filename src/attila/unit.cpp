@@ -21,65 +21,101 @@ namespace Props {
 }
 
 /***
-Returns the memory address of the unit object as a hexadecimal string.
+Memory address of the unit object in hexadecimal format.
 @function GetMemoryAddress
 @treturn string memory address (e.g. "0x12345678")
+@usage
+local addr = unit:GetMemoryAddress()
 */
 static int GetMemoryAddress    (lua_State* L) { return tw_mem_address(L, "unit", UNIT_PTR); }
 
 /***
-Gets the current number of men in the unit.
+Current number of surviving soldiers in the unit.
 @function GetNumMen
 @treturn integer current number of men
+@usage
+local men = unit:GetNumMen()
+local max_men = unit:GetMaxNumMen()
+if men < max_men * 0.5 then
+    -- Unit is below 50% strength and heavily depleted
+end
 */
 static int GetNumMen        (lua_State* L) { return Props::NumMen.get(L); }
 
 /***
-Sets the current number of men in the unit.
+Sets the number of surviving soldiers in the unit.
+Immediately updates the unit's health bar and strength percentage.
 @function SetNumMen
-@tparam integer value new number of men
+@tparam integer value new number of men (clamped between 0 and `max_num_men`)
+@treturn boolean true on success, false otherwise
+@usage
+-- Replenish unit immediately to full strength:
+unit:SetNumMen(unit:GetMaxNumMen())
+
+-- Or set specific casualty count after an event:
+unit:SetNumMen(20)
 */
 static int SetNumMen        (lua_State* L) { return Props::NumMen.set(L); }
 
 /***
-Gets the maximum number of men the unit can have.
+Maximum soldier capacity (full strength count) for this unit.
 @function GetMaxNumMen
 @treturn integer maximum number of men
+@usage
+local max_men = unit:GetMaxNumMen()
 */
 static int GetMaxNumMen     (lua_State* L) { return Props::MaxNumMen.get(L); }
 
 /***
-Sets the maximum number of men the unit can have.
+Sets the maximum soldier capacity (full strength count) for this unit.
 @function SetMaxNumMen
 @tparam integer value new maximum number of men
+@treturn boolean true on success, false otherwise
+@usage
+-- Increase unit max strength cap to 150:
+unit:SetMaxNumMen(150)
 */
 static int SetMaxNumMen     (lua_State* L) { return Props::MaxNumMen.set(L); }
 
 /***
-Gets the action points remaining for the unit.
+Remaining movement action points for this unit.
 @function GetActionPoints
 @treturn integer action points
+@usage
+local ap = unit:GetActionPoints()
 */
 static int GetActionPoints  (lua_State* L) { return Props::ActionPoints.get(L); }
 
 /***
-Sets the action points for the unit.
+Sets the movement action points for this unit.
 @function SetActionPoints
 @tparam integer value new action points
+@treturn boolean true on success, false otherwise
+@usage
+-- Reset unit action points:
+unit:SetActionPoints(100)
 */
 static int SetActionPoints  (lua_State* L) { return Props::ActionPoints.set(L); }
 
 /***
-Replaces the unit with a new unit of the given type, in the same army, using
-the engine's own unit conversion path (the same one used for religion and
-technology upgrades). The new unit preserves the old unit's health proportion
-(men count scaled to the new unit size), experience and combat statistics. If the
-unit is a general's bodyguard, the character's persistent bodyguard snapshot is
-also updated. The old unit object is destroyed in the process, so the original unit
-reference is no longer valid afterwards.
+Replaces the unit with a new unit type in the same military force (matching the engine upgrade path).
+
+Key mechanics:
+- Scales soldier count proportionally to the new unit's max capacity.
+- Preserves experience chevron rank, battle kills, and combat statistics.
+- If the unit is a general's bodyguard, synchronises the commander's bodyguard record.
+- **Note**: Destroys the old unit object; retrieve the replacement from the force's unit list.
 @function ConvertUnit
-@tparam string unit_key the unit record key (e.g. "att_inf_melee_spear_att")
+@tparam string unit_key the unit record key from `main_units_tables` (e.g. `"att_merc_ger_agathyrsi_warriors"`, `"att_inf_melee_spear_att"`)
 @treturn boolean true if the unit was converted, false otherwise
+@usage
+-- Upgrade or convert a unit in an army:
+local unit = force:unit_list():item_at(0)
+local ok = unit:ConvertUnit("att_merc_ger_agathyrsi_warriors")
+if ok then
+    -- Note: 'unit' is now invalid; fetch the updated unit from force:unit_list()
+    local updated_unit = force:unit_list():item_at(0)
+end
 */
 static int ConvertUnit(lua_State* L) {
     if (!g_convert_unit || !g_record_index) {
@@ -179,11 +215,14 @@ static int ConvertUnit(lua_State* L) {
 }
 
 /***
-Disbands (permanently removes) this unit from its military force. This mirrors the game's
-own UNIT::disband_units path, so the unit is fully removed from the world and all
-bookkeeping (events, dirty flags, force teardown) runs correctly. Save/load safe.
+Disbands and removes this unit from its military force.
+
+Updates campaign force state, unit counts, and UI bookkeeping in a single transaction. Save/load safe.
 @function Disband
 @treturn boolean true if successfully disbanded, false otherwise
+@usage
+local unit = force:unit_list():item_at(force:unit_list():num_items() - 1)
+local ok = unit:Disband()
 */
 static int Disband(lua_State* L) {
     if (!g_disband_units || !g_campaign_model) {

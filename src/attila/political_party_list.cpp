@@ -19,9 +19,11 @@ static PartyListUserdata* get_party_list(lua_State* L) {
 }
 
 /***
-Returns the number of political parties in this list.
+Number of political parties in this list.
 @function num_items
 @treturn integer number of parties
+@usage
+local count = party_list:num_items()
 */
 static int PartyListNumItems(lua_State* L) {
     auto* list = get_party_list(L);
@@ -30,10 +32,17 @@ static int PartyListNumItems(lua_State* L) {
 }
 
 /***
-Returns the political party at a zero-based index, or nil when out of bounds.
+Retrieves the political party at a zero-based index (`0` to `num_items() - 1`).
 @function item_at
 @tparam integer index zero-based list index
-@treturn userdata CAMPAIGN_POLITICAL_PARTY or nil
+@treturn CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE|nil political party object, or nil when out of bounds
+@usage
+for i = 0, party_list:num_items() - 1 do
+    local party = party_list:item_at(i)
+    if party:IsPrimary() then
+        -- Found ruling party
+    end
+end
 */
 static int PartyListItemAt(lua_State* L) {
     auto* list = get_party_list(L);
@@ -53,9 +62,13 @@ static int PartyListItemAt(lua_State* L) {
 }
 
 /***
-Returns whether this political party list is empty.
+Checks whether this political party list is empty.
 @function is_empty
-@treturn boolean true when the list has no parties
+@treturn boolean true when the list has no parties, false otherwise
+@usage
+if not party_list:is_empty() then
+    local first_party = party_list:item_at(0)
+end
 */
 static int PartyListIsEmpty(lua_State* L) {
     auto* list = get_party_list(L);

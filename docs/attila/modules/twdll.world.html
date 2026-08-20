@@ -39,23 +39,23 @@
 
 <h2>Modules</h2>
 <ul class="nowrap">
-  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
-  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
-  <li><strong>twdll.world</strong></li>
-  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
-  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
-  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
-  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><strong>twdll.world</strong></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
 </ul>
 
 </div>
@@ -72,46 +72,45 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#GetFactionCount">GetFactionCount ()</a></td>
+	<td class="summary">Gets the total number of factions existing in the current campaign world.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxTraits">GetMaxTraits ()</a></td>
+	<td class="summary">Gets the maximum number of traits a character can hold simultaneously (vanilla default is 10).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxUnitsInArmy">GetMaxUnitsInArmy ()</a></td>
+	<td class="summary">Gets the maximum number of units allowed per land army (vanilla default: 20).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxUnitsInNavy">GetMaxUnitsInNavy ()</a></td>
+	<td class="summary">Gets the maximum number of units allowed per naval fleet (vanilla default: 20).</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
 	<td class="summary">Returns the memory address of the WORLD singleton as a hexadecimal string.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#GetFactionCount">GetFactionCount ()</a></td>
-	<td class="summary">Gets the number of factions in the current campaign.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMaxUnitsInArmy">GetMaxUnitsInArmy ()</a></td>
-	<td class="summary">Gets the maximum number of units allowed in an army.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetMaxUnitsInArmy">SetMaxUnitsInArmy (val)</a></td>
-	<td class="summary">Sets the maximum number of units allowed in an army.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMaxUnitsInNavy">GetMaxUnitsInNavy ()</a></td>
-	<td class="summary">Gets the maximum number of units allowed in a navy.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetMaxUnitsInNavy">SetMaxUnitsInNavy (val)</a></td>
-	<td class="summary">Sets the maximum number of units allowed in a navy.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#SetReinforcementCap">SetReinforcementCap (max_units)</a></td>
-	<td class="summary">Sets the reinforcement cap (max units per army in battle) for battles started
-after the call.</td>
-	</tr>
-	<tr>
 	<td class="name" nowrap><a href="#GetReinforcementCap">GetReinforcementCap ()</a></td>
-	<td class="summary">Returns the currently applied reinforcement cap, or nil if the game default is
-in effect.</td>
-	</tr>
-	<tr>
-	<td class="name" nowrap><a href="#GetMaxTraits">GetMaxTraits ()</a></td>
-	<td class="summary">Gets the maximum number of traits a character can have at any one time (vanilla default is 10).</td>
+	<td class="summary">Returns the currently applied reinforcement cap override, or nil if the game default is in effect.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetMaxTraits">SetMaxTraits (val)</a></td>
-	<td class="summary">Sets the maximum number of traits a character can have at any one time.</td>
+	<td class="summary">Sets the maximum number of traits a character can hold simultaneously.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxUnitsInArmy">SetMaxUnitsInArmy (val)</a></td>
+	<td class="summary">Sets the maximum number of units allowed per land army.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxUnitsInNavy">SetMaxUnitsInNavy (val)</a></td>
+	<td class="summary">Sets the maximum number of units allowed per naval fleet.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetReinforcementCap">SetReinforcementCap (max_units)</a></td>
+	<td class="summary">Sets the reinforcement cap (maximum concurrent units per army in tactical battles) for battles started
+after this call.</td>
 	</tr>
 </table>
 
@@ -123,169 +122,27 @@ in effect.</td>
 
     <dl class="function">
     <dt>
-    <a name = "GetMemoryAddress"></a>
-    <strong>GetMemoryAddress ()</strong>
-    </dt>
-    <dd>
-    Returns the memory address of the WORLD singleton as a hexadecimal string.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        memory address (e.g. "0x12345678"), or nil if not yet initialised
-    </ol>
-
-
-
-
-</dd>
-    <dt>
     <a name = "GetFactionCount"></a>
     <strong>GetFactionCount ()</strong>
     </dt>
     <dd>
-    Gets the number of factions in the current campaign.
+    Gets the total number of factions existing in the current campaign world.
 
 
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">integer</span></span>
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
         number of factions, or nil if not yet initialised
     </ol>
 
 
 
-
-</dd>
-    <dt>
-    <a name = "GetMaxUnitsInArmy"></a>
-    <strong>GetMaxUnitsInArmy ()</strong>
-    </dt>
-    <dd>
-    Gets the maximum number of units allowed in an army.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        maximum unit count
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMaxUnitsInArmy"></a>
-    <strong>SetMaxUnitsInArmy (val)</strong>
-    </dt>
-    <dd>
-    Sets the maximum number of units allowed in an army.
-
-
-    <h3>Parameters:</h3>
+    <h3>Usage:</h3>
     <ul>
-        <li><span class="parameter">val</span>
-            <span class="types"><span class="type">integer</span></span>
-         maximum unit count
-        </li>
+        <pre class="example"><span class="keyword">local</span> total_factions = twdll.world.<span class="function-name">GetFactionCount</span>()</pre>
     </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetMaxUnitsInNavy"></a>
-    <strong>GetMaxUnitsInNavy ()</strong>
-    </dt>
-    <dd>
-    Gets the maximum number of units allowed in a navy.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        maximum unit count
-    </ol>
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetMaxUnitsInNavy"></a>
-    <strong>SetMaxUnitsInNavy (val)</strong>
-    </dt>
-    <dd>
-    Sets the maximum number of units allowed in a navy.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">val</span>
-            <span class="types"><span class="type">integer</span></span>
-         maximum unit count
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "SetReinforcementCap"></a>
-    <strong>SetReinforcementCap (max_units)</strong>
-    </dt>
-    <dd>
-    Sets the reinforcement cap (max units per army in battle) for battles started
-after the call.  Pass -1 to restore the game default (disable the override).
-Any value >= 0 is applied as-is.
-
-
-    <h3>Parameters:</h3>
-    <ul>
-        <li><span class="parameter">max_units</span>
-            <span class="types"><span class="type">integer</span></span>
-         new cap value, or -1 to restore the default
-        </li>
-    </ul>
-
-
-
-
-
-</dd>
-    <dt>
-    <a name = "GetReinforcementCap"></a>
-    <strong>GetReinforcementCap ()</strong>
-    </dt>
-    <dd>
-    Returns the currently applied reinforcement cap, or nil if the game default is
-in effect.
-
-
-
-    <h3>Returns:</h3>
-    <ol>
-
-           <span class="types"><span class="type">integer</span></span>
-        current cap value
-    </ol>
-
-
-
 
 </dd>
     <dt>
@@ -293,7 +150,7 @@ in effect.
     <strong>GetMaxTraits ()</strong>
     </dt>
     <dd>
-    Gets the maximum number of traits a character can have at any one time (vanilla default is 10).
+    Gets the maximum number of traits a character can hold simultaneously (vanilla default is 10).
 
 
 
@@ -306,6 +163,109 @@ in effect.
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> max_traits = twdll.world.<span class="function-name">GetMaxTraits</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMaxUnitsInArmy"></a>
+    <strong>GetMaxUnitsInArmy ()</strong>
+    </dt>
+    <dd>
+    Gets the maximum number of units allowed per land army (vanilla default: 20).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum unit count
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> max_army_units = twdll.world.<span class="function-name">GetMaxUnitsInArmy</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMaxUnitsInNavy"></a>
+    <strong>GetMaxUnitsInNavy ()</strong>
+    </dt>
+    <dd>
+    Gets the maximum number of units allowed per naval fleet (vanilla default: 20).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum unit count
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> max_navy_units = twdll.world.<span class="function-name">GetMaxUnitsInNavy</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the WORLD singleton as a hexadecimal string.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">nil</span></span>
+        memory address (e.g. "0x12345678"), or nil if not yet initialised
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = twdll.world.<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetReinforcementCap"></a>
+    <strong>GetReinforcementCap ()</strong>
+    </dt>
+    <dd>
+    Returns the currently applied reinforcement cap override, or nil if the game default is in effect.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        current cap value, or nil if default
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> cap = twdll.world.<span class="function-name">GetReinforcementCap</span>()
+<span class="keyword">if</span> cap <span class="keyword">then</span>
+    <span class="comment">-- An override is currently active
+</span><span class="keyword">end</span></pre>
+    </ul>
 
 </dd>
     <dt>
@@ -313,7 +273,8 @@ in effect.
     <strong>SetMaxTraits (val)</strong>
     </dt>
     <dd>
-    Sets the maximum number of traits a character can have at any one time.
+    Sets the maximum number of traits a character can hold simultaneously.
+Prevents new traits from being discarded when a character exceeds 10 traits.
 
 
     <h3>Parameters:</h3>
@@ -327,6 +288,96 @@ in effect.
 
 
 
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Expand character trait limit to 30:
+</span>twdll.world.<span class="function-name">SetMaxTraits</span>(<span class="number">30</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMaxUnitsInArmy"></a>
+    <strong>SetMaxUnitsInArmy (val)</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of units allowed per land army.
+Affects recruitment limits, army stacking, and UI capacity.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">val</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum unit count (e.g. 40)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Allow up to 40 units per land army:
+</span>twdll.world.<span class="function-name">SetMaxUnitsInArmy</span>(<span class="number">40</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMaxUnitsInNavy"></a>
+    <strong>SetMaxUnitsInNavy (val)</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of units allowed per naval fleet.
+Affects naval recruitment limits and fleet stacking.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">val</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum unit count (e.g. 30)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Allow up to 30 ships per naval fleet:
+</span>twdll.world.<span class="function-name">SetMaxUnitsInNavy</span>(<span class="number">30</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetReinforcementCap"></a>
+    <strong>SetReinforcementCap (max_units)</strong>
+    </dt>
+    <dd>
+    Sets the reinforcement cap (maximum concurrent units per army in tactical battles) for battles started
+after this call.  Pass <code>-1</code> to restore the vanilla engine default.
+Any value <code>&gt;= 0</code> is applied as an absolute cap.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">max_units</span>
+            <span class="types"><span class="type">integer</span></span>
+         new cap value (e.g. 40, 80), or -1 to restore the default
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Allow up to 40 reinforcement units simultaneously in tactical battle:
+</span>twdll.world.<span class="function-name">SetReinforcementCap</span>(<span class="number">40</span>)
+
+<span class="comment">-- Restore vanilla behavior:
+</span>twdll.world.<span class="function-name">SetReinforcementCap</span>(-<span class="number">1</span>)</pre>
+    </ul>
 
 </dd>
 </dl>

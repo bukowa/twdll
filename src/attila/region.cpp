@@ -23,16 +23,23 @@ static TW_FACTION_PROVINCE_MANAGER* get_fpm(lua_State* L) {
 }
 
 /***
-Returns the memory address of the region object as a hexadecimal string.
+Memory address of the region object in hexadecimal format.
 @function GetMemoryAddress
 @treturn string memory address (e.g. "0x12345678")
+@usage
+local addr = region:GetMemoryAddress()
 */
 static int GetMemoryAddress    (lua_State* L) { return tw_mem_address(L, "region", REGION_PTR); }
 
 /***
-Gets the population surplus for the region (points used to expand settlement slots).
+Province development population surplus points (used to unlock new building slots).
 @function GetPopulationSurplus
-@treturn integer population surplus
+@treturn integer population surplus points
+@usage
+local surplus = region:GetPopulationSurplus()
+if surplus >= 4 then
+    -- Province has enough surplus points to expand settlement slots
+end
 */
 static int GetPopulationSurplus(lua_State* L) {
     auto* fpm = get_fpm(L);
@@ -42,9 +49,13 @@ static int GetPopulationSurplus(lua_State* L) {
 }
 
 /***
-Sets the population surplus for the region (points used to expand settlement slots).
+Sets the province development population surplus points (used to unlock new building slots).
+Persisted in savegames and immediately reflected in province development UI.
 @function SetPopulationSurplus
-@tparam integer value new population surplus
+@tparam integer value new population surplus value (>= 0)
+@usage
+-- Grant 5 population surplus points for fast slot expansion:
+region:SetPopulationSurplus(5)
 */
 static int SetPopulationSurplus(lua_State* L) {
     auto* fpm = get_fpm(L);
@@ -55,9 +66,11 @@ static int SetPopulationSurplus(lua_State* L) {
 }
 
 /***
-Gets the number of growth points for the region (accumulated growth).
+Accumulated province growth points progressing towards the next population surplus point.
 @function GetGrowthPoints
-@treturn integer number of growth points
+@treturn integer accumulated growth points
+@usage
+local growth = region:GetGrowthPoints()
 */
 static int GetGrowthPoints(lua_State* L) {
     auto* fpm = get_fpm(L);
@@ -67,9 +80,11 @@ static int GetGrowthPoints(lua_State* L) {
 }
 
 /***
-Sets the number of growth points for the region (accumulated growth).
+Sets the accumulated province growth points progressing towards the next population surplus point.
 @function SetGrowthPoints
-@tparam integer value new number of growth points
+@tparam integer value new growth points value
+@usage
+region:SetGrowthPoints(500)
 */
 static int SetGrowthPoints(lua_State* L) {
     auto* fpm = get_fpm(L);
@@ -82,9 +97,18 @@ static int SetGrowthPoints(lua_State* L) {
 void push_religion_list(lua_State* L, const twdll::TW_ReligionProportion* items, int count);
 
 /***
-Returns the list of religions present in this region.
+List interface (@{RELIGION_LIST_SCRIPT_INTERFACE}) containing all religious denominations present in this region.
+Use `num_items()` and zero-based `item_at(index)` to iterate through the breakdown.
 @function GetReligionList
-@treturn userdata RELIGION_LIST_SCRIPT_INTERFACE
+@treturn RELIGION_LIST_SCRIPT_INTERFACE list interface containing all religions present in this region
+@usage
+local rel_list = region:GetReligionList()
+for i = 0, rel_list:num_items() - 1 do
+    local rel = rel_list:item_at(i)
+    local key = rel:GetKey()
+    local pct = rel:GetProportion() * 100
+    -- e.g. key = "att_rel_chr_catholic", pct = 75.0
+end
 */
 static int GetReligionList(lua_State* L) {
     auto* region = twdll::tw_unwrap<TW_Region>(L, 1);
@@ -99,10 +123,15 @@ static int GetReligionList(lua_State* L) {
 }
 
 /***
-Returns the raw proportion (0.0 to 1.0) of a specific religion in this region.
+Proportion of a specific religion in this region as a normalized float (0.0 to 1.0).
 @function GetReligionProportion
-@tparam string religion_key database key of the religion
+@tparam string religion_key database key from `religions_tables` (e.g. `"att_rel_chr_catholic"`, `"att_rel_pagan_germanic"`)
 @treturn number religion proportion (0.0 to 1.0), or 0.0 if not present
+@usage
+local pagan_pct = region:GetReligionProportion("att_rel_pagan_germanic") * 100
+if pagan_pct > 50.0 then
+    -- Paganism is the dominant majority religion in this region
+end
 */
 static int GetReligionProportion(lua_State* L) {
     auto* region = twdll::tw_unwrap<TW_Region>(L, 1);

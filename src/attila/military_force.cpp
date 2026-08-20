@@ -16,25 +16,39 @@ namespace Props {
 }
 
 /***
-Returns the memory address of the military force object as a hexadecimal string.
+Memory address of the military force object in hexadecimal format.
 @function GetMemoryAddress
 @treturn string memory address (e.g. "0x12345678")
+@usage
+local addr = force:GetMemoryAddress()
 */
 static int GetMemoryAddress           (lua_State* L) { return tw_mem_address(L, "military_force", MIL_FORCE_PTR); }
 
 /***
-Returns the number of units in the recruitment queue.
+Number of units currently in this military force's recruitment queue.
 @function GetRecruitmentQueueSize
-@treturn integer number of units
+@treturn integer queued unit count
+@usage
+local queue_size = force:GetRecruitmentQueueSize()
+if queue_size > 0 then
+    -- Force is actively recruiting
+end
 */
 static int GetRecruitmentQueueSize (lua_State* L) { return Props::RecruitmentQueueSize.get(L); }
 
 /***
-Disbands (permanently removes) one or more units from this military force.
-Accepts UNIT userdata objects or integer unit indices (0-indexed matching unit_list:item_at), passed as varargs.
+Disbands one or more units from this military force in a single engine transaction.
+Accepts UNIT userdata objects or zero-based list indices matching `unit_list:item_at`.
 @function DisbandUnits
-@param ... unit userdata or integer indices to disband
+@tparam UNIT_SCRIPT_INTERFACE|integer ... unit objects or 0-based integer indices to disband
 @treturn boolean true if units were successfully disbanded, false otherwise
+@usage
+-- Option 1: Disband using unit userdata objects:
+local ul = force:unit_list()
+force:DisbandUnits(ul:item_at(0), ul:item_at(1))
+
+-- Option 2: Disband using 0-based list indices:
+force:DisbandUnits(0, 1)
 */
 static int DisbandUnits(lua_State* L) {
     if (!g_disband_units || !g_campaign_model) {
@@ -103,9 +117,14 @@ static int DisbandUnits(lua_State* L) {
 }
 
 /***
-Returns the current integrity (army morale) value between 0.0 and 100.0, or nil if none.
+Current integrity (army morale) value of the military force.
 @function GetIntegrity
-@treturn number integrity value (0.0 to 100.0) or nil
+@treturn number|nil integrity value (0.0 to 100.0), or nil if the force has no integrity tracker
+@usage
+local integrity = force:GetIntegrity()
+if integrity and integrity < 25.0 then
+    -- Force is suffering from severe mutiny / desertion risks
+end
 */
 static int GetIntegrity(lua_State* L) {
     auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);
@@ -118,10 +137,13 @@ static int GetIntegrity(lua_State* L) {
 }
 
 /***
-Sets the integrity (army morale) value, clamped between 0.0 and 100.0.
+Sets the integrity (army morale) value for this military force, clamped between 0.0 and 100.0.
 @function SetIntegrity
 @tparam number value new integrity value (0.0 to 100.0)
 @treturn boolean true on success, false otherwise
+@usage
+-- Restore army morale / integrity to 100%:
+force:SetIntegrity(100.0)
 */
 static int SetIntegrity(lua_State* L) {
     auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);
@@ -140,9 +162,13 @@ static int SetIntegrity(lua_State* L) {
 }
 
 /***
-Returns whether this military force uses the integrity / army morale system.
+Checks whether this military force tracks integrity (army morale).
 @function HasIntegrity
-@treturn boolean true if the force has integrity tracking
+@treturn boolean true if the force has integrity tracking, false otherwise
+@usage
+if force:HasIntegrity() then
+    local morale = force:GetIntegrity()
+end
 */
 static int HasIntegrity(lua_State* L) {
     auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);

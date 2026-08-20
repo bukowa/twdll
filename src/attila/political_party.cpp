@@ -11,9 +11,11 @@ using twdll::TW_CampaignPolitics;
 static const char* kPartyMetatable = "CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE";
 
 /***
-Returns the party's record key string (e.g. "att_political_party_romans_1").
+Database record key string of the political party from `political_parties_tables` (e.g. `"att_politics_hunni_ruler"`).
 @function GetKey
 @treturn string party record key
+@usage
+local key = party:GetKey()
 */
 static int GetKey(lua_State* L) {
     auto* party = twdll::tw_unwrap<TW_CampaignPoliticalParty>(L, 1);
@@ -35,23 +37,34 @@ namespace Props {
 }
 
 /***
-Returns the number of senators currently held by the party.
+Number of senators currently supporting this political party.
 @function GetSenators
 @treturn integer number of senators
+@usage
+local senators = party:GetSenators()
 */
 static int GetSenators(lua_State* L) { return Props::Senators.get(L); }
 
 /***
-Returns the current political power of the party as a float.
+Current political power of the party as a normalized proportion (e.g. `0.70` for 70% senate dominance).
 @function GetPower
-@treturn number political power
+@treturn number political power proportion (0.0 to 1.0)
+@usage
+local power_pct = party:GetPower() * 100
+if power_pct >= 60.0 then
+    -- Ruling party enjoys high political dominance
+end
 */
 static int GetPower(lua_State* L) { return Props::Power.get(L); }
 
 /***
-Returns whether this party is the faction's primary (leading) party.
+Checks whether this political party is the faction's primary (ruling) party.
 @function IsPrimary
-@treturn boolean true if this is the primary party
+@treturn boolean true if this is the primary ruling party, false otherwise
+@usage
+if party:IsPrimary() then
+    -- Party is the head of the faction
+end
 */
 static int IsPrimary(lua_State* L) {
     auto* party = twdll::tw_unwrap<TW_CampaignPoliticalParty>(L, 1);
@@ -66,15 +79,20 @@ static int IsPrimary(lua_State* L) {
 }
 
 /***
-Sets this party as the faction's primary (leading) party.
+Sets this party as the faction's primary (ruling) party.
 
-NOTE: This method sets the faction's `m_primary_party` record pointer directly.
+NOTE: This method directly assigns the ruling political party of the faction.
 It does not automatically cascade allegiance changes to existing family members
-or the faction leader. Changing the primary party without synchronizing character
-allegiances can cause UI display conflicts in the Clan / Family Tree panel (where
-characters belonging to other parties appear under 'Other Houses').
+or the faction leader. To avoid visual conflicts in the Clan / Family Tree UI
+(where family members belonging to other parties appear under 'Other Houses'),
+reassign characters using @{CHARACTER_SCRIPT_INTERFACE:SetPoliticalParty}.
 @function SetPrimary
 @treturn boolean true if successfully set, false otherwise
+@usage
+local opposition = faction:GetPoliticalParty("att_politics_hunni_council")
+if opposition and not opposition:IsPrimary() then
+    opposition:SetPrimary()
+end
 */
 static int SetPrimary(lua_State* L) {
     auto* party = twdll::tw_unwrap<TW_CampaignPoliticalParty>(L, 1);

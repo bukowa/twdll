@@ -52,18 +52,23 @@ static TW_SettlementExpansionSlot* get_expansion_slot(lua_State* L) {
 }
 
 /***
-Returns the memory address of the slot object as a hexadecimal string.
+Memory address of the slot object in hexadecimal format.
 @function GetMemoryAddress
 @treturn string memory address (e.g. "0x12345678")
+@usage
+local addr = slot:GetMemoryAddress()
 */
 static int GetMemoryAddress(lua_State* L) {
     return tw_mem_address(L, "slot", SLOT_PTR);
 }
 
 /***
-Gets the building model rotation on the campaign map (0..5, representing 60-degree increments).
+Building model 3D rotation step on the campaign map (0 to 5, in 60-degree increments: `0°`, `60°`, `120°`, `180°`, `240°`, `300°`).
 @function GetBuildingRotation
-@treturn integer rotation index (0..5)
+@treturn integer rotation index (0 to 5)
+@usage
+local rot = slot:GetBuildingRotation()
+-- rot is an integer 0..5 (0 = 0 deg, 1 = 60 deg, 2 = 120 deg, etc.)
 */
 static int GetBuildingRotation(lua_State* L) {
     auto* exp_slot = get_expansion_slot(L);
@@ -76,10 +81,14 @@ static int GetBuildingRotation(lua_State* L) {
 }
 
 /***
-Sets the building model rotation on the campaign map (0..5, representing 60-degree increments).
-Persisted across save/load. Call `twdll.campaign_ui.RefreshSettlements()` or `slot:Refresh()` to apply visual changes on the campaign map.
+Sets the building model 3D rotation step on the campaign map (0 to 5, representing 60-degree increments).
+Persisted across save/load. Call @{Refresh} or @{twdll.campaign_ui.RefreshSettlements} to immediately update the visual 3D asset in-game.
 @function SetBuildingRotation
-@tparam integer rotation new rotation index (0..5)
+@tparam integer rotation new rotation index (0 to 5, modulo 6 applied automatically)
+@usage
+-- Rotate building by 180 degrees (step 3) and update visuals:
+slot:SetBuildingRotation(3)
+slot:Refresh()
 */
 static int SetBuildingRotation(lua_State* L) {
     auto* exp_slot = get_expansion_slot(L);
@@ -90,8 +99,10 @@ static int SetBuildingRotation(lua_State* L) {
 }
 
 /***
-Forces an immediate visual refresh of settlement building models on the campaign map.
+Forces an immediate visual refresh of settlement building 3D models on the campaign map.
 @function Refresh
+@usage
+slot:Refresh()
 */
 static int Refresh(lua_State*) {
     refresh_settlements_display();
