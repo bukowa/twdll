@@ -1,8 +1,5 @@
 #include "cai_common.h"
 
-static const uintptr_t RVA_MAKE_OCCUPATION_DECISION = 0x00D05C80;
-static uintptr_t g_make_occupation_decision_addr = 0;
-
 typedef int (__thiscall *fn_make_occupation_decision)(
     void* this_ptr,
     void* faction_cai,
@@ -98,11 +95,10 @@ static int __fastcall Hooked_make_occupation_decision(
         bool is_major = false;
         __try {
             if (faction_cai) {
-                char* fc = reinterpret_cast<char*>(faction_cai);
-                num_regions = *reinterpret_cast<int*>(fc + 0xA4);
-                char* faction = *reinterpret_cast<char**>(fc + 0xEC);
-                if (faction) {
-                    is_major = *reinterpret_cast<bool*>(faction + 0x84C);
+                auto* fc = static_cast<twdll::TW_CaiFaction*>(faction_cai);
+                num_regions = fc->m_num_regions;
+                if (fc->m_faction) {
+                    is_major = fc->m_faction->is_major;
                 }
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) {}
@@ -116,8 +112,13 @@ static int __fastcall Hooked_make_occupation_decision(
 }
 
 void install_cai_occupation_hook(uintptr_t base, size_t size) {
+    (void)base;
     (void)size;
-    g_make_occupation_decision_addr = base + RVA_MAKE_OCCUPATION_DECISION;
+
+    if (!g_make_occupation_decision_addr) {
+        Log("[twdll] [CAI_OCCUPATION] signature not resolved");
+        return;
+    }
 
     MH_STATUS mhs = MH_CreateHook(
         reinterpret_cast<void*>(g_make_occupation_decision_addr),
@@ -142,7 +143,6 @@ void uninstall_cai_occupation_hook() {
     if (g_make_occupation_decision_addr) {
         MH_DisableHook(reinterpret_cast<void*>(g_make_occupation_decision_addr));
         MH_RemoveHook(reinterpret_cast<void*>(g_make_occupation_decision_addr));
-        g_make_occupation_decision_addr = 0;
     }
     orig_make_occupation_decision = nullptr;
 }

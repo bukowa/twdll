@@ -53,6 +53,7 @@
 #define GET_FACTION_RECORD_SIG "8B 81 ? ? ? ? 85 C0 75 ? 81 C1 58 01 00 00"
 #define REASSIGN_FACTION_SIG "83 EC 08 53 55 8B D9 C6 44 24 ? ? 56 57 8D 8B"
 #define SPAWN_AGENT_SIG "81 EC 08 05 00 00 53 55"
+#define MAKE_OCCUPATION_DECISION_SIG "81 EC 50 01 00 00 53 55 56 57 8B BC 24"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -65,6 +66,7 @@ uintptr_t          g_reinf_cap_insn_addr = 0;
 uintptr_t          g_battle_ctor_addr    = 0;
 uintptr_t          g_battle_dtor_addr    = 0;
 uintptr_t          g_settlement_cb_initialize_addr = 0;
+uintptr_t          g_make_occupation_decision_addr = 0;
 static uintptr_t   g_update_animation_addr = 0;
 static uintptr_t   g_force_settlement_refresh_addr = 0;
 
@@ -118,5 +120,6 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"FACTION::get_faction_record",                        (void**)&g_get_faction_record,     GET_FACTION_RECORD_SIG},
     {"CHARACTER::reassign_faction",                        (void**)&g_reassign_faction,       REASSIGN_FACTION_SIG},
     {"CHARACTER_RECRUITMENT_POOL::spawn_agent",            (void**)&g_spawn_agent,            SPAWN_AGENT_SIG},
+    {"CAI_DECISION::make_occupation_decision",             (void**)&g_make_occupation_decision_addr, MAKE_OCCUPATION_DECISION_SIG},
     {nullptr, nullptr, nullptr}
 };

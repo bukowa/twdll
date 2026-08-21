@@ -154,7 +154,9 @@ struct TW_Faction {
     int  treasury;                  // 0x7DC
     char pad_7E0[0x20];
     TW_FactionRecord* m_faction_record; // 0x800
-    char pad_804[0x8C];
+    char pad_804[0x48];
+    bool is_major;                  // 0x84C
+    char pad_84D[0x43];
     void* m_home_region;            // 0x890
     void* m_original_home_region;   // 0x894
     void* m_home_theatre;           // 0x898
@@ -373,6 +375,13 @@ struct TW_Unit {
         if (!m_force_link || !m_force_link->m_container) return nullptr;
         return m_force_link->m_container->m_military_force;
     }
+};
+
+struct TW_CaiFaction {
+    char        pad_00[0xA4];
+    int         m_num_regions; // 0xA4
+    char        pad_A8[0x44];
+    TW_Faction* m_faction;     // 0xEC
 };
 
 struct TW_CaiRegion {
@@ -622,6 +631,7 @@ struct TW_Databases {
 TW_ASSERT_OFFSET(TW_Faction,       treasury,                0x7DC);
 TW_ASSERT_OFFSET(TW_Faction,       m_faction_record,        0x800);
 TW_ASSERT_OFFSET(TW_FactionRecord, m_key,                   0x0);
+TW_ASSERT_OFFSET(TW_Faction,       is_major,                0x84C);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_region,            0x890);
 TW_ASSERT_OFFSET(TW_Faction,       m_original_home_region,   0x894);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_theatre,           0x898);
@@ -681,6 +691,8 @@ TW_ASSERT_OFFSET(TW_Unit,          num_men,                 0x44);
 TW_ASSERT_OFFSET(TW_Unit,          max_num_men,             0x48);
 TW_ASSERT_OFFSET(TW_Unit,          action_points,           0x64);
 TW_ASSERT_OFFSET(TW_Unit,          m_commander_link,        0x114);
+TW_ASSERT_OFFSET(TW_CaiFaction,    m_num_regions,           0xA4);
+TW_ASSERT_OFFSET(TW_CaiFaction,    m_faction,               0xEC);
 TW_ASSERT_OFFSET(TW_CaiRegion,     m_settlement_key,        0x114);
 TW_ASSERT_OFFSET(TW_CaiSettlement, m_cai_region,            0x10);
 TW_ASSERT_OFFSET(TW_LandStats,     charge_bonus,            0x38);

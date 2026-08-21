@@ -7,10 +7,9 @@ bool g_cai_logging_enabled = true;
 const char* get_cai_faction_key(void* faction_cai) {
     if (!faction_cai) return "null_faction";
     __try {
-        char* fc = reinterpret_cast<char*>(faction_cai);
-        auto* faction = *reinterpret_cast<twdll::TW_Faction**>(fc + 0xEC);
-        if (faction && faction->m_faction_record && faction->m_faction_record->m_key.m_data) {
-            const char* key = faction->m_faction_record->m_key.m_data;
+        auto* fc = static_cast<twdll::TW_CaiFaction*>(faction_cai);
+        if (fc && fc->m_faction && fc->m_faction->m_faction_record && fc->m_faction->m_faction_record->m_key.m_data) {
+            const char* key = fc->m_faction->m_faction_record->m_key.m_data;
             if (key[0] != '\0') return key;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {}
