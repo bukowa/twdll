@@ -2063,21 +2063,35 @@ local function run_twdll_tests()
             -- ======================================================
             -- POST-TEST LIFECYCLE: Save -> Load (Only when all tests passed!)
             -- ======================================================
-            twdll.core.Log("[TEST] [LIFECYCLE] All unit tests passed! Starting SaveGame & LoadGame verification...")
-            twdll.core.Log("[TEST] [LIFECYCLE] Step 1: Saving campaign to 'twdll_lifecycle_test'...")
-            local save_ok = twdll.world.SaveGame("twdll_lifecycle_test")
-            twdll.core.Log(string.format("[TEST] [LIFECYCLE] Save result: %s", tostring(save_ok)))
-            if save_ok then
-                local f_write = io.open(marker_file, "w")
-                if f_write then
-                    f_write:write("reload_pending\n")
-                    f_write:close()
+            local function schedule_callback(func, delay_seconds)
+                if cm and type(cm.callback) == "function" then
+                    cm:callback(func, delay_seconds)
+                elseif game and type(game.callback) == "function" then
+                    game:callback(func, delay_seconds)
+                else
+                    func()
                 end
-                twdll.core.Log("[TEST] [LIFECYCLE] Step 2: Requesting engine to load 'twdll_lifecycle_test'...")
-                twdll.world.LoadGame("twdll_lifecycle_test")
-            else
-                twdll.core.Log("[TEST] [LIFECYCLE] FAILED: SaveGame returned false!")
             end
+
+            schedule_callback(function()
+                twdll.core.Log("[TEST] [LIFECYCLE] All unit tests passed! Starting SaveGame & LoadGame verification...")
+                twdll.core.Log("[TEST] [LIFECYCLE] Step 1: Saving campaign to 'twdll_lifecycle_test' (after 1.0s delay)...")
+                local save_ok = twdll.world.SaveGame("twdll_lifecycle_test")
+                twdll.core.Log(string.format("[TEST] [LIFECYCLE] Save result: %s", tostring(save_ok)))
+                if save_ok then
+                    local f_write = io.open(marker_file, "w")
+                    if f_write then
+                        f_write:write("reload_pending\n")
+                        f_write:close()
+                    end
+                    schedule_callback(function()
+                        twdll.core.Log("[TEST] [LIFECYCLE] Step 2: Requesting engine to load 'twdll_lifecycle_test' (after 1.0s save flush)...")
+                        twdll.world.LoadGame("twdll_lifecycle_test")
+                    end, 1.0)
+                else
+                    twdll.core.Log("[TEST] [LIFECYCLE] FAILED: SaveGame returned false!")
+                end
+            end, 1.0)
         else
             twdll.core.Log("[TEST] !!! THERE WERE FAILURES !!!")
             for _, n in ipairs(failed_names) do

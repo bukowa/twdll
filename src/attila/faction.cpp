@@ -202,6 +202,15 @@ static int GetTechnologyStatus(lua_State* L) {
 
 /***
 Sets the research status of a technology for this faction and recalculates effects and availabilities.
+
+### Engine Save / Load Behavior & Persistence Notice:
+The vanilla Total War save format (`.save`) only serializes the set of researched technologies (`RESEARCHED = 0` and `RESEARCHED_BUT_DISABLED = 1`). Intermediate non-researched states (`AVAILABLE = 3`, `UNAVAILABLE = 4`, `BEING_RESEARCHED = 2`, `LOCKED_FACTION_LEVEL = 6`) and tree availabilities are dynamically reconstructed by the engine upon loading a save game based on database prerequisite trees (`technologies_nodes_tables`).
+
+Furthermore, during save loading, the engine's native post-load solver recursively ensures that all parent prerequisites of any researched child technology are also marked as researched (`0`).
+
+**Recommendation for Modders:**
+If your script sets non-standard tree states (e.g. locking specific parent nodes while children are researched, or manually setting nodes to `UNAVAILABLE = 4`), re-apply your `SetTechnologyStatus` calls in a `FirstTickAfterWorldCreated` or `LoadingGame` campaign event callback upon loading a save.
+
 @function SetTechnologyStatus
 @tparam string technology_key the technology record key from `technologies_tables`
 @tparam integer status status integer (0=RESEARCHED, 1=RESEARCHED_BUT_DISABLED, 2=BEING_RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT_PRESENT, 6=LOCKED_FACTION_LEVEL)
@@ -209,6 +218,11 @@ Sets the research status of a technology for this faction and recalculates effec
 @usage
 -- Revert a researched technology back to available (unresearched):
 faction:SetTechnologyStatus("att_hunnic_military_tactical_formations", 3)
+
+-- Re-apply custom lock on campaign load:
+events.FirstTickAfterWorldCreated[#events.FirstTickAfterWorldCreated + 1] = function()
+    faction:SetTechnologyStatus("att_hunnic_military_supply_acquisition", 4)
+end
 */
 static int SetTechnologyStatus(lua_State* L) {
     if (!g_lookup_campaign_tech || !g_record_index) return 0;
