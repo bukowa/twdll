@@ -127,6 +127,13 @@ add_custom_target(tw-test-keep
     VERBATIM USES_TERMINAL
 )
 
+add_custom_target(tw-test-keep-nosavereload
+    DEPENDS twdll
+    COMMAND powershell -ExecutionPolicy Bypass -File "${TW_PS1}" test-keep-nosavereload "${TW_GAME}" "$<TARGET_FILE:twdll>"
+    COMMENT "Running tests without save/reload, keeping game alive (${TW_GAME})"
+    VERBATIM USES_TERMINAL
+)
+
 # ── Documentation targets (defer to docs/CMakeLists.txt) ────────────────────
 add_subdirectory(docs)
 

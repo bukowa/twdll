@@ -103,6 +103,12 @@ function Install-Test {
         Write-Host "Cleaned stale reload marker: $MarkerFile"
     }
 
+    $NoSaveFlag = Join-Path $InstallDir "twdll_no_save_reload.flag"
+    if (Test-Path $NoSaveFlag) {
+        Remove-Item -Force $NoSaveFlag
+        Write-Host "Cleaned no-save flag: $NoSaveFlag"
+    }
+
     $TestPackName = Split-Path $TestPack -Leaf
     Copy-Item -Force $TestPack "$DataDir\"
 
@@ -124,6 +130,13 @@ function Install-Test {
 
     Set-Content -Path (Join-Path $ScriptDir "user.script.txt") -Value $s
     Write-Host "Test env installed for $Game"
+}
+
+function Install-Test-NoSaveReload {
+    Install-Test
+    $NoSaveFlag = Join-Path $InstallDir "twdll_no_save_reload.flag"
+    New-Item -ItemType File -Force -Path $NoSaveFlag | Out-Null
+    Write-Host "Created no-save-reload flag: $NoSaveFlag"
 }
 
 function Fix-CpuAffinity($procName) {
@@ -300,9 +313,10 @@ switch ($c) {
     "tail"         { Tail-Log }
     "test"         { Install-Test; Launch-Game; Tail-Log }
     "test-keep"    { Install-Test; Launch-Game; Tail-Log-Keep }
+    "test-keep-nosavereload" { Install-Test-NoSaveReload; Launch-Game; Tail-Log-Keep }
     "help" {
         Write-Host "Usage: .\tools\twdll.ps1 <command> <game> [-Steam]"
-        Write-Host "Commands: pack, install, install-test, run, run-test, tail, test, test-keep"
+        Write-Host "Commands: pack, install, install-test, run, run-test, tail, test, test-keep, test-keep-nosavereload"
     }
     Default {
         Write-Error "Unknown command: $Command"

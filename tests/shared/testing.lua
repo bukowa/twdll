@@ -2052,6 +2052,59 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 31: Character 204 Manual Disband & Mutation Test
+        -- ======================================================
+        twdll.core.Log("[TEST] ----- Test 31: Character 204 Manual Disband & Mutation Test -----")
+        do
+            local f = game:model():world():faction_by_key(faction)
+            local char_204 = nil
+            if f and f:character_list() then
+                for i = 0, f:character_list():num_items() - 1 do
+                    local c = f:character_list():item_at(i)
+                    if c:cqi() == 204 then
+                        char_204 = c
+                        break
+                    end
+                end
+            end
+
+            if not char_204 then
+                twdll.core.Log("[TEST] Character 204 Test: SKIPPED (character CQI 204 not found in faction)")
+                record_skip()
+            else
+                twdll.core.Log(string.format("[TEST] Mutating character CQI=%d (faction='%s')", char_204:cqi(), f:name()))
+
+                -- 1. Faction Leader
+                f:SetFactionLeader(char_204)
+                local leader = f:faction_leader()
+                local is_leader = (leader ~= nil) and (leader:cqi() == char_204:cqi())
+                twdll.core.Log(string.format("[TEST] faction:SetFactionLeader(char 204) -> (is_leader=%s)", tostring(is_leader)))
+                report("char 204 is faction leader", is_leader == true)
+
+                -- 2. Art Set
+                local art_ok = char_204:SetArtSet("att_general_nomadic_16")
+                local cur_art = char_204:GetArtSet()
+                local cur_art_key = cur_art and cur_art:GetKey() or ""
+                twdll.core.Log(string.format("[TEST] char 204:SetArtSet('att_general_nomadic_16') -> %s (active key: '%s')", tostring(art_ok), tostring(cur_art_key)))
+                report("char 204 SetArtSet returns true", art_ok == true)
+                report("char 204 GetArtSet matches att_general_nomadic_16", cur_art_key == "att_general_nomadic_16")
+
+                -- 3. Immortality
+                local imm_ok = char_204:SetImmortal(false)
+                twdll.core.Log(string.format("[TEST] char 204:SetImmortal(false) -> %s (IsImmortal: %s)", tostring(imm_ok), tostring(char_204:IsImmortal())))
+                report("char 204 SetImmortal(false) returns true", imm_ok == true)
+                report("char 204 IsImmortal is false", char_204:IsImmortal() == false)
+
+                -- 4. Custom Forename
+                local set_fn_ok = char_204:SetForename("Aragorn")
+                twdll.core.Log(string.format("[TEST] char 204:SetForename('Aragorn') -> %s (Forename: '%s', FullName: '%s')",
+                    tostring(set_fn_ok), tostring(char_204:GetForename()), tostring(char_204:GetFullName())))
+                report("char 204 SetForename returns true", set_fn_ok == true)
+                report("char 204 GetForename is Aragorn", char_204:GetForename() == "Aragorn")
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")
@@ -2061,37 +2114,43 @@ local function run_twdll_tests()
             twdll.core.Log("[TEST] Final Result: SUCCESS")
 
             -- ======================================================
-            -- POST-TEST LIFECYCLE: Save -> Load (Only when all tests passed!)
+            -- POST-TEST LIFECYCLE: Save -> Load (Only when all tests passed and no-save flag not set)
             -- ======================================================
-            local function schedule_callback(func, delay_seconds)
-                if cm and type(cm.callback) == "function" then
-                    cm:callback(func, delay_seconds)
-                elseif game and type(game.callback) == "function" then
-                    game:callback(func, delay_seconds)
-                else
-                    func()
-                end
-            end
-
-            schedule_callback(function()
-                twdll.core.Log("[TEST] [LIFECYCLE] All unit tests passed! Starting SaveGame & LoadGame verification...")
-                twdll.core.Log("[TEST] [LIFECYCLE] Step 1: Saving campaign to 'twdll_lifecycle_test' (after 1.0s delay)...")
-                local save_ok = twdll.world.SaveGame("twdll_lifecycle_test")
-                twdll.core.Log(string.format("[TEST] [LIFECYCLE] Save result: %s", tostring(save_ok)))
-                if save_ok then
-                    local f_write = io.open(marker_file, "w")
-                    if f_write then
-                        f_write:write("reload_pending\n")
-                        f_write:close()
+            local no_save_flag = io.open("twdll_no_save_reload.flag", "r")
+            if no_save_flag then
+                no_save_flag:close()
+                twdll.core.Log("[TEST] [LIFECYCLE] twdll_no_save_reload.flag detected — skipping SaveGame / LoadGame reload sequence.")
+            else
+                local function schedule_callback(func, delay_seconds)
+                    if cm and type(cm.callback) == "function" then
+                        cm:callback(func, delay_seconds)
+                    elseif game and type(game.callback) == "function" then
+                        game:callback(func, delay_seconds)
+                    else
+                        func()
                     end
-                    schedule_callback(function()
-                        twdll.core.Log("[TEST] [LIFECYCLE] Step 2: Requesting engine to load 'twdll_lifecycle_test' (after 1.0s save flush)...")
-                        twdll.world.LoadGame("twdll_lifecycle_test")
-                    end, 1.0)
-                else
-                    twdll.core.Log("[TEST] [LIFECYCLE] FAILED: SaveGame returned false!")
                 end
-            end, 1.0)
+
+                schedule_callback(function()
+                    twdll.core.Log("[TEST] [LIFECYCLE] All unit tests passed! Starting SaveGame & LoadGame verification...")
+                    twdll.core.Log("[TEST] [LIFECYCLE] Step 1: Saving campaign to 'twdll_lifecycle_test' (after 1.0s delay)...")
+                    local save_ok = twdll.world.SaveGame("twdll_lifecycle_test")
+                    twdll.core.Log(string.format("[TEST] [LIFECYCLE] Save result: %s", tostring(save_ok)))
+                    if save_ok then
+                        local f_write = io.open(marker_file, "w")
+                        if f_write then
+                            f_write:write("reload_pending\n")
+                            f_write:close()
+                        end
+                        schedule_callback(function()
+                            twdll.core.Log("[TEST] [LIFECYCLE] Step 2: Requesting engine to load 'twdll_lifecycle_test' (after 1.0s save flush)...")
+                            twdll.world.LoadGame("twdll_lifecycle_test")
+                        end, 1.0)
+                    else
+                        twdll.core.Log("[TEST] [LIFECYCLE] FAILED: SaveGame returned false!")
+                    end
+                end, 1.0)
+            end
         else
             twdll.core.Log("[TEST] !!! THERE WERE FAILURES !!!")
             for _, n in ipairs(failed_names) do
