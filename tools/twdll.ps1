@@ -97,6 +97,12 @@ function Install-Test {
 
     if (!(Test-Path $SaveDir)) { New-Item -ItemType Directory -Force -Path $SaveDir | Out-Null }
 
+    $MarkerFile = Join-Path $InstallDir "twdll_reload_marker.flag"
+    if (Test-Path $MarkerFile) {
+        Remove-Item -Force $MarkerFile
+        Write-Host "Cleaned stale reload marker: $MarkerFile"
+    }
+
     $TestPackName = Split-Path $TestPack -Leaf
     Copy-Item -Force $TestPack "$DataDir\"
 

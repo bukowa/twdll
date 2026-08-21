@@ -685,16 +685,6 @@ enum NameType : uint32_t {
     OtherName  = 3,
 };
 
-// Converts a UTF-16 wide string buffer to a UTF-8 std::string.
-static std::string wide_to_utf8(const wchar_t* wstr, size_t len) {
-    if (!wstr || len == 0) return "";
-    int needed = WideCharToMultiByte(CP_UTF8, 0, wstr, static_cast<int>(len), nullptr, 0, nullptr, nullptr);
-    if (needed <= 0) return "";
-    std::string s(needed, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, wstr, static_cast<int>(len), &s[0], needed, nullptr, nullptr);
-    return s;
-}
-
 // Finds the entry corresponding to 'type' within the character's 4 name slots,
 // or initializes the slot if it has not been configured yet.
 static twdll::TW_CharacterNameEntry* GetNameEntry(twdll::TW_CharacterName& name, uint32_t type) {
@@ -714,12 +704,12 @@ static twdll::TW_CharacterNameEntry* GetNameEntry(twdll::TW_CharacterName& name,
 // 3. Raw database localisation key fallback (m_localisation_key)
 static std::string ReadNameSlot(const twdll::TW_CharacterNameEntry& entry) {
     if (entry.m_localisation.m_custom_string.m_data && entry.m_localisation.m_custom_string.m_len > 0) {
-        return wide_to_utf8(reinterpret_cast<const wchar_t*>(entry.m_localisation.m_custom_string.m_data), entry.m_localisation.m_custom_string.m_len);
+        return tw_wide_to_utf8(reinterpret_cast<const wchar_t*>(entry.m_localisation.m_custom_string.m_data), entry.m_localisation.m_custom_string.m_len);
     }
     if (entry.m_localisation.m_localised_string) {
         auto* unistr = reinterpret_cast<const twdll::TW_CAString*>(entry.m_localisation.m_localised_string);
         if (unistr && unistr->m_data && unistr->m_len > 0) {
-            return wide_to_utf8(reinterpret_cast<const wchar_t*>(unistr->m_data), unistr->m_len);
+            return tw_wide_to_utf8(reinterpret_cast<const wchar_t*>(unistr->m_data), unistr->m_len);
         }
     }
     if (entry.m_localisation.m_localisation_key.m_data && entry.m_localisation.m_localisation_key.m_len > 0) {
@@ -743,15 +733,14 @@ static bool SetNameSlot(twdll::TW_CharacterNameEntry& entry, uint32_t type, cons
         return true;
     }
 
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(text_len), nullptr, 0);
-    if (wlen <= 0) return false;
+    std::wstring ws = tw_utf8_to_wide(text, text_len);
+    if (ws.empty()) return false;
 
-    wchar_t* wbuf = new wchar_t[wlen + 1];
-    MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(text_len), wbuf, wlen);
-    wbuf[wlen] = L'\0';
+    wchar_t* wbuf = new wchar_t[ws.length() + 1];
+    memcpy(wbuf, ws.c_str(), (ws.length() + 1) * sizeof(wchar_t));
 
-    entry.m_localisation.m_custom_string.m_len = static_cast<uint32_t>(wlen);
-    entry.m_localisation.m_custom_string.m_pad = static_cast<uint32_t>(wlen);
+    entry.m_localisation.m_custom_string.m_len = static_cast<uint32_t>(ws.length());
+    entry.m_localisation.m_custom_string.m_pad = static_cast<uint32_t>(ws.length());
     entry.m_localisation.m_custom_string.m_data = reinterpret_cast<const char*>(wbuf);
     return true;
 }

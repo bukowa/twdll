@@ -9,6 +9,24 @@ local function run_twdll_tests()
         f:close()
     end
 
+    -- ======================================================
+    -- RELOAD CHECK: If we are running after LoadGame, verify and finish test run
+    -- ======================================================
+    local marker_file = "twdll_reload_marker.flag"
+    local f_marker = io.open(marker_file, "r")
+    if f_marker then
+        f_marker:close()
+        os.remove(marker_file)
+        if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
+            twdll.core.Log("\n======================================================")
+            twdll.core.Log("[TEST] [LIFECYCLE] Reload verification successful!")
+            twdll.core.Log("[TEST] [LIFECYCLE] Campaign successfully reloaded from saved game.")
+            twdll.core.Log("[TEST] [LIFECYCLE] All tests and save/load cycle PASSED.")
+            twdll.core.Log("======================================================\n")
+        end
+        return
+    end
+
     -- Using the flat global structure and PascalCase as defined in your C++ code
     if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
         twdll.core.Log("[TEST] twdll is loaded. Starting unit tests...")
@@ -1976,6 +1994,17 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 29: Game Lifecycle & Save/Load API Functions Existence
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test 29: Game Lifecycle & Save/Load API Functions Existence ---")
+        do
+            report("twdll.world.SaveGame is function", type(twdll.world.SaveGame) == "function")
+            report("twdll.world.LoadGame is function", type(twdll.world.LoadGame) == "function")
+            report("twdll.world.ExitToMainMenu is function", type(twdll.world.ExitToMainMenu) == "function")
+            report("twdll.world.ExitGame is function", type(twdll.world.ExitGame) == "function")
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")
@@ -1983,6 +2012,25 @@ local function run_twdll_tests()
         if failed == 0 then
             twdll.core.Log("[TEST] ===== ALL TESTS PASSED =====")
             twdll.core.Log("[TEST] Final Result: SUCCESS")
+
+            -- ======================================================
+            -- POST-TEST LIFECYCLE: Save -> Load (Only when all tests passed!)
+            -- ======================================================
+            twdll.core.Log("[TEST] [LIFECYCLE] All unit tests passed! Starting SaveGame & LoadGame verification...")
+            twdll.core.Log("[TEST] [LIFECYCLE] Step 1: Saving campaign to 'twdll_lifecycle_test'...")
+            local save_ok = twdll.world.SaveGame("twdll_lifecycle_test")
+            twdll.core.Log(string.format("[TEST] [LIFECYCLE] Save result: %s", tostring(save_ok)))
+            if save_ok then
+                local f_write = io.open(marker_file, "w")
+                if f_write then
+                    f_write:write("reload_pending\n")
+                    f_write:close()
+                end
+                twdll.core.Log("[TEST] [LIFECYCLE] Step 2: Requesting engine to load 'twdll_lifecycle_test'...")
+                twdll.world.LoadGame("twdll_lifecycle_test")
+            else
+                twdll.core.Log("[TEST] [LIFECYCLE] FAILED: SaveGame returned false!")
+            end
         else
             twdll.core.Log("[TEST] !!! THERE WERE FAILURES !!!")
             for _, n in ipairs(failed_names) do

@@ -72,6 +72,14 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#ExitGame">ExitGame ()</a></td>
+	<td class="summary">Requests the engine to cleanly exit the game process to Windows.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#ExitToMainMenu">ExitToMainMenu ()</a></td>
+	<td class="summary">Requests the engine to cleanly exit the active campaign and return to the main menu.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetFactionCount">GetFactionCount ()</a></td>
 	<td class="summary">Gets the total number of factions existing in the current campaign world.</td>
 	</tr>
@@ -94,6 +102,14 @@
 	<tr>
 	<td class="name" nowrap><a href="#GetReinforcementCap">GetReinforcementCap ()</a></td>
 	<td class="summary">Returns the currently applied reinforcement cap override, or nil if the game default is in effect.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#LoadGame">LoadGame (filename)</a></td>
+	<td class="summary">Requests the engine to load a saved game from disk at the end of the current tick.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SaveGame">SaveGame (filename)</a></td>
+	<td class="summary">Saves the active campaign game to disk.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetMaxTraits">SetMaxTraits ([val])</a></td>
@@ -121,6 +137,54 @@ after this call.</td>
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
+    <dt>
+    <a name = "ExitGame"></a>
+    <strong>ExitGame ()</strong>
+    </dt>
+    <dd>
+    Requests the engine to cleanly exit the game process to Windows.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        <code>true</code> if the exit request was dispatched
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.world.<span class="function-name">ExitGame</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "ExitToMainMenu"></a>
+    <strong>ExitToMainMenu ()</strong>
+    </dt>
+    <dd>
+    Requests the engine to cleanly exit the active campaign and return to the main menu.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        <code>true</code> if the exit request was dispatched
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.world.<span class="function-name">ExitToMainMenu</span>()</pre>
+    </ul>
+
+</dd>
     <dt>
     <a name = "GetFactionCount"></a>
     <strong>GetFactionCount ()</strong>
@@ -265,6 +329,68 @@ after this call.</td>
 <span class="keyword">if</span> cap <span class="keyword">then</span>
     <span class="comment">-- An override is currently active
 </span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "LoadGame"></a>
+    <strong>LoadGame (filename)</strong>
+    </dt>
+    <dd>
+    Requests the engine to load a saved game from disk at the end of the current tick.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">filename</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         save game filename (e.g. <code>&quot;my_checkpoint&quot;</code> or <code>&quot;tests.save&quot;</code>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        <code>true</code> if the load request was successfully dispatched
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.world.<span class="function-name">LoadGame</span>(<span class="string">"tests.save"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SaveGame"></a>
+    <strong>SaveGame (filename)</strong>
+    </dt>
+    <dd>
+    Saves the active campaign game to disk.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">filename</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         save game filename (with or without <code>.save</code> extension)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        <code>true</code> if the save succeeded, <code>false</code> otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> success = twdll.world.<span class="function-name">SaveGame</span>(<span class="string">"my_checkpoint"</span>)</pre>
     </ul>
 
 </dd>

@@ -8,7 +8,28 @@
 #include "log.h"
 #include <cstddef>
 #include <cstdio>
+#include <string>
 #include <type_traits>
+#include <windows.h>
+
+// ── String conversion helpers ────────────────────────────────────────────────
+inline std::string tw_wide_to_utf8(const wchar_t* wstr, size_t len) {
+    if (!wstr || len == 0) return "";
+    int needed = WideCharToMultiByte(CP_UTF8, 0, wstr, static_cast<int>(len), nullptr, 0, nullptr, nullptr);
+    if (needed <= 0) return "";
+    std::string s(needed, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wstr, static_cast<int>(len), &s[0], needed, nullptr, nullptr);
+    return s;
+}
+
+inline std::wstring tw_utf8_to_wide(const char* text, size_t len) {
+    if (!text || len == 0) return L"";
+    int needed = MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(len), nullptr, 0);
+    if (needed <= 0) return L"";
+    std::wstring ws(needed, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text, static_cast<int>(len), &ws[0], needed);
+    return ws;
+}
 
 // ── Memory helpers ────────────────────────────────────────────────────────────
 // Raw typed read/write at a byte offset from a base pointer.

@@ -54,6 +54,8 @@
 #define REASSIGN_FACTION_SIG "83 EC 08 53 55 8B D9 C6 44 24 ? ? 56 57 8D 8B"
 #define SPAWN_AGENT_SIG "81 EC 08 05 00 00 53 55"
 #define MAKE_OCCUPATION_DECISION_SIG "81 EC 50 01 00 00 53 55 56 57 8B BC 24"
+#define SAVE_GAME_SIG "81 EC FC 01 00 00 53 55 56 8B B4 24"
+#define LOAD_GAME_SIG "83 EC 14 56 FF 74 24 ? 8B F1 C6 44 24"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -80,6 +82,8 @@ FnGetLoyaltyFactors    g_get_loyalty_factors    = nullptr;
 FnGetFactionRecord     g_get_faction_record     = nullptr;
 FnReassignFaction      g_reassign_faction       = nullptr;
 FnSpawnAgent           g_spawn_agent            = nullptr;
+FnSaveGame             g_save_game              = nullptr;
+FnLoadGame             g_load_game              = nullptr;
 
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
@@ -121,5 +125,7 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"CHARACTER::reassign_faction",                        (void**)&g_reassign_faction,       REASSIGN_FACTION_SIG},
     {"CHARACTER_RECRUITMENT_POOL::spawn_agent",            (void**)&g_spawn_agent,            SPAWN_AGENT_SIG},
     {"CAI_DECISION::make_occupation_decision",             (void**)&g_make_occupation_decision_addr, MAKE_OCCUPATION_DECISION_SIG},
+    {"CAMPAIGN_ENV::save_game",                            (void**)&g_save_game,              SAVE_GAME_SIG},
+    {"CAMPAIGN_ENV::load_game",                            (void**)&g_load_game,              LOAD_GAME_SIG},
     {nullptr, nullptr, nullptr}
 };

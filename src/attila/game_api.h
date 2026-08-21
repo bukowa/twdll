@@ -53,7 +53,15 @@ extern FnRecordIndex g_record_index;
 using FnConvertUnit = void*(__cdecl*)(void* old_unit, void* force, void* target_record);
 extern FnConvertUnit g_convert_unit;
 
-namespace twdll { struct TW_CAString; }
+namespace twdll { struct TW_CAString; struct TW_CAUniString; struct TW_CampaignEnv; }
+
+// CAMPAIGN_ENV::save_game @ 0x107EE8A0
+using FnSaveGame = bool(__thiscall*)(twdll::TW_CampaignEnv* env, const twdll::TW_CAUniString* name, void* startpos_info, char save_to_cloud, char save_to_cloud_and_disk);
+extern FnSaveGame g_save_game;
+
+// CAMPAIGN_ENV::load_game @ 0x107C21C0
+using FnLoadGame = int(__thiscall*)(twdll::TW_CampaignEnv* env, const twdll::TW_CAUniString* path, char load_from_cloud);
+extern FnLoadGame g_load_game;
 
 // CHARACTER::add_trait (sub_10797900)
 using FnAddTrait = int(__thiscall*)(void* ch, const twdll::TW_CAString* trait_str, int points, int show_msg);

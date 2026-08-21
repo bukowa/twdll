@@ -31,6 +31,14 @@ struct TW_CAString {
     const char* m_data;   // 0x8
 };
 
+// CA::UniString layout (32-bit: length, capacity, UTF-16 wchar_t* buffer)
+struct TW_CAUniString {
+    uint32_t       m_len;      // 0x0
+    uint32_t       m_capacity; // 0x4
+    const wchar_t* m_data;     // 0x8
+};
+
+
 struct TW_PoliticalPartyRecord {
     TW_CAString m_key;          // 0x0
     char        pad_0C[0x38];
@@ -568,9 +576,22 @@ struct TW_CampaignModel {
 // EMPIRECAMPAIGN::CAMPAIGN_ENV — selected fields (32-bit Attila layout).
 // 64-bit m_game_core@0x58 -> 32-bit 0x30 (leading members shrink 8B->4B).
 // Verified via disasm of sub_109C8F70: `mov eax,[eax+30h]`.
+struct TW_CampaignLoadGameDescription {
+    bool           m_pending;         // 0x00 (0x5C in CAMPAIGN_ENV)
+    char           pad_01[3];
+    TW_CAUniString m_filename;        // 0x04 (0x60 in CAMPAIGN_ENV)
+    bool           m_load_from_cloud; // 0x10 (0x6C in CAMPAIGN_ENV)
+    char           pad_11[3];
+};
+
 struct TW_CampaignEnv {
-    char  pad_00[0x30];
-    void* m_game_core;      // 0x30  EMPIRECOMMON::GAME_CORE*
+    char                           pad_00[0x30];
+    void*                          m_game_core;         // 0x30  EMPIRECOMMON::GAME_CORE*
+    char                           pad_34[0x28];
+    TW_CampaignLoadGameDescription m_load_game;         // 0x5C  load game request descriptor
+    char                           pad_70[0x2C];
+    bool                           m_quit_to_main_menu; // 0x9C  request exit to main menu
+    bool                           m_quit_to_windows;   // 0x9D  request exit to windows
 };
 
 // EMPIRECOMMON::GAME_CORE — selected fields (32-bit Attila layout).
@@ -733,6 +754,12 @@ TW_ASSERT_OFFSET(TW_ReligionProportion, m_proportion,         0x4);
 TW_ASSERT_OFFSET(TW_RegionData,    m_theatre,                0x94);
 TW_ASSERT_OFFSET(TW_CampaignModel, m_campaign_env,           0x10F0);
 TW_ASSERT_OFFSET(TW_CampaignEnv,   m_game_core,              0x30);
+TW_ASSERT_OFFSET(TW_CampaignEnv,   m_load_game,              0x5C);
+TW_ASSERT_OFFSET(TW_CampaignEnv,   m_quit_to_main_menu,      0x9C);
+TW_ASSERT_OFFSET(TW_CampaignEnv,   m_quit_to_windows,        0x9D);
+TW_ASSERT_OFFSET(TW_CampaignLoadGameDescription, m_pending,         0x00);
+TW_ASSERT_OFFSET(TW_CampaignLoadGameDescription, m_filename,        0x04);
+TW_ASSERT_OFFSET(TW_CampaignLoadGameDescription, m_load_from_cloud, 0x10);
 TW_ASSERT_OFFSET(TW_GameCore,      m_databases,              0x10);
 TW_ASSERT_OFFSET(TW_Databases,     political_parties,        0xF18);
 TW_ASSERT_OFFSET(TW_Databases,     main_units,               0x1000);

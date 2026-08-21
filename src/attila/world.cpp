@@ -345,6 +345,145 @@ static int SetMaxTraits(lua_State* L) {
     return 0;
 }
 
+/***
+Saves the active campaign game to disk.
+@function SaveGame
+@tparam string filename save game filename (with or without `.save` extension)
+@treturn boolean `true` if the save succeeded, `false` otherwise
+@usage
+local success = twdll.world.SaveGame("my_checkpoint")
+*/
+static int SaveGame(lua_State* L) {
+    if (!g_save_game) {
+        Log("[twdll] SaveGame: save_game signature not resolved");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    if (!g_campaign_model) {
+        Log("[twdll] SaveGame: campaign model not available");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    auto* cm = static_cast<twdll::TW_CampaignModel*>(g_campaign_model);
+    if (!cm->m_campaign_env) {
+        Log("[twdll] SaveGame: campaign env not available");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    size_t len = 0;
+    const char* name = l_checklstring(L, 1, &len);
+    if (!name || len == 0) {
+        Log("[twdll] SaveGame: invalid filename argument");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    std::wstring wname = tw_utf8_to_wide(name, len);
+    twdll::TW_CAUniString unistr{
+        static_cast<uint32_t>(wname.length()),
+        static_cast<uint32_t>(wname.length()),
+        wname.c_str()
+    };
+    auto* env = static_cast<twdll::TW_CampaignEnv*>(cm->m_campaign_env);
+    bool ok = g_save_game(env, &unistr, nullptr, 0, 0);
+    Log("[twdll] SaveGame('%s'): result = %d", name, ok ? 1 : 0);
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
+/***
+Requests the engine to load a saved game from disk at the end of the current tick.
+@function LoadGame
+@tparam string filename save game filename (e.g. `"my_checkpoint"` or `"tests.save"`)
+@treturn boolean `true` if the load request was successfully dispatched
+@usage
+twdll.world.LoadGame("tests.save")
+*/
+static int LoadGame(lua_State* L) {
+    if (!g_campaign_model) {
+        Log("[twdll] LoadGame: campaign model not available");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    auto* cm = static_cast<twdll::TW_CampaignModel*>(g_campaign_model);
+    if (!cm->m_campaign_env) {
+        Log("[twdll] LoadGame: campaign env not available");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    size_t len = 0;
+    const char* name = l_checklstring(L, 1, &len);
+    if (!name || len == 0) {
+        Log("[twdll] LoadGame: invalid filename argument");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    std::wstring wname = tw_utf8_to_wide(name, len);
+    twdll::TW_CAUniString unistr{
+        static_cast<uint32_t>(wname.length()),
+        static_cast<uint32_t>(wname.length()),
+        wname.c_str()
+    };
+    auto* env = static_cast<twdll::TW_CampaignEnv*>(cm->m_campaign_env);
+    if (g_load_game) {
+        g_load_game(env, &unistr, 0);
+    }
+    Log("[twdll] LoadGame('%s'): scheduled load", name);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
+/***
+Requests the engine to cleanly exit the active campaign and return to the main menu.
+@function ExitToMainMenu
+@treturn boolean `true` if the exit request was dispatched
+@usage
+twdll.world.ExitToMainMenu()
+*/
+static int ExitToMainMenu(lua_State* L) {
+    if (!g_campaign_model) {
+        Log("[twdll] ExitToMainMenu: campaign model not available");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    auto* cm = static_cast<twdll::TW_CampaignModel*>(g_campaign_model);
+    if (!cm->m_campaign_env) {
+        Log("[twdll] ExitToMainMenu: campaign env not available");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    auto* env = static_cast<twdll::TW_CampaignEnv*>(cm->m_campaign_env);
+    env->m_quit_to_main_menu = true;
+    Log("[twdll] ExitToMainMenu: requested exit to main menu");
+    l_pushboolean(L, 1);
+    return 1;
+}
+
+/***
+Requests the engine to cleanly exit the game process to Windows.
+@function ExitGame
+@treturn boolean `true` if the exit request was dispatched
+@usage
+twdll.world.ExitGame()
+*/
+static int ExitGame(lua_State* L) {
+    if (!g_campaign_model) {
+        Log("[twdll] ExitGame: campaign model not available");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    auto* cm = static_cast<twdll::TW_CampaignModel*>(g_campaign_model);
+    if (!cm->m_campaign_env) {
+        Log("[twdll] ExitGame: campaign env not available");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+    auto* env = static_cast<twdll::TW_CampaignEnv*>(cm->m_campaign_env);
+    env->m_quit_to_windows = true;
+    Log("[twdll] ExitGame: requested exit to windows");
+    l_pushboolean(L, 1);
+    return 1;
+}
+
 extern const luaL_Reg world_functions[] = {
     {"GetMemoryAddress",    GetMemoryAddress},
     {"GetFactionCount",     GetFactionCount},
@@ -356,6 +495,10 @@ extern const luaL_Reg world_functions[] = {
     {"SetReinforcementCap", SetReinforcementCap},
     {"GetMaxTraits",        GetMaxTraits},
     {"SetMaxTraits",        SetMaxTraits},
+    {"SaveGame",            SaveGame},
+    {"LoadGame",            LoadGame},
+    {"ExitToMainMenu",      ExitToMainMenu},
+    {"ExitGame",            ExitGame},
     {nullptr, nullptr}
 };
 
