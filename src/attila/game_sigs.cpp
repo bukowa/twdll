@@ -56,6 +56,8 @@
 #define MAKE_OCCUPATION_DECISION_SIG "81 EC 50 01 00 00 53 55 56 57 8B BC 24"
 #define SAVE_GAME_SIG "81 EC FC 01 00 00 53 55 56 8B B4 24"
 #define LOAD_GAME_SIG "83 EC 14 56 FF 74 24 ? 8B F1 C6 44 24"
+#define LOOKUP_CAMPAIGN_TECH_SIG "53 8B 59 0C 55 56 33 F6 57 85 DB 74 1B 8B 79 10"
+#define UPDATE_TECH_EFFECTS_SIG  "83 EC 30 53 8B D9 56 57 89 5C 24 0C 8D 4B 24 E8 ? ? ? ? 33 C9 89 4C 24"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -73,6 +75,8 @@ static uintptr_t   g_update_animation_addr = 0;
 static uintptr_t   g_force_settlement_refresh_addr = 0;
 
 FnInstantSetResearched g_instant_set_researched = nullptr;
+FnLookupCampaignTech   g_lookup_campaign_tech   = nullptr;
+FnUpdateTechEffects    g_update_tech_effects    = nullptr;
 FnRecordIndex          g_record_index           = nullptr;
 FnConvertUnit          g_convert_unit           = nullptr;
 FnAddTrait             g_add_trait              = nullptr;
@@ -114,6 +118,8 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"EMPIREBATTLE::MANAGER::dtor",            (void**)&g_battle_dtor_addr,    BATTLE_DTOR_SIG},
     {"CampaignSettlementCallback::Initialize", (void**)&g_settlement_cb_initialize_addr, SETTLEMENT_CB_INITIALIZE_SIG},
     {"FACTION_TECHNOLOGY_MANAGER::instant_set_researched", (void**)&g_instant_set_researched, INSTANT_SET_RESEARCHED_SIG},
+    {"FACTION_TECHNOLOGY_MANAGER::lookup_tech",            (void**)&g_lookup_campaign_tech,   LOOKUP_CAMPAIGN_TECH_SIG},
+    {"FACTION_TECHNOLOGY_MANAGER::update_effect_list",      (void**)&g_update_tech_effects,    UPDATE_TECH_EFFECTS_SIG},
     {"DATABASE_TABLE::record_index",                       (void**)&g_record_index,           RECORD_INDEX_SIG},
     {"UNIT::convert_unit",                                 (void**)&g_convert_unit,           CONVERT_UNIT_SIG},
     {"CAMPAIGN_BUILDING_DISPLAY::update_animation",        (void**)&g_update_animation_addr,  UPDATE_ANIMATION_SIG},

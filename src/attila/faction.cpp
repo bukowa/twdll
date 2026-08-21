@@ -18,6 +18,7 @@ using twdll::TW_CampaignPolitics;
 using twdll::TW_CampaignPoliticalParty;
 using twdll::TW_PoliticalPartiesMap;
 using twdll::TW_PoliticalPartyRecord;
+using twdll::TW_CampaignTechnology;
 
 void push_campaign_political_party(lua_State* L, TW_CampaignPoliticalParty* party);
 void push_political_party_list(lua_State* L,
@@ -97,8 +98,12 @@ This triggers all native engine completion mechanics:
 
 Note: this differs from the game's built-in `cm:unlock_technology`, which only
 makes a technology selectable in the UI and never actually finishes research.
+
+@warning Calling `InstantlyResearchTechnology` while the in-game Technology Panel
+is open will cause a crash due to concurrent UI state invalidation. Always ensure the technology UI panel is closed before invoking this method.
 @function InstantlyResearchTechnology
 @tparam string technology_key the technology record key from `technologies_tables` (e.g. `"att_tech_military_barracks"`, `"att_hunnic_military_combat_at_distance"`)
+@tparam[opt=false] boolean report_to_ui whether to generate UI event feed messages (default: false)
 @treturn boolean true if the technology was found and completed, false otherwise
 @usage
 local ok = faction:InstantlyResearchTechnology("att_hunnic_military_combat_at_distance")
@@ -154,7 +159,78 @@ static int InstantlyResearchTechnology(lua_State* L) {
         reinterpret_cast<uintptr_t>(manager),
         reinterpret_cast<uintptr_t>(record), key);
 
-    g_instant_set_researched(manager, record, /*report_to_ui*/ true);
+    bool report_to_ui = false;
+    if (l_type(L, 3) == LUA_TBOOLEAN) {
+        report_to_ui = l_tobool(L, 3);
+    }
+    g_instant_set_researched(manager, record, report_to_ui);
+    l_pushboolean(L, 1);
+    return 1;
+}
+
+static void update_tech_manager(void* manager) {
+    if (g_update_tech_effects) {
+        g_update_tech_effects(manager);
+    }
+}
+
+/***
+Gets the current research status of a technology for this faction.
+@function GetTechnologyStatus
+@tparam string technology_key the technology record key from `technologies_tables`
+@treturn integer|nil status integer (0=RESEARCHED, 1=RESEARCHED_BUT_DISABLED, 2=BEING_RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT_PRESENT, 6=LOCKED_FACTION_LEVEL), or nil if not found
+@usage
+local status = faction:GetTechnologyStatus("att_hunnic_military_tactical_formations")
+*/
+static int GetTechnologyStatus(lua_State* L) {
+    if (!g_lookup_campaign_tech || !g_record_index) return 0;
+
+    size_t key_len = 0;
+    const char* key = l_checklstring(L, 2, &key_len);
+    if (!key) return 0;
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    if (!faction || !faction->m_faction_technology_manager) return 0;
+    auto* dbs = TW_Databases::get();
+    if (!dbs || !dbs->technologies) return 0;
+    void* record = dbs->technologies->find_record(key, key_len);
+    if (!record) return 0;
+    TW_CampaignTechnology* tech = g_lookup_campaign_tech(faction->m_faction_technology_manager, record);
+    if (!tech) return 0;
+    l_pushinteger(L, static_cast<lua_Integer>(tech->m_technology_status));
+    return 1;
+}
+
+/***
+Sets the research status of a technology for this faction and recalculates effects and availabilities.
+@function SetTechnologyStatus
+@tparam string technology_key the technology record key from `technologies_tables`
+@tparam integer status status integer (0=RESEARCHED, 1=RESEARCHED_BUT_DISABLED, 2=BEING_RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT_PRESENT, 6=LOCKED_FACTION_LEVEL)
+@treturn boolean true on success, false otherwise
+@usage
+-- Revert a researched technology back to available (unresearched):
+faction:SetTechnologyStatus("att_hunnic_military_tactical_formations", 3)
+*/
+static int SetTechnologyStatus(lua_State* L) {
+    if (!g_lookup_campaign_tech || !g_record_index) return 0;
+
+    size_t key_len = 0;
+    const char* key = l_checklstring(L, 2, &key_len);
+    if (!key || l_type(L, 3) != LUA_TNUMBER) return 0;
+    auto status = static_cast<uint32_t>(l_tointeger(L, 3));
+    auto* faction = twdll::tw_unwrap<TW_Faction>(L, 1);
+    if (!faction || !faction->m_faction_technology_manager) return 0;
+    auto* dbs = TW_Databases::get();
+    if (!dbs || !dbs->technologies) return 0;
+    void* record = dbs->technologies->find_record(key, key_len);
+    if (!record) return 0;
+    void* manager = faction->m_faction_technology_manager;
+    TW_CampaignTechnology* tech = g_lookup_campaign_tech(manager, record);
+    if (!tech) return 0;
+    tech->m_technology_status = status;
+    if (status != 0) { // 0 = RESEARCHED
+        tech->m_research_points_completed = 0;
+    }
+    update_tech_manager(manager);
     l_pushboolean(L, 1);
     return 1;
 }
@@ -417,6 +493,8 @@ static const luaL_Reg faction_methods[] = {
     {"SetFactionLeader",  SetFactionLeader},
     {"SetCapital",        SetCapital},
     {"InstantlyResearchTechnology", InstantlyResearchTechnology},
+    {"GetTechnologyStatus", GetTechnologyStatus},
+    {"SetTechnologyStatus", SetTechnologyStatus},
     {"GetPoliticalPartyList", GetPoliticalPartyList},
     {"GetPoliticalParty",     GetPoliticalParty},
     {"GetPrimaryParty",       GetPrimaryParty},

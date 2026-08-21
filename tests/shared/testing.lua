@@ -2005,6 +2005,53 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- TEST 30: Technology Status API (GetTechnologyStatus / SetTechnologyStatus)
+        -- ======================================================
+        do
+            twdll.core.Log("[TEST] ----- Test 30: Technology Status API -----")
+            local fac_obj = game:model():world():faction_by_key(faction)
+            if fac_obj then
+                report("faction:GetTechnologyStatus is function", type(fac_obj.GetTechnologyStatus) == "function")
+                report("faction:SetTechnologyStatus is function", type(fac_obj.SetTechnologyStatus) == "function")
+                report("faction:InstantlyResearchTechnology is function", type(fac_obj.InstantlyResearchTechnology) == "function")
+
+                -- 1. Instantly research 4 Hunnic military technologies
+                fac_obj:InstantlyResearchTechnology("att_hunnic_military_militarised_massing_of_power")
+                fac_obj:InstantlyResearchTechnology("att_hunnic_military_traditions_of_mobility")
+                fac_obj:InstantlyResearchTechnology("att_hunnic_military_extra_military_provisions")
+                fac_obj:InstantlyResearchTechnology("att_hunnic_military_speed_of_attack")
+
+                local s1 = fac_obj:GetTechnologyStatus("att_hunnic_military_militarised_massing_of_power")
+                local s2 = fac_obj:GetTechnologyStatus("att_hunnic_military_traditions_of_mobility")
+                local s3 = fac_obj:GetTechnologyStatus("att_hunnic_military_extra_military_provisions")
+                local s4 = fac_obj:GetTechnologyStatus("att_hunnic_military_speed_of_attack")
+
+                twdll.core.Log(string.format("[TEST] Researched tech statuses: s1=%s s2=%s s3=%s s4=%s", tostring(s1), tostring(s2), tostring(s3), tostring(s4)))
+                report("Tech 1 status is RESEARCHED (0)", s1 == 0)
+                report("Tech 2 status is RESEARCHED (0)", s2 == 0)
+                report("Tech 3 status is RESEARCHED (0)", s3 == 0)
+                report("Tech 4 status is RESEARCHED (0)", s4 == 0)
+
+                -- 2. Explicitly set supply_acquisition to UNAVAILABLE (4)
+                local set_ok = fac_obj:SetTechnologyStatus("att_hunnic_military_supply_acquisition", 4)
+                local s5 = fac_obj:GetTechnologyStatus("att_hunnic_military_supply_acquisition")
+                twdll.core.Log(string.format("[TEST] SetTechnologyStatus returned %s, status=%s", tostring(set_ok), tostring(s5)))
+                report("SetTechnologyStatus returns true", set_ok == true)
+                report("Tech 5 status is UNAVAILABLE (4)", s5 == 4)
+            else
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

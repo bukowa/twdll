@@ -176,6 +176,34 @@ struct TW_Faction {
     TW_CampaignPolitics m_politics; // 0x112C verified via disasm: lea ecx,[ebx+112Ch]; push ebx; call sub_10BF27C0 @ 0x106c2140
 };
 
+// EMPIRECAMPAIGN::TECHNOLOGY_STATUS (32-bit / 64-bit enum)
+enum class TW_TechnologyStatus : uint32_t {
+    RESEARCHED                  = 0,  // Completed / researched
+    RESEARCHED_BUT_DISABLED     = 1,  // Researched but disabled (e.g. via bonus caps)
+    BEING_RESEARCHED            = 2,  // Currently researching this turn
+    AVAILABLE                   = 3,  // Available to research (clickable in UI)
+    UNAVAILABLE                 = 4,  // Unavailable (prerequisites not met)
+    NOT_PRESENT                 = 5,  // Not present in tree
+    LOCKED_FACTION_LEVEL        = 6,  // Locked by faction / imperium level
+    NUM_STATES                  = 7
+};
+
+// EMPIRECAMPAIGN::CAMPAIGN_TECHNOLOGY (32-bit layout, size >= 0x2C)
+// Derived from 64-bit reference and 32-bit disasm (sub_10B9D400):
+//   10B9D406: mov esi, [esp+70h+arg_0]   ; esi = CAMPAIGN_TECHNOLOGY*
+//   10B9D435: mov ecx, [esi+28h]         ; m_technologies_for_category @ 0x28
+//   10B9D536: cmp [esi+10h], edi         ; m_parent_links vector @ 0x10
+//   10B9D479: cmp dword ptr [eax+4], 0   ; m_technology_status @ 0x4
+struct TW_CampaignTechnology {
+    void*    m_technology_node_record;        // 0x00
+    uint32_t m_technology_status;             // 0x04 (TW_TechnologyStatus)
+    uint32_t m_research_points_completed;     // 0x08
+    uint32_t pad_0C;                          // 0x0C
+    char     m_parent_links[0xC];             // 0x10 (CA_STD::VECTOR)
+    char     pad_1C[0xC];                     // 0x1C
+    void*    m_technologies_for_category;     // 0x28
+};
+
 // EMPIRECAMPAIGN::GENERAL_BODYGUARD_DETAILS (32-bit layout, size 0x24)
 // Verified via CHARACTER_DETAILS::update_initial_general_bodyguard (sub_107F8A50):
 //   0x107f8a5c  mov eax, [edx]       ; m_unit (MAIN_UNIT_RECORD*)
@@ -659,6 +687,12 @@ TW_ASSERT_OFFSET(TW_Faction,       m_home_theatre,           0x898);
 TW_ASSERT_OFFSET(TW_Faction,       m_faction_technology_manager, 0x934);
 TW_ASSERT_OFFSET(TW_Faction,       m_character_recruitment_pool, 0xEE0);
 TW_ASSERT_OFFSET(TW_Faction,       m_politics,               0x112C);
+
+TW_ASSERT_OFFSET(TW_CampaignTechnology, m_technology_node_record, 0x00);
+TW_ASSERT_OFFSET(TW_CampaignTechnology, m_technology_status, 0x04);
+TW_ASSERT_OFFSET(TW_CampaignTechnology, m_research_points_completed, 0x08);
+TW_ASSERT_OFFSET(TW_CampaignTechnology, m_technologies_for_category, 0x28);
+
 TW_ASSERT_OFFSET(TW_Databases,     agents,                   0x152C);
 TW_ASSERT_OFFSET(TW_Character,        action_points,                        0x14);
 TW_ASSERT_OFFSET(TW_Character,        commanded_unit_link,                  0x1DC);

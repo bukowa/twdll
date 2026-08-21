@@ -92,6 +92,10 @@
 	<td class="summary">Primary (leading / ruling) political party of the faction.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#GetTechnologyStatus">GetTechnologyStatus (technology_key)</a></td>
+	<td class="summary">Gets the current research status of a technology for this faction.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetTreasury">GetTreasury ()</a></td>
 	<td class="summary">Amount of gold in the faction's treasury.</td>
 	</tr>
@@ -100,7 +104,7 @@
 	<td class="summary">Checks whether the faction participates in the campaign politics system and has political parties.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#InstantlyResearchTechnology">InstantlyResearchTechnology (technology_key)</a></td>
+	<td class="name" nowrap><a href="#InstantlyResearchTechnology">InstantlyResearchTechnology (technology_key[, report_to_ui=false])</a></td>
 	<td class="summary">Instantly completes research of the given technology for the faction, using the
 game's own internal path for finishing a technology.</td>
 	</tr>
@@ -111,6 +115,10 @@ game's own internal path for finishing a technology.</td>
 	<tr>
 	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age=false]])</a></td>
 	<td class="summary">Sets a new leader for the faction.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetTechnologyStatus">SetTechnologyStatus (technology_key, status)</a></td>
+	<td class="summary">Sets the research status of a technology for this faction and recalculates effects and availabilities.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetTreasury">SetTreasury (value)</a></td>
@@ -291,6 +299,37 @@ Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to itera
 
 </dd>
     <dt>
+    <a name = "GetTechnologyStatus"></a>
+    <strong>GetTechnologyStatus (technology_key)</strong>
+    </dt>
+    <dd>
+    Gets the current research status of a technology for this faction.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key from <code>technologies_tables</code>
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        status integer (0=RESEARCHED, 1=RESEARCHED<em>BUT</em>DISABLED, 2=BEING<em>RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT</em>PRESENT, 6=LOCKED<em>FACTION</em>LEVEL), or nil if not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> status = faction:<span class="function-name">GetTechnologyStatus</span>(<span class="string">"att_hunnic_military_tactical_formations"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "GetTreasury"></a>
     <strong>GetTreasury ()</strong>
     </dt>
@@ -343,7 +382,7 @@ Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to itera
 </dd>
     <dt>
     <a name = "InstantlyResearchTechnology"></a>
-    <strong>InstantlyResearchTechnology (technology_key)</strong>
+    <strong>InstantlyResearchTechnology (technology_key[, report_to_ui=false])</strong>
     </dt>
     <dd>
     Instantly completes research of the given technology for the faction, using the
@@ -364,6 +403,11 @@ makes a technology selectable in the UI and never actually finishes research.
         <li><span class="parameter">technology_key</span>
             <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
          the technology record key from <code>technologies_tables</code> (e.g. <code>&quot;att_tech_military_barracks&quot;</code>, <code>&quot;att_hunnic_military_combat_at_distance&quot;</code>)
+        </li>
+        <li><span class="parameter">report_to_ui</span>
+            <span class="types"><span class="type">boolean</span></span>
+         whether to generate UI event feed messages (default: false)
+         (<em>default</em> false)
         </li>
     </ul>
 
@@ -461,6 +505,42 @@ faction:<span class="function-name">SetFactionLeader</span>(new_general, old_lea
 
 <span class="comment">-- Mode 3: Heir coming of age succession:
 </span>faction:<span class="function-name">SetFactionLeader</span>(heir_general, old_leader, <span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetTechnologyStatus"></a>
+    <strong>SetTechnologyStatus (technology_key, status)</strong>
+    </dt>
+    <dd>
+    Sets the research status of a technology for this faction and recalculates effects and availabilities.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key from <code>technologies_tables</code>
+        </li>
+        <li><span class="parameter">status</span>
+            <span class="types"><span class="type">integer</span></span>
+         status integer (0=RESEARCHED, 1=RESEARCHED<em>BUT</em>DISABLED, 2=BEING<em>RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT</em>PRESENT, 6=LOCKED<em>FACTION</em>LEVEL)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Revert a researched technology back to available (unresearched):
+</span>faction:<span class="function-name">SetTechnologyStatus</span>(<span class="string">"att_hunnic_military_tactical_formations"</span>, <span class="number">3</span>)</pre>
     </ul>
 
 </dd>

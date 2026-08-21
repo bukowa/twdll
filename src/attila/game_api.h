@@ -43,6 +43,14 @@ extern FnUpdateArtSet g_update_art_set;
 using FnInstantSetResearched = void(__thiscall*)(void* manager, void* record, bool report_to_ui);
 extern FnInstantSetResearched g_instant_set_researched;
 
+namespace twdll { struct TW_CampaignTechnology; }
+
+using FnLookupCampaignTech = twdll::TW_CampaignTechnology*(__thiscall*)(void* manager, void* record);
+extern FnLookupCampaignTech g_lookup_campaign_tech;
+
+using FnUpdateTechEffects = void(__thiscall*)(void* manager);
+extern FnUpdateTechEffects g_update_tech_effects;
+
 // sub_10192660 = DATABASE_TABLE::record_index(table, &CA::String key) -> record.
 using FnRecordIndex = void*(__thiscall*)(void* table, void* key_string);
 extern FnRecordIndex g_record_index;
