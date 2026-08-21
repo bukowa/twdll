@@ -92,6 +92,10 @@
 	<td class="summary">Primary (leading / ruling) political party of the faction.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#GetTechnologyStatus">GetTechnologyStatus (technology_key)</a></td>
+	<td class="summary">Gets the current research status of a technology for this faction.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetTreasury">GetTreasury ()</a></td>
 	<td class="summary">Amount of gold in the faction's treasury.</td>
 	</tr>
@@ -100,7 +104,7 @@
 	<td class="summary">Checks whether the faction participates in the campaign politics system and has political parties.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#InstantlyResearchTechnology">InstantlyResearchTechnology (technology_key)</a></td>
+	<td class="name" nowrap><a href="#InstantlyResearchTechnology">InstantlyResearchTechnology (technology_key[, report_to_ui=false])</a></td>
 	<td class="summary">Instantly completes research of the given technology for the faction, using the
 game's own internal path for finishing a technology.</td>
 	</tr>
@@ -111,6 +115,10 @@ game's own internal path for finishing a technology.</td>
 	<tr>
 	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age=false]])</a></td>
 	<td class="summary">Sets a new leader for the faction.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetTechnologyStatus">SetTechnologyStatus (technology_key, status)</a></td>
+	<td class="summary">Sets the research status of a technology for this faction and recalculates effects and availabilities.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetTreasury">SetTreasury (value)</a></td>
@@ -291,6 +299,46 @@ Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to itera
 
 </dd>
     <dt>
+    <a name = "GetTechnologyStatus"></a>
+    <strong>GetTechnologyStatus (technology_key)</strong>
+    </dt>
+    <dd>
+    Gets the current research status of a technology for this faction. </p>
+
+<p>Status enum values:
+- <code>0</code> = <code>RESEARCHED</code> (fully unlocked and active)
+- <code>1</code> = <code>RESEARCHED_BUT_DISABLED</code> (researched, but effect bundle disabled)
+- <code>2</code> = <code>BEING_RESEARCHED</code> (currently selected in faction research queue)
+- <code>3</code> = <code>AVAILABLE</code> (all prerequisites met, eligible to be researched)
+- <code>4</code> = <code>UNAVAILABLE</code> (prerequisites missing / locked in technology tree)
+- <code>5</code> = <code>NOT_PRESENT</code> (technology node not present in faction's tree)
+- <code>6</code> = <code>LOCKED_FACTION_LEVEL</code> (locked by faction imperium / tier level)
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key from <code>technologies_tables</code>
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        status integer (0=RESEARCHED, 1=RESEARCHED<em>BUT</em>DISABLED, 2=BEING<em>RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT</em>PRESENT, 6=LOCKED<em>FACTION</em>LEVEL), or nil if not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> status = faction:<span class="function-name">GetTechnologyStatus</span>(<span class="string">"att_hunnic_military_tactical_formations"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "GetTreasury"></a>
     <strong>GetTreasury ()</strong>
     </dt>
@@ -343,7 +391,7 @@ Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to itera
 </dd>
     <dt>
     <a name = "InstantlyResearchTechnology"></a>
-    <strong>InstantlyResearchTechnology (technology_key)</strong>
+    <strong>InstantlyResearchTechnology (technology_key[, report_to_ui=false])</strong>
     </dt>
     <dd>
     Instantly completes research of the given technology for the faction, using the
@@ -364,6 +412,11 @@ makes a technology selectable in the UI and never actually finishes research.
         <li><span class="parameter">technology_key</span>
             <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
          the technology record key from <code>technologies_tables</code> (e.g. <code>&quot;att_tech_military_barracks&quot;</code>, <code>&quot;att_hunnic_military_combat_at_distance&quot;</code>)
+        </li>
+        <li><span class="parameter">report_to_ui</span>
+            <span class="types"><span class="type">boolean</span></span>
+         whether to generate UI event feed messages (default: false)
+         (<em>default</em> false)
         </li>
     </ul>
 
@@ -461,6 +514,64 @@ faction:<span class="function-name">SetFactionLeader</span>(new_general, old_lea
 
 <span class="comment">-- Mode 3: Heir coming of age succession:
 </span>faction:<span class="function-name">SetFactionLeader</span>(heir_general, old_leader, <span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetTechnologyStatus"></a>
+    <strong>SetTechnologyStatus (technology_key, status)</strong>
+    </dt>
+    <dd>
+    Sets the research status of a technology for this faction and recalculates effects and availabilities. </p>
+
+<p>Status enum values:
+- <code>0</code> = <code>RESEARCHED</code> (instantly unlocks and applies all faction effects)
+- <code>1</code> = <code>RESEARCHED_BUT_DISABLED</code> (marks researched, but disables faction bonuses)
+- <code>2</code> = <code>BEING_RESEARCHED</code> (sets as active research target)
+- <code>3</code> = <code>AVAILABLE</code> (makes available to be clicked and researched)
+- <code>4</code> = <code>UNAVAILABLE</code> (locks / disables from research)
+- <code>5</code> = <code>NOT_PRESENT</code> (marks unassigned)
+- <code>6</code> = <code>LOCKED_FACTION_LEVEL</code> (locks under faction level requirements)</p>
+
+<h3>Engine Save / Load Behavior &amp; Persistence Notice:</h3>
+<p>The vanilla Total War save format (<code>.save</code>) only serializes the list of researched technologies (<code>RESEARCHED = 0</code> and <code>RESEARCHED_BUT_DISABLED = 1</code>) in its <code>RESEARCHED_TECHS</code> block. Intermediate non-researched states (<code>AVAILABLE = 3</code>, <code>UNAVAILABLE = 4</code>, <code>BEING_RESEARCHED = 2</code>, <code>LOCKED_FACTION_LEVEL = 6</code>) are never serialized to disk; they are dynamically reconstructed upon campaign load by the engine's database dependency solver (<code>technologies_nodes_tables</code>).</p>
+
+<p>Furthermore, during save loading (<code>post_load_fixup</code>), the engine's native solver recursively ensures that all parent prerequisites of any researched child technology are automatically marked as researched (<code>0</code>).</p>
+
+<h3>Recommendation for Modders:</h3>
+<p>If your script sets non-standard tree states (e.g. locking specific parent nodes while children are researched, or manually setting nodes to <code>UNAVAILABLE = 4</code>), re-apply your <a href="../modules/FACTION_SCRIPT_INTERFACE.html#SetTechnologyStatus">SetTechnologyStatus</a> calls in a <code>FirstTickAfterWorldCreated</code> or <code>LoadingGame</code> campaign event callback upon loading a save game.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key from <code>technologies_tables</code>
+        </li>
+        <li><span class="parameter">status</span>
+            <span class="types"><span class="type">integer</span></span>
+         status integer (0=RESEARCHED, 1=RESEARCHED<em>BUT</em>DISABLED, 2=BEING<em>RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT</em>PRESENT, 6=LOCKED<em>FACTION</em>LEVEL)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Revert a researched technology back to available (unresearched):
+</span>faction:<span class="function-name">SetTechnologyStatus</span>(<span class="string">"att_hunnic_military_tactical_formations"</span>, <span class="number">3</span>)
+
+<span class="comment">-- Re-apply custom lock on campaign load:
+</span>events.FirstTickAfterWorldCreated[#events.FirstTickAfterWorldCreated + <span class="number">1</span>] = <span class="keyword">function</span>()
+    faction:<span class="function-name">SetTechnologyStatus</span>(<span class="string">"att_hunnic_military_supply_acquisition"</span>, <span class="number">4</span>)
+<span class="keyword">end</span></pre>
     </ul>
 
 </dd>
