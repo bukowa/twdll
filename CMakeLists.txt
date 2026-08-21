@@ -134,6 +134,13 @@ add_custom_target(tw-test-keep-nosavereload
     VERBATIM USES_TERMINAL
 )
 
+add_custom_target(tw-tdd
+    DEPENDS twdll
+    COMMAND powershell -ExecutionPolicy Bypass -File "${TW_PS1}" tdd "${TW_GAME}" "$<TARGET_FILE:twdll>"
+    COMMENT "Running The Dawnless Days campaign (${TW_GAME})"
+    VERBATIM USES_TERMINAL
+)
+
 # ── Documentation targets (defer to docs/CMakeLists.txt) ────────────────────
 add_subdirectory(docs)
 

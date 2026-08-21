@@ -83,6 +83,7 @@ function Install-Base {
     if (!(Test-Path $ScriptDir)) { New-Item -ItemType Directory -Force -Path $ScriptDir | Out-Null }
 
     Copy-Item -Force $DllPath $InstallDir
+    Copy-Item -Force $DllPath (Join-Path $InstallDir ("twdll_" + $Game + ".dll"))
     Copy-Item -Force $ModPack $DataDir
 
     $content = "mod `"twdll.pack`";"
@@ -137,6 +138,38 @@ function Install-Test-NoSaveReload {
     $NoSaveFlag = Join-Path $InstallDir "twdll_no_save_reload.flag"
     New-Item -ItemType File -Force -Path $NoSaveFlag | Out-Null
     Write-Host "Created no-save-reload flag: $NoSaveFlag"
+}
+
+function Install-Tdd {
+    Install-Base
+    # Build per-game test pack
+    Build-Pack $TestPack $TestSrcDir
+
+    $MarkerFile = Join-Path $InstallDir "twdll_reload_marker.flag"
+    if (Test-Path $MarkerFile) {
+        Remove-Item -Force $MarkerFile
+        Write-Host "Cleaned stale reload marker: $MarkerFile"
+    }
+
+    $NoSaveFlag = Join-Path $InstallDir "twdll_no_save_reload.flag"
+    New-Item -ItemType File -Force -Path $NoSaveFlag | Out-Null
+    Write-Host "Created no-save-reload flag: $NoSaveFlag"
+
+    $TestPackName = Split-Path $TestPack -Leaf
+    Copy-Item -Force $TestPack "$DataDir\"
+
+    $s = @"
+mod "twdll_test_valerius.pack";
+mod "startpos_war_of_the_ring.pack";
+mod "tdd_pack1_main_1.1.0.9.pack";
+mod "tdd_pack2_battles_1.1.0.9.pack";
+mod "tdd_pack3_campaign_1.0.0.pack";
+mod "tdd_pack4_models_1.1.0_rev.9.pack";
+mod "tdd_pack5_buildings_1.1.0_rev.9.pack";
+mod "tdd_pack6_weather_1.0.0.pack";
+"@
+    Set-Content -Path (Join-Path $ScriptDir "user.script.txt") -Value $s
+    Write-Host "TDD campaign env installed for $Game"
 }
 
 function Fix-CpuAffinity($procName) {
@@ -314,9 +347,11 @@ switch ($c) {
     "test"         { Install-Test; Launch-Game; Tail-Log }
     "test-keep"    { Install-Test; Launch-Game; Tail-Log-Keep }
     "test-keep-nosavereload" { Install-Test-NoSaveReload; Launch-Game; Tail-Log-Keep }
+    "install-tdd"  { Install-Tdd }
+    "tdd"          { Install-Tdd; Launch-Game; Tail-Log-Keep }
     "help" {
         Write-Host "Usage: .\tools\twdll.ps1 <command> <game> [-Steam]"
-        Write-Host "Commands: pack, install, install-test, run, run-test, tail, test, test-keep, test-keep-nosavereload"
+        Write-Host "Commands: pack, install, install-test, run, run-test, tail, test, test-keep, test-keep-nosavereload, install-tdd, tdd"
     }
     Default {
         Write-Error "Unknown command: $Command"
