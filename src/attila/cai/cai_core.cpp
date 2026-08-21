@@ -2,7 +2,7 @@
 /// Campaign AI decision logging and telemetry extensions.
 #include "cai_common.h"
 
-bool g_cai_logging_enabled = true;
+bool g_cai_logging_enabled = false;
 
 const char* get_cai_faction_key(void* faction_cai) {
     if (!faction_cai) return "null_faction";
@@ -38,6 +38,7 @@ void install_cai_hooks(uintptr_t base, size_t size) {
 
 void uninstall_cai_hooks() {
     uninstall_cai_occupation_hook();
+    g_cai_logging_enabled = false;
 }
 
 /***

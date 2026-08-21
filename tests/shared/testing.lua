@@ -415,6 +415,14 @@ local function run_twdll_tests()
                 twdll.core.Log("[TEST] SetMaxUnitsInNavy: FAILED (expected 15, got " .. tostring(navy_after) .. ")")
                 report("SetMaxUnitsInNavy", false)
             end
+
+            -- Test restore via no-arg / nil
+            twdll.world.SetMaxUnitsInArmy()
+            twdll.world.SetMaxUnitsInNavy(nil)
+            local army_restored = twdll.world.GetMaxUnitsInArmy()
+            local navy_restored = twdll.world.GetMaxUnitsInNavy()
+            report("SetMaxUnitsInArmy() restores default", army_restored == army_before)
+            report("SetMaxUnitsInNavy(nil) restores default", navy_restored == navy_before)
         end
 
         -- ======================================================
@@ -1426,10 +1434,10 @@ local function run_twdll_tests()
                 local clamped_traits = twdll.world.GetMaxTraits()
                 report("twdll.world.SetMaxTraits clamps < 1 to 1", clamped_traits == 1)
 
-                -- Restore default 10
-                twdll.world.SetMaxTraits(10)
+                -- Restore default 10 via no-arg
+                twdll.world.SetMaxTraits()
                 local restored_traits = twdll.world.GetMaxTraits()
-                report("twdll.world.SetMaxTraits restored to 10", restored_traits == 10)
+                report("twdll.world.SetMaxTraits() restored to 10", restored_traits == 10)
             end
         end
 

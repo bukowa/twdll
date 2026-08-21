@@ -16,6 +16,10 @@ using twdll::TW_World;
 static TW_World* g_world = nullptr;
 static void* orig_world_ctor = nullptr;
 static uintptr_t world_ctor_addr = 0;
+static int g_orig_max_units_army = -1;
+static int g_orig_max_units_navy = -1;
+static int g_orig_max_traits     = -1;
+
 
 static void LogWorldHook(void* ptr) {
     g_world = static_cast<TW_World*>(ptr);
@@ -124,18 +128,28 @@ static int GetMaxUnitsInArmy(lua_State* L) {
 /***
 Sets the maximum number of units allowed per land army.
 Affects recruitment limits, army stacking, and UI capacity.
+Pass no arguments or `nil` to restore the vanilla engine default (20).
 @function SetMaxUnitsInArmy
-@tparam integer val new maximum unit count (e.g. 40)
+@tparam[opt] integer val new maximum unit count (e.g. 40), or omit/nil to restore the default
 @usage
 -- Allow up to 40 units per land army:
 twdll.world.SetMaxUnitsInArmy(40)
+
+-- Restore vanilla default (20):
+twdll.world.SetMaxUnitsInArmy()
 */
 static int SetMaxUnitsInArmy(lua_State* L) {
-    int val = static_cast<int>(l_tointeger(L, 1));
-    if (g_empire_module) {
-        tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY, val);
-        Log("[twdll] SetMaxUnitsInArmy: %d", val);
+    if (!g_empire_module) return 0;
+    if (g_orig_max_units_army == -1) {
+        g_orig_max_units_army = tw_read<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY);
     }
+    int val = g_orig_max_units_army;
+    if (l_type(L, 1) > LUA_TNIL) {
+        val = static_cast<int>(l_tointeger(L, 1));
+        if (val < 1) val = 1;
+    }
+    tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY, val);
+    Log("[twdll] SetMaxUnitsInArmy: %d", val);
     return 0;
 }
 
@@ -158,18 +172,28 @@ static int GetMaxUnitsInNavy(lua_State* L) {
 /***
 Sets the maximum number of units allowed per naval fleet.
 Affects naval recruitment limits and fleet stacking.
+Pass no arguments or `nil` to restore the vanilla engine default (20).
 @function SetMaxUnitsInNavy
-@tparam integer val new maximum unit count (e.g. 30)
+@tparam[opt] integer val new maximum unit count (e.g. 30), or omit/nil to restore the default
 @usage
 -- Allow up to 30 ships per naval fleet:
 twdll.world.SetMaxUnitsInNavy(30)
+
+-- Restore vanilla default (20):
+twdll.world.SetMaxUnitsInNavy()
 */
 static int SetMaxUnitsInNavy(lua_State* L) {
-    int val = static_cast<int>(l_tointeger(L, 1));
-    if (g_empire_module) {
-        tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY, val);
-        Log("[twdll] SetMaxUnitsInNavy: %d", val);
+    if (!g_empire_module) return 0;
+    if (g_orig_max_units_navy == -1) {
+        g_orig_max_units_navy = tw_read<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY);
     }
+    int val = g_orig_max_units_navy;
+    if (l_type(L, 1) > LUA_TNIL) {
+        val = static_cast<int>(l_tointeger(L, 1));
+        if (val < 1) val = 1;
+    }
+    tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY, val);
+    Log("[twdll] SetMaxUnitsInNavy: %d", val);
     return 0;
 }
 
@@ -229,27 +253,25 @@ bool set_reinforcement_cap(bool restore_default, uint32_t max_units) {
 
 /***
 Sets the reinforcement cap (maximum concurrent units per army in tactical battles) for battles started
-after this call. Pass `-1` to restore the vanilla engine default.
+after this call. Pass no arguments or `nil` to restore the vanilla engine default.
 Any value `>= 0` is applied as an absolute cap.
 @function SetReinforcementCap
-@tparam integer max_units new cap value (e.g. 40, 80), or -1 to restore the default
+@tparam[opt] integer max_units new cap value (e.g. 40, 80), or omit/nil to restore the default
 @usage
 -- Allow up to 40 reinforcement units simultaneously in tactical battle:
 twdll.world.SetReinforcementCap(40)
 
 -- Restore vanilla behavior:
-twdll.world.SetReinforcementCap(-1)
+twdll.world.SetReinforcementCap()
 */
 static int SetReinforcementCap(lua_State* L) {
     if (l_type(L, 1) == LUA_TNIL || l_type(L, 1) == LUA_TNONE) {
+        set_reinforcement_cap(true, 0);
         return 0;
     }
-    // lua_Integer is 32-bit in Attila's Lua; -1 means restore default.
     int v = static_cast<int>(l_tointeger(L, 1));
-    if (v == -1) {
+    if (v < 0) {
         set_reinforcement_cap(true, 0);
-    } else if (v < 0) {
-        Log("[twdll] SetReinforcementCap: value must be >= 0 or -1 (default), got %d", v);
     } else {
         set_reinforcement_cap(false, static_cast<uint32_t>(v));
     }
@@ -298,19 +320,28 @@ static int GetMaxTraits(lua_State* L) {
 /***
 Sets the maximum number of traits a character can hold simultaneously.
 Prevents new traits from being discarded when a character exceeds 10 traits.
+Pass no arguments or `nil` to restore the vanilla engine default (10).
 @function SetMaxTraits
-@tparam integer val new maximum trait count (e.g. 20, 30, 50)
+@tparam[opt] integer val new maximum trait count (e.g. 20, 30, 50), or omit/nil to restore the default
 @usage
 -- Expand character trait limit to 30:
 twdll.world.SetMaxTraits(30)
+
+-- Restore vanilla default (10):
+twdll.world.SetMaxTraits()
 */
 static int SetMaxTraits(lua_State* L) {
-    int val = static_cast<int>(l_tointeger(L, 1));
-    if (val < 1) val = 1;
-    if (g_empire_module) {
-        tw_write<int>(g_empire_module, OFFSET_MAX_TRAITS, val);
-        Log("[twdll] SetMaxTraits: %d", val);
+    if (!g_empire_module) return 0;
+    if (g_orig_max_traits == -1) {
+        g_orig_max_traits = tw_read<int>(g_empire_module, OFFSET_MAX_TRAITS);
     }
+    int val = g_orig_max_traits;
+    if (l_type(L, 1) > LUA_TNIL) {
+        val = static_cast<int>(l_tointeger(L, 1));
+        if (val < 1) val = 1;
+    }
+    tw_write<int>(g_empire_module, OFFSET_MAX_TRAITS, val);
+    Log("[twdll] SetMaxTraits: %d", val);
     return 0;
 }
 
@@ -328,8 +359,27 @@ extern const luaL_Reg world_functions[] = {
     {nullptr, nullptr}
 };
 
-// Uninstall hook and clear global pointers
+// Uninstall hook and clear global pointers / restore engine defaults
 void uninstall_world_hook() {
+    if (g_empire_module) {
+        if (g_orig_max_units_army != -1) {
+            tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY, g_orig_max_units_army);
+            Log("[twdll] Restored OFFSET_MAX_UNITS_ARMY to %d", g_orig_max_units_army);
+            g_orig_max_units_army = -1;
+        }
+        if (g_orig_max_units_navy != -1) {
+            tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY, g_orig_max_units_navy);
+            Log("[twdll] Restored OFFSET_MAX_UNITS_NAVY to %d", g_orig_max_units_navy);
+            g_orig_max_units_navy = -1;
+        }
+        if (g_orig_max_traits != -1) {
+            tw_write<int>(g_empire_module, OFFSET_MAX_TRAITS, g_orig_max_traits);
+            Log("[twdll] Restored OFFSET_MAX_TRAITS to %d", g_orig_max_traits);
+            g_orig_max_traits = -1;
+        }
+    }
+    set_reinforcement_cap(true, 0);
+
     if (world_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(world_ctor_addr));
         MH_RemoveHook(reinterpret_cast<void*>(world_ctor_addr));

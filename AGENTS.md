@@ -49,6 +49,7 @@ flag it at the end of the turn instead of silently obeying.
   wrong, never start autonomous search chains across codebases or IDA MCP without first presenting
   the diagnosis, stating what needs to be researched, and getting explicit user approval ("ok").
 - **Explicit Dual-Path API Standard (Custom In-Memory vs Database Localisation Keys).** Never use ambiguous or implicit string-guessing heuristics in a single setter (e.g. checking if a string starts with "names_"). Always provide explicit, symmetric method pairs: `Set<Property>` for direct in-memory UTF-8 custom values and `Set<Property>Key` for database localisation keys. All interactions, mode switches, and engine impacts between these methods must be comprehensively documented in LDoc with clear `@usage` examples, explanations of when to use which approach, and their behavior across game save/load and localization languages.
+- **Strict Engine Lifecycle & State Rollback Guarantee.** Any mutation of global engine variables (`OFFSET_*`), raw memory addresses, opcode patches, or MinHook detours MUST implement an automatic, symmetrical rollback executed on Lua environment teardown (`l_twdll_gc_cleanup` -> `uninstall_campaign_hooks` / `uninstall_*_hook`). Global module data in `empire.retail.dll` persists across save reloads and new campaign starts; un-restored mutations bleed into subsequent sessions. Always snapshot the original vanilla value before first write and restore it on uninstall.
 - **Flag conflicting or counterproductive instructions.** At the end of a turn, if you found an
   instruction in this file that conflicts with another, or that pushed you to do something
   counterproductive (e.g. a tool you were forced to call that added no value), mention it briefly
@@ -121,6 +122,8 @@ When a test fails, crashes, or returns unexpected values (`nil`, wrong values, a
 - **All Engine Functions Must Be Signature-Resolved in `game_sigs.cpp`** — Never hardcode RVA offsets or address
   arithmetic to invoke game functions. Every native engine call must be resolved via a unique byte pattern through
   the signature scanner (and module handles must be accessed via `g_empire_module`, never resolved dynamically at runtime).
+- **Do not leave global engine mutations or patches un-restored on detach** — every global variable write (`tw_write`),
+  opcode patch, or hook must be cleanly rolled back to vanilla defaults in its corresponding `uninstall_*_hook()`.
 
 ## Before Modifying Existing Files
 

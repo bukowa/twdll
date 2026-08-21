@@ -33,6 +33,7 @@ All notable changes to this project will be documented in this file.
 - Extended the game's unit interface (`UNIT_SCRIPT_INTERFACE`) with `ConvertUnit(unit_key)` — replaces the unit with a new unit of the given type in the same army, using the engine's native unit conversion path (same as religion/technology upgrades). Health proportion (scaled men count), experience, and combat statistics are preserved, and general bodyguard snapshots are automatically synchronised. The original unit object is destroyed.
 
 ### Changed
+- `twdll.world.SetMaxTraits([val])`, `twdll.world.SetMaxUnitsInArmy([val])`, `twdll.world.SetMaxUnitsInNavy([val])`, and `twdll.world.SetReinforcementCap([val])` now accept no arguments or `nil` to restore the game's vanilla defaults, and all modified world/engine limits are automatically rolled back to their original vanilla values when the Lua environment is detached/cleaned up.
 - `twdll.core.Log` now accepts any number of arguments of any Lua data type (e.g. `nil`, numbers, booleans, tables, userdata), automatically converting them via Lua's `tostring` similar to standard `print(...)`.
 - `GetInfluence` / `SetInfluence` replace the legacy Rome 2 character methods (`GetGravitas` / `SetGravitas` and `GetAmbition` / `SetAmbition`).
 
