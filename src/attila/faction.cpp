@@ -386,28 +386,16 @@ static int CreateAgent(lua_State* L) {
         optional_settlement = faction->m_home_region;
     }
 
-    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
-    if (!hMod) {
+    if (!g_spawn_agent) {
+        Log("[twdll] faction:CreateAgent: g_spawn_agent not resolved");
         l_pushboolean(L, 0);
         return 1;
     }
 
-    using FnSpawnAgent = void(__thiscall*)(
-        void* recruitment_pool_mgr,
-        void* agent_record,
-        uint32_t* optional_position,
-        void* optional_settlement,
-        void* optional_military_force,
-        void* script_id_ca_string,
-        unsigned int character_type
-    );
-    auto fnSpawnAgent = reinterpret_cast<FnSpawnAgent>(
-        reinterpret_cast<uintptr_t>(hMod) + 0x007F2CF0);
-
-    struct { uint32_t len; uint32_t cap; const char* buf; } empty_id = { 0, 0, "" };
+    twdll::TW_CAString empty_id = { 0, 0, "" };
 
     __try {
-        fnSpawnAgent(pool_mgr, agent_rec, p_optional_position, optional_settlement, nullptr, &empty_id, 3);
+        g_spawn_agent(pool_mgr, agent_rec, p_optional_position, optional_settlement, nullptr, &empty_id, 3);
         Log("[twdll] faction:CreateAgent: agent '%s' spawned successfully for faction 0x%08X",
             agent_key, reinterpret_cast<uintptr_t>(faction));
         l_pushboolean(L, 1);
@@ -430,12 +418,10 @@ static const luaL_Reg faction_methods[] = {
     {"SetCapital",        SetCapital},
     {"InstantlyResearchTechnology", InstantlyResearchTechnology},
     {"GetPoliticalPartyList", GetPoliticalPartyList},
-    {"GetPoliticalParties",   GetPoliticalPartyList},
-    {"political_party_list",  GetPoliticalPartyList},
-    {"GetPoliticalParty", GetPoliticalParty},
-    {"GetPrimaryParty",   GetPrimaryParty},
-    {"HasPoliticalParties", HasPoliticalParties},
-    {"CreateAgent",       CreateAgent},
+    {"GetPoliticalParty",     GetPoliticalParty},
+    {"GetPrimaryParty",       GetPrimaryParty},
+    {"HasPoliticalParties",   HasPoliticalParties},
+    {"CreateAgent",           CreateAgent},
     {nullptr, nullptr}
 };
 

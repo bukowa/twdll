@@ -115,6 +115,12 @@ When a test fails, crashes, or returns unexpected values (`nil`, wrong values, a
 - **Do not create aliases** — never create `snake_case`, alternative names, or duplicate method registrations
   for Lua-exposed functions unless explicitly requested by the user. Every function must have exactly ONE canonical
   `PascalCase` name (e.g. `InstantDefect`, `GetLoyalty`, `SetLoyalty`, `GetReligionList`, `AddTrait`, `RemoveTrait`).
+- **All Engine Data Paths Must Be Formally Structured in `tw_types.h`** — Never use raw byte arithmetic (`ptr + 0x...`)
+  or chained `reinterpret_cast` in `.cpp` files. Every entity relationship, sub-object, container, or record must be
+  modeled as a typed C++ struct in `tw_types.h` and guarded by `TW_ASSERT_OFFSET`.
+- **All Engine Functions Must Be Signature-Resolved in `game_sigs.cpp`** — Never hardcode RVA offsets or address
+  arithmetic to invoke game functions. Every native engine call must be resolved via a unique byte pattern through
+  the signature scanner (and module handles must be accessed via `g_empire_module`, never resolved dynamically at runtime).
 
 ## Before Modifying Existing Files
 

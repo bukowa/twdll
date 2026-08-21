@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 // lua_api.h — Lua abstraction layer.
 //
@@ -141,6 +142,18 @@ extern lua_settop_t        g_game_lua_settop;
 #define l_pop(L, n)     g_game_lua_settop(L, -(n)-1)
 #define l_getglobal(L, s) g_game_lua_getfield(L, LUA_GLOBALSINDEX, s)
 #define l_newtable(L)   g_game_lua_createtable(L, 0, 0)
+
+inline bool l_tobool(lua_State* state, int idx) {
+    if (l_type(state, idx) == LUA_TBOOLEAN) {
+        auto* pState = reinterpret_cast<uintptr_t*>(state);
+        auto* pVal = reinterpret_cast<uint32_t*>(pState[3] + 8 * (idx - 1));
+        return (pVal[0] != 0);
+    }
+    if (l_type(state, idx) == LUA_TNUMBER) {
+        return l_tointeger(state, idx) != 0;
+    }
+    return l_type(state, idx) != LUA_TNIL && l_type(state, idx) != LUA_TNONE;
+}
 
 // Signature scan descriptor — used by lua_api.cpp + per-game lua_sigs.cpp
 struct TW_SignatureInfo {

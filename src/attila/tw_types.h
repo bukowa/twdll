@@ -145,10 +145,16 @@ struct TW_CampaignPolitics {
     char                 m_political_event_data[0x18]; // 0x5C
 };
 
+struct TW_FactionRecord {
+    TW_CAString m_key; // 0x00
+};
+
 struct TW_Faction {
     char pad_00[0x7DC];
     int  treasury;                  // 0x7DC
-    char pad_7E0[0xB0];
+    char pad_7E0[0x20];
+    TW_FactionRecord* m_faction_record; // 0x800
+    char pad_804[0x8C];
     void* m_home_region;            // 0x890
     void* m_original_home_region;   // 0x894
     void* m_home_theatre;           // 0x898
@@ -228,6 +234,24 @@ struct TW_CharacterDetailsArtSetInfo {
     TW_CharacterArtSet* m_art_set;              // 0x3C
 };
 
+struct TW_CharacterTraitRecord {
+    TW_CAString m_key; // 0x00
+};
+
+struct TW_TraitInfoRecord {
+    const TW_CharacterTraitRecord* m_character_trait; // 0x00
+};
+
+struct TW_MainUnitRecord {
+    TW_CAString m_key;       // 0x00
+    char        pad_0C[0x1C];
+    uint32_t    m_num_men;   // 0x28
+};
+
+struct TW_LoyaltyFactorRecord {
+    TW_CAString m_key; // 0x00
+};
+
 struct TW_GeneralBodyguardDetails {
     void*    m_unit;                      // 0x00 (MAIN_UNIT_RECORD*)
     uint16_t m_men;                       // 0x04
@@ -239,9 +263,9 @@ struct TW_GeneralBodyguardDetails {
 };
 
 struct TW_TraitEntry {
-    void*    m_record;       // 0x00 (const TRAIT_INFO_RECORD*)
-    void*    m_level_record; // 0x04 (const CHARACTER_TRAIT_LEVEL_RECORD*)
-    int32_t  m_points;       // 0x08
+    const TW_TraitInfoRecord* m_record;       // 0x00 (const TRAIT_INFO_RECORD*)
+    void*                     m_level_record; // 0x04 (const CHARACTER_TRAIT_LEVEL_RECORD*)
+    int32_t                   m_points;       // 0x08
 };
 
 struct TW_Traits {
@@ -326,14 +350,39 @@ struct TW_MilitaryForce {
     int                     recruitment_queue_size;  // 0x45C
 };
 
+struct TW_UnitContainer {
+    TW_MilitaryForce* m_military_force; // 0x00
+};
+
+struct TW_UnitForceLink {
+    TW_UnitContainer* m_container;      // 0x00
+};
+
 struct TW_Unit {
-    char  pad_00[0x38];
-    void* m_force_link;          // 0x38  m_force_link.m_link.m_object -> ONE_TO_MANY_LINK<UNIT_CONTAINER,UNIT>*
-    char  pad_3C[0x8];           // 0x3C  m_faction, 0x40 m_unit_record
-    int   num_men;               // 0x44
-    int   max_num_men;           // 0x48
-    char  pad_4C[0x18];
-    int   action_points;         // 0x64
+    char              pad_00[0x38];
+    TW_UnitForceLink* m_force_link;     // 0x38  (ONE_TO_MANY_LINK<UNIT_CONTAINER,UNIT>*)
+    char              pad_3C[0x8];      // 0x3C  m_faction, 0x40 m_unit_record
+    int               num_men;          // 0x44
+    int               max_num_men;      // 0x48
+    char              pad_4C[0x18];
+    int               action_points;    // 0x64
+    char              pad_68[0xAC];
+    void*             m_commander_link; // 0x114 (ONE_TO_ONE_LINK to CHARACTER)
+
+    TW_MilitaryForce* get_military_force() const {
+        if (!m_force_link || !m_force_link->m_container) return nullptr;
+        return m_force_link->m_container->m_military_force;
+    }
+};
+
+struct TW_CaiRegion {
+    char        pad_00[0x114];
+    const char* m_settlement_key; // 0x114
+};
+
+struct TW_CaiSettlement {
+    char          pad_00[0x10];
+    TW_CaiRegion* m_cai_region;   // 0x10
 };
 
 // EMPIREBATTLE::LAND_STATS — live battle statistics (embedded in UNIT via LAND_STATS_MANAGER)
@@ -526,6 +575,11 @@ struct TW_GameCore {
 // EMPIREUTILITY::DATABASE_TABLE — single DB table lookup interface.
 // Verified via disasm of sub_10192660 (DATABASE_TABLE::record_index).
 struct TW_DatabaseTable {
+    void*        _vptr;       // 0x00
+    void*        m_capacity;  // 0x04
+    uint32_t     m_size;      // 0x08
+    void**       m_elements;  // 0x0C
+
     void* find_record(const char* key, size_t key_len = 0) const {
         if (!this || !g_record_index || !key) return nullptr;
         if (key_len == 0) key_len = std::strlen(key);
@@ -566,6 +620,8 @@ struct TW_Databases {
     static_assert(offsetof(S, F) == O, #S " Attila: " #F " expected at " #O)
 
 TW_ASSERT_OFFSET(TW_Faction,       treasury,                0x7DC);
+TW_ASSERT_OFFSET(TW_Faction,       m_faction_record,        0x800);
+TW_ASSERT_OFFSET(TW_FactionRecord, m_key,                   0x0);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_region,            0x890);
 TW_ASSERT_OFFSET(TW_Faction,       m_original_home_region,   0x894);
 TW_ASSERT_OFFSET(TW_Faction,       m_home_theatre,           0x898);
@@ -618,10 +674,15 @@ TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);
 TW_ASSERT_OFFSET(TW_MilitaryForceMorale, m_morale,          0x00);
 TW_ASSERT_OFFSET(TW_MilitaryForce, m_morale,                0x3E4);
 TW_ASSERT_OFFSET(TW_MilitaryForce, recruitment_queue_size,  0x45C);
+TW_ASSERT_OFFSET(TW_UnitContainer, m_military_force,        0x0);
+TW_ASSERT_OFFSET(TW_UnitForceLink, m_container,             0x0);
 TW_ASSERT_OFFSET(TW_Unit,          m_force_link,            0x38);
 TW_ASSERT_OFFSET(TW_Unit,          num_men,                 0x44);
 TW_ASSERT_OFFSET(TW_Unit,          max_num_men,             0x48);
 TW_ASSERT_OFFSET(TW_Unit,          action_points,           0x64);
+TW_ASSERT_OFFSET(TW_Unit,          m_commander_link,        0x114);
+TW_ASSERT_OFFSET(TW_CaiRegion,     m_settlement_key,        0x114);
+TW_ASSERT_OFFSET(TW_CaiSettlement, m_cai_region,            0x10);
 TW_ASSERT_OFFSET(TW_LandStats,     charge_bonus,            0x38);
 TW_ASSERT_OFFSET(TW_LandStats,     morale,                  0x44);
 TW_ASSERT_OFFSET(TW_LandStats,     melee_attack,            0x48);
@@ -690,6 +751,14 @@ TW_ASSERT_OFFSET(TW_CharacterDetails, m_is_immortal,                   0x348);
 TW_ASSERT_OFFSET(TW_CharacterDetails, m_turns_to_resurrection,         0x34C);
 TW_ASSERT_OFFSET(TW_Traits, m_size,                                   0x8);
 TW_ASSERT_OFFSET(TW_Traits, m_elements,                               0xC);
+TW_ASSERT_OFFSET(TW_CharacterTraitRecord, m_key,                      0x0);
+TW_ASSERT_OFFSET(TW_TraitInfoRecord, m_character_trait,               0x0);
+TW_ASSERT_OFFSET(TW_LoyaltyFactorRecord, m_key,                       0x0);
+TW_ASSERT_OFFSET(TW_MainUnitRecord, m_key,                            0x0);
+TW_ASSERT_OFFSET(TW_MainUnitRecord, m_num_men,                        0x28);
+TW_ASSERT_OFFSET(TW_Unit, m_commander_link,                           0x114);
+TW_ASSERT_OFFSET(TW_DatabaseTable, m_size,                            0x8);
+TW_ASSERT_OFFSET(TW_DatabaseTable, m_elements,                        0xC);
 
 // Per-type pointer offset inside the Lua userdata wrapper.
 // Specialize via TW_PTR_OFFSET(T, offset) for each type.

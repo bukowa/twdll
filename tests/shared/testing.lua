@@ -751,13 +751,12 @@ local function run_twdll_tests()
                         ["att_politics_hunni_council"] = { senators = 720, power_pct = 30, primary = false },
                     }
 
-                    -- GetPoliticalPartyList: exactly the two known parties + alias check
+                    -- GetPoliticalPartyList: exactly the two known parties
                     local list_ok = type(parties) == "userdata"
                         and parties:num_items() == 2
                         and not parties:is_empty()
                         and parties:item_at(-1) == nil
                         and parties:item_at(999) == nil
-                        and f:GetPoliticalParties():num_items() == 2
                     report("PoliticalParties list", list_ok)
 
                     -- per-party data against hardcoded values
@@ -822,7 +821,7 @@ local function run_twdll_tests()
 
                     -- HasPoliticalParties: false on a faction with no parties, if one exists
                     if empty_faction ~= nil then
-                        local empty_list = empty_faction:GetPoliticalParties()
+                        local empty_list = empty_faction:GetPoliticalPartyList()
                         local ok = empty_faction:HasPoliticalParties() == false
                             and empty_list ~= nil
                             and empty_list:num_items() == 0
@@ -959,8 +958,8 @@ local function run_twdll_tests()
         -- ======================================================
         twdll.core.Log("[TEST] --- Test: Political Parties & SetPrimary ---")
         local hun_faction = game:model():world():faction_by_key("att_fact_hunni")
-        if hun_faction and type(hun_faction.GetPoliticalParties) == "function" then
-            local parties = hun_faction:GetPoliticalParties()
+        if hun_faction and type(hun_faction.GetPoliticalPartyList) == "function" then
+            local parties = hun_faction:GetPoliticalPartyList()
             local num_parties = (parties and type(parties.num_items) == "function") and parties:num_items() or 0
             twdll.core.Log(string.format("[TEST] hunni political parties count = %d", num_parties))
             report("political parties num_items > 0", num_parties > 0)
@@ -994,7 +993,7 @@ local function run_twdll_tests()
                 record_skip()
             end
         else
-            twdll.core.Log("[TEST] Political Parties: SKIPPED (GetPoliticalParties not available)")
+            twdll.core.Log("[TEST] Political Parties: SKIPPED (GetPoliticalPartyList not available)")
             record_skip()
         end
 
@@ -1022,8 +1021,8 @@ local function run_twdll_tests()
             report("character GetPoliticalParty valid", char_party ~= nil)
             report("character initial party is primary", char_party ~= nil and char_party:IsPrimary() == true)
 
-            if char_party and hun_faction and type(hun_faction.GetPoliticalParties) == "function" then
-                local parties = hun_faction:GetPoliticalParties()
+            if char_party and hun_faction and type(hun_faction.GetPoliticalPartyList) == "function" then
+                local parties = hun_faction:GetPoliticalPartyList()
                 if parties and parties:num_items() >= 2 then
                     local p0 = parties:item_at(0)
                     local p1 = parties:item_at(1)
@@ -1096,14 +1095,13 @@ local function run_twdll_tests()
                     local num_items = is_ud and religions:num_items() or 0
                     twdll.core.Log(string.format("[TEST] Region att_reg_scandza_hafn religions count: %d", num_items))
 
-                    local list_valid = is_ud and num_items > 0 and not religions:is_empty() and region:GetReligions():num_items() == num_items
+                    local list_valid = is_ud and num_items > 0 and not religions:is_empty()
                     report("Region GetReligionList valid", list_valid)
                     report("Region religion list is_empty false", religions:is_empty() == false)
 
                     local sum_proportion = 0.0
                     local found_majority = false
                     local majority_key = region:majority_religion()
-                    local aliases_ok = true
 
                     for i = 0, num_items - 1 do
                         local rel = religions:item_at(i)
@@ -1111,11 +1109,6 @@ local function run_twdll_tests()
                             local r_key = rel:GetKey()
                             local r_prop = rel:GetProportion()
                             local r_icon = rel:GetIconPath()
-
-                            -- Test aliases (lowercase)
-                            if rel:key() ~= r_key or rel:proportion() ~= r_prop or rel:icon_path() ~= r_icon then
-                                aliases_ok = false
-                            end
 
                             sum_proportion = sum_proportion + r_prop
                             twdll.core.Log(string.format("[TEST]   religion[%d]: key='%s', proportion=%.4f, icon='%s'", i, tostring(r_key), r_prop, tostring(r_icon)))
@@ -1129,8 +1122,6 @@ local function run_twdll_tests()
                             end
                         end
                     end
-
-                    report("Region religion methods and aliases match", aliases_ok)
 
                     local sum_ok = math.abs(sum_proportion - 1.0) < 0.05
                     twdll.core.Log(string.format("[TEST] Total religion proportion sum: %.4f (sum_ok=%s)", sum_proportion, tostring(sum_ok)))

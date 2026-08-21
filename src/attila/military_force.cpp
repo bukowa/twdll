@@ -104,14 +104,14 @@ static int DisbandUnits(lua_State* L) {
         return 1;
     }
 
-    void* vec[3] = {
+    twdll::TW_VectorNcc vec = {
         reinterpret_cast<void*>(units_to_disband.size()),
-        reinterpret_cast<void*>(units_to_disband.size()),
+        static_cast<int>(units_to_disband.size()),
         units_to_disband.data()
     };
     Log("[twdll] force:DisbandUnits: force=0x%08X disbanding %d units",
         reinterpret_cast<uintptr_t>(force), static_cast<int>(units_to_disband.size()));
-    g_disband_units(vec, g_campaign_model);
+    g_disband_units(&vec, g_campaign_model);
     l_pushboolean(L, 1);
     return 1;
 }

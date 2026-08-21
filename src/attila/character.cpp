@@ -126,8 +126,9 @@ static int SetDefaultBodyGuard(lua_State* L) {
         return 1;
     }
 
+    auto* unit_rec = static_cast<const twdll::TW_MainUnitRecord*>(record);
     ch->details.m_initial_general_bodyguard_details.m_unit = record;
-    uint16_t num_men = static_cast<uint16_t>(*reinterpret_cast<uint32_t*>(reinterpret_cast<char*>(record) + 0x28));
+    uint16_t num_men = static_cast<uint16_t>(unit_rec->m_num_men);
     ch->details.m_initial_general_bodyguard_details.m_men = num_men;
     ch->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = num_men;
 
@@ -330,8 +331,8 @@ static int AddTrait(lua_State* L) {
         show_msg = true;
     }
 
-    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
-    if (!hMod) {
+    if (!g_add_trait) {
+        Log("[twdll] char:AddTrait: g_add_trait not resolved");
         l_pushboolean(L, 0);
         return 1;
     }
@@ -341,11 +342,7 @@ static int AddTrait(lua_State* L) {
     str.m_pad = str.m_len;
     str.m_data = trait_key;
 
-    using FnAddTrait = int(__thiscall*)(void* ch, const twdll::TW_CAString* trait_str, int points, int show_msg);
-    auto fnAddTrait = reinterpret_cast<FnAddTrait>(
-        reinterpret_cast<uintptr_t>(hMod) + 0x00797900);
-
-    fnAddTrait(ch, &str, points, show_msg ? 1 : 0);
+    g_add_trait(ch, &str, points, show_msg ? 1 : 0);
     Log("[twdll] char:AddTrait: added trait '%s' to character 0x%08X", trait_key, reinterpret_cast<uintptr_t>(ch));
     l_pushboolean(L, 1);
     return 1;
@@ -368,42 +365,35 @@ static int RemoveTrait(lua_State* L) {
     }
     const char* trait_key = l_checkstring(L, 2);
     auto* traits = &ch->details.traits;
-    if (!traits || !traits->m_elements || traits->m_size == 0) {
+    if (!traits->m_elements || traits->m_size == 0) {
         l_pushboolean(L, 0);
         return 1;
     }
 
     for (uint32_t i = 0; i < traits->m_size; ++i) {
         auto& entry = traits->m_elements[i];
-        if (entry.m_record) {
-            auto* char_trait_rec = *reinterpret_cast<const char* const*>(entry.m_record);
-            if (char_trait_rec) {
-                const char* key = *reinterpret_cast<const char* const*>(char_trait_rec + 0x8);
-                if (key && strcmp(key, trait_key) == 0) {
-                    if (entry.m_level_record && traits->_vptr) {
-                        using FnOnRemoveLevel = void(__thiscall*)(void*, void*);
-                        auto* vtbl = static_cast<FnOnRemoveLevel*>(traits->_vptr);
-                        if (vtbl) {
-                            vtbl[0](traits, entry.m_level_record);
-                        }
+        if (entry.m_record && entry.m_record->m_character_trait) {
+            const char* key = entry.m_record->m_character_trait->m_key.m_data;
+            if (key && strcmp(key, trait_key) == 0) {
+                if (entry.m_level_record && traits->_vptr) {
+                    using FnOnRemoveLevel = void(__thiscall*)(void*, void*);
+                    auto* vtbl = static_cast<FnOnRemoveLevel*>(traits->_vptr);
+                    if (vtbl) {
+                        vtbl[0](traits, entry.m_level_record);
                     }
-                    for (uint32_t j = i; j + 1 < traits->m_size; ++j) {
-                        traits->m_elements[j] = traits->m_elements[j + 1];
-                    }
-                    traits->m_size--;
-
-                    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
-                    if (hMod) {
-                        using FnSetEffectList = void(__thiscall*)(void*);
-                        auto fnSetEffectList = reinterpret_cast<FnSetEffectList>(
-                            reinterpret_cast<uintptr_t>(hMod) + 0x00728750);
-                        fnSetEffectList(traits);
-                    }
-
-                    Log("[twdll] char:RemoveTrait: removed trait '%s'", trait_key);
-                    l_pushboolean(L, 1);
-                    return 1;
                 }
+                for (uint32_t j = i; j + 1 < traits->m_size; ++j) {
+                    traits->m_elements[j] = traits->m_elements[j + 1];
+                }
+                traits->m_size--;
+
+                if (g_set_effect_list) {
+                    g_set_effect_list(traits);
+                }
+
+                Log("[twdll] char:RemoveTrait: removed trait '%s'", trait_key);
+                l_pushboolean(L, 1);
+                return 1;
             }
         }
     }
@@ -443,21 +433,18 @@ static int GetTraitList(lua_State* L) {
     }
     auto* traits = &ch->details.traits;
     l_newtable(L);
-    if (!traits || !traits->m_elements || traits->m_size == 0) {
+    if (!traits->m_elements || traits->m_size == 0) {
         return 1;
     }
     int idx = 1;
     for (uint32_t i = 0; i < traits->m_size; ++i) {
         const auto& entry = traits->m_elements[i];
-        if (entry.m_record) {
-            auto* char_trait_rec = *reinterpret_cast<const char* const*>(entry.m_record);
-            if (char_trait_rec) {
-                const char* key = *reinterpret_cast<const char* const*>(char_trait_rec + 0x8);
-                if (key && key[0] != '\0') {
-                    l_pushinteger(L, idx++);
-                    l_pushstring(L, key);
-                    l_settable(L, -3);
-                }
+        if (entry.m_record && entry.m_record->m_character_trait) {
+            const char* key = entry.m_record->m_character_trait->m_key.m_data;
+            if (key && key[0] != '\0') {
+                l_pushinteger(L, idx++);
+                l_pushstring(L, key);
+                l_settable(L, -3);
             }
         }
     }
@@ -481,15 +468,11 @@ static int GetLoyalty(lua_State* L) {
         l_pushinteger(L, 0);
         return 1;
     }
-    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
-    if (!hMod) {
+    if (!g_get_loyalty) {
         l_pushinteger(L, 0);
         return 1;
     }
-    using FnGetLoyalty = int(__thiscall*)(void*);
-    auto fnGetLoyalty = reinterpret_cast<FnGetLoyalty>(
-        reinterpret_cast<uintptr_t>(hMod) + 0x007C5920);
-    l_pushinteger(L, fnGetLoyalty(ch));
+    l_pushinteger(L, g_get_loyalty(ch));
     return 1;
 }
 
@@ -576,29 +559,20 @@ static int GetLoyaltyFactorList(lua_State* L) {
     l_newtable(L);
     if (!ch) return 1;
 
-    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
-    if (!hMod) return 1;
+    if (!g_get_loyalty_factors) return 1;
 
     int8_t factors[32]{};
-    using FnGetFactors = void*(__thiscall*)(void*, void*);
-    auto fnGetFactors = reinterpret_cast<FnGetFactors>(
-        reinterpret_cast<uintptr_t>(hMod) + 0x007C5A00);
-
-    fnGetFactors(ch, factors);
+    g_get_loyalty_factors(ch, factors);
 
     auto* dbs = TW_Databases::get();
-    void** factor_records = nullptr;
-    uint32_t factor_count = 0;
-    if (dbs && dbs->loyalty_factors) {
-        factor_records = *reinterpret_cast<void***>(reinterpret_cast<uintptr_t>(dbs->loyalty_factors) + 0x0C);
-        factor_count = *reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(dbs->loyalty_factors) + 0x08);
-    }
+    auto* table = dbs ? dbs->loyalty_factors : nullptr;
 
-    for (int i = 0; i < 32; ++i) {
+    for (uint32_t i = 0; i < 32; ++i) {
         if (factors[i] != 0) {
             const char* key = nullptr;
-            if (factor_records && static_cast<uint32_t>(i) < factor_count && factor_records[i]) {
-                key = *reinterpret_cast<const char* const*>(reinterpret_cast<uintptr_t>(factor_records[i]) + 0x08);
+            if (table && table->m_elements && i < table->m_size && table->m_elements[i]) {
+                auto* rec = static_cast<const twdll::TW_LoyaltyFactorRecord*>(table->m_elements[i]);
+                key = rec->m_key.m_data;
             }
             if (key && key[0] != '\0') {
                 l_pushstring(L, key);
@@ -657,29 +631,16 @@ static int TransferToFaction(lua_State* L) {
         return 1;
     }
 
-    HMODULE hMod = GetModuleHandleA("empire.retail.dll");
-    if (!hMod) {
+    if (!g_get_faction_record || !g_reassign_faction) {
+        Log("[twdll] char:TransferToFaction: function signatures not resolved");
         l_pushboolean(L, 0);
         return 1;
     }
 
-    using FnGetFactionRecord = void*(__thiscall*)(void* faction);
-    auto fnGetFactionRecord = reinterpret_cast<FnGetFactionRecord>(
-        reinterpret_cast<uintptr_t>(hMod) + 0x006FF720);
-
-    void* faction_rec = fnGetFactionRecord(target_faction);
+    void* faction_rec = g_get_faction_record(target_faction);
 
     void* rebel_region = nullptr;
     int replenish = 0;
-
-    auto get_bool = [](lua_State* state, int idx) -> int {
-        if (l_type(state, idx) == LUA_TBOOLEAN) {
-            auto* pState = reinterpret_cast<uintptr_t*>(state);
-            auto* pVal = reinterpret_cast<uint32_t*>(pState[3] + 8 * (idx - 1));
-            return (pVal[0] != 0) ? 1 : 0;
-        }
-        return 0;
-    };
 
     if (l_type(L, 3) == LUA_TTABLE) {
         l_getfield(L, 3, "replenish_units");
@@ -687,8 +648,8 @@ static int TransferToFaction(lua_State* L) {
             l_pop(L, 1);
             l_getfield(L, 3, "replenish");
         }
-        if (l_type(L, -1) == LUA_TBOOLEAN) {
-            replenish = get_bool(L, -1);
+        if (l_type(L, -1) != LUA_TNIL && l_type(L, -1) != LUA_TNONE) {
+            replenish = l_tobool(L, -1) ? 1 : 0;
         }
         l_pop(L, 1);
 
@@ -703,12 +664,8 @@ static int TransferToFaction(lua_State* L) {
         l_pop(L, 1);
     }
 
-    using FnReassignFaction = void(__thiscall*)(void* ch, void* target_fac, void* fac_rec, void* rebel_region, int replenish, int bribed, int kill_faction_if_leader);
-    auto fnReassignFaction = reinterpret_cast<FnReassignFaction>(
-        reinterpret_cast<uintptr_t>(hMod) + 0x007E6400);
-
     __try {
-        fnReassignFaction(ch, target_faction, faction_rec, rebel_region, replenish, 0, 0);
+        g_reassign_faction(ch, target_faction, faction_rec, rebel_region, replenish, 0, 0);
         Log("[twdll] char:TransferToFaction: character 0x%08X successfully transferred to faction 0x%08X (replenish=%d, rebel_reg=0x%08X)",
             reinterpret_cast<uintptr_t>(ch), reinterpret_cast<uintptr_t>(target_faction), replenish, reinterpret_cast<uintptr_t>(rebel_region));
         l_pushboolean(L, 1);
@@ -1154,18 +1111,6 @@ static int IsImmortal(lua_State* L) {
     return 1;
 }
 
-static bool get_lua_bool(lua_State* state, int idx) {
-    if (l_type(state, idx) == LUA_TBOOLEAN) {
-        auto* pState = reinterpret_cast<uintptr_t*>(state);
-        auto* pVal = reinterpret_cast<uint32_t*>(pState[3] + 8 * (idx - 1));
-        return (pVal[0] != 0);
-    }
-    if (l_type(state, idx) == LUA_TNUMBER) {
-        return l_tointeger(state, idx) != 0;
-    }
-    return l_type(state, idx) != LUA_TNIL && l_type(state, idx) != LUA_TNONE;
-}
-
 /***
 Sets the immortality flag of the character.
 @function SetImmortal
@@ -1176,7 +1121,7 @@ Sets the immortality flag of the character.
 static int SetImmortal(lua_State* L) {
     auto* ch = twdll::tw_unwrap<TW_Character>(L, 1);
     if (!ch) { l_pushboolean(L, 0); return 1; }
-    ch->details.m_is_immortal = get_lua_bool(L, 2);
+    ch->details.m_is_immortal = l_tobool(L, 2);
     l_pushboolean(L, 1);
     return 1;
 }

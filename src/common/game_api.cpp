@@ -9,6 +9,7 @@ extern const char* GAME_MODULE_NAME;
 void initialize_game_api() {
     HMODULE hMod = GetModuleHandleA(GAME_MODULE_NAME);
     if (!hMod) { Log("[twdll] initialize_game_api: %s not found", GAME_MODULE_NAME); return; }
+    g_empire_module = hMod;
 
     MODULEINFO mi = {};
     if (!GetModuleInformation(GetCurrentProcess(), hMod, &mi, sizeof(mi))) {

@@ -113,8 +113,8 @@ Gets the maximum number of units allowed per land army (vanilla default: 20).
 local max_army_units = twdll.world.GetMaxUnitsInArmy()
 */
 static int GetMaxUnitsInArmy(lua_State* L) {
-    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
-        l_pushinteger(L, *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_UNITS_ARMY));
+    if (g_empire_module) {
+        l_pushinteger(L, tw_read<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY));
         return 1;
     }
     l_pushnil(L);
@@ -132,8 +132,8 @@ twdll.world.SetMaxUnitsInArmy(40)
 */
 static int SetMaxUnitsInArmy(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));
-    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
-        *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_UNITS_ARMY) = val;
+    if (g_empire_module) {
+        tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY, val);
         Log("[twdll] SetMaxUnitsInArmy: %d", val);
     }
     return 0;
@@ -147,8 +147,8 @@ Gets the maximum number of units allowed per naval fleet (vanilla default: 20).
 local max_navy_units = twdll.world.GetMaxUnitsInNavy()
 */
 static int GetMaxUnitsInNavy(lua_State* L) {
-    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
-        l_pushinteger(L, *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_UNITS_NAVY));
+    if (g_empire_module) {
+        l_pushinteger(L, tw_read<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY));
         return 1;
     }
     l_pushnil(L);
@@ -166,8 +166,8 @@ twdll.world.SetMaxUnitsInNavy(30)
 */
 static int SetMaxUnitsInNavy(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));
-    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
-        *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_UNITS_NAVY) = val;
+    if (g_empire_module) {
+        tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY, val);
         Log("[twdll] SetMaxUnitsInNavy: %d", val);
     }
     return 0;
@@ -287,8 +287,8 @@ Gets the maximum number of traits a character can hold simultaneously (vanilla d
 local max_traits = twdll.world.GetMaxTraits()
 */
 static int GetMaxTraits(lua_State* L) {
-    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
-        l_pushinteger(L, *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_TRAITS));
+    if (g_empire_module) {
+        l_pushinteger(L, tw_read<int>(g_empire_module, OFFSET_MAX_TRAITS));
         return 1;
     }
     l_pushnil(L);
@@ -307,8 +307,8 @@ twdll.world.SetMaxTraits(30)
 static int SetMaxTraits(lua_State* L) {
     int val = static_cast<int>(l_tointeger(L, 1));
     if (val < 1) val = 1;
-    if (HMODULE hMod = GetModuleHandleA("empire.retail.dll")) {
-        *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(hMod) + OFFSET_MAX_TRAITS) = val;
+    if (g_empire_module) {
+        tw_write<int>(g_empire_module, OFFSET_MAX_TRAITS, val);
         Log("[twdll] SetMaxTraits: %d", val);
     }
     return 0;

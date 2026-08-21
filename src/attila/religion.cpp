@@ -70,11 +70,8 @@ static int GetIconPath(lua_State* L) {
 
 static const luaL_Reg religion_methods[] = {
     {"GetKey",        GetKey},
-    {"key",           GetKey},
     {"GetProportion", GetProportion},
-    {"proportion",    GetProportion},
     {"GetIconPath",   GetIconPath},
-    {"icon_path",     GetIconPath},
     {nullptr, nullptr}
 };
 

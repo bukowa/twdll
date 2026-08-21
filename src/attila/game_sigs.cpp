@@ -46,9 +46,17 @@
 #define CA_STRING_ASSIGN_SIG "83 EC 0C 56 57 8B F9 8B 4C 24 18 8B F1 8D 56 01"
 // CHARACTER_DETAILS_ART_SET_INFO::update_art_set @ 0x107F83D0
 #define UPDATE_ART_SET_SIG "83 EC 30 53 56 57 8B 7C 24 40 8B D9 8B 37 8B 43 3C 89 44 24"
+#define ADD_TRAIT_SIG "56 8B F1 8D 8E ? ? ? ? E8 ? ? ? ? 8B C8 E8 ? ? ? ? FF 74 24 ? 8B C8 E8 ? ? ? ? 85 C0 74 ? FF 74 24 ? 8B CE FF 74 24"
+#define SET_EFFECT_LIST_SIG "83 EC 0C 53 55 8B D9 8D 4C 24"
+#define GET_LOYALTY_SIG "83 EC 20 56 8B F1 57 8B 8E"
+#define GET_LOYALTY_FACTORS_SIG "83 EC 08 53 55 8B D9 C6 44 24 ? ? 56 57 8D BB"
+#define GET_FACTION_RECORD_SIG "8B 81 ? ? ? ? 85 C0 75 ? 81 C1 58 01 00 00"
+#define REASSIGN_FACTION_SIG "83 EC 08 53 55 8B D9 C6 44 24 ? ? 56 57 8D 8B"
+#define SPAWN_AGENT_SIG "81 EC 08 05 00 00 53 55"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
+HMODULE            g_empire_module        = nullptr;
 FnFactionProvinceManager g_faction_province_manager = nullptr;
 FnResolvePortraitPath    g_resolve_portrait_path    = nullptr;
 FnCaStringAssign         g_ca_string_assign         = nullptr;
@@ -63,6 +71,13 @@ static uintptr_t   g_force_settlement_refresh_addr = 0;
 FnInstantSetResearched g_instant_set_researched = nullptr;
 FnRecordIndex          g_record_index           = nullptr;
 FnConvertUnit          g_convert_unit           = nullptr;
+FnAddTrait             g_add_trait              = nullptr;
+FnSetEffectList        g_set_effect_list        = nullptr;
+FnGetLoyalty           g_get_loyalty            = nullptr;
+FnGetLoyaltyFactors    g_get_loyalty_factors    = nullptr;
+FnGetFactionRecord     g_get_faction_record     = nullptr;
+FnReassignFaction      g_reassign_faction       = nullptr;
+FnSpawnAgent           g_spawn_agent            = nullptr;
 
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
@@ -96,5 +111,12 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"DATABASE_TABLE::record_index",                       (void**)&g_record_index,           RECORD_INDEX_SIG},
     {"UNIT::convert_unit",                                 (void**)&g_convert_unit,           CONVERT_UNIT_SIG},
     {"CAMPAIGN_BUILDING_DISPLAY::update_animation",        (void**)&g_update_animation_addr,  UPDATE_ANIMATION_SIG},
+    {"CHARACTER::add_trait",                               (void**)&g_add_trait,              ADD_TRAIT_SIG},
+    {"CHARACTER_TRAITS::set_effect_list",                  (void**)&g_set_effect_list,         SET_EFFECT_LIST_SIG},
+    {"CHARACTER::get_loyalty",                             (void**)&g_get_loyalty,            GET_LOYALTY_SIG},
+    {"CHARACTER::get_loyalty_factors",                     (void**)&g_get_loyalty_factors,    GET_LOYALTY_FACTORS_SIG},
+    {"FACTION::get_faction_record",                        (void**)&g_get_faction_record,     GET_FACTION_RECORD_SIG},
+    {"CHARACTER::reassign_faction",                        (void**)&g_reassign_faction,       REASSIGN_FACTION_SIG},
+    {"CHARACTER_RECRUITMENT_POOL::spawn_agent",            (void**)&g_spawn_agent,            SPAWN_AGENT_SIG},
     {nullptr, nullptr, nullptr}
 };

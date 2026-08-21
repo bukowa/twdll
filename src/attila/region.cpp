@@ -168,8 +168,6 @@ static const luaL_Reg region_methods[] = {
     {"GetGrowthPoints",       GetGrowthPoints},
     {"SetGrowthPoints",       SetGrowthPoints},
     {"GetReligionList",       GetReligionList},
-    {"GetReligions",          GetReligionList},
-    {"religion_list",         GetReligionList},
     {"GetReligionProportion", GetReligionProportion},
     {nullptr, nullptr}
 };

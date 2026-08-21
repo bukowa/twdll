@@ -1,5 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <windows.h>
+
+extern HMODULE g_empire_module;
 
 using FnNewFactionLeader = void(__thiscall*)(void* faction, void* new_leader, void* old_char, bool heir_coming_of_age);
 extern FnNewFactionLeader g_new_faction_leader;
@@ -49,6 +52,44 @@ extern FnRecordIndex g_record_index;
 // destroy old_unit. Returns the new UNIT*.
 using FnConvertUnit = void*(__cdecl*)(void* old_unit, void* force, void* target_record);
 extern FnConvertUnit g_convert_unit;
+
+namespace twdll { struct TW_CAString; }
+
+// CHARACTER::add_trait (sub_10797900)
+using FnAddTrait = int(__thiscall*)(void* ch, const twdll::TW_CAString* trait_str, int points, int show_msg);
+extern FnAddTrait g_add_trait;
+
+// CHARACTER_TRAITS::set_effect_list (sub_10728750)
+using FnSetEffectList = void(__thiscall*)(void* traits);
+extern FnSetEffectList g_set_effect_list;
+
+// CHARACTER::get_loyalty (sub_107C5920)
+using FnGetLoyalty = int(__thiscall*)(void* ch);
+extern FnGetLoyalty g_get_loyalty;
+
+// CHARACTER::get_loyalty_factors (sub_107C5A00)
+using FnGetLoyaltyFactors = void*(__thiscall*)(void* ch, void* factors_buf);
+extern FnGetLoyaltyFactors g_get_loyalty_factors;
+
+// FACTION::get_faction_record (sub_106FF720)
+using FnGetFactionRecord = void*(__thiscall*)(void* faction);
+extern FnGetFactionRecord g_get_faction_record;
+
+// CHARACTER::reassign_faction (sub_107E6400)
+using FnReassignFaction = void(__thiscall*)(void* ch, void* target_fac, void* fac_rec, void* rebel_region, int replenish, int bribed, int kill_faction_if_leader);
+extern FnReassignFaction g_reassign_faction;
+
+// CHARACTER_RECRUITMENT_POOL::spawn_agent (sub_107F2CF0)
+using FnSpawnAgent = void(__thiscall*)(
+    void* recruitment_pool_mgr,
+    void* agent_record,
+    uint32_t* optional_position,
+    void* optional_settlement,
+    void* optional_military_force,
+    void* script_id_ca_string,
+    unsigned int character_type
+);
+extern FnSpawnAgent g_spawn_agent;
 
 // Address of the `mov eax, [eax+0x13C]` instruction in the REINFORCEMENTS_MANAGER
 // ctor, resolved by initialize_game_api().

@@ -137,21 +137,8 @@ static int ConvertUnit(lua_State* L) {
     }
 
     // Resolve the force through the unit's force link (verified against the
-    // engine's own UNIT_SCRIPT_INTERFACE::military_force in the 64-bit source):
-    //   unit->m_force_link.m_link.m_object          -> ONE_TO_MANY_LINK*
-    //     ->m_object.m_object                       -> UNIT_CONTAINER*
-    //     ->m_military_force.m_object               -> MILITARY_FORCE*
-    void* one_to_many = *reinterpret_cast<void**>(reinterpret_cast<char*>(unit) + 0x38);
-    if (!one_to_many) {
-        Log("[twdll] ConvertUnit: unit has no force link");
-        return 0;
-    }
-    void* container = *reinterpret_cast<void**>(one_to_many);
-    if (!container) {
-        Log("[twdll] ConvertUnit: unit has no container");
-        return 0;
-    }
-    void* force = *reinterpret_cast<void**>(container);
+    // Traverse unit -> container link -> container -> military force:
+    auto* force = unit->get_military_force();
     if (!force) {
         Log("[twdll] ConvertUnit: unit has no military force");
         return 0;
@@ -198,7 +185,7 @@ static int ConvertUnit(lua_State* L) {
     }
 
     // If this unit is a general's bodyguard, synchronise the character's persistent snapshot:
-    void* commander_link = *reinterpret_cast<void**>(reinterpret_cast<char*>(new_unit) + 0x114);
+    void* commander_link = new_unit->m_commander_link;
     if (commander_link) {
         auto* commander = *reinterpret_cast<TW_Character**>(commander_link);
         if (commander) {
@@ -237,13 +224,13 @@ static int Disband(lua_State* L) {
         return 1;
     }
     void* elems[1] = { unit };
-    void* vec[3] = {
-        reinterpret_cast<void*>(static_cast<size_t>(1)),
-        reinterpret_cast<void*>(static_cast<size_t>(1)),
+    twdll::TW_VectorNcc vec = {
+        reinterpret_cast<void*>(1),
+        1,
         elems
     };
     Log("[twdll] unit:Disband: unit=0x%08X", reinterpret_cast<uintptr_t>(unit));
-    g_disband_units(vec, g_campaign_model);
+    g_disband_units(&vec, g_campaign_model);
     l_pushboolean(L, 1);
     return 1;
 }
