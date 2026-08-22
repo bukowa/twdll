@@ -44,6 +44,8 @@
 #define RESOLVE_PORTRAIT_PATH_SIG "83 EC 08 55 8B E9 56 83 BD 54 03 00 00 00 0F 84"
 // CA::String::operator=(const char*) @ 0x100DBD40
 #define CA_STRING_ASSIGN_SIG "83 EC 0C 56 57 8B F9 8B 4C 24 18 8B F1 8D 56 01"
+// CA::UniString::operator=(const wchar_t*) @ 0x100DB660
+#define CA_UNISTRING_ASSIGN_SIG "56 8B 74 24 08 8B C6 57 8B F9 66 0F 1F 44 00 00 0F B7 10"
 // CHARACTER_DETAILS_ART_SET_INFO::update_art_set @ 0x107F83D0
 #define UPDATE_ART_SET_SIG "83 EC 30 53 56 57 8B 7C 24 40 8B D9 8B 37 8B 43 3C 89 44 24"
 #define ADD_TRAIT_SIG "56 8B F1 8D 8E ? ? ? ? E8 ? ? ? ? 8B C8 E8 ? ? ? ? FF 74 24 ? 8B C8 E8 ? ? ? ? 85 C0 74 ? FF 74 24 ? 8B CE FF 74 24"
@@ -65,6 +67,7 @@ HMODULE            g_empire_module        = nullptr;
 FnFactionProvinceManager g_faction_province_manager = nullptr;
 FnResolvePortraitPath    g_resolve_portrait_path    = nullptr;
 FnCaStringAssign         g_ca_string_assign         = nullptr;
+FnCaUniStringAssign      g_ca_unistring_assign      = nullptr;
 FnUpdateArtSet           g_update_art_set           = nullptr;
 uintptr_t          g_reinf_cap_insn_addr = 0;
 uintptr_t          g_battle_ctor_addr    = 0;
@@ -109,6 +112,7 @@ void refresh_settlements_display() {
 const TW_GameSigInfo g_game_signatures[] = {
     {"CHARACTER_DETAILS::portrait_path", (void**)&g_resolve_portrait_path, RESOLVE_PORTRAIT_PATH_SIG},
     {"CA::String::operator=",           (void**)&g_ca_string_assign,      CA_STRING_ASSIGN_SIG},
+    {"CA::UniString::operator=",        (void**)&g_ca_unistring_assign,   CA_UNISTRING_ASSIGN_SIG},
     {"CHARACTER_DETAILS_ART_SET_INFO::update_art_set", (void**)&g_update_art_set, UPDATE_ART_SET_SIG},
     {"FACTION::new_faction_leader",     (void**)&g_new_faction_leader, NEW_FACTION_LEADER_SIG},
     {"UNIT::disband_units",             (void**)&g_disband_units,      DISBAND_UNITS_SIG},

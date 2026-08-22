@@ -722,26 +722,21 @@ static std::string ReadNameSlot(const twdll::TW_CharacterNameEntry& entry) {
 // Clears m_localisation_key and m_localised_string so the UI renders the custom UTF-16 string
 // directly across all campaign panels regardless of game language.
 static bool SetNameSlot(twdll::TW_CharacterNameEntry& entry, uint32_t type, const char* text, size_t text_len) {
+    if (!g_ca_string_assign || !g_ca_unistring_assign) return false;
+
     entry.m_type = type;
-    entry.m_localisation.m_localisation_key.m_len = 0;
-    entry.m_localisation.m_localisation_key.m_data = nullptr;
+    g_ca_string_assign(&entry.m_localisation.m_localisation_key, "");
     entry.m_localisation.m_localised_string = nullptr;
 
     if (!text || text_len == 0) {
-        entry.m_localisation.m_custom_string.m_len = 0;
-        entry.m_localisation.m_custom_string.m_data = nullptr;
+        g_ca_unistring_assign(&entry.m_localisation.m_custom_string, L"");
         return true;
     }
 
     std::wstring ws = tw_utf8_to_wide(text, text_len);
     if (ws.empty()) return false;
 
-    wchar_t* wbuf = new wchar_t[ws.length() + 1];
-    memcpy(wbuf, ws.c_str(), (ws.length() + 1) * sizeof(wchar_t));
-
-    entry.m_localisation.m_custom_string.m_len = static_cast<uint32_t>(ws.length());
-    entry.m_localisation.m_custom_string.m_capacity = static_cast<uint32_t>(ws.length());
-    entry.m_localisation.m_custom_string.m_data = wbuf;
+    g_ca_unistring_assign(&entry.m_localisation.m_custom_string, ws.c_str());
     return true;
 }
 
@@ -757,24 +752,18 @@ static std::string ReadNameKeySlot(const twdll::TW_CharacterNameEntry& entry) {
 // Clears m_custom_string and m_localised_string so the engine dynamically resolves and translates
 // the key from the game's names.loc database table based on the player's active language.
 static bool SetNameKeySlot(twdll::TW_CharacterNameEntry& entry, uint32_t type, const char* key, size_t key_len) {
+    if (!g_ca_string_assign || !g_ca_unistring_assign) return false;
+
     entry.m_type = type;
-    entry.m_localisation.m_custom_string.m_len = 0;
-    entry.m_localisation.m_custom_string.m_data = nullptr;
+    g_ca_unistring_assign(&entry.m_localisation.m_custom_string, L"");
     entry.m_localisation.m_localised_string = nullptr;
 
     if (!key || key_len == 0) {
-        entry.m_localisation.m_localisation_key.m_len = 0;
-        entry.m_localisation.m_localisation_key.m_data = nullptr;
+        g_ca_string_assign(&entry.m_localisation.m_localisation_key, "");
         return true;
     }
 
-    char* buf = new char[key_len + 1];
-    std::memcpy(buf, key, key_len);
-    buf[key_len] = '\0';
-
-    entry.m_localisation.m_localisation_key.m_len = static_cast<uint32_t>(key_len);
-    entry.m_localisation.m_localisation_key.m_capacity = static_cast<uint32_t>(key_len);
-    entry.m_localisation.m_localisation_key.m_data = buf;
+    g_ca_string_assign(&entry.m_localisation.m_localisation_key, key);
     return true;
 }
 

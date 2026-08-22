@@ -26,6 +26,10 @@ extern FnResolvePortraitPath g_resolve_portrait_path;
 using FnCaStringAssign = void*(__thiscall*)(void* str, const char* src);
 extern FnCaStringAssign g_ca_string_assign;
 
+// CA::UniString::operator=(const wchar_t* src) (sub_100DB660)
+using FnCaUniStringAssign = void*(__thiscall*)(void* unistr, const wchar_t* src);
+extern FnCaUniStringAssign g_ca_unistring_assign;
+
 // CHARACTER_DETAILS_ART_SET_INFO::update_art_set (sub_107F83D0)
 // (this=CHARACTER_DETAILS_ART_SET_INFO*, details=CHARACTER_DETAILS*, campaign_model=CAMPAIGN_MODEL*)
 using FnUpdateArtSet = int(__thiscall*)(void* art_info, void* details, void* campaign_model);
