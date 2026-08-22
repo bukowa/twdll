@@ -1,5 +1,26 @@
 local game = nil
 local faction = nil
+local twdll_tests_already_run = false
+local marker_file = "twdll_reload_marker.flag"
+
+local function get_game_interface()
+    if not game then
+        pcall(function()
+            local scripting_string = nil
+            if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.GameBuild) == "function" and twdll.core.GameBuild() == "Rome2" then
+                scripting_string = 'lua_scripts.EpisodicScripting'
+                faction = 'rom_rome'
+            else
+                scripting_string = "lua_scripts.episodicscripting"
+                faction = 'att_fact_hunni'
+            end
+            local scripting = require(scripting_string)
+            game = scripting.game_interface
+        end)
+    end
+    return game
+end
+
 local function run_twdll_tests()
     local f = io.open("twdll.log", "a")
     if f then
@@ -12,11 +33,14 @@ local function run_twdll_tests()
     -- ======================================================
     -- RELOAD CHECK: If we are running after LoadGame, verify and finish test run
     -- ======================================================
-    local marker_file = "twdll_reload_marker.flag"
     local f_marker = io.open(marker_file, "r")
+    local is_reload = twdll_tests_already_run or (f_marker ~= nil)
     if f_marker then
         f_marker:close()
         os.remove(marker_file)
+    end
+
+    if is_reload then
         if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
             twdll.core.Log("\n======================================================")
             twdll.core.Log("[TEST] [LIFECYCLE] Reload verification successful!")
@@ -27,13 +51,8 @@ local function run_twdll_tests()
         return
     end
 
-    -- If this is NOT a new campaign start (e.g. loaded from an existing savegame), skip initial one-off unit tests
-    if cm and type(cm.is_new_game) == "function" and not cm:is_new_game() then
-        if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
-            twdll.core.Log("[TEST] Campaign loaded from savegame (not a new game). Skipping initial unit test assertions.")
-        end
-        return
-    end
+    -- Mark that tests have run in this campaign session so subsequent saves will persist it
+    twdll_tests_already_run = true
 
     -- Using the flat global structure and PascalCase as defined in your C++ code
     if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
@@ -2069,10 +2088,15 @@ local function run_twdll_tests()
             twdll.core.Log("[TEST] Final Result: SUCCESS")
 
             -- ======================================================
-            -- POST-TEST LIFECYCLE: Save -> Load (Only when all tests passed and no-save flag not set)
+            -- POST-TEST LIFECYCLE: Save -> Load (Only when all tests passed, not MP, and no-save flag not set)
             -- ======================================================
+            local is_mp = (cm and type(cm.is_multiplayer) == "function" and cm:is_multiplayer()) or
+                          (game and type(game.model) == "function" and game:model() and type(game:model().is_multiplayer) == "function" and game:model():is_multiplayer())
+
             local no_save_flag = io.open("twdll_no_save_reload.flag", "r")
-            if no_save_flag then
+            if is_mp then
+                twdll.core.Log("[TEST] [LIFECYCLE] Multiplayer campaign detected — skipping SaveGame / LoadGame reload sequence.")
+            elseif no_save_flag then
                 no_save_flag:close()
                 twdll.core.Log("[TEST] [LIFECYCLE] twdll_no_save_reload.flag detected — skipping SaveGame / LoadGame reload sequence.")
             else
@@ -2125,21 +2149,29 @@ local function run_twdll_tests()
     end
 end
 
+-- Register Save/Load persistence listeners
+pcall(function()
+    table.insert(events.SavingGame, function(context)
+        local gi = get_game_interface()
+        if gi and type(gi.save_named_value) == "function" then
+            gi:save_named_value("twdll_tests_already_run", twdll_tests_already_run, context)
+        end
+    end)
+end)
+
+pcall(function()
+    table.insert(events.LoadingGame, function(context)
+        local gi = get_game_interface()
+        if gi and type(gi.load_named_value) == "function" then
+            twdll_tests_already_run = gi:load_named_value("twdll_tests_already_run", false, context)
+        end
+    end)
+end)
+
 -- Register the test suite to execute only after the world is initialized
 local _, err = pcall(function()
     table.insert(events.FirstTickAfterWorldCreated, function()
-        local scripting_string = nil
-        if twdll.core.GameBuild() == "Rome2" then
-            scripting_string = 'lua_scripts.EpisodicScripting'
-            faction = 'rom_rome'
-        elseif twdll.core.GameBuild() == "Attila" then
-            scripting_string = "lua_scripts.episodicscripting"
-            faction = 'att_fact_hunni'
-        end
-
-        local scripting = require(scripting_string)
-        game = scripting.game_interface
-
+        get_game_interface()
         local ok, err = pcall(run_twdll_tests)
         twdll.core.Log(ok and "[TEST] run_twdll_tests returned normally" or ("[TEST] run_twdll_tests error: " .. tostring(err)))
     end)
