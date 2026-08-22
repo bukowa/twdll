@@ -141,6 +141,20 @@ add_custom_target(tw-tdd
     VERBATIM USES_TERMINAL
 )
 
+add_custom_target(tw-mp-install
+    DEPENDS twdll
+    COMMAND powershell -ExecutionPolicy Bypass -File "${TW_PS1}" install-mp "${TW_GAME}" "$<TARGET_FILE:twdll>"
+    COMMENT "Installing twdll to multiplayer instances (${TW_GAME})"
+    VERBATIM
+)
+
+add_custom_target(tw-mp-run
+    DEPENDS twdll
+    COMMAND powershell -ExecutionPolicy Bypass -File "${TW_PS1}" run-mp "${TW_GAME}" "$<TARGET_FILE:twdll>"
+    COMMENT "Running multiplayer instances (${TW_GAME})"
+    VERBATIM USES_TERMINAL
+)
+
 # ── Documentation targets (defer to docs/CMakeLists.txt) ────────────────────
 add_subdirectory(docs)
 

@@ -36,3 +36,5 @@ compile_commands.json
 tools/paths.ps1
 config.ld.*.generated
 todo.md
+__pycache__/
+*.pyc

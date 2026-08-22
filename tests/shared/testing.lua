@@ -27,6 +27,14 @@ local function run_twdll_tests()
         return
     end
 
+    -- If this is NOT a new campaign start (e.g. loaded from an existing savegame), skip initial one-off unit tests
+    if cm and type(cm.is_new_game) == "function" and not cm:is_new_game() then
+        if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
+            twdll.core.Log("[TEST] Campaign loaded from savegame (not a new game). Skipping initial unit test assertions.")
+        end
+        return
+    end
+
     -- Using the flat global structure and PascalCase as defined in your C++ code
     if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
         twdll.core.Log("[TEST] twdll is loaded. Starting unit tests...")
@@ -2120,7 +2128,6 @@ end
 -- Register the test suite to execute only after the world is initialized
 local _, err = pcall(function()
     table.insert(events.FirstTickAfterWorldCreated, function()
-
         local scripting_string = nil
         if twdll.core.GameBuild() == "Rome2" then
             scripting_string = 'lua_scripts.EpisodicScripting'

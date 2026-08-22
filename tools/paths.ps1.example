@@ -36,3 +36,13 @@ $RpfmGames = @{
     "rome2"  = "rome_2"
     "attila" = "attila"
 }
+
+$MpGamePaths = @(
+    (Join-Path $env:USERPROFILE "Documents\TDD\Total War Attila"),
+    (Join-Path $env:USERPROFILE "Documents\TDD\Total War Attila - Copy")
+)
+
+$MpAppDataPaths = @(
+    (Join-Path $env:SystemDrive "Sandbox\$env:USERNAME\TDD\user\current\AppData\Roaming\The Creative Assembly\Attila"),
+    (Join-Path $env:SystemDrive "Sandbox\$env:USERNAME\TDD_Copy\user\current\AppData\Roaming\The Creative Assembly\Attila")
+)

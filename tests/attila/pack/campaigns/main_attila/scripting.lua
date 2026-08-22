@@ -159,8 +159,11 @@ end
 load_twdll()
 
 -- Load shared testing logic
-local _, err = pcall(function()
+pcall(function()
     require "shared.testing"
 end)
 
-twdll.Log(err)
+-- Load MP event testing logic
+pcall(function()
+    require "shared.mp_testing"
+end)

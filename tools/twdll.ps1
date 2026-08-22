@@ -176,15 +176,17 @@ function Fix-CpuAffinity($procName) {
     # Windows 11 freeze workaround: exclude CPU0 from the game's affinity mask.
     $startTime = Get-Date
     while ($true) {
-        $proc = Get-Process -Name $procName -ErrorAction SilentlyContinue
-        if ($proc) {
+        $procs = @(Get-Process -Name $procName -ErrorAction SilentlyContinue)
+        if ($procs.Count -gt 0) {
             try {
                 # Build mask with all CPUs except CPU0 (bit 0)
                 $sys = [System.Environment]::ProcessorCount
                 $fullMask = [int64]([math]::Pow(2, $sys) - 1)
                 $newMask  = $fullMask -band (-bnot 1)
-                $proc.ProcessorAffinity = [System.IntPtr]$newMask
-                Write-Host "CPU affinity fixed: CPU0 excluded (mask 0x$($newMask.ToString('X')))"
+                foreach ($proc in $procs) {
+                    $proc.ProcessorAffinity = [System.IntPtr]$newMask
+                }
+                Write-Host "CPU affinity fixed for $($procs.Count) process(es): CPU0 excluded (mask 0x$($newMask.ToString('X')))"
             } catch {
                 Write-Host "Warning: could not set CPU affinity: $_"
             }
@@ -336,14 +338,154 @@ function Tail-Log-Keep {
     }
 }
 
+function Install-Mp {
+    Write-Host "Installing Multiplayer environment for $Game..."
+    if (!$MpGamePaths -or $MpGamePaths.Count -eq 0) {
+        Write-Error "No MpGamePaths configured. Check tools/paths.ps1."
+        exit 1
+    }
+    if (!(Test-Path $DllPath)) { Write-Error "No DLL found at $DllPath"; exit 1 }
+    if (!(Test-Path $ModPack)) { Build-Pack $ModPack $ModDir }
+    Build-Pack $TestPack $TestSrcDir
+
+    $TestPackName = Split-Path $TestPack -Leaf
+    $userScriptContent = "mod `"$TestPackName`";`nmod `"twdll.pack`";`n"
+
+    for ($i = 0; $i -lt $MpGamePaths.Count; $i++) {
+        $gPath = $MpGamePaths[$i]
+        $data = Join-Path $gPath "data"
+        if (!(Test-Path $data)) { New-Item -ItemType Directory -Force -Path $data | Out-Null }
+
+        Write-Host "Deploying to Game Instance $($i+1): $gPath"
+        try {
+            Copy-Item -Force $DllPath $gPath -ErrorAction Stop
+            Copy-Item -Force $DllPath (Join-Path $gPath ("twdll_" + $Game + ".dll")) -ErrorAction Stop
+        } catch {
+            Write-Warning "Could not overwrite DLL (game process is likely running): $_"
+        }
+        try {
+            Copy-Item -Force $ModPack $data -ErrorAction Stop
+            Copy-Item -Force $TestPack $data -ErrorAction Stop
+        } catch {
+            Write-Warning "Could not overwrite pack files: $_"
+        }
+
+        Remove-Item -Force (Join-Path $gPath "twdll_reload_marker.flag") -ErrorAction SilentlyContinue
+        Remove-Item -Force (Join-Path $gPath "twdll_no_save_reload.flag") -ErrorAction SilentlyContinue
+
+    }
+
+    if ($MpAppDataPaths) {
+        for ($i = 0; $i -lt $MpAppDataPaths.Count; $i++) {
+            $appData = $MpAppDataPaths[$i]
+            $scriptDir = Join-Path $appData "scripts"
+            if (!(Test-Path $scriptDir)) { New-Item -ItemType Directory -Force -Path $scriptDir | Out-Null }
+
+            Write-Host "Setting user.script.txt for Instance $($i+1): $scriptDir"
+            Set-Content -Path (Join-Path $scriptDir "user.script.txt") -Value $userScriptContent
+        }
+    }
+
+    Write-Host "Multiplayer environment successfully installed to all instances."
+}
+
+function Launch-Mp {
+    Install-Mp
+    Write-Host "Launching MP instances..."
+    foreach ($gPath in $MpGamePaths) {
+        $exePath = Join-Path $gPath $Exe
+        if (Test-Path $exePath) {
+            Start-Process -FilePath $exePath -WorkingDirectory $gPath
+            Write-Host "Launched: $exePath"
+        } else {
+            Write-Warning "Could not find $exePath"
+        }
+    }
+    $ProcName = if ($Game -eq "rome2") { "Rome2" } else { "Attila" }
+    Fix-CpuAffinity $ProcName
+}
+
+function Tail-Mp-Log {
+    Write-Host "Tailing MP logs from $($MpGamePaths.Count) instances (Ctrl+C to stop)..."
+    $ProcName = if ($Game -eq "rome2") { "Rome2" } else { "Attila" }
+
+    $startTime = Get-Date
+    while (!@(Get-Process -Name $ProcName -ErrorAction SilentlyContinue).Count) {
+        if (((Get-Date) - $startTime).TotalSeconds -gt 30) {
+            Write-Error "Timeout waiting for game processes ($ProcName) to start"
+            exit 1
+        }
+        Start-Sleep -Milliseconds 500
+    }
+
+    $logFiles = @()
+    $lastCounts = @()
+    for ($i = 0; $i -lt $MpGamePaths.Count; $i++) {
+        $gName = Split-Path $MpGamePaths[$i] -Leaf
+        $sandboxName = if ($i -eq 0) { "TDD" } else { "TDD_Copy" }
+        $sboxLog = Join-Path $env:SystemDrive "Sandbox\$env:USERNAME\$sandboxName\user\current\Documents\TDD\$gName\twdll.log"
+        $directLog = Join-Path $MpGamePaths[$i] "twdll.log"
+
+        $targetLog = if (Test-Path $sboxLog) { $sboxLog } else { $directLog }
+        $logFiles += $targetLog
+        $initCount = 0
+        if (Test-Path $targetLog) {
+            $initCount = @(Get-Content -Path $targetLog -ErrorAction SilentlyContinue).Count
+        }
+        $lastCounts += $initCount
+        Write-Host "Monitoring log for Instance $($i+1): $targetLog (initial lines: $initCount)"
+    }
+
+    $colors = @("Cyan", "Yellow", "Green", "Magenta")
+
+    while ($true) {
+        for ($i = 0; $i -lt $logFiles.Count; $i++) {
+            $lf = $logFiles[$i]
+            if (!(Test-Path $lf)) {
+                $gName = Split-Path $MpGamePaths[$i] -Leaf
+                $sandboxName = if ($i -eq 0) { "TDD" } else { "TDD_Copy" }
+                $sboxLog = Join-Path $env:SystemDrive "Sandbox\$env:USERNAME\$sandboxName\user\current\Documents\TDD\$gName\twdll.log"
+                if (Test-Path $sboxLog) {
+                    $lf = $sboxLog
+                    $logFiles[$i] = $sboxLog
+                }
+            }
+
+            $lastCount = $lastCounts[$i]
+            if (Test-Path $lf) {
+                $lines = @(Get-Content -Path $lf -ErrorAction SilentlyContinue)
+                if ($lines.Count -lt $lastCount) { $lastCount = 0 }
+                if ($lines.Count -gt $lastCount) {
+                    $prefix = "[G$($i+1)]"
+                    $color = $colors[$i % $colors.Count]
+                    for ($j = $lastCount; $j -lt $lines.Count; $j++) {
+                        Write-Host "$prefix $($lines[$j])" -ForegroundColor $color
+                    }
+                    $lastCounts[$i] = $lines.Count
+                }
+            }
+        }
+
+        if (!@(Get-Process -Name $ProcName -ErrorAction SilentlyContinue).Count) {
+            Write-Host "All game processes exited"
+            exit 0
+        }
+        Start-Sleep -Milliseconds 250
+    }
+}
+
 $c = $Command.ToLower().Trim()
 switch ($c) {
     "pack"         { Build-Pack $ModPack $ModDir; Build-Pack $TestPack $TestSrcDir }
     "install"      { Install-Base }
     "install-test" { Install-Test }
+    "install-mp"   { Install-Mp }
     "run"          { Install-Base; Launch-Game }
     "run-test"     { Install-Test; Launch-Game }
+    "run-mp"       { Launch-Mp; Tail-Mp-Log }
+    "mp-run"       { Launch-Mp; Tail-Mp-Log }
     "tail"         { Tail-Log }
+    "tail-mp"      { Tail-Mp-Log }
     "test"         { Install-Test; Launch-Game; Tail-Log }
     "test-keep"    { Install-Test; Launch-Game; Tail-Log-Keep }
     "test-keep-nosavereload" { Install-Test-NoSaveReload; Launch-Game; Tail-Log-Keep }
@@ -351,7 +493,7 @@ switch ($c) {
     "tdd"          { Install-Tdd; Launch-Game; Tail-Log-Keep }
     "help" {
         Write-Host "Usage: .\tools\twdll.ps1 <command> <game> [-Steam]"
-        Write-Host "Commands: pack, install, install-test, run, run-test, tail, test, test-keep, test-keep-nosavereload, install-tdd, tdd"
+        Write-Host "Commands: pack, install, install-test, install-mp, run, run-test, run-mp, tail, tail-mp, test, test-keep, test-keep-nosavereload, install-tdd, tdd"
     }
     Default {
         Write-Error "Unknown command: $Command"
@@ -359,3 +501,4 @@ switch ($c) {
         exit 1
     }
 }
+
