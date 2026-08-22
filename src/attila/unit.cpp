@@ -136,8 +136,7 @@ static int ConvertUnit(lua_State* L) {
         return 0;
     }
 
-    // Resolve the force through the unit's force link (verified against the
-    // Traverse unit -> container link -> container -> military force:
+    // Resolve the force through the unit's force link:
     auto* force = unit->get_military_force();
     if (!force) {
         Log("[twdll] ConvertUnit: unit has no military force");

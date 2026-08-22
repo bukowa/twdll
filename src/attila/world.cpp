@@ -202,15 +202,7 @@ constexpr size_t  kReinfCapInsnLen = 6;
 constexpr uint8_t kReinfCapOrig[6] = {0x8B, 0x80, 0x3C, 0x01, 0x00, 0x00};
 } // namespace
 
-// REINFORCEMENTS_MANAGER ctor stores `max units per army` from the battle setup
-// into the manager field at offset 0x28. Replacing the load instruction
-//   mov eax, [eax+0x13C]   (8B 80 3C 01 00 00)
-//   mov [esi+0x28], eax    (89 46 28)
-// with `mov eax, <imm32>` + nop lets scripts set the cap to any value before a
-// battle starts, so the deploy gate (m_size >= m_max_num_units_per_army) never
-// blocks reinforcements. It is a permanent code modification and applies to
-// battles started after the call. restore_default == true writes the original
-// bytes back; otherwise max_units (any uint32, including 0) is the new cap.
+// Updates or restores the reinforcement cap instruction in REINFORCEMENTS_MANAGER.
 bool set_reinforcement_cap(bool restore_default, uint32_t max_units) {
     if (!g_reinf_cap_insn_addr) {
         Log("[twdll] set_reinforcement_cap: signature not resolved");

@@ -54,7 +54,7 @@ local function run_twdll_tests()
     -- Mark that tests have run in this campaign session so subsequent saves will persist it
     twdll_tests_already_run = true
 
-    -- Using the flat global structure and PascalCase as defined in your C++ code
+    -- Initialize test suite with flat global structure
     if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.Log) == "function" then
         twdll.core.Log("[TEST] twdll is loaded. Starting unit tests...")
 
@@ -2192,10 +2192,10 @@ local function run_twdll_tests()
                                 local orig_val = tw.value
                                 if type(orig_val) == "number" then
                                     tw.value = orig_val + 1
-                                    if tw.value == orig_val + 1 then
+                                    if math.abs(tw.value - (orig_val + 1)) < 0.001 then
                                         mutate_ok_count = mutate_ok_count + 1
                                     else
-                                        mutate_ok_count = mutate_ok_count + 1
+                                        twdll.core.Log(string.format("[TEST] [FAIL] Mutate mismatch on '%s': expected %.2f, got %.2f", name, orig_val + 1, tw.value))
                                     end
                                     tw.value = orig_val
                                 elseif type(orig_val) == "boolean" then
@@ -2203,7 +2203,7 @@ local function run_twdll_tests()
                                     if tw.value == (not orig_val) then
                                         mutate_ok_count = mutate_ok_count + 1
                                     else
-                                        mutate_ok_count = mutate_ok_count + 1
+                                        twdll.core.Log(string.format("[TEST] [FAIL] Mutate boolean mismatch on '%s'", name))
                                     end
                                     tw.value = orig_val
                                 else

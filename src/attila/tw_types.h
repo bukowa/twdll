@@ -236,7 +236,6 @@ struct TW_CampaignCharacterArtSetsCampaignGroupRecord {
 };
 
 // EMPIREUTILITY::CAMPAIGN_CHARACTER_ART_SET_RECORD (size 0x44)
-// Verified via 64-bit DWARF & 32-bit DB loader (sub_10E1AE60 / sub_10EFC250)
 struct TW_CampaignCharacterArtSetRecord {
     TW_CAString m_agent_type;   // 0x00
     TW_CAString m_art_set_id;   // 0x0C (e.g. "att_cult_barbarian")
@@ -455,7 +454,6 @@ struct TW_LandStats {
 };
 
 // EMPIREBATTLE::UNIT — selected fields only (32-bit Attila layout)
-// m_stat_modifier_manager.m_stats is embedded (no pointer), verified via BATTLE_SCRIPT_UNIT vtable disasm
 struct TW_BattleUnit {
     char         pad_00[0x1220];
     TW_LandStats stats;           // 0x1220  (m_stat_modifier_manager.m_stats)

@@ -12,7 +12,7 @@ end
 
 log("Loaded mp_testing.lua")
 
--- Bezpieczny wrapper pcall dla wszystkich listenerów
+-- Safe pcall wrapper for all event listeners
 local function on_event(event_table, name, callback)
     if not event_table then return end
     table.insert(event_table, function(context)
@@ -23,7 +23,7 @@ local function on_event(event_table, name, callback)
     end)
 end
 
--- 1. Start kampanii / Pierwszy tick (Globalne limity silnika)
+-- 1. Campaign start / First tick (Global engine limits)
 on_event(events.FirstTickAfterWorldCreated, "FirstTickAfterWorldCreated", function(context)
     log("=== FirstTickAfterWorldCreated (MP) ===")
     if twdll and twdll.world then
@@ -33,7 +33,7 @@ on_event(events.FirstTickAfterWorldCreated, "FirstTickAfterWorldCreated", functi
     end
 end)
 
--- 2. Początek tury frakcji (Deterministyczny integer bonus)
+-- 2. Faction turn start (Deterministic integer bonus)
 on_event(events.FactionTurnStart, "FactionTurnStart", function(context)
     local f = context:faction()
     if f:is_null_interface() then return end
@@ -46,7 +46,7 @@ on_event(events.FactionTurnStart, "FactionTurnStart", function(context)
     log("  Treasury: " .. tostring(cur) .. " -> " .. tostring(f:GetTreasury()))
 end)
 
--- 3. Początek tury postaci (Deterministyczny stan AP, wpływów, lojalności i oddziału)
+-- 3. Character turn start (Deterministic AP, influence, loyalty and unit state)
 on_event(events.CharacterTurnStart, "CharacterTurnStart", function(context)
     local c = context:character()
     if c:is_null_interface() then return end
@@ -54,13 +54,13 @@ on_event(events.CharacterTurnStart, "CharacterTurnStart", function(context)
     local name = c:GetFullName()
     log("[EVENT] CharacterTurnStart: " .. tostring(name))
 
-    -- Punkty ruchu w Attili (skala ~3960 = 100%)
+    -- Movement points in Attila (scale ~3960 = 100%)
     local cur_ap = c:GetActionPoints()
     c:SetActionPoints(cur_ap + 500)
     c:SetInfluence(c:GetInfluence() + 1)
     c:SetLoyaltyModifier(c:GetLoyaltyModifier() + 1)
 
-    -- Modyfikacja pierwszego oddziału w armii generała
+    -- Modify first unit in general's army
     if c:has_military_force() then
         local mf = c:military_force()
         if not mf:is_null_interface() then
@@ -75,7 +75,7 @@ on_event(events.CharacterTurnStart, "CharacterTurnStart", function(context)
     end
 end)
 
--- 4. Początek tury regionu (Deterministyczny wzrost prowincji)
+-- 4. Region turn start (Deterministic province growth)
 on_event(events.RegionTurnStart, "RegionTurnStart", function(context)
     local r = context:region()
     if r:is_null_interface() then return end
@@ -87,7 +87,7 @@ on_event(events.RegionTurnStart, "RegionTurnStart", function(context)
     log("  Region growth: " .. tostring(gr) .. " -> " .. tostring(r:GetGrowthPoints()))
 end)
 
--- 5. Zakończenie bitwy
+-- 5. Battle completed
 on_event(events.BattleCompleted, "BattleCompleted", function(context)
     log("=== [EVENT] BattleCompleted (MP) ===")
     if twdll and twdll.world and twdll.world.SetReinforcementCap then
