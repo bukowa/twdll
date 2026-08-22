@@ -34,7 +34,7 @@ extern void uninstall_tweakers();
 
 static bool g_is_initialized = false;
 
-static int l_twdll_gc_cleanup(lua_State* L) {
+static int l_twdll_gc_cleanup(lua_State*) {
     if (g_is_initialized) {
         Log("[twdll] GC destroying Lua state — uninstalling campaign hooks");
         uninstall_tweakers();
@@ -79,9 +79,21 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
         g_is_initialized = true;
     }
 
+    // Check if twdll table instance already exists in this Lua state's registry
+    l_getfield(L, LUA_REGISTRYINDEX, "twdll");
+    if (l_type(L, -1) == LUA_TTABLE) {
+        Log("[twdll] luaopen_twdll: returning existing twdll table instance from registry");
+        return 1;
+    }
+    l_settop(L, -2);
+
     Log("[twdll] luaopen_twdll: registering modules");
 
     l_createtable(L, 0, 8);
+
+    // Save table instance in Lua registry for future loadlib calls in this session
+    l_pushvalue(L, -1);
+    l_setfield(L, LUA_REGISTRYINDEX, "twdll");
 
     l_newuserdata(L, 1);
     l_createtable(L, 0, 1);

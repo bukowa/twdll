@@ -41,6 +41,9 @@ All notable changes to this project will be documented in this file.
 - `twdll.core.Log` now accepts any number of arguments of any Lua data type (e.g. `nil`, numbers, booleans, tables, userdata), automatically converting them via Lua's `tostring` similar to standard `print(...)`.
 - `GetInfluence` / `SetInfluence` replace the legacy Rome 2 character methods (`GetGravitas` / `SetGravitas` and `GetAmbition` / `SetAmbition`).
 
+### Fixed
+- Fixed an issue where multiple `package.loadlib` calls across scripts within the same campaign session created duplicate garbage collection proxies, causing premature uninstallation of campaign hooks during gameplay.
+
 ## [0.9.0] - 2026-08-06
 
 ### Added

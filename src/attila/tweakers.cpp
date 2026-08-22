@@ -11,6 +11,14 @@ Provides unified read/write access to all 3,731 internal engine variables:
 All modified values automatically snapshot their original vanilla state and are cleanly
 restored on Lua teardown / game reload.
 
+### Engine Evaluation Timing & Subsystem Mechanics
+
+Engine tweakers are read and evaluated by different engine subsystems at different times:
+
+1. **Per-frame / Runtime Dynamic**: Visuals, terrain seasons, camera constraints, shader toggles, and general action points. Changes take effect **immediately**.
+2. **Subsystem / Event-driven**: CAI strategic goals, autoresolver modifiers, marriage odds, looting income formulas, and cultural conversion. Changes take effect whenever that specific calculation is executed by the engine.
+3. **Initialization-time / Cache-only**: World generation parameters and static baseline tables. These should be modified as early as possible at top level in the campaign's `scripting.lua` starting script (before world initialization events fire).
+
 For the complete catalog of all 3,731 variables, categories, and descriptions, see
 [Complete Engine Tweakers Inventory](../topics/engine_tweakers_inventory.md.html).
 
