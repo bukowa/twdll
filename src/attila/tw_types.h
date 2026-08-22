@@ -127,25 +127,42 @@ struct TW_CampaignPoliticalParty {
     char  pad_1C[0x10];      // 0x1C
 };
 
+// CA_STD::UNORDERED_MAP_NCC node layout (32-bit)
+template <typename ValueT>
+struct TW_HashNodeNCC {
+    uint32_t                m_hash_or_prev; // 0x00
+    TW_HashNodeNCC<ValueT>* m_next;         // 0x04
+    void*                   m_key;          // 0x08
+    ValueT                  m_value;        // 0x0C
+};
+
+// CA_STD::UNORDERED_MAP_NCC bucket layout (32-bit: size 12B)
+template <typename NodeT>
+struct TW_HashBucketNCC {
+    NodeT* m_first;          // 0x00
+    void*  m_sentinel;       // 0x04 (points to &m_sentinel in vanilla)
+    void*  m_pad;            // 0x08
+};
+
 // CA_STD::UNORDERED_MAP_NCC — container layout for political parties.
 struct TW_PoliticalPartiesMap {
-    char   pad_00[0x4];     // m_hash_function (1B) + m_equality_comparison (1B) + pad
-    void*  m_capacity;      // 0x4  bucket vector capacity
-    int    m_size;          // 0x8  bucket count
-    void** m_elements;      // 0xC  buckets array (each element 12B)
-    int    m_count;         // 0x10 number of entries (map size)
-    float  m_max_load_factor; // 0x14
+    char                                                         pad_00[0x4];       // m_hash_function (1B) + m_equality_comparison (1B) + pad
+    void*                                                        m_capacity;        // 0x4  bucket vector capacity
+    int                                                          m_size;            // 0x8  bucket count
+    TW_HashBucketNCC<TW_HashNodeNCC<TW_CampaignPoliticalParty>>* m_elements;        // 0xC  buckets array
+    int                                                          m_count;           // 0x10 number of entries (map size)
+    float                                                        m_max_load_factor; // 0x14
 
     template <typename Fn>
     void for_each(Fn&& fn) const {
+        if (!m_elements || m_size <= 0) return;
         for (int i = 0; i < m_size; ++i) {
-            char* bucket = reinterpret_cast<char*>(m_elements) + i * 12;
-            char* fake   = bucket + 4;
-            char* node   = *reinterpret_cast<char**>(bucket);
-            while (node && node != fake) {
-                auto* party = reinterpret_cast<TW_CampaignPoliticalParty*>(node + 0xC);
-                fn(party);
-                node = *reinterpret_cast<char**>(node + 4);
+            const auto& bucket = m_elements[i];
+            auto* node = bucket.m_first;
+            const void* sentinel = &bucket.m_sentinel;
+            while (node && node != reinterpret_cast<const TW_HashNodeNCC<TW_CampaignPoliticalParty>*>(sentinel)) {
+                fn(&node->m_value);
+                node = node->m_next;
             }
         }
     }
@@ -796,6 +813,10 @@ TW_ASSERT_OFFSET(TW_CampaignPoliticalParty, m_senators,      0x14);
 TW_ASSERT_OFFSET(TW_CampaignPoliticalParty, m_power,         0x18);
 TW_ASSERT_OFFSET(TW_PoliticalPartiesMap, m_size,             0x8);
 TW_ASSERT_OFFSET(TW_PoliticalPartiesMap, m_elements,         0xC);
+TW_ASSERT_OFFSET(TW_PoliticalPartiesMap, m_count,            0x10);
+static_assert(sizeof(TW_HashBucketNCC<TW_HashNodeNCC<TW_CampaignPoliticalParty>>) == 12, "TW_HashBucketNCC size must be 12");
+TW_ASSERT_OFFSET(TW_HashNodeNCC<TW_CampaignPoliticalParty>, m_next,  0x04);
+TW_ASSERT_OFFSET(TW_HashNodeNCC<TW_CampaignPoliticalParty>, m_value, 0x0C);
 TW_ASSERT_OFFSET(TW_CampaignPolitics, m_faction,             0x24);
 TW_ASSERT_OFFSET(TW_CampaignPolitics, m_political_parties,   0x28);
 TW_ASSERT_OFFSET(TW_CampaignPolitics, m_primary_party,       0x40);
