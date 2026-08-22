@@ -113,8 +113,8 @@ extern uintptr_t g_settlement_cb_initialize_addr;
 // CAI make_occupation_decision entry point, resolved by initialize_game_api().
 extern uintptr_t g_make_occupation_decision_addr;
 
-extern const uintptr_t OFFSET_MAX_UNITS_ARMY;
-extern const uintptr_t OFFSET_MAX_UNITS_NAVY;
+int* get_max_units_in_army();
+int* get_max_units_in_navy();
 
 namespace twdll {
     struct TW_TweakerMap;

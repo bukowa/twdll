@@ -17,6 +17,7 @@
 #define INSTANT_SET_RESEARCHED_SIG "56 FF 74 24 ? 8B F1 E8 ? ? ? ? 85 C0 74 ? 6A 00 FF 74 24"
 #define RECORD_INDEX_SIG "83 EC 0C 53 8B D9 56 8B 74 24 ? 56 8D 4B ? E8 ? ? ? ? 85 C0 74 ? 8B 08 8B 43 ? EB ? 57 8B CE E8 ? ? ? ? 8D 4B ? 8B F8 E8 ? ? ? ? 68 ? ? ? ? 8D 4C 24 ? 8B F0 E8 ? ? ? ? 57 8D 44 24 ? 56 50 E8 ? ? ? ? 83 C4 0C 8D 4C 24 ? E8 ? ? ? ? 8B 4B ? 8B C1 5F 3B C8 73 ? 8B 43 ? 5E 5B 8B 04 88 83 C4 0C"
 #define CONVERT_UNIT_SIG "53 8B 5C 24 08 55 56 57 8D 4B 34 E8 ? ? ? ? 8D 4B 30 E8 ? ? ? ? 8D 88 F0 10 00 00 E8 ? ? ? ? 8B 6C 24 1C 8D 48 18 FF 75 28"
+#define CAMPAIGN_MODEL_MAX_UNITS_SIG "C7 05 ? ? ? ? 14 00 00 00 C7 05 ? ? ? ? 0E 00 00 00"
 #define RESOLVE_PORTRAIT_PATH_SIG "83 EC 08 55 8B E9 56 83 BD 54 03 00 00 00 0F 84"
 #define CA_STRING_ASSIGN_SIG "83 EC 0C 56 57 8B F9 8B 4C 24 18 8B F1 8D 56 01"
 #define CA_UNISTRING_ASSIGN_SIG "56 8B 74 24 08 8B C6 57 8B F9 66 0F 1F 44 00 00 0F B7 10"
@@ -48,6 +49,9 @@ uintptr_t          g_battle_ctor_addr    = 0;
 uintptr_t          g_battle_dtor_addr    = 0;
 uintptr_t          g_settlement_cb_initialize_addr = 0;
 uintptr_t          g_make_occupation_decision_addr = 0;
+static uintptr_t   g_max_units_init_insn_addr = 0;
+static int*        g_max_units_in_army = nullptr;
+static int*        g_max_units_in_navy = nullptr;
 using FnGetTweakerMap = twdll::TW_TweakerMap*(__cdecl*)();
 FnGetTweakerMap    g_get_tweaker_map = nullptr;
 twdll::TW_TweakerMap* g_tweaker_map = nullptr;
@@ -67,8 +71,27 @@ FnSpawnAgent           g_spawn_agent            = nullptr;
 FnSaveGame             g_save_game              = nullptr;
 FnLoadGame             g_load_game              = nullptr;
 
-const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
-const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
+int* get_max_units_in_army() {
+    if (!g_max_units_in_army && g_max_units_init_insn_addr) {
+        g_max_units_in_army = *reinterpret_cast<int**>(g_max_units_init_insn_addr + 2);
+        g_max_units_in_navy = *reinterpret_cast<int**>(g_max_units_init_insn_addr + 12);
+        Log("[twdll] Resolved max_units_army @ 0x%08X (val: %d), max_units_navy @ 0x%08X (val: %d)",
+            reinterpret_cast<uintptr_t>(g_max_units_in_army), g_max_units_in_army ? *g_max_units_in_army : 0,
+            reinterpret_cast<uintptr_t>(g_max_units_in_navy), g_max_units_in_navy ? *g_max_units_in_navy : 0);
+    }
+    return g_max_units_in_army;
+}
+
+int* get_max_units_in_navy() {
+    if (!g_max_units_in_navy && g_max_units_init_insn_addr) {
+        g_max_units_in_army = *reinterpret_cast<int**>(g_max_units_init_insn_addr + 2);
+        g_max_units_in_navy = *reinterpret_cast<int**>(g_max_units_init_insn_addr + 12);
+        Log("[twdll] Resolved max_units_army @ 0x%08X (val: %d), max_units_navy @ 0x%08X (val: %d)",
+            reinterpret_cast<uintptr_t>(g_max_units_in_army), g_max_units_in_army ? *g_max_units_in_army : 0,
+            reinterpret_cast<uintptr_t>(g_max_units_in_navy), g_max_units_in_navy ? *g_max_units_in_navy : 0);
+    }
+    return g_max_units_in_navy;
+}
 
 twdll::TW_ITweaker* find_engine_tweaker(const char* name, size_t len) {
     if (!g_tweaker_map && g_get_tweaker_map) {
@@ -109,6 +132,7 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"FACTION_TECHNOLOGY_MANAGER::update_effect_list",      (void**)&g_update_tech_effects,    UPDATE_TECH_EFFECTS_SIG},
     {"DATABASE_TABLE::record_index",                       (void**)&g_record_index,           RECORD_INDEX_SIG},
     {"UNIT::convert_unit",                                 (void**)&g_convert_unit,           CONVERT_UNIT_SIG},
+    {"CAMPAIGN_MODEL::max_units_init",                     (void**)&g_max_units_init_insn_addr, CAMPAIGN_MODEL_MAX_UNITS_SIG},
     {"CHARACTER::add_trait",                               (void**)&g_add_trait,              ADD_TRAIT_SIG},
     {"CHARACTER_TRAITS::set_effect_list",                  (void**)&g_set_effect_list,         SET_EFFECT_LIST_SIG},
     {"CHARACTER::get_loyalty",                             (void**)&g_get_loyalty,            GET_LOYALTY_SIG},

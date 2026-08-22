@@ -117,8 +117,9 @@ Gets the maximum number of units allowed per land army (vanilla default: 20).
 local max_army_units = twdll.world.GetMaxUnitsInArmy()
 */
 static int GetMaxUnitsInArmy(lua_State* L) {
-    if (g_empire_module) {
-        l_pushinteger(L, tw_read<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY));
+    int* p = get_max_units_in_army();
+    if (p) {
+        l_pushinteger(L, *p);
         return 1;
     }
     l_pushnil(L);
@@ -139,16 +140,17 @@ twdll.world.SetMaxUnitsInArmy(40)
 twdll.world.SetMaxUnitsInArmy()
 */
 static int SetMaxUnitsInArmy(lua_State* L) {
-    if (!g_empire_module) return 0;
+    int* p = get_max_units_in_army();
+    if (!p) return 0;
     if (g_orig_max_units_army == -1) {
-        g_orig_max_units_army = tw_read<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY);
+        g_orig_max_units_army = *p;
     }
     int val = g_orig_max_units_army;
     if (l_type(L, 1) > LUA_TNIL) {
         val = static_cast<int>(l_tointeger(L, 1));
         if (val < 1) val = 1;
     }
-    tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY, val);
+    *p = val;
     Log("[twdll] SetMaxUnitsInArmy: %d", val);
     return 0;
 }
@@ -161,8 +163,9 @@ Gets the maximum number of units allowed per naval fleet (vanilla default: 20).
 local max_navy_units = twdll.world.GetMaxUnitsInNavy()
 */
 static int GetMaxUnitsInNavy(lua_State* L) {
-    if (g_empire_module) {
-        l_pushinteger(L, tw_read<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY));
+    int* p = get_max_units_in_navy();
+    if (p) {
+        l_pushinteger(L, *p);
         return 1;
     }
     l_pushnil(L);
@@ -183,16 +186,17 @@ twdll.world.SetMaxUnitsInNavy(30)
 twdll.world.SetMaxUnitsInNavy()
 */
 static int SetMaxUnitsInNavy(lua_State* L) {
-    if (!g_empire_module) return 0;
+    int* p = get_max_units_in_navy();
+    if (!p) return 0;
     if (g_orig_max_units_navy == -1) {
-        g_orig_max_units_navy = tw_read<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY);
+        g_orig_max_units_navy = *p;
     }
     int val = g_orig_max_units_navy;
     if (l_type(L, 1) > LUA_TNIL) {
         val = static_cast<int>(l_tointeger(L, 1));
         if (val < 1) val = 1;
     }
-    tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY, val);
+    *p = val;
     Log("[twdll] SetMaxUnitsInNavy: %d", val);
     return 0;
 }
@@ -498,17 +502,17 @@ extern const luaL_Reg world_functions[] = {
 
 // Uninstall hook and clear global pointers / restore engine defaults
 void uninstall_world_hook() {
-    if (g_empire_module) {
-        if (g_orig_max_units_army != -1) {
-            tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_ARMY, g_orig_max_units_army);
-            Log("[twdll] Restored OFFSET_MAX_UNITS_ARMY to %d", g_orig_max_units_army);
-            g_orig_max_units_army = -1;
-        }
-        if (g_orig_max_units_navy != -1) {
-            tw_write<int>(g_empire_module, OFFSET_MAX_UNITS_NAVY, g_orig_max_units_navy);
-            Log("[twdll] Restored OFFSET_MAX_UNITS_NAVY to %d", g_orig_max_units_navy);
-            g_orig_max_units_navy = -1;
-        }
+    if (g_orig_max_units_army != -1) {
+        int* p = get_max_units_in_army();
+        if (p) *p = g_orig_max_units_army;
+        Log("[twdll] Restored max_units_army to %d", g_orig_max_units_army);
+        g_orig_max_units_army = -1;
+    }
+    if (g_orig_max_units_navy != -1) {
+        int* p = get_max_units_in_navy();
+        if (p) *p = g_orig_max_units_navy;
+        Log("[twdll] Restored max_units_navy to %d", g_orig_max_units_navy);
+        g_orig_max_units_navy = -1;
     }
     if (g_orig_max_traits != -1) {
         auto* tweaker = find_engine_tweaker("max_traits", 10);
