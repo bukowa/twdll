@@ -49,8 +49,15 @@ foreach(source_file IN LISTS TWDLL_DOC_SOURCES)
 endforeach()
 string(JOIN ",\n" lua_file_list_string "${lua_formatted_files}")
 
+set(lua_formatted_topics "")
+foreach(topic_file IN LISTS TWDLL_DOC_TOPICS)
+    list(APPEND lua_formatted_topics "    \"${topic_file}\"")
+endforeach()
+string(JOIN ",\n" lua_topic_list_string "${lua_formatted_topics}")
+
 file(READ ${CONFIG_LD_SOURCE} ORIGINAL_CONFIG_CONTENT)
 string(REPLACE "file = {}" "file = {\n${lua_file_list_string}\n}" MODIFIED_CONFIG_CONTENT "${ORIGINAL_CONFIG_CONTENT}")
+string(REPLACE "topics = {}" "topics = {\n${lua_topic_list_string}\n}" MODIFIED_CONFIG_CONTENT "${MODIFIED_CONFIG_CONTENT}")
 string(REPLACE "dir = \"docs/lua/doc\"" "dir = \"docs/${TW_GAME}\"" MODIFIED_CONFIG_CONTENT "${MODIFIED_CONFIG_CONTENT}")
 file(WRITE ${CONFIG_LD_GENERATED} "${MODIFIED_CONFIG_CONTENT}")
 
@@ -64,7 +71,7 @@ add_custom_command(
                 "${PROJECT_SOURCE_DIR}/docs/lua/ldoc/ldoc.lua"
                 -c "${CONFIG_LD_GENERATED}"
                 src
-    DEPENDS     lua_for_docs luafilesystem ${CONFIG_LD_GENERATED} ${TWDLL_DOC_SOURCES}
+    DEPENDS     lua_for_docs luafilesystem ${CONFIG_LD_GENERATED} ${TWDLL_DOC_SOURCES} ${TWDLL_DOC_TOPICS}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     VERBATIM
 )

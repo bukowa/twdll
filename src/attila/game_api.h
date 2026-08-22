@@ -129,4 +129,11 @@ extern const uintptr_t OFFSET_MAX_UNITS_ARMY;
 extern const uintptr_t OFFSET_MAX_UNITS_NAVY;
 extern const uintptr_t OFFSET_MAX_TRAITS;
 
+namespace twdll {
+    struct TW_TweakerMap;
+    struct TW_ITweaker;
+}
+extern twdll::TW_TweakerMap* g_tweaker_map;
+twdll::TW_ITweaker* find_engine_tweaker(const char* name, size_t len);
+
 void refresh_settlements_display();

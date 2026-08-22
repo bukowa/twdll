@@ -291,7 +291,7 @@ of the suite.
 
 ### Manual / Visual Test Scripts
 
-When verifying visual, UI, or interactive features (e.g. building model rotation, clan/family tree panel updates, political allegiance reassignments, agent creation), the agent should provide a clear, standalone Lua snippet based on `tests/shared/manual_test_template.lua` that the user can run directly in-game (e.g. via Scriptum) to visually inspect the outcome.
+When verifying visual, UI, or interactive features (e.g. building model rotation, clan/family tree panel updates, political allegiance reassignments, agent creation), the agent should provide a clear, standalone Lua snippet based on `tests/manual/manual_test_template.lua` that the user can run directly in-game (e.g. via Scriptum) to visually inspect the outcome.
 **Scriptum / In-Game Environment Rule**: Never use `package.loadlib` in Scriptum scripts since the DLL is already loaded into the engine's global environment; always use `twdll = _G.script_env.twdll` (or `_G.script_env and _G.script_env.twdll or package.loadlib('twdll', "luaopen_twdll")()`).
 
 ### When You Change the Lua API

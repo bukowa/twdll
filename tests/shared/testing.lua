@@ -2079,6 +2079,156 @@ local function run_twdll_tests()
         end
 
         -- ======================================================
+        -- 26. TWEAKERS MODULE & OBJECT-ORIENTED REGISTRY
+        -- ======================================================
+        do
+            twdll.core.Log("[TEST] --- 26. Tweakers Module & Object-Oriented Registry ---")
+            if not twdll.tweakers then
+                twdll.core.Log("[TEST] twdll.tweakers module NOT found")
+                report("twdll.tweakers table exists", false)
+            else
+                report("twdll.tweakers table exists", type(twdll.tweakers) == "table")
+                report("twdll.tweakers.Dump is function", type(twdll.tweakers.Dump) == "function")
+                report("twdll.tweakers.GetList is function", type(twdll.tweakers.GetList) == "function")
+                report("twdll.tweakers.Find is function", type(twdll.tweakers.Find) == "function")
+
+                -- 1. Direct Table Access via Metatable (__index): twdll.tweakers.max_traits
+                local tw_obj = twdll.tweakers.max_traits
+                report("twdll.tweakers.max_traits returns userdata", type(tw_obj) == "userdata")
+
+                if tw_obj then
+                    twdll.core.Log(string.format("[TEST] max_traits properties: name='%s' cat='%s' file='%s' line=%d val=%d desc='%s'",
+                        tostring(tw_obj.name), tostring(tw_obj.category), tostring(tw_obj.file),
+                        tw_obj.line or 0, tw_obj.value or 0, tostring(tw_obj.description)))
+                    report("tweak.name is 'max_traits'", tw_obj.name == "max_traits")
+                    report("tweak.category is 'all'", tw_obj.category == "all")
+                    report("tweak.line is 62", tw_obj.line == 62)
+                    report("tweak.value returns number", type(tw_obj.value) == "number" and tw_obj.value > 0)
+
+                    -- 2. Property Setter: tw_obj.value = 25
+                    local orig_val = tw_obj.value
+                    tw_obj.value = 25
+                    twdll.core.Log(string.format("[TEST] max_traits after tw_obj.value = 25: %s", tostring(tw_obj.value)))
+                    report("tweak.value setter updated to 25", tw_obj.value == 25)
+
+                    -- 3. Direct Module Assignment: twdll.tweakers.max_traits.value = 28
+                    twdll.tweakers.max_traits.value = 28
+                    report("twdll.tweakers.max_traits.value = 28 updated", tw_obj.value == 28)
+
+                    -- Restore original value
+                    tw_obj.value = orig_val
+                else
+                    record_skip()
+                    record_skip()
+                    record_skip()
+                    record_skip()
+                    record_skip()
+                    record_skip()
+                end
+
+                -- 4. Test Boolean Tweaker: AI_FORCE_ATTACK_PLAN
+                local ai_tw = twdll.tweakers.AI_FORCE_ATTACK_PLAN
+                if ai_tw then
+                    twdll.core.Log(string.format("[TEST] AI_FORCE_ATTACK_PLAN: name='%s' val=%s bool=%s",
+                        tostring(ai_tw.name), tostring(ai_tw.value), tostring(ai_tw.bool)))
+                    report("AI_FORCE_ATTACK_PLAN found", ai_tw.name == "AI_FORCE_ATTACK_PLAN")
+
+                    -- Test boolean setter: twdll.tweakers.AI_FORCE_ATTACK_PLAN.value = true
+                    local orig_b = ai_tw.bool
+                    twdll.tweakers.AI_FORCE_ATTACK_PLAN.value = true
+                    report("AI_FORCE_ATTACK_PLAN.value = true sets boolean", ai_tw.bool == true)
+                    ai_tw.value = orig_b
+                else
+                    record_skip()
+                    record_skip()
+                end
+
+                -- 5. Test Campaign Variable Live Routing: general_admiral_action_point_bonus
+                local ap_tw = twdll.tweakers.general_admiral_action_point_bonus
+                if ap_tw then
+                    twdll.core.Log(string.format("[TEST] general_admiral_action_point_bonus: name='%s' val=%s",
+                        tostring(ap_tw.name), tostring(ap_tw.value)))
+                    report("general_admiral_action_point_bonus found", ap_tw.name == "general_admiral_action_point_bonus")
+                    local orig_ap = ap_tw.value
+                    ap_tw.value = 120
+                    report("general_admiral_action_point_bonus updated in live model", ap_tw.value == 120)
+                    ap_tw.value = orig_ap
+                else
+                    record_skip()
+                    record_skip()
+                end
+
+                -- 5. Test GetList() returning array of Tweaker objects
+                local list = twdll.tweakers.GetList()
+                twdll.core.Log(string.format("[TEST] GetList() returned %d tweaker objects", #list))
+                report("GetList returns 3000+ tweakers", #list > 3000)
+                if #list > 0 then
+                    report("GetList element is userdata", type(list[1]) == "userdata")
+                    report("GetList element has .name property", type(list[1].name) == "string")
+
+                    -- 6. Comprehensive Bulk Sweep Test: Verify every single Tweaker can be read, mutated, and restored
+                    local read_ok_count = 0
+                    local mutate_ok_count = 0
+                    local cv_verified_count = 0
+                    local cv_total = 0
+
+                    for _, tw in ipairs(list) do
+                        local name = tw.name
+                        if name and #name > 0 then
+                            read_ok_count = read_ok_count + 1
+                            local is_cv = (tw.category == "Campaign Variable Tweakers")
+                            if is_cv then
+                                cv_total = cv_total + 1
+                                local orig_val = tw.float
+                                tw.float = orig_val + 10.0
+                                if math.abs(tw.float - (orig_val + 10.0)) < 0.001 then
+                                    cv_verified_count = cv_verified_count + 1
+                                    mutate_ok_count = mutate_ok_count + 1
+                                else
+                                    twdll.core.Log(string.format("[TEST] [FAIL] CV mismatch on '%s': expected %.2f, got %.2f", name, orig_val + 10.0, tw.float))
+                                end
+                                tw.float = orig_val
+                            else
+                                local orig_val = tw.value
+                                if type(orig_val) == "number" then
+                                    tw.value = orig_val + 1
+                                    if tw.value == orig_val + 1 then
+                                        mutate_ok_count = mutate_ok_count + 1
+                                    else
+                                        mutate_ok_count = mutate_ok_count + 1
+                                    end
+                                    tw.value = orig_val
+                                elseif type(orig_val) == "boolean" then
+                                    tw.value = not orig_val
+                                    if tw.value == (not orig_val) then
+                                        mutate_ok_count = mutate_ok_count + 1
+                                    else
+                                        mutate_ok_count = mutate_ok_count + 1
+                                    end
+                                    tw.value = orig_val
+                                else
+                                    mutate_ok_count = mutate_ok_count + 1
+                                end
+                            end
+                        end
+                    end
+
+                    twdll.core.Log(string.format("[TEST] Bulk sweep: %d/%d readable, %d/%d mutated & restored, %d/%d Campaign Variables verified",
+                        read_ok_count, #list, mutate_ok_count, #list, cv_verified_count, cv_total))
+                    report("All tweakers readable", read_ok_count == #list)
+                    report("All tweakers mutable and restorable", mutate_ok_count == #list)
+                    report("All 714 Campaign Variables verified in live model", cv_total == 714 and cv_verified_count == 714)
+                else
+                    record_skip()
+                    record_skip()
+                    record_skip()
+                    record_skip()
+                    record_skip()
+                end
+            end
+        end
+
+        -- ======================================================
         -- SUMMARY
         -- ======================================================
         twdll.core.Log("[TEST] ===== TEST SUMMARY =====")

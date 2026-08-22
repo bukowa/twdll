@@ -159,11 +159,25 @@ end
 load_twdll()
 
 -- Load shared testing logic
-pcall(function()
+local ok_testing, err_testing = pcall(function()
     require "shared.testing"
 end)
+if not ok_testing then
+    local f = io.open("twdll.log", "a")
+    if f then
+        f:write("[LUA] Error loading shared.testing: " .. tostring(err_testing) .. "\n")
+        f:close()
+    end
+end
 
 -- Load MP event testing logic
-pcall(function()
+local ok_mp, err_mp = pcall(function()
     require "shared.mp_testing"
 end)
+if not ok_mp then
+    local f = io.open("twdll.log", "a")
+    if f then
+        f:write("[LUA] Error loading shared.mp_testing: " .. tostring(err_mp) .. "\n")
+        f:close()
+    end
+end

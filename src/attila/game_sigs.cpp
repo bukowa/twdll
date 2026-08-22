@@ -1,5 +1,6 @@
 #include "game_api.h"
 #include "tw_types.h"
+#include "../common/tw.h"
 #include "../common/game_api.h"
 #include "../common/log.h"
 
@@ -61,6 +62,8 @@
 #define LOAD_GAME_SIG "83 EC 14 56 FF 74 24 ? 8B F1 C6 44 24"
 #define LOOKUP_CAMPAIGN_TECH_SIG "53 8B 59 0C 55 56 33 F6 57 85 DB 74 1B 8B 79 10"
 #define UPDATE_TECH_EFFECTS_SIG  "83 EC 30 53 8B D9 56 57 89 5C 24 0C 8D 4B 24 E8 ? ? ? ? 33 C9 89 4C 24"
+// Direct signature for UTILITYDLL::get_tweaker_map singleton getter (sub_11631B20)
+#define GET_TWEAKER_MAP_SIG "64 A1 ? ? ? ? 83 EC 18 8B 0D ? ? ? ? 8B 0C 88 A1 ? ? ? ? 3B 81 ? ? ? ? 7F ? B8 ? ? ? ? 83 C4 18 C3 68 ? ? ? ? E8 ? ? ? ? 83 C4 04 83 3D ? ? ? ? FF 75 ? 57 68 ? ? ? ? 8D 4C 24 ? E8 ? ? ? ? 68 ? ? ? ? 8D 4C 24 ? E8 ? ? ? ? 8D 44 24 ? C7 05 ? ? ? ? 08 00 00 00"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -77,6 +80,9 @@ uintptr_t          g_settlement_cb_initialize_addr = 0;
 uintptr_t          g_make_occupation_decision_addr = 0;
 static uintptr_t   g_update_animation_addr = 0;
 static uintptr_t   g_force_settlement_refresh_addr = 0;
+using FnGetTweakerMap = twdll::TW_TweakerMap*(__cdecl*)();
+FnGetTweakerMap    g_get_tweaker_map = nullptr;
+twdll::TW_TweakerMap* g_tweaker_map = nullptr;
 
 FnInstantSetResearched g_instant_set_researched = nullptr;
 FnLookupCampaignTech   g_lookup_campaign_tech   = nullptr;
@@ -96,6 +102,18 @@ FnLoadGame             g_load_game              = nullptr;
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
 const uintptr_t OFFSET_MAX_TRAITS     = 0x2188610;
+
+twdll::TW_ITweaker* find_engine_tweaker(const char* name, size_t len) {
+    if (!g_tweaker_map && g_get_tweaker_map) {
+        g_tweaker_map = g_get_tweaker_map();
+        Log("[twdll] Resolved global tweaker map @ 0x%08X (capacity: %u)",
+            reinterpret_cast<uintptr_t>(g_tweaker_map),
+            g_tweaker_map ? g_tweaker_map->m_capacity : 0);
+    }
+    if (!g_tweaker_map || !name || len == 0) return nullptr;
+    std::wstring wname = tw_utf8_to_wide(name, len);
+    return g_tweaker_map->find(wname.c_str(), wname.length());
+}
 
 void refresh_settlements_display() {
     if (!g_force_settlement_refresh_addr && g_update_animation_addr) {
@@ -139,5 +157,6 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"CAI_DECISION::make_occupation_decision",             (void**)&g_make_occupation_decision_addr, MAKE_OCCUPATION_DECISION_SIG},
     {"CAMPAIGN_ENV::save_game",                            (void**)&g_save_game,              SAVE_GAME_SIG},
     {"CAMPAIGN_ENV::load_game",                            (void**)&g_load_game,              LOAD_GAME_SIG},
+    {"UTILITYDLL::get_tweaker_map",                        (void**)&g_get_tweaker_map,        GET_TWEAKER_MAP_SIG},
     {nullptr, nullptr, nullptr}
 };

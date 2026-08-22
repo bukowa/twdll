@@ -18,6 +18,7 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/campaign_ui.cpp"          # twdll.campaign_ui
         "${PROJECT_SOURCE_DIR}/src/common/lua_core.cpp"             # twdll.core
         "${PROJECT_SOURCE_DIR}/src/attila/model.cpp"                # twdll.model
+        "${PROJECT_SOURCE_DIR}/src/attila/tweakers.cpp"             # twdll.tweakers
         "${PROJECT_SOURCE_DIR}/src/attila/world.cpp"                # twdll.world
 
         # Script interfaces (alphabetical)
@@ -32,6 +33,9 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/religion.cpp"             # RELIGION_SCRIPT_INTERFACE
         "${PROJECT_SOURCE_DIR}/src/attila/slot.cpp"                 # SLOT_SCRIPT_INTERFACE
         "${PROJECT_SOURCE_DIR}/src/attila/unit.cpp"                 # UNIT_SCRIPT_INTERFACE
+    )
+    set(TWDLL_DOC_TOPICS
+        "${PROJECT_SOURCE_DIR}/docs/engine_tweakers_inventory.md"
     )
 elseif(TW_GAME STREQUAL "rome2")
     set(TWDLL_DOC_SOURCES

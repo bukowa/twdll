@@ -229,7 +229,7 @@ function Tail-Log {
     # Wait for process to start (especially for Steam)
     $startTime = Get-Date
     while (!(Get-Process -Name $ProcName -ErrorAction SilentlyContinue)) {
-        if (((Get-Date) - $startTime).TotalSeconds -gt 30) {
+        if (((Get-Date) - $startTime).TotalSeconds -gt 45) {
             Write-Error "Timeout waiting for game process ($ProcName) to start"
             exit 1
         }
@@ -241,26 +241,35 @@ function Tail-Log {
         $lastCount = @(Get-Content -Path $LogFile -ErrorAction SilentlyContinue).Count
     }
 
+    $lastActivity = Get-Date
     while ($true) {
         if (Test-Path $LogFile) {
             $lines = @(Get-Content -Path $LogFile -ErrorAction SilentlyContinue)
             if ($lines.Count -lt $lastCount) { $lastCount = 0 }
             if ($lines.Count -gt $lastCount) {
+                $lastActivity = Get-Date
                 for ($i = $lastCount; $i -lt $lines.Count; $i++) {
                     $line = $lines[$i]
                     Write-Host $line
-                    if ($line -match '\[TEST\] Final Result: SUCCESS') {
-                        Write-Host "PASSED"
+                    if ($line -match '\[TEST\] Final Result: SUCCESS' -or $line -match 'Reload verification completed successfully') {
+                        Write-Host "=== TEST PASSED ==="
                         Stop-Process -Name $ProcName -Force -ErrorAction SilentlyContinue
                         exit 0
                     }
-                    if ($line -match '\[TEST\] Final Result: FAILED') {
-                        Write-Host "FAILED"
+                    if ($line -match '\[TEST\] Final Result: FAILED' -or $line -match '\[TEST\] run_twdll_tests error:' -or $line -match '\[LUA\] FATAL:') {
+                        Write-Host "=== TEST FAILED ==="
+                        Stop-Process -Name $ProcName -Force -ErrorAction SilentlyContinue
                         exit 1
                     }
                 }
                 $lastCount = $lines.Count
             }
+        }
+
+        if (((Get-Date) - $lastActivity).TotalSeconds -gt 90) {
+            Write-Host "Warning: 90s inactivity timeout waiting for test results"
+            Stop-Process -Name $ProcName -Force -ErrorAction SilentlyContinue
+            exit 1
         }
 
         if (!(Get-Process -Name $ProcName -ErrorAction SilentlyContinue)) {

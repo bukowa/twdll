@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
+#include <cwchar>
 #include "game_api.h"
 #include "../common/lua_api.h"
 
@@ -38,11 +39,81 @@ struct TW_CAUniString {
     const wchar_t* m_data;     // 0x8
 };
 
+template <typename T> struct TW_Tweaker;
+
+// UTILITYDLL::I_TWEAKER — base class for all engine tweakers (32-bit: size 0x48)
+struct TW_ITweaker {
+    void*          _vptr;            // 0x00
+    TW_CAUniString m_name;           // 0x04
+    TW_CAUniString m_file_name;      // 0x10
+    int32_t        m_line_number;    // 0x1C
+    TW_CAUniString m_tooltip_title;  // 0x20
+    TW_CAUniString m_tooltip_text;   // 0x2C
+    TW_CAUniString m_category;       // 0x38
+    uint8_t        m_ev;             // 0x44
+    uint8_t        m_dirty;          // 0x45
+    uint8_t        pad_46[2];        // 0x46
+
+    template <typename T>
+    T& value();
+
+    template <typename T>
+    const T& value() const;
+
+    uint32_t raw_value();
+    void set_raw_value(uint32_t val);
+};
+
 // UTILITYDLL::TWEAKER<T> — engine tweak wrapper struct
 template <typename T>
-struct TW_Tweaker {
-    char pad_00[0x48];
-    T    m_value;      // 0x48
+struct TW_Tweaker : TW_ITweaker {
+    T m_value; // 0x48
+};
+
+template <typename T>
+inline T& TW_ITweaker::value() {
+    return static_cast<TW_Tweaker<T>*>(this)->m_value;
+}
+
+template <typename T>
+inline const T& TW_ITweaker::value() const {
+    return static_cast<const TW_Tweaker<T>*>(this)->m_value;
+}
+
+inline uint32_t TW_ITweaker::raw_value() {
+    return value<uint32_t>();
+}
+
+inline void TW_ITweaker::set_raw_value(uint32_t val) {
+    value<uint32_t>() = val;
+    m_dirty = 1;
+}
+
+// Global Tweaker Registry dense_hash_map entry (size 0x10 = 16B)
+struct TW_TweakerMapEntry {
+    TW_CAUniString m_key;      // 0x00
+    TW_ITweaker*   m_tweaker;  // 0x0C
+};
+
+// Global Tweaker Registry dense_hash_map table
+struct TW_TweakerMap {
+    TW_TweakerMapEntry* m_buckets;      // 0x00
+    uint32_t            m_capacity;     // 0x04
+    TW_CAUniString      m_empty_key;    // 0x08
+    TW_CAUniString      m_deleted_key;  // 0x14
+
+    TW_ITweaker* find(const wchar_t* name, size_t len) const {
+        if (!m_buckets || !name || len == 0) return nullptr;
+        for (uint32_t i = 0; i < m_capacity; ++i) {
+            const auto& entry = m_buckets[i];
+            if (entry.m_tweaker && entry.m_key.m_data && entry.m_key.m_len == len) {
+                if (wcsncmp(entry.m_key.m_data, name, len) == 0) {
+                    return entry.m_tweaker;
+                }
+            }
+        }
+        return nullptr;
+    }
 };
 
 
@@ -605,7 +676,9 @@ struct TW_Region {
 // unlock wrapper sub_1073C7F0: `lea ecx,[ecx+10F0h]; call sub_109C8F70`.
 struct TW_CampaignModel {
     char  pad_00[0x10F0];
-    void* m_campaign_env;   // 0x10F0  CAMPAIGN_ENV_MODEL_ACCESS::m_campaign_env (CAMPAIGN_ENV*)
+    void* m_campaign_env;             // 0x10F0  CAMPAIGN_ENV_MODEL_ACCESS::m_campaign_env (CAMPAIGN_ENV*)
+    char  pad_10F4[0xC];              // 0x10F4
+    float m_campaign_variables[714];  // 0x1100  CAMPAIGN_VARIABLES_ARRAY (714 floats, 2856B)
 };
 
 // EMPIRECAMPAIGN::CAMPAIGN_ENV — selected fields (32-bit Attila layout).
@@ -658,7 +731,8 @@ struct TW_DatabaseTable {
 // 64-bit m_technologies_table@0x20E0 -> 32-bit 0x1604, m_main_units_table@0x1000.
 // Lazy-loader cache fields: populated on the first tick of any running campaign.
 struct TW_Databases {
-    char              pad_00[0xF18];
+    float             m_campaign_variables[714]; // 0x0000 (CAMPAIGN_VARIABLES_ARRAY, 714 floats, 0xB28 bytes)
+    char              pad_B28[0x3F0];            // 0x0B28
     TW_DatabaseTable* political_parties; // 0xF18  (POLITICAL_PARTIES_TABLE)
     char              pad_F1C[0xE4];
     TW_DatabaseTable* main_units;        // 0x1000 (MAIN_UNITS_TABLE)
@@ -684,7 +758,23 @@ struct TW_Databases {
 #define TW_ASSERT_OFFSET(S, F, O) \
     static_assert(offsetof(S, F) == O, #S " Attila: " #F " expected at " #O)
 
+static_assert(sizeof(TW_ITweaker) == 0x48, "TW_ITweaker size must be 0x48");
+TW_ASSERT_OFFSET(TW_ITweaker, m_name,          0x04);
+TW_ASSERT_OFFSET(TW_ITweaker, m_file_name,     0x10);
+TW_ASSERT_OFFSET(TW_ITweaker, m_line_number,   0x1C);
+TW_ASSERT_OFFSET(TW_ITweaker, m_tooltip_title, 0x20);
+TW_ASSERT_OFFSET(TW_ITweaker, m_tooltip_text,  0x2C);
+TW_ASSERT_OFFSET(TW_ITweaker, m_category,      0x38);
+TW_ASSERT_OFFSET(TW_ITweaker, m_ev,            0x44);
+TW_ASSERT_OFFSET(TW_ITweaker, m_dirty,         0x45);
 TW_ASSERT_OFFSET(TW_Tweaker<uint8_t>, m_value, 0x48);
+static_assert(sizeof(TW_TweakerMapEntry) == 0x10, "TW_TweakerMapEntry size must be 0x10");
+TW_ASSERT_OFFSET(TW_TweakerMapEntry, m_key,     0x00);
+TW_ASSERT_OFFSET(TW_TweakerMapEntry, m_tweaker, 0x0C);
+TW_ASSERT_OFFSET(TW_TweakerMap, m_buckets,      0x00);
+TW_ASSERT_OFFSET(TW_TweakerMap, m_capacity,     0x04);
+TW_ASSERT_OFFSET(TW_TweakerMap, m_empty_key,    0x08);
+TW_ASSERT_OFFSET(TW_TweakerMap, m_deleted_key,  0x14);
 TW_ASSERT_OFFSET(TW_Faction,       treasury,                0x7DC);
 TW_ASSERT_OFFSET(TW_Faction,       m_faction_record,        0x800);
 TW_ASSERT_OFFSET(TW_FactionRecord, m_key,                   0x0);
@@ -795,6 +885,8 @@ TW_ASSERT_OFFSET(TW_ReligionProportion, m_religion,           0x0);
 TW_ASSERT_OFFSET(TW_ReligionProportion, m_proportion,         0x4);
 TW_ASSERT_OFFSET(TW_RegionData,    m_theatre,                0x94);
 TW_ASSERT_OFFSET(TW_CampaignModel, m_campaign_env,           0x10F0);
+TW_ASSERT_OFFSET(TW_CampaignModel, m_campaign_variables,     0x1100);
+TW_ASSERT_OFFSET(TW_Databases,     m_campaign_variables,     0x0000);
 TW_ASSERT_OFFSET(TW_CampaignEnv,   m_game_core,              0x30);
 TW_ASSERT_OFFSET(TW_CampaignEnv,   m_load_game,              0x5C);
 TW_ASSERT_OFFSET(TW_CampaignEnv,   m_quit_to_main_menu,      0x9C);
@@ -864,6 +956,7 @@ TW_PTR_OFFSET(TW_Settlement,    0x8);
 TW_PTR_OFFSET(TW_PoliticalPartyRecord,   0x8);
 TW_PTR_OFFSET(TW_CampaignPoliticalParty, 0x8);
 TW_PTR_OFFSET(TW_CharacterDetailsArtSetInfo, 0x8);
+TW_PTR_OFFSET(TW_ITweaker,                0x8);
 
 template<typename T> T * tw_unwrap(lua_State* L, int slot) {
     void** ud = static_cast<void**>(l_touserdata(L, slot));

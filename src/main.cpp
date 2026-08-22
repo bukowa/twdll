@@ -28,12 +28,16 @@ extern void register_political_party_methods(lua_State *L);
 extern void register_political_party_list_methods(lua_State *L);
 extern void register_religion_methods(lua_State *L);
 extern void register_religion_list_methods(lua_State *L);
+extern const luaL_Reg tweaker_functions[];
+extern void register_tweaker_methods(lua_State *L);
+extern void uninstall_tweakers();
 
 static bool g_is_initialized = false;
 
 static int l_twdll_gc_cleanup(lua_State* L) {
     if (g_is_initialized) {
         Log("[twdll] GC destroying Lua state — uninstalling campaign hooks");
+        uninstall_tweakers();
         uninstall_campaign_hooks();
         g_is_initialized = false;
     }
@@ -129,6 +133,10 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     l_register(L, "twdll_cai", cai_functions_export);
     l_setfield(L, -2, "cai");
+
+    l_register(L, "twdll_tweakers", tweaker_functions);
+    register_tweaker_methods(L);
+    l_setfield(L, -2, "tweakers");
 
     Log("[twdll] luaopen_twdll: done");
     return 1;

@@ -11,4 +11,5 @@ format = "markdown"
 sort = true
 dir = "docs/lua/doc"
 file = {}
+topics = {}
 
