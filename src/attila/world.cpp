@@ -301,8 +301,9 @@ Gets the maximum number of traits a character can hold simultaneously (vanilla d
 local max_traits = twdll.world.GetMaxTraits()
 */
 static int GetMaxTraits(lua_State* L) {
-    if (g_empire_module) {
-        l_pushinteger(L, tw_read<int>(g_empire_module, OFFSET_MAX_TRAITS));
+    auto* tweaker = find_engine_tweaker("max_traits", 10);
+    if (tweaker) {
+        l_pushinteger(L, static_cast<lua_Integer>(tweaker->raw_value()));
         return 1;
     }
     l_pushnil(L);
@@ -323,16 +324,17 @@ twdll.world.SetMaxTraits(30)
 twdll.world.SetMaxTraits()
 */
 static int SetMaxTraits(lua_State* L) {
-    if (!g_empire_module) return 0;
+    auto* tweaker = find_engine_tweaker("max_traits", 10);
+    if (!tweaker) return 0;
     if (g_orig_max_traits == -1) {
-        g_orig_max_traits = tw_read<int>(g_empire_module, OFFSET_MAX_TRAITS);
+        g_orig_max_traits = static_cast<int>(tweaker->raw_value());
     }
     int val = g_orig_max_traits;
     if (l_type(L, 1) > LUA_TNIL) {
         val = static_cast<int>(l_tointeger(L, 1));
         if (val < 1) val = 1;
     }
-    tw_write<int>(g_empire_module, OFFSET_MAX_TRAITS, val);
+    tweaker->set_raw_value(static_cast<uint32_t>(val));
     Log("[twdll] SetMaxTraits: %d", val);
     return 0;
 }
@@ -507,11 +509,14 @@ void uninstall_world_hook() {
             Log("[twdll] Restored OFFSET_MAX_UNITS_NAVY to %d", g_orig_max_units_navy);
             g_orig_max_units_navy = -1;
         }
-        if (g_orig_max_traits != -1) {
-            tw_write<int>(g_empire_module, OFFSET_MAX_TRAITS, g_orig_max_traits);
-            Log("[twdll] Restored OFFSET_MAX_TRAITS to %d", g_orig_max_traits);
-            g_orig_max_traits = -1;
+    }
+    if (g_orig_max_traits != -1) {
+        auto* tweaker = find_engine_tweaker("max_traits", 10);
+        if (tweaker) {
+            tweaker->set_raw_value(static_cast<uint32_t>(g_orig_max_traits));
+            Log("[twdll] Restored max_traits tweaker to %d", g_orig_max_traits);
         }
+        g_orig_max_traits = -1;
     }
     set_reinforcement_cap(true, 0);
 

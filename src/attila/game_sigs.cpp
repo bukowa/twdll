@@ -69,7 +69,6 @@ FnLoadGame             g_load_game              = nullptr;
 
 const uintptr_t OFFSET_MAX_UNITS_ARMY = 0x1CC91F0;
 const uintptr_t OFFSET_MAX_UNITS_NAVY = 0x1CC91F4;
-const uintptr_t OFFSET_MAX_TRAITS     = 0x2188610;
 
 twdll::TW_ITweaker* find_engine_tweaker(const char* name, size_t len) {
     if (!g_tweaker_map && g_get_tweaker_map) {

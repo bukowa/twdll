@@ -115,7 +115,6 @@ extern uintptr_t g_make_occupation_decision_addr;
 
 extern const uintptr_t OFFSET_MAX_UNITS_ARMY;
 extern const uintptr_t OFFSET_MAX_UNITS_NAVY;
-extern const uintptr_t OFFSET_MAX_TRAITS;
 
 namespace twdll {
     struct TW_TweakerMap;
