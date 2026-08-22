@@ -188,39 +188,20 @@ private:
 // ── Getter class ───────────────────────────────────────────────────────
 // For read-only properties.
 
-struct offset_tag_t {};
-inline constexpr offset_tag_t offset_tag{};
-
 template <typename T, typename S>
 class Getter {
 public:
     Getter(T S::* field, size_t ptr_off, const char* tag)
-        : field_(field), offset_(0), use_offset_(false), ptr_off_(ptr_off), tag_(tag), chain_{} {}
+        : field_(field), ptr_off_(ptr_off), tag_(tag), chain_{} {}
 
     Getter(T S::* field, size_t ptr_off, const char* tag, std::initializer_list<size_t> chain)
-        : field_(field), offset_(0), use_offset_(false), ptr_off_(ptr_off), tag_(tag), chain_(chain) {}
-
-    // Offset-based legacy variant for embedded/nested fields
-    Getter(offset_tag_t, size_t offset, size_t ptr_off, const char* tag)
-        : field_(nullptr), offset_(offset), use_offset_(true), ptr_off_(ptr_off), tag_(tag), chain_{} {}
+        : field_(field), ptr_off_(ptr_off), tag_(tag), chain_(chain) {}
 
     int get(lua_State* L) {
-        if (use_offset_) {
-            void* obj = tw_get_obj(L, tag_, ptr_off_);
-            if (!obj) { l_pushnil(L); return 1; }
-            T v = *reinterpret_cast<T*>(static_cast<char*>(obj) + offset_);
-            if constexpr (std::is_integral_v<T>)
-                l_pushinteger(L, static_cast<lua_Integer>(v));
-            else if constexpr (std::is_floating_point_v<T>)
-                l_pushnumber(L, static_cast<float>(v));
-            return 1;
-        }
         return tw_get(L, ptr_off_, field_, tag_, chain_);
     }
 private:
     T S::*         field_;
-    size_t         offset_;
-    bool           use_offset_;
     size_t         ptr_off_;
     const char*    tag_;
     OffsetChain<4> chain_;
