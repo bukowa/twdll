@@ -116,7 +116,7 @@ static int GetReligionList(lua_State* L) {
         push_religion_list(L, nullptr, 0);
         return 1;
     }
-    auto* elements = reinterpret_cast<const twdll::TW_ReligionProportion*>(region->m_religion_breakdown.m_elements);
+    const auto* elements = region->m_religion_breakdown.m_elements;
     int count = static_cast<int>(region->m_religion_breakdown.m_size);
     push_religion_list(L, elements, count);
     return 1;
@@ -144,7 +144,7 @@ static int GetReligionProportion(lua_State* L) {
         l_pushnumber(L, 0.0f);
         return 1;
     }
-    auto* elements = reinterpret_cast<const twdll::TW_ReligionProportion*>(region->m_religion_breakdown.m_elements);
+    const auto* elements = region->m_religion_breakdown.m_elements;
     int count = static_cast<int>(region->m_religion_breakdown.m_size);
     for (int i = 0; i < count; ++i) {
         if (elements[i].m_religion && elements[i].m_religion->m_key.m_data &&

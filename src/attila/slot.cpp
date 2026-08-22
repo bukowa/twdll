@@ -35,7 +35,7 @@ static TW_SettlementExpansionSlot* get_expansion_slot(lua_State* L) {
     TW_SettlementExpansionSlot* result = nullptr;
     if (settlement && settlement->m_settlement_expansion_manager) {
         auto* sem = settlement->m_settlement_expansion_manager;
-        auto** elements = reinterpret_cast<TW_SettlementExpansionSlot**>(sem->m_slots.m_elements);
+        auto* elements = sem->m_slots.m_elements;
         int count = static_cast<int>(sem->m_slots.m_size);
         if (elements && count > 0 && count < 32) {
             for (int i = 0; i < count; ++i) {

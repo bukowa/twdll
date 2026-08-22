@@ -119,6 +119,11 @@ When a test fails, crashes, or returns unexpected values (`nil`, wrong values, a
 - **All Engine Data Paths Must Be Formally Structured in `tw_types.h`** — Never use raw byte arithmetic (`ptr + 0x...`)
   or chained `reinterpret_cast` in `.cpp` files. Every entity relationship, sub-object, container, or record must be
   modeled as a typed C++ struct in `tw_types.h` and guarded by `TW_ASSERT_OFFSET`.
+- **Typed Entity Links & Container Abstractions over Raw C-Casts (`reinterpret_cast`)** — Never leave container elements
+  (`CA_STD::VECTOR` / `TW_VectorNcc<T>`), hash tables, or entity relationship links (`ONE_TO_ONE_LINK<T>`, `ONE_TO_MANY_LINK<T>`)
+  as untyped `void*` or `void**` in `tw_types.h`. Always model them as typed templates so member access is direct,
+  readable, and type-checked at compile time without requiring `reinterpret_cast` in `.cpp` files. `reinterpret_cast`
+  is reserved strictly for external C ABIs (MinHook, OS APIs) and pointer address logging.
 - **All Engine Functions Must Be Signature-Resolved in `game_sigs.cpp`** — Never hardcode RVA offsets or address
   arithmetic to invoke game functions. Every native engine call must be resolved via a unique byte pattern through
   the signature scanner (and module handles must be accessed via `g_empire_module`, never resolved dynamically at runtime).

@@ -390,13 +390,18 @@ struct TW_CharacterDetails {
     TW_PortraitCameraSettings*    m_portrait_camera_settings;          // 0x354 (= CHARACTER+0x558)
 };
 
+template <typename T>
+struct TW_OneToOneLink {
+    T* m_object; // 0x00
+};
+
 struct TW_Character {
-    char                pad_00[0x14];
-    int                 action_points;       // 0x14
-    char                pad_18[0x1C4];
-    void*               commanded_unit_link; // 0x1DC  m_commanded_unit.m_link.m_object
-    char                pad_1E0[0x24];
-    TW_CharacterDetails details;             // 0x204  CHARACTER_DETAILS embedded sub-struct
+    char                            pad_00[0x14];
+    int                             action_points;       // 0x14
+    char                            pad_18[0x1C4];
+    TW_OneToOneLink<struct TW_Unit>* commanded_unit_link; // 0x1DC  m_commanded_unit.m_link.m_object
+    char                            pad_1E0[0x24];
+    TW_CharacterDetails             details;             // 0x204  CHARACTER_DETAILS embedded sub-struct
 };
 
 struct TW_World {
@@ -432,8 +437,8 @@ struct TW_Unit {
     int               max_num_men;      // 0x48
     char              pad_4C[0x18];
     int               action_points;    // 0x64
-    char              pad_68[0xAC];
-    void*             m_commander_link; // 0x114 (ONE_TO_ONE_LINK to CHARACTER)
+    char                           pad_68[0xAC];
+    TW_OneToOneLink<TW_Character>* m_commander_link; // 0x114 (ONE_TO_ONE_LINK to CHARACTER)
 
     TW_MilitaryForce* get_military_force() const {
         if (!m_force_link || !m_force_link->m_container) return nullptr;
@@ -484,10 +489,22 @@ struct TW_BattleScriptUnit {
     TW_BattleUnit* m_unit;  // 0x4
 };
 
+template <typename T = void*>
 struct TW_VectorNcc {
-    void*  m_capacity_and_allocator;  // 0x0  (low bits: capacity, high bits: allocator ptr)
-    int    m_size;                    // 0x4
-    void** m_elements;                // 0x8
+    void* m_capacity_and_allocator;  // 0x0  (low bits: capacity, high bits: allocator ptr)
+    int   m_size;                    // 0x4
+    T*    m_elements;                // 0x8
+
+    static TW_VectorNcc<T> from_span(T* ptr, size_t count) {
+        return { reinterpret_cast<void*>(count), static_cast<int>(count), ptr };
+    }
+
+    T* data() { return m_elements; }
+    const T* data() const { return m_elements; }
+    int size() const { return m_size; }
+    bool empty() const { return m_size == 0; }
+    T& operator[](int idx) { return m_elements[idx]; }
+    const T& operator[](int idx) const { return m_elements[idx]; }
 };
 
 struct TW_ReinforcementsManager {
@@ -495,8 +512,8 @@ struct TW_ReinforcementsManager {
     bool          m_debug_draw;                    // 0x4
     char          pad_05[0x3];
     void*         m_debug_draw_menu_item;          // 0x8
-    TW_VectorNcc  m_spawn_zones;                   // 0xC
-    TW_VectorNcc  m_reinforcements;                // 0x18
+    TW_VectorNcc<void*> m_spawn_zones;                   // 0xC
+    TW_VectorNcc<void*> m_reinforcements;                // 0x18
     bool          m_reinforcements_message_issued; // 0x24
     char          pad_25[0x3];
     int           m_max_num_units_per_army;        // 0x28
@@ -549,8 +566,8 @@ struct TW_SettlementExpansionSlot {
 };
 
 struct TW_SettlementExpansionManager {
-    char         pad_00[0x14];
-    TW_VectorNcc m_slots;     // 0x14 (vector<SETTLEMENT_EXPANSION_SLOT*>, m_size@0x18, m_elements@0x1C)
+    char                                      pad_00[0x14];
+    TW_VectorNcc<TW_SettlementExpansionSlot*> m_slots; // 0x14 (vector<SETTLEMENT_EXPANSION_SLOT*>)
 };
 
 struct TW_Settlement {
@@ -580,10 +597,10 @@ struct TW_ReligionProportion {
 };
 
 struct TW_Region {
-    char           pad_00[0x50];
-    TW_RegionData* m_region_data;        // 0x50
-    char           pad_54[0x88];
-    TW_VectorNcc   m_religion_breakdown; // 0xDC (m_size @0xE0, m_elements @0xE4)
+    char                                pad_00[0x50];
+    TW_RegionData*                      m_region_data;        // 0x50
+    char                                pad_54[0x88];
+    TW_VectorNcc<TW_ReligionProportion> m_religion_breakdown; // 0xDC (m_size @0xE0, m_elements @0xE4)
 };
 
 // EMPIRECAMPAIGN::CAMPAIGN_MODEL
@@ -763,9 +780,10 @@ TW_ASSERT_OFFSET(TW_BattleUnit,    num_men_initial,         0x1C24);
 TW_ASSERT_OFFSET(TW_BattleScriptUnit, m_unit,              0x4);
 TW_ASSERT_OFFSET(TW_FamilyMember,    mother,                  0x18);
 TW_ASSERT_OFFSET(TW_FamilyMember,    father,                  0x1C);
-TW_ASSERT_OFFSET(TW_VectorNcc,             m_capacity_and_allocator, 0x0);
-TW_ASSERT_OFFSET(TW_VectorNcc,             m_size,                   0x4);
-TW_ASSERT_OFFSET(TW_VectorNcc,             m_elements,               0x8);
+TW_ASSERT_OFFSET(TW_OneToOneLink<TW_Character>, m_object,     0x00);
+TW_ASSERT_OFFSET(TW_VectorNcc<void*>,       m_capacity_and_allocator, 0x0);
+TW_ASSERT_OFFSET(TW_VectorNcc<void*>,       m_size,                   0x4);
+TW_ASSERT_OFFSET(TW_VectorNcc<void*>,       m_elements,               0x8);
 TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_battle_env,             0x0);
 TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_debug_draw,             0x4);
 TW_ASSERT_OFFSET(TW_ReinforcementsManager, m_debug_draw_menu_item,   0x8);

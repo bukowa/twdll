@@ -184,16 +184,14 @@ static int ConvertUnit(lua_State* L) {
     }
 
     // If this unit is a general's bodyguard, synchronise the character's persistent snapshot:
-    void* commander_link = new_unit->m_commander_link;
-    if (commander_link) {
-        auto* commander = *reinterpret_cast<TW_Character**>(commander_link);
-        if (commander) {
-            commander->details.m_initial_general_bodyguard_details.m_unit = record;
-            commander->details.m_initial_general_bodyguard_details.m_men = static_cast<uint16_t>(new_unit->num_men);
-            commander->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = static_cast<uint16_t>(new_unit->max_num_men);
-            Log("[twdll] ConvertUnit: updated commander=0x%08X bodyguard snapshot (men=%d/%d)",
-                reinterpret_cast<uintptr_t>(commander), new_unit->num_men, new_unit->max_num_men);
-        }
+    auto* commander_link = new_unit->m_commander_link;
+    if (commander_link && commander_link->m_object) {
+        auto* commander = commander_link->m_object;
+        commander->details.m_initial_general_bodyguard_details.m_unit = record;
+        commander->details.m_initial_general_bodyguard_details.m_men = static_cast<uint16_t>(new_unit->num_men);
+        commander->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = static_cast<uint16_t>(new_unit->max_num_men);
+        Log("[twdll] ConvertUnit: updated commander=0x%08X bodyguard snapshot (men=%d/%d)",
+            reinterpret_cast<uintptr_t>(commander), new_unit->num_men, new_unit->max_num_men);
     }
 
     l_pushboolean(L, 1);
@@ -223,11 +221,7 @@ static int Disband(lua_State* L) {
         return 1;
     }
     void* elems[1] = { unit };
-    twdll::TW_VectorNcc vec = {
-        reinterpret_cast<void*>(1),
-        1,
-        elems
-    };
+    auto vec = twdll::TW_VectorNcc<void*>::from_span(elems, 1);
     Log("[twdll] unit:Disband: unit=0x%08X", reinterpret_cast<uintptr_t>(unit));
     g_disband_units(&vec, g_campaign_model);
     l_pushboolean(L, 1);

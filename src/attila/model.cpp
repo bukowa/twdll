@@ -47,11 +47,7 @@ static int DisbandUnits(lua_State* L) {
         elems[static_cast<size_t>(i)] = unit;
     }
 
-    twdll::TW_VectorNcc vec = {
-        reinterpret_cast<void*>(static_cast<size_t>(n)),
-        n,
-        elems.data()
-    };
+    auto vec = twdll::TW_VectorNcc<void*>::from_span(elems.data(), elems.size());
     Log("[twdll] DisbandUnits: n=%d model=0x%08X", n,
         reinterpret_cast<uintptr_t>(g_campaign_model));
     g_disband_units(&vec, g_campaign_model);
