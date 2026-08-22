@@ -38,6 +38,13 @@ struct TW_CAUniString {
     const wchar_t* m_data;     // 0x8
 };
 
+// UTILITYDLL::TWEAKER<T> — engine tweak wrapper struct
+template <typename T>
+struct TW_Tweaker {
+    char pad_00[0x48];
+    T    m_value;      // 0x48
+};
+
 
 struct TW_PoliticalPartyRecord {
     TW_CAString m_key;          // 0x0
@@ -677,6 +684,7 @@ struct TW_Databases {
 #define TW_ASSERT_OFFSET(S, F, O) \
     static_assert(offsetof(S, F) == O, #S " Attila: " #F " expected at " #O)
 
+TW_ASSERT_OFFSET(TW_Tweaker<uint8_t>, m_value, 0x48);
 TW_ASSERT_OFFSET(TW_Faction,       treasury,                0x7DC);
 TW_ASSERT_OFFSET(TW_Faction,       m_faction_record,        0x800);
 TW_ASSERT_OFFSET(TW_FactionRecord, m_key,                   0x0);

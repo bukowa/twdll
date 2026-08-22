@@ -1,4 +1,5 @@
 #include "game_api.h"
+#include "tw_types.h"
 #include "../common/game_api.h"
 #include "../common/log.h"
 
@@ -102,7 +103,8 @@ void refresh_settlements_display() {
         Log("[twdll] Resolved force_settlement_refresh tweak @ 0x%08X", g_force_settlement_refresh_addr);
     }
     if (g_force_settlement_refresh_addr) {
-        *reinterpret_cast<uint8_t*>(g_force_settlement_refresh_addr + 0x48) = 1;
+        auto* tweaker = reinterpret_cast<twdll::TW_Tweaker<uint8_t>*>(g_force_settlement_refresh_addr);
+        tweaker->m_value = 1;
         Log("[twdll] Triggered full settlement display refresh");
     } else {
         Log("[twdll] WARNING: force_settlement_refresh tweak address not resolved");
