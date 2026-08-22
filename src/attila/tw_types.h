@@ -19,13 +19,7 @@ struct TW_FamilyMember {
 
 #pragma pack(push, 1)
 
-// EMPIREUTILITY::POLITICAL_PARTY_RECORD — 32-bit layout, derived via gap
-// analysis from the 64-bit DWARF (112B) where pointers shrink 8B->4B.
-// The static DB row behind each campaign party. m_key is a CA::String whose
-// 32-bit layout {m_len@0, m_capacity@4, m_data@8} is verified in faction.cpp.
-// Only fields needed so far are mapped; m_initial_power is used to seed a
-// party's senators in the CAMPAIGN_POLITICAL_PARTY ctor (sub_10BF2640):
-//   10bf269d  movd xmm0, dword ptr [eax+44h]   ; record->m_initial_power
+// EMPIREUTILITY::POLITICAL_PARTY_RECORD — database record for political parties.
 struct TW_CAString {
     uint32_t    m_len;      // 0x0
     uint32_t    m_capacity; // 0x4
@@ -123,45 +117,17 @@ struct TW_PoliticalPartyRecord {
     float       m_initial_power;   // 0x44
 };
 
-// EMPIRECAMPAIGN::CAMPAIGN_POLITICAL_PARTY — one runtime party inside a
-// faction's politics map. 32-bit layout derived via gap analysis from 64-bit
-// DWARF (64B): m_politics 8->4, m_party_record 8->4, m_senators_string
-// (CA::UniString) 16->12, so m_senators 0x20->0x14 and m_power 0x24->0x18.
-// Verified via disasm of the party ctor sub_10BF2640:
-//   10bf264a  mov [esi], eax            ; m_politics
-//   10bf2653  mov [esi+4], eax          ; m_party_record
-//   10bf2656  call sub_100DB6C0         ; m_senators_string ctor @ +0x8
-//   10bf26e1  mov [esi+14h], eax        ; m_senators = (int)(initial_power * senator_total * mult)
+// EMPIRECAMPAIGN::CAMPAIGN_POLITICAL_PARTY — active political party instance.
 struct TW_CampaignPoliticalParty {
     void* m_politics;        // 0x0  (CAMPAIGN_POLITICS*)
     void* m_party_record;    // 0x4  (const POLITICAL_PARTY_RECORD*)
     char  pad_08[0xC];       // 0x8  m_senators_string (CA::UniString)
     int   m_senators;        // 0x14 (CA::card32)
     float m_power;           // 0x18 (CA::float32)
-    char  pad_1C[0x10];      // 0x1C m_active_effects, 0x20 m_possible_effects (unused so far)
+    char  pad_1C[0x10];      // 0x1C
 };
 
-// CA_STD::UNORDERED_MAP_NCC bucket walk layout — the m_political_parties map
-// (24B) lives at politics+0x28 (verified below). Member order follows CA_STD
-// (same as TW_VectorNcc: capacity first, then size, then elements). Each
-// bucket is 12B:
-//   bucket+0  m_head_and_allocator.m_member  (head NODE* or &bucket+4 if empty)
-//   bucket+4  m_fake_node                    (terminator sentinel)
-// Each NODE is 12B header + the value:
-//   node+0    m_previous
-//   node+4    m_next
-//   node+8    m_data.first    (const POLITICAL_PARTY_RECORD*)
-//   node+0xC  m_data.second   (CAMPAIGN_POLITICAL_PARTY)
-// Verified via disasm of politics ctor insert loop (sub_10BF27C0):
-//   10bf2832  add edi, 28h            ; edi = &this->m_political_parties (map base)
-//   10bf2903  mov esi, [edi+8]        ; esi = map->m_size (bucket count)
-//   10bf2911  mov eax, [edi+0Ch]      ; eax = map->m_elements
-//   10bf2921  mov esi, [ecx+eax]      ; esi = buckets[idx*12].m_head
-//   10bf2936  mov esi, [esi+4]        ; node = node->m_next
-//   10bf29e2  mov [edi+8], ecx        ; node->m_data.first = record
-//   10bf29e5  lea ecx, [edi+0Ch]      ; &node->m_data.second (party)
-// And rehash sub_10C6A9D0: [ebp+8] count, [ebp+0Ch] elements, [ebp+10h] count
-// of entries, [ebp+14h] max_load_factor; bucket stride: add edi, 0Ch @ 10c6ab3d
+// CA_STD::UNORDERED_MAP_NCC — container layout for political parties.
 struct TW_PoliticalPartiesMap {
     char   pad_00[0x4];     // m_hash_function (1B) + m_equality_comparison (1B) + pad
     void*  m_capacity;      // 0x4  bucket vector capacity
@@ -206,20 +172,7 @@ struct TW_PoliticalPartiesMap {
     }
 };
 
-// EMPIRECAMPAIGN::CAMPAIGN_POLITICS — per-faction politics manager, embedded
-// in FACTION at 0x112C. 32-bit layout derived via gap analysis from 64-bit
-// DWARF (184B @ 0x1518): two embedded SAFER_REPORTERs shrink 32->16B each,
-// CAMPAIGN_ENV_MODEL_ACCESS 8->4B, so the map lands at +0x28 and m_active at
-// +0x48 (64-bit: map @ +0x50, m_active @ +0x7C). Verified via disasm of the
-// politics ctor sub_10BF27C0:
-//   10bf27d5  lea eax, [esi+158h]     ; faction env access (0x158)
-//   10bf27dc  lea ecx, [edi+20h]      ; CAMPAIGN_ENV_MODEL_ACCESS @ +0x20
-//   10bf282f  mov [edi+24h], esi      ; m_faction @ +0x24
-//   10bf2832  add edi, 28h            ; m_political_parties @ +0x28
-//   10bf283e  call sub_10BE4D20(4,..) ; map ctor (4 buckets)
-//   10bf285e  mov byte ptr [eax+48h], 1  ; m_active @ +0x48
-//   10bf2868  mov dword ptr [eax+40h], 0 ; m_primary_party @ +0x40
-//   10bf2865  lea ecx, [eax+5Ch]      ; m_political_event_data @ +0x5C
+// EMPIRECAMPAIGN::CAMPAIGN_POLITICS — faction politics manager.
 struct TW_CampaignPolitics {
     char                 pad_00[0x24];
     void*                m_faction;           // 0x24 (FACTION*)
@@ -247,11 +200,11 @@ struct TW_Faction {
     void* m_original_home_region;   // 0x894
     void* m_home_theatre;           // 0x898
     char  pad_89C[0x98];
-    void* m_faction_technology_manager;  // 0x934  verified via disasm: mov eax,[ecx+934h] @ sub_10705560
+    void* m_faction_technology_manager;  // 0x934
     char  pad_938[0x5A8];
     void* m_character_recruitment_pool;  // 0xEE0  (CHARACTER_RECRUITMENT_POOL_MANAGER*)
     char  pad_EE4[0x248];
-    TW_CampaignPolitics m_politics; // 0x112C verified via disasm: lea ecx,[ebx+112Ch]; push ebx; call sub_10BF27C0 @ 0x106c2140
+    TW_CampaignPolitics m_politics;      // 0x112C
 };
 
 // EMPIRECAMPAIGN::TECHNOLOGY_STATUS (32-bit / 64-bit enum)
@@ -267,11 +220,6 @@ enum class TW_TechnologyStatus : uint32_t {
 };
 
 // EMPIRECAMPAIGN::CAMPAIGN_TECHNOLOGY (32-bit layout, size >= 0x2C)
-// Derived from 64-bit reference and 32-bit disasm (sub_10B9D400):
-//   10B9D406: mov esi, [esp+70h+arg_0]   ; esi = CAMPAIGN_TECHNOLOGY*
-//   10B9D435: mov ecx, [esi+28h]         ; m_technologies_for_category @ 0x28
-//   10B9D536: cmp [esi+10h], edi         ; m_parent_links vector @ 0x10
-//   10B9D479: cmp dword ptr [eax+4], 0   ; m_technology_status @ 0x4
 struct TW_CampaignTechnology {
     void*    m_technology_node_record;        // 0x00
     uint32_t m_technology_status;             // 0x04 (TW_TechnologyStatus)
@@ -281,16 +229,6 @@ struct TW_CampaignTechnology {
     char     pad_1C[0xC];                     // 0x1C
     void*    m_technologies_for_category;     // 0x28
 };
-
-// EMPIRECAMPAIGN::GENERAL_BODYGUARD_DETAILS (32-bit layout, size 0x24)
-// Verified via CHARACTER_DETAILS::update_initial_general_bodyguard (sub_107F8A50):
-//   0x107f8a5c  mov eax, [edx]       ; m_unit (MAIN_UNIT_RECORD*)
-//   0x107f8a61  mov [ecx+31Ch], eax  ; stored in CHARACTER_DETAILS+0x31C (= CHARACTER+0x520)
-//   0x107f8a67  movzx eax, word ptr [edx+4] ; m_men -> [ecx+320h]
-//   0x107f8a72  movzx eax, word ptr [edx+6] ; m_men_in_fully_replenished -> [ecx+322h]
-//   0x107f8a7d  mov eax, [edx+8]     ; experience score -> [ecx+324h]
-//   0x107f8a86  mov al, [edx+0Ch]    ; experience level -> [ecx+328h]
-//   0x107f8a8f  mov eax, [edx+10h]   ; experience progress -> [ecx+32Ch]
 
 // EMPIREUTILITY::CAMPAIGN_CHARACTER_ART_SETS_CAMPAIGN_GROUP_RECORD
 struct TW_CampaignCharacterArtSetsCampaignGroupRecord {
@@ -312,7 +250,6 @@ struct TW_CampaignCharacterArtSetRecord {
 };
 
 // EMPIRECAMPAIGN::CHARACTER_ART_SET (size 0x20)
-// Verified via 64-bit DWARF (0x1587a00) and gap analysis
 struct TW_CharacterArtSet {
     bool          m_aging_set;          // 0x00
     bool          m_seasonal_set;       // 0x01
@@ -326,7 +263,6 @@ struct TW_CharacterArtSet {
 };
 
 // EMPIRECAMPAIGN::PORTRAIT_CAMERA_SETTINGS (size 0x2C)
-// Verified via CHARACTER_DETAILS + 0x354 (sub_107DC9E0 @ cmp [ebp+354h], 0)
 struct TW_PortraitCameraSettings {
     float       m_camera_distance;       // 0x00
     float       m_theta;                 // 0x04
@@ -428,7 +364,6 @@ struct TW_CharacterDetails {
     void*                         m_political_party;   // 0x2EC (= CHARACTER+0x4F0, const POLITICAL_PARTY_RECORD*)
     char                          pad_2F0[0x4];
     int                           political_gravitas;  // 0x2F4 (= CHARACTER+0x4F8, CA::card32)
-                                                       //         verified: sub_107DC770 @ mov eax,[ecx+2F4h]
     char                          pad_2F8[0x24];
     TW_GeneralBodyguardDetails    m_initial_general_bodyguard_details; // 0x31C (= CHARACTER+0x520)
     char                          pad_330[0x18];
@@ -441,12 +376,11 @@ struct TW_CharacterDetails {
 
 struct TW_Character {
     char                pad_00[0x14];
-    int                 action_points;       // 0x14  verified: LOCOMOTABLE::m_action_points, gap analysis
+    int                 action_points;       // 0x14
     char                pad_18[0x1C4];
     void*               commanded_unit_link; // 0x1DC  m_commanded_unit.m_link.m_object
     char                pad_1E0[0x24];
     TW_CharacterDetails details;             // 0x204  CHARACTER_DETAILS embedded sub-struct
-                                             //         verified: sub_107F8A00 @ lea ecx,[esi+204h]
 };
 
 struct TW_World {
@@ -564,22 +498,7 @@ struct TW_Battle {
 struct TW_CampaignUi {
 };
 
-// EMPIRECAMPAIGN::CampaignSettlementCallback — selected fields (32-bit Attila layout).
-// Gap analysis vs 64-bit DWARF (m_region@0x68, m_is_capital@0x70, m_max_slots@0x74,
-// m_num_available_slots@0x78): the ComponentCallbacks+LISTENER base shrinks by
-// 0x28 (10 pointers 8B→4B), so m_region@0x40, m_is_capital@0x44, m_max_slots@0x48,
-// m_num_available_slots@0x4C. Verified via disasm of CampaignSettlementCallback__Initialize
-// (0x113E1D50):
-//   113e1d66  mov [esi+40h], edi    ; m_region = region arg
-//   113e1d7b  mov [esi+4Ch], eax    ; m_num_available_slots = settlement->m_slots.m_size
-//   113e2513  cmp [esi+48h], ebx    ; slot-render loop bound = m_max_slots
-//   113e25cb  cmp ebx, [esi+4Ch]    ; avail-slot gate
-// m_is_capital (0x44) distinguishes the main/selected settlement card (1) from the
-// other province cards (0). Verified:
-//   113c2210  mov byte ptr [ecx+44h], 0  ; Construct — minor defaults
-//   113eab70  mov byte ptr [ecx+44h], 1  ; SetAsCapital — major
-//   113e89b9  call SetAsCapital          ; BEFORE Initialize @113e89c8 (major card)
-//   113e8a42..113e8a9a loop calls Initialize directly (minor cards keep 0)
+// EMPIRECAMPAIGN::CampaignSettlementCallback — UI slot rendering callback.
 struct TW_SettlementCallback {
     char  pad_00[0x40];
     void* m_region;                 // 0x40  (EMPIRE_UTILITY SAFE_PTR deref -> REGION)
@@ -589,35 +508,20 @@ struct TW_SettlementCallback {
     int   m_num_available_slots;    // 0x4C  (settlement->m_slots.m_size)
 };
 
-// EMPIRECAMPAIGN::PROVINCE_DEVELOPMENT — 3 fields, 12B in 32-bit.
-// Gap analysis vs 64-bit DWARF (m_faction_province_manager@0x0 ptr,
-// m_development_points@0x8, m_accumulated_growth@0xC): the back-ref pointer
-// shrinks 8B->4B, so both card32 fields shift to 0x4 and 0x8. Verified via disasm:
-//   10b6b71f  add [ebx+4], eax    ; m_development_points += eax
-//   10b6c4b6  mov [esi+8], eax    ; m_accumulated_growth = eax
-//   10b6c4e5  sub [esi+8], edi    ; m_accumulated_growth -= threshold
+// EMPIRECAMPAIGN::PROVINCE_DEVELOPMENT — province growth and development points.
 struct TW_PROVINCE_DEVELOPMENT {
     void*        m_faction_province_manager; // 0x0  (back-ref to FPM)
     unsigned int m_development_points;       // 0x4  (spent dev points)
     unsigned int m_accumulated_growth;       // 0x8  (surplus population accumulator)
 };
 
-// EMPIRECAMPAIGN::FACTION_PROVINCE_MANAGER — selected fields (32-bit Attila layout).
-// Gap analysis vs 64-bit DWARF (m_province_development@0x340): FPM's leading
-// pointer members shrink 8B->4B before m_province_development, so it lands at 0x23C.
-// Verified via disasm of SCRIPTING_INTERFACE::add_development_points_to_region:
-//   1073d4e0  lea ecx, [eax+23Ch]  ; ecx = &fpm->m_province_development
+// EMPIRECAMPAIGN::FACTION_PROVINCE_MANAGER
 struct TW_FACTION_PROVINCE_MANAGER {
     char pad_00[0x23C];
     TW_PROVINCE_DEVELOPMENT m_province_development; // 0x23C
 };
 
-// EMPIRECAMPAIGN::REGION — selected fields (32-bit Attila layout).
-// Gap analysis vs 64-bit DWARF (m_region_data@0x78): REGION's leading members
-// shrink 8B->4B before m_region_data, so it lands at 0x50. Verified via disasm
-// of REGION::theatre (sub_1094FCA0 @ 0x1094FCA0):
-//   1094fca0  mov eax, [ecx+50h]   ; eax = this->m_region_data
-//   1094fca3  mov eax, [eax+94h]   ; eax = m_region_data->m_theatre
+// EMPIRECAMPAIGN::REGION_DATA
 struct TW_RegionData {
     char  pad_00[0x94];
     void* m_theatre;   // 0x94  (const CAMPAIGN_THEATRE*)
@@ -644,8 +548,7 @@ struct TW_RegionSlot {
     void* m_slot_manager;     // 0x1C8
 };
 
-// EMPIREUTILITY::RELIGION_RECORD (32-bit layout, size 0x28)
-// Verified via disasm of sub_10848EE0 / sub_100DBCB0
+// EMPIREUTILITY::RELIGION_RECORD
 struct TW_ReligionRecord {
     TW_CAString m_key;            // 0x00 (m_len @0, m_capacity @4, m_data @8)
     void*       m_onscreen;       // 0x0C (const CA::UniString*)
@@ -655,8 +558,7 @@ struct TW_ReligionRecord {
     int32_t     m_sort_order;     // 0x24
 };
 
-// std::pair<const RELIGION_RECORD*, float> (32-bit layout, size 0x8)
-// Verified via disasm of PROVINCE::majority_religion_proportion (sub_10BA28D0)
+// std::pair<const RELIGION_RECORD*, float>
 struct TW_ReligionProportion {
     const TW_ReligionRecord* m_religion;   // 0x00
     float                    m_proportion; // 0x04 (raw float 0.0 .. 1.0)
@@ -669,11 +571,7 @@ struct TW_Region {
     TW_VectorNcc   m_religion_breakdown; // 0xDC (m_size @0xE0, m_elements @0xE4)
 };
 
-// EMPIRECAMPAIGN::CAMPAIGN_MODEL — selected fields (32-bit Attila layout).
-// CAMPAIGN_ENV_MODEL_ACCESS (single pointer m_campaign_env) is embedded here;
-// in 64-bit it sits at 0x21E0 behind the REPORTING_NEXUS base, which shrinks
-// to 0x10F0 in 32-bit (all pointers 8B->4B). Verified via disasm of the 32-bit
-// unlock wrapper sub_1073C7F0: `lea ecx,[ecx+10F0h]; call sub_109C8F70`.
+// EMPIRECAMPAIGN::CAMPAIGN_MODEL
 struct TW_CampaignModel {
     char  pad_00[0x10F0];
     void* m_campaign_env;             // 0x10F0  CAMPAIGN_ENV_MODEL_ACCESS::m_campaign_env (CAMPAIGN_ENV*)
@@ -681,9 +579,7 @@ struct TW_CampaignModel {
     float m_campaign_variables[714];  // 0x1100  CAMPAIGN_VARIABLES_ARRAY (714 floats, 2856B)
 };
 
-// EMPIRECAMPAIGN::CAMPAIGN_ENV — selected fields (32-bit Attila layout).
-// 64-bit m_game_core@0x58 -> 32-bit 0x30 (leading members shrink 8B->4B).
-// Verified via disasm of sub_109C8F70: `mov eax,[eax+30h]`.
+// EMPIRECAMPAIGN::CAMPAIGN_LOAD_GAME_DESCRIPTION
 struct TW_CampaignLoadGameDescription {
     bool           m_pending;         // 0x00 (0x5C in CAMPAIGN_ENV)
     char           pad_01[3];
@@ -702,16 +598,13 @@ struct TW_CampaignEnv {
     bool                           m_quit_to_windows;   // 0x9D  request exit to windows
 };
 
-// EMPIRECOMMON::GAME_CORE — selected fields (32-bit Attila layout).
-// 64-bit m_databases@0x20 -> 32-bit 0x10 (leading pointers shrink 8B->4B).
-// Verified via disasm of sub_109C8F70: `mov eax,[eax+10h]`.
+// EMPIRECOMMON::GAME_CORE
 struct TW_GameCore {
     char  pad_00[0x10];
     void* m_databases;      // 0x10  EMPIREUTILITY::EMPIRE_DATABASES*
 };
 
-// EMPIREUTILITY::DATABASE_TABLE — single DB table lookup interface.
-// Verified via disasm of sub_10192660 (DATABASE_TABLE::record_index).
+// EMPIREUTILITY::DATABASE_TABLE — database table lookup interface.
 struct TW_DatabaseTable {
     void*        _vptr;       // 0x00
     void*        m_capacity;  // 0x04
@@ -727,9 +620,7 @@ struct TW_DatabaseTable {
     }
 };
 
-// EMPIREUTILITY::EMPIRE_DATABASES — container for all game database tables (32-bit Attila layout).
-// 64-bit m_technologies_table@0x20E0 -> 32-bit 0x1604, m_main_units_table@0x1000.
-// Lazy-loader cache fields: populated on the first tick of any running campaign.
+// EMPIREUTILITY::EMPIRE_DATABASES — container for game database tables.
 struct TW_Databases {
     float             m_campaign_variables[714]; // 0x0000 (CAMPAIGN_VARIABLES_ARRAY, 714 floats, 0xB28 bytes)
     char              pad_B28[0x3F0];            // 0x0B28

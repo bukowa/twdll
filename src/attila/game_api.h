@@ -17,33 +17,23 @@ extern FnFactionProvinceManager g_faction_province_manager;
 
 extern void* g_campaign_model;
 
-// CHARACTER_DETAILS::portrait_path (sub_107DC9E0)
-// (this=CHARACTER_DETAILS*, out_str=void*, campaign_model=void*) -> out_str
+// CHARACTER_DETAILS::portrait_path
 using FnResolvePortraitPath = void*(__thiscall*)(void* details, void* out_str, void* campaign_model);
 extern FnResolvePortraitPath g_resolve_portrait_path;
 
-// CA::String::operator=(const char* src) (sub_100DBD40)
+// CA::String::operator=(const char* src)
 using FnCaStringAssign = void*(__thiscall*)(void* str, const char* src);
 extern FnCaStringAssign g_ca_string_assign;
 
-// CA::UniString::operator=(const wchar_t* src) (sub_100DB660)
+// CA::UniString::operator=(const wchar_t* src)
 using FnCaUniStringAssign = void*(__thiscall*)(void* unistr, const wchar_t* src);
 extern FnCaUniStringAssign g_ca_unistring_assign;
 
-// CHARACTER_DETAILS_ART_SET_INFO::update_art_set (sub_107F83D0)
-// (this=CHARACTER_DETAILS_ART_SET_INFO*, details=CHARACTER_DETAILS*, campaign_model=CAMPAIGN_MODEL*)
+// CHARACTER_DETAILS_ART_SET_INFO::update_art_set
 using FnUpdateArtSet = int(__thiscall*)(void* art_info, void* details, void* campaign_model);
 extern FnUpdateArtSet g_update_art_set;
 
-// ── Technology research (instantly_research_technology) ──────────────────────
-// 32-bit analogs of the 64-bit FACTION_TECHNOLOGY_MANAGER instant-research
-// path (research/ structures_faction_substructs.md + plan_6_features_twdll.md):
-//   sub_10B9D3D0 = instant_set_researched_without_updating_effects wrapper:
-//     (this=manager, record, report_to_ui) -> lookup_tech_for_record ->
-//     sub_10B9D400 (set_tech_as_researched + event + parent recursion) ->
-//     update_effect_list + update_availabilities. This is exactly the game's
-//     native per-tech instant completion, so it fires events, achievements,
-//     unit upgrades and refreshes effects — no manual field writes.
+// ── Technology research ─────────────────────────────────────────────────────
 using FnInstantSetResearched = void(__thiscall*)(void* manager, void* record, bool report_to_ui);
 extern FnInstantSetResearched g_instant_set_researched;
 
@@ -55,51 +45,49 @@ extern FnLookupCampaignTech g_lookup_campaign_tech;
 using FnUpdateTechEffects = void(__thiscall*)(void* manager);
 extern FnUpdateTechEffects g_update_tech_effects;
 
-// sub_10192660 = DATABASE_TABLE::record_index(table, &CA::String key) -> record.
+// DATABASE_TABLE::record_index
 using FnRecordIndex = void*(__thiscall*)(void* table, void* key_string);
 extern FnRecordIndex g_record_index;
 
-// UNIT::convert_unit (sub_106FC010): replace old_unit with a fresh UNIT built
-// from target_record inside the same force, preserving men/xp/stats, then
-// destroy old_unit. Returns the new UNIT*.
+// UNIT::convert_unit
 using FnConvertUnit = void*(__cdecl*)(void* old_unit, void* force, void* target_record);
 extern FnConvertUnit g_convert_unit;
 
 namespace twdll { struct TW_CAString; struct TW_CAUniString; struct TW_CampaignEnv; }
 
-// CAMPAIGN_ENV::save_game @ 0x107EE8A0
+// CAMPAIGN_ENV::save_game
 using FnSaveGame = bool(__thiscall*)(twdll::TW_CampaignEnv* env, const twdll::TW_CAUniString* name, void* startpos_info, char save_to_cloud, char save_to_cloud_and_disk);
 extern FnSaveGame g_save_game;
 
-// CAMPAIGN_ENV::load_game @ 0x107C21C0
+// CAMPAIGN_ENV::load_game
 using FnLoadGame = int(__thiscall*)(twdll::TW_CampaignEnv* env, const twdll::TW_CAUniString* path, char load_from_cloud);
 extern FnLoadGame g_load_game;
 
-// CHARACTER::add_trait (sub_10797900)
+// CHARACTER::add_trait
 using FnAddTrait = int(__thiscall*)(void* ch, const twdll::TW_CAString* trait_str, int points, int show_msg);
 extern FnAddTrait g_add_trait;
 
-// CHARACTER_TRAITS::set_effect_list (sub_10728750)
+// CHARACTER_TRAITS::set_effect_list
 using FnSetEffectList = void(__thiscall*)(void* traits);
 extern FnSetEffectList g_set_effect_list;
 
-// CHARACTER::get_loyalty (sub_107C5920)
+// CHARACTER::get_loyalty
 using FnGetLoyalty = int(__thiscall*)(void* ch);
 extern FnGetLoyalty g_get_loyalty;
 
-// CHARACTER::get_loyalty_factors (sub_107C5A00)
+// CHARACTER::get_loyalty_factors
 using FnGetLoyaltyFactors = void*(__thiscall*)(void* ch, void* factors_buf);
 extern FnGetLoyaltyFactors g_get_loyalty_factors;
 
-// FACTION::get_faction_record (sub_106FF720)
+// FACTION::get_faction_record
 using FnGetFactionRecord = void*(__thiscall*)(void* faction);
 extern FnGetFactionRecord g_get_faction_record;
 
-// CHARACTER::reassign_faction (sub_107E6400)
+// CHARACTER::reassign_faction
 using FnReassignFaction = void(__thiscall*)(void* ch, void* target_fac, void* fac_rec, void* rebel_region, int replenish, int bribed, int kill_faction_if_leader);
 extern FnReassignFaction g_reassign_faction;
 
-// CHARACTER_RECRUITMENT_POOL::spawn_agent (sub_107F2CF0)
+// CHARACTER_RECRUITMENT_POOL::spawn_agent
 using FnSpawnAgent = void(__thiscall*)(
     void* recruitment_pool_mgr,
     void* agent_record,
