@@ -1,10 +1,10 @@
 /// @module twdll.world
 /// Campaign world singleton and world-level modifiers for Total War: Attila.
-#include "common/tw.h"
-#include "common/campaign_hooks.h"
+#include "../common/tw.h"
+#include "../common/campaign_hooks.h"
 #include "game_api.h"
 #include "tw_types.h"
-#include "common/signature_scanner.h"
+#include "../common/signature_scanner.h"
 #include <MinHook.h>
 
 #include <windows.h>

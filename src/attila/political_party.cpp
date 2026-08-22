@@ -1,6 +1,6 @@
 /// @module CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE
 /// Political party userdata handed out by faction:GetPoliticalPartyList().
-#include "common/tw.h"
+#include "../common/tw.h"
 #include "game_api.h"
 #include "tw_types.h"
 

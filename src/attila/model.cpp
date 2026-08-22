@@ -1,6 +1,6 @@
 /// @module twdll.model
 /// Campaign model-level operations for Total War: Attila.
-#include "common/tw.h"
+#include "../common/tw.h"
 #include "game_api.h"
 #include "tw_types.h"
 

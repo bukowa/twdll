@@ -1,11 +1,11 @@
 /// @module twdll.campaign_ui
 /// Campaign UI singleton accessor for Total War: Attila.
-#include "common/campaign_hooks.h"
-#include "common/lua_api.h"
-#include "common/log.h"
+#include "../common/campaign_hooks.h"
+#include "../common/lua_api.h"
+#include "../common/log.h"
 #include "game_api.h"
 #include "tw_types.h"
-#include "common/signature_scanner.h"
+#include "../common/signature_scanner.h"
 #include <MinHook.h>
 
 #include <cstdio>

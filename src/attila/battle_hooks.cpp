@@ -1,7 +1,7 @@
 /// @module twdll.battle
 /// Battle lifecycle hooks for Total War: Attila.
-#include "common/tw.h"
-#include "common/campaign_hooks.h"
+#include "../common/tw.h"
+#include "../common/campaign_hooks.h"
 #include "game_api.h"
 #include "tw_types.h"
 #include <MinHook.h>
@@ -11,10 +11,6 @@
 
 using twdll::TW_Battle;
 using twdll::TW_ReinforcementsManager;
-
-// Tentative stride of a REINFORCEMENT_ARMY element inside
-// REINFORCEMENTS_MANAGER::m_reinforcements (32-bit layout).
-static constexpr uintptr_t kReinforcementArmyStride = 0x28;
 
 static TW_Battle* g_battle = nullptr;
 static void*      orig_battle_ctor = nullptr;
@@ -31,28 +27,6 @@ static void LogBattleCtor(void* ptr) {
 static void LogBattleDtor(void* ptr) {
     Log("[twdll] BATTLE dtor hooked — 0x%08X",
         static_cast<unsigned int>(reinterpret_cast<uintptr_t>(ptr)));
-
-    TW_Battle* battle = static_cast<TW_Battle*>(ptr);
-    if (battle && battle->m_reinforcements_manager) {
-        TW_ReinforcementsManager* mgr = battle->m_reinforcements_manager;
-        Log("[twdll]  reinforcements manager = 0x%08X, cap = %d, size = %d, elements = 0x%08X",
-            static_cast<unsigned int>(reinterpret_cast<uintptr_t>(mgr)),
-            mgr->m_max_num_units_per_army,
-            mgr->m_reinforcements.m_size,
-            static_cast<unsigned int>(reinterpret_cast<uintptr_t>(mgr->m_reinforcements.m_elements)));
-
-        if (mgr->m_reinforcements.m_elements && mgr->m_reinforcements.m_size > 0) {
-            uintptr_t base = reinterpret_cast<uintptr_t>(mgr->m_reinforcements.m_elements);
-            const int n = mgr->m_reinforcements.m_size > 8 ? 8 : mgr->m_reinforcements.m_size;
-            for (int i = 0; i < n; ++i) {
-                Log("[twdll]  reinforcement[%d] @ 0x%08X", i,
-                    static_cast<unsigned int>(base + static_cast<uintptr_t>(i) * kReinforcementArmyStride));
-            }
-        }
-    } else {
-        Log("[twdll]  reinforcements manager = null");
-    }
-
     g_battle = nullptr;
 }
 

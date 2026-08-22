@@ -339,7 +339,7 @@ static int AddTrait(lua_State* L) {
 
     twdll::TW_CAString str{};
     str.m_len = static_cast<uint32_t>(strlen(trait_key));
-    str.m_pad = str.m_len;
+    str.m_capacity = str.m_len;
     str.m_data = trait_key;
 
     g_add_trait(ch, &str, points, show_msg ? 1 : 0);
@@ -704,12 +704,12 @@ static twdll::TW_CharacterNameEntry* GetNameEntry(twdll::TW_CharacterName& name,
 // 3. Raw database localisation key fallback (m_localisation_key)
 static std::string ReadNameSlot(const twdll::TW_CharacterNameEntry& entry) {
     if (entry.m_localisation.m_custom_string.m_data && entry.m_localisation.m_custom_string.m_len > 0) {
-        return tw_wide_to_utf8(reinterpret_cast<const wchar_t*>(entry.m_localisation.m_custom_string.m_data), entry.m_localisation.m_custom_string.m_len);
+        return tw_wide_to_utf8(entry.m_localisation.m_custom_string.m_data, entry.m_localisation.m_custom_string.m_len);
     }
     if (entry.m_localisation.m_localised_string) {
-        auto* unistr = reinterpret_cast<const twdll::TW_CAString*>(entry.m_localisation.m_localised_string);
+        auto* unistr = entry.m_localisation.m_localised_string;
         if (unistr && unistr->m_data && unistr->m_len > 0) {
-            return tw_wide_to_utf8(reinterpret_cast<const wchar_t*>(unistr->m_data), unistr->m_len);
+            return tw_wide_to_utf8(unistr->m_data, unistr->m_len);
         }
     }
     if (entry.m_localisation.m_localisation_key.m_data && entry.m_localisation.m_localisation_key.m_len > 0) {
@@ -740,8 +740,8 @@ static bool SetNameSlot(twdll::TW_CharacterNameEntry& entry, uint32_t type, cons
     memcpy(wbuf, ws.c_str(), (ws.length() + 1) * sizeof(wchar_t));
 
     entry.m_localisation.m_custom_string.m_len = static_cast<uint32_t>(ws.length());
-    entry.m_localisation.m_custom_string.m_pad = static_cast<uint32_t>(ws.length());
-    entry.m_localisation.m_custom_string.m_data = reinterpret_cast<const char*>(wbuf);
+    entry.m_localisation.m_custom_string.m_capacity = static_cast<uint32_t>(ws.length());
+    entry.m_localisation.m_custom_string.m_data = wbuf;
     return true;
 }
 
@@ -773,7 +773,7 @@ static bool SetNameKeySlot(twdll::TW_CharacterNameEntry& entry, uint32_t type, c
     buf[key_len] = '\0';
 
     entry.m_localisation.m_localisation_key.m_len = static_cast<uint32_t>(key_len);
-    entry.m_localisation.m_localisation_key.m_pad = static_cast<uint32_t>(key_len);
+    entry.m_localisation.m_localisation_key.m_capacity = static_cast<uint32_t>(key_len);
     entry.m_localisation.m_localisation_key.m_data = buf;
     return true;
 }

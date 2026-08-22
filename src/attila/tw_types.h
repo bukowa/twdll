@@ -21,14 +21,14 @@ struct TW_FamilyMember {
 // EMPIREUTILITY::POLITICAL_PARTY_RECORD — 32-bit layout, derived via gap
 // analysis from the 64-bit DWARF (112B) where pointers shrink 8B->4B.
 // The static DB row behind each campaign party. m_key is a CA::String whose
-// 32-bit layout {m_len@0, m_pad@4, m_data@8} is verified in faction.cpp.
+// 32-bit layout {m_len@0, m_capacity@4, m_data@8} is verified in faction.cpp.
 // Only fields needed so far are mapped; m_initial_power is used to seed a
 // party's senators in the CAMPAIGN_POLITICAL_PARTY ctor (sub_10BF2640):
 //   10bf269d  movd xmm0, dword ptr [eax+44h]   ; record->m_initial_power
 struct TW_CAString {
-    uint32_t    m_len;    // 0x0
-    uint32_t    m_pad;    // 0x4
-    const char* m_data;   // 0x8
+    uint32_t    m_len;      // 0x0
+    uint32_t    m_capacity; // 0x4
+    const char* m_data;     // 0x8
 };
 
 // CA::UniString layout (32-bit: length, capacity, UTF-16 wchar_t* buffer)
@@ -318,9 +318,9 @@ static_assert(sizeof(TW_Traits) == 0x28, "TW_Traits size must be 0x28");
 
 // EMPIRECAMPAIGN::CAMPAIGN_LOCALISATION (size 0x1C / 28B in 32-bit)
 struct TW_CampaignLocalisation {
-    TW_CAString m_localisation_key; // 0x00 (e.g. "names_name_12345")
-    void*       m_localised_string; // 0x0C (const CA::UniString* from DB loc cache)
-    TW_CAString m_custom_string;    // 0x10 (CA::UniString: len, cap, const wchar_t* data)
+    TW_CAString            m_localisation_key;  // 0x00 (e.g. "names_name_12345")
+    const TW_CAUniString*  m_localised_string;  // 0x0C (const CA::UniString* from DB loc cache)
+    TW_CAUniString         m_custom_string;     // 0x10 (CA::UniString: len, cap, const wchar_t* data)
 };
 static_assert(sizeof(TW_CampaignLocalisation) == 0x1C, "TW_CampaignLocalisation size must be 0x1C");
 
@@ -569,7 +569,7 @@ struct TW_RegionSlot {
 // EMPIREUTILITY::RELIGION_RECORD (32-bit layout, size 0x28)
 // Verified via disasm of sub_10848EE0 / sub_100DBCB0
 struct TW_ReligionRecord {
-    TW_CAString m_key;            // 0x00 (m_len @0, m_pad @4, m_data @8)
+    TW_CAString m_key;            // 0x00 (m_len @0, m_capacity @4, m_data @8)
     void*       m_onscreen;       // 0x0C (const CA::UniString*)
     int32_t     m_convertibility; // 0x10
     TW_CAString m_icon_path;      // 0x14

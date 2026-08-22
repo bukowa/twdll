@@ -1,6 +1,6 @@
 /// @module ARTSET_SCRIPT_INTERFACE
 /// Art set userdata for character portraits and cultural variations.
-#include "common/tw.h"
+#include "../common/tw.h"
 #include "game_api.h"
 #include "tw_types.h"
 
