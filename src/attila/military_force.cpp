@@ -7,7 +7,10 @@
 #include <vector>
 
 using twdll::TW_MilitaryForce;
+using twdll::TW_Character;
 using twdll::TW_Unit;
+using twdll::TW_AvailableCharacterRecruitmentItem;
+using twdll::TW_Databases;
 
 constexpr size_t MIL_FORCE_PTR = twdll::TW_PtrOffset<TW_MilitaryForce>::value;
 
@@ -172,6 +175,115 @@ static int HasIntegrity(lua_State* L) {
     return 1;
 }
 
+/***
+Appoints and assigns the specified character as the commanding general of this military force.
+Instantiates the general's bodyguard unit, subsumes it into the force, dismisses the former general
+back to the faction court, and promotes the character to commanding general.
+@function AppointCharacter
+@tparam CHARACTER_SCRIPT_INTERFACE character character object to appoint as commanding general
+@treturn boolean true if the character was successfully appointed, false otherwise
+@usage
+local candidate = faction:character_list():item_at(1)
+force:AppointCharacter(candidate)
+*/
+static int AppointCharacter(lua_State* L) {
+    auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);
+    auto* character = twdll::tw_unwrap<TW_Character>(L, 2);
+
+    if (!force || !character) {
+        Log("[twdll] force:AppointCharacter: invalid force or character userdata");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto* current_gen = force->m_general_link.get();
+    if (current_gen == character) {
+        l_pushboolean(L, 1);
+        return 1;
+    }
+
+    if (!g_recruit_character_entry_impl) {
+        Log("[twdll] force:AppointCharacter: required engine signature for recruit_character_entry_impl not resolved");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto* faction = force->m_faction_link.get();
+    void* pool_mgr = faction ? faction->m_character_recruitment_pool : nullptr;
+    if (!pool_mgr) {
+        Log("[twdll] force:AppointCharacter: character recruitment pool manager is null");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    auto* dbs = TW_Databases::get();
+    void* agent_rec = nullptr;
+    if (dbs && dbs->agents) {
+        agent_rec = dbs->agents->find_record("general");
+    }
+
+    // Ensure candidate character has valid initial general bodyguard details:
+    if (!character->details.m_initial_general_bodyguard_details.m_unit && current_gen) {
+        character->details.m_initial_general_bodyguard_details.m_unit = current_gen->details.m_initial_general_bodyguard_details.m_unit;
+        character->details.m_initial_general_bodyguard_details.m_men = current_gen->details.m_initial_general_bodyguard_details.m_men;
+        character->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = current_gen->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished;
+    }
+
+    uint32_t army_pos = 0;
+    void* region_ptr = nullptr;
+    if (current_gen) {
+        if (g_get_character_map_piece) {
+            void* piece = g_get_character_map_piece(current_gen);
+            if (piece) {
+                army_pos = *reinterpret_cast<uint32_t*>(reinterpret_cast<uintptr_t>(piece) + 8);
+            }
+        }
+        if (!army_pos) {
+            army_pos = current_gen->logical_position;
+        }
+        region_ptr = *reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(current_gen) + 0x5CC);
+    }
+
+    Log("[twdll] force:AppointCharacter: force=0x%08X appointing character=0x%08X (former_general=0x%08X, region=0x%08X, army_pos=0x%08X: x=%d, y=%d)",
+        reinterpret_cast<uintptr_t>(force),
+        reinterpret_cast<uintptr_t>(character),
+        reinterpret_cast<uintptr_t>(current_gen),
+        reinterpret_cast<uintptr_t>(region_ptr),
+        army_pos,
+        army_pos & 0xFFFF,
+        army_pos >> 16);
+
+    TW_AvailableCharacterRecruitmentItem item{};
+    item.m_character = character;
+    item.m_cost = 0;
+
+    void* res = g_recruit_character_entry_impl(
+        pool_mgr,
+        &item,
+        region_ptr,
+        force,
+        reinterpret_cast<void*>(army_pos),
+        agent_rec,
+        0,
+        nullptr,
+        nullptr,
+        &character->details.m_initial_general_bodyguard_details,
+        0,
+        reinterpret_cast<void*>(1) // ignore_agent_cap = 1
+    );
+
+    if (!res) {
+        Log("[twdll] force:AppointCharacter: g_recruit_character_entry_impl returned null");
+        l_pushboolean(L, 0);
+        return 1;
+    }
+
+    Log("[twdll] force:AppointCharacter: force=0x%08X successfully appointed character=0x%08X as general",
+        reinterpret_cast<uintptr_t>(force), reinterpret_cast<uintptr_t>(character));
+    l_pushboolean(L, 1);
+    return 1;
+}
+
 extern const luaL_Reg military_force_functions[] = {
     {nullptr, nullptr}
 };
@@ -183,6 +295,7 @@ static const luaL_Reg military_force_methods[] = {
     {"GetIntegrity",            GetIntegrity},
     {"SetIntegrity",            SetIntegrity},
     {"HasIntegrity",            HasIntegrity},
+    {"AppointCharacter",        AppointCharacter},
     {nullptr, nullptr}
 };
 

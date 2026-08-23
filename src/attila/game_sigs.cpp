@@ -36,14 +36,22 @@
 #define UPDATE_TECH_EFFECTS_SIG  "83 EC 30 53 8B D9 56 57 89 5C 24 0C 8D 4B 24 E8 ? ? ? ? 33 C9 89 4C 24"
 #define GET_TWEAKER_MAP_SIG "64 A1 ? ? ? ? 83 EC 18 8B 0D ? ? ? ? 8B 0C 88 A1 ? ? ? ? 3B 81 ? ? ? ? 7F ? B8 ? ? ? ? 83 C4 18 C3 68 ? ? ? ? E8 ? ? ? ? 83 C4 04 83 3D ? ? ? ? FF 75 ? 57 68 ? ? ? ? 8D 4C 24 ? E8 ? ? ? ? 68 ? ? ? ? 8D 4C 24 ? E8 ? ? ? ? 8D 44 24 ? C7 05 ? ? ? ? 08 00 00 00"
 
+#define RECRUIT_CHARACTER_ENTRY_IMPL_SIG "83 EC 20 53 8B 5C 24 ? 55 56 8B F1 8B 43"
+#define KILL_INSTANT_AND_COMMANDED_UNIT_SIG "83 EC 24 56 8B F1 57 8D 8E"
+
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
 HMODULE            g_empire_module        = nullptr;
+#define GET_CHARACTER_MAP_PIECE_SIG "51 8D 44 24 ? 50 E8 ? ? ? ? 59 C3 CC CC CC 53"
+
 FnFactionProvinceManager g_faction_province_manager = nullptr;
 FnResolvePortraitPath    g_resolve_portrait_path    = nullptr;
 FnCaStringAssign         g_ca_string_assign         = nullptr;
 FnCaUniStringAssign      g_ca_unistring_assign      = nullptr;
 FnUpdateArtSet           g_update_art_set           = nullptr;
+FnRecruitCharacterEntryImpl g_recruit_character_entry_impl = nullptr;
+FnGetCharacterMapPiece   g_get_character_map_piece  = nullptr;
+FnKillInstantAndCommandedUnit g_kill_instant_and_commanded_unit = nullptr;
 uintptr_t          g_reinf_cap_insn_addr = 0;
 uintptr_t          g_battle_ctor_addr    = 0;
 uintptr_t          g_battle_dtor_addr    = 0;
@@ -144,5 +152,8 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"CAMPAIGN_ENV::save_game",                            (void**)&g_save_game,              SAVE_GAME_SIG},
     {"CAMPAIGN_ENV::load_game",                            (void**)&g_load_game,              LOAD_GAME_SIG},
     {"UTILITYDLL::get_tweaker_map",                        (void**)&g_get_tweaker_map,        GET_TWEAKER_MAP_SIG},
+    {"CHARACTER_RECRUITMENT_POOL_MANAGER::recruit_character_entry_impl", (void**)&g_recruit_character_entry_impl, RECRUIT_CHARACTER_ENTRY_IMPL_SIG},
+    {"CHARACTER::get_map_piece",                           (void**)&g_get_character_map_piece, GET_CHARACTER_MAP_PIECE_SIG},
+    {"CHARACTER::kill_instant_and_commanded_unit",         (void**)&g_kill_instant_and_commanded_unit, KILL_INSTANT_AND_COMMANDED_UNIT_SIG},
     {nullptr, nullptr, nullptr}
 };

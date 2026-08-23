@@ -146,7 +146,10 @@ extern lua_settop_t        g_game_lua_settop;
 inline bool l_tobool(lua_State* state, int idx) {
     if (l_type(state, idx) == LUA_TBOOLEAN) {
         auto* pState = reinterpret_cast<uintptr_t*>(state);
-        auto* pVal = reinterpret_cast<uint32_t*>(pState[3] + 8 * (idx - 1));
+        uintptr_t addr = (idx > 0)
+            ? (pState[3] + 8 * (idx - 1))
+            : (pState[2] + 8 * idx);
+        auto* pVal = reinterpret_cast<uint32_t*>(addr);
         return (pVal[0] != 0);
     }
     if (l_type(state, idx) == LUA_TNUMBER) {

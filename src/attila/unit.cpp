@@ -185,8 +185,8 @@ static int ConvertUnit(lua_State* L) {
 
     // If this unit is a general's bodyguard, synchronise the character's persistent snapshot:
     auto* commander_link = new_unit->m_commander_link;
-    if (commander_link && commander_link->m_object) {
-        auto* commander = commander_link->m_object;
+    auto* commander = commander_link ? commander_link->get() : nullptr;
+    if (commander) {
         commander->details.m_initial_general_bodyguard_details.m_unit = record;
         commander->details.m_initial_general_bodyguard_details.m_men = static_cast<uint16_t>(new_unit->num_men);
         commander->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = static_cast<uint16_t>(new_unit->max_num_men);

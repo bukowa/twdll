@@ -1707,8 +1707,8 @@ local function run_twdll_tests()
             local p_char = w_fac:character_list():item_at(0)
             local reg = p_char:has_region() and p_char:region() or (ere_fac:has_home_region() and ere_fac:home_region() or ere_fac:region_list():item_at(0))
             local reg_name = reg:name()
-            local spawn_x = p_char:logical_position_x() + 2
-            local spawn_y = p_char:logical_position_y() + 2
+            local spawn_x = p_char:logical_position_x() + 8
+            local spawn_y = p_char:logical_position_y() + 8
 
             local spawn_seq = 0
             local function spawn_general_for_test(id_tag, target_fac_key)
@@ -1724,8 +1724,8 @@ local function run_twdll_tests()
                 local u_key = (target_f_key == "att_fact_eastern_roman_empire") and "att_rom_legio" or "att_merc_ger_agathyrsi_warriors"
                 local target_reg = (target_f_key == "att_fact_eastern_roman_empire" and ere_fac:has_home_region()) and ere_fac:home_region() or reg
                 local r_name = target_reg:name()
-                local s_x = (target_f_key == "att_fact_eastern_roman_empire" and target_reg:settlement()) and target_reg:settlement():logical_position_x() + 2 + spawn_seq or spawn_x + spawn_seq
-                local s_y = (target_f_key == "att_fact_eastern_roman_empire" and target_reg:settlement()) and target_reg:settlement():logical_position_y() + 2 + spawn_seq or spawn_y + spawn_seq
+                local s_x = (target_f_key == "att_fact_eastern_roman_empire" and target_reg:settlement()) and target_reg:settlement():logical_position_x() + 6 + (spawn_seq * 3) or spawn_x + (spawn_seq * 3)
+                local s_y = (target_f_key == "att_fact_eastern_roman_empire" and target_reg:settlement()) and target_reg:settlement():logical_position_y() + 6 + (spawn_seq * 3) or spawn_y + (spawn_seq * 3)
                 game:create_force(target_f_key, u_key, r_name, s_x, s_y, tag, false)
                 for i = 0, fac_obj:character_list():num_items() - 1 do
                     local c = fac_obj:character_list():item_at(i)
@@ -2226,6 +2226,130 @@ local function run_twdll_tests()
                     record_skip()
                 end
             end
+        end
+
+        -- ======================================================
+        -- TEST: MILITARY_FORCE methods and AppointCharacter
+        -- ======================================================
+        twdll.core.Log("[TEST] --- Test: MILITARY_FORCE methods and AppointCharacter ---")
+        local test_fac = nil
+        if game and type(game.model) == "function" and game:model() and type(game:model().world) == "function" and game:model():world() then
+            local fac_list = game:model():world():faction_list()
+            if fac_list and type(fac_list.num_items) == "function" and fac_list:num_items() > 0 then
+                for i = 0, fac_list:num_items() - 1 do
+                    local f = fac_list:item_at(i)
+                    if f and type(f.military_force_list) == "function" and f:military_force_list():num_items() > 0 then
+                        test_fac = f
+                        break
+                    end
+                end
+            end
+        end
+
+        if test_fac then
+            local force_list = test_fac:military_force_list()
+            local force = force_list:item_at(0)
+            if force then
+                local mf_mem = force:GetMemoryAddress()
+                twdll.core.Log(string.format("[TEST] force:GetMemoryAddress() = %s", tostring(mf_mem)))
+                report("force:GetMemoryAddress valid", type(mf_mem) == "string" and mf_mem:sub(1, 2) == "0x")
+
+                local rq_size = force:GetRecruitmentQueueSize()
+                twdll.core.Log(string.format("[TEST] force:GetRecruitmentQueueSize() = %s", tostring(rq_size)))
+                report("force:GetRecruitmentQueueSize valid", type(rq_size) == "number" and rq_size >= 0)
+
+                local has_integ = force:HasIntegrity()
+                twdll.core.Log(string.format("[TEST] force:HasIntegrity() = %s", tostring(has_integ)))
+                report("force:HasIntegrity boolean", type(has_integ) == "boolean")
+
+                if has_integ then
+                    local orig_integ = force:GetIntegrity()
+                    twdll.core.Log(string.format("[TEST] force:GetIntegrity() = %s", tostring(orig_integ)))
+                    force:SetIntegrity(75.0)
+                    local new_integ = force:GetIntegrity()
+                    report("force:SetIntegrity", math.abs(new_integ - 75.0) < 0.01)
+                    force:SetIntegrity(orig_integ)
+                else
+                    record_skip()
+                end
+
+                -- 1. Test invalid arguments
+                local bad_arg_ok = force:AppointCharacter(nil)
+                twdll.core.Log(string.format("[TEST] [APPOINT] Call force:AppointCharacter(nil) -> %s (expected false)", tostring(bad_arg_ok)))
+                report("force:AppointCharacter invalid nil arg returns false", bad_arg_ok == false)
+
+                -- 2. Test AppointCharacter self-assignment (no-op check)
+                local current_gen = force:has_general() and force:general_character()
+                if current_gen then
+                    local orig_name = current_gen:GetFullName()
+                    local orig_cqi = current_gen:command_queue_index()
+                    twdll.core.Log(string.format("[TEST] [APPOINT] Initial commanding general: '%s' (CQI %d, memory: %s)",
+                        orig_name, orig_cqi, tostring(current_gen:GetMemoryAddress())))
+
+                    local app_self_ok = force:AppointCharacter(current_gen)
+                    twdll.core.Log(string.format("[TEST] [APPOINT] Call force:AppointCharacter('%s') [self-assign no-op] -> %s", orig_name, tostring(app_self_ok)))
+                    report("force:AppointCharacter self-assign", app_self_ok == true)
+
+                    -- 3. Find another character in the faction to test real swap
+                    local other_gen = nil
+                    local char_list = test_fac:character_list()
+                    if char_list and type(char_list.num_items) == "function" then
+                        for i = 0, char_list:num_items() - 1 do
+                            local c = char_list:item_at(i)
+                            if c and not c:is_null_interface() and c:command_queue_index() ~= orig_cqi then
+                                local ctype = type(c.character_type_key) == "function" and c:character_type_key() or ""
+                                if ctype == "general" or ctype == "colonel" or ctype == "politician" or ctype == "" then
+                                    other_gen = c
+                                    break
+                                end
+                            end
+                        end
+                    end
+
+                    if other_gen then
+                        local other_name = other_gen:GetFullName()
+                        local other_cqi = other_gen:command_queue_index()
+                        twdll.core.Log(string.format("[TEST] [APPOINT] Found candidate character: '%s' (CQI %d, memory: %s)",
+                            other_name, other_cqi, tostring(other_gen:GetMemoryAddress())))
+                        twdll.core.Log(string.format("[TEST] [APPOINT] >>> APPOINT ACTION: Appointing candidate '%s' (CQI %d) as general",
+                            other_name, other_cqi))
+
+                        local swap_ok = force:AppointCharacter(other_gen)
+                        local new_active_gen = force:has_general() and force:general_character()
+                        local new_active_name = new_active_gen and new_active_gen:GetFullName() or "None"
+                        local new_active_cqi = new_active_gen and new_active_gen:command_queue_index() or -1
+                        local swap_verified = swap_ok and new_active_gen and (new_active_cqi == other_cqi)
+
+                        twdll.core.Log(string.format("[TEST] [APPOINT] Appointment result: %s | Active General in force is now: '%s' (CQI %d)",
+                            tostring(swap_ok), new_active_name, new_active_cqi))
+                        report("force:AppointCharacter appoint candidate", swap_verified == true)
+                    else
+                        twdll.core.Log("[TEST] [APPOINT] SKIPPED: No alternative general candidate in faction to test appointment.")
+                        record_skip()
+                    end
+                else
+                    record_skip()
+                    record_skip()
+                end
+            else
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+                record_skip()
+            end
+        else
+            record_skip()
+            record_skip()
+            record_skip()
+            record_skip()
+            record_skip()
+            record_skip()
+            record_skip()
+            record_skip()
         end
 
         -- ======================================================

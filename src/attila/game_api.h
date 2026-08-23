@@ -107,6 +107,31 @@ extern uintptr_t g_reinf_cap_insn_addr;
 extern uintptr_t g_battle_ctor_addr;
 extern uintptr_t g_battle_dtor_addr;
 
+// CHARACTER_RECRUITMENT_POOL_MANAGER::recruit_character_entry_impl (sub_107E6C80)
+using FnRecruitCharacterEntryImpl = void*(__thiscall*)(
+    void* pool_mgr,                        // ecx (this)
+    void* item,                            // arg_0
+    void* region,                          // arg_4
+    void* supplied_force,                  // arg_8
+    void* pos,                             // arg_C (LOGICAL_POSITION)
+    void* agent_record_type,               // arg_10 (AGENT_RECORD*)
+    unsigned int new_legacy_def,           // arg_14
+    void* legacy_to_reinstate,             // arg_18
+    void* generals_unit,                   // arg_1C
+    void* generals_unit_bodyguard_details, // arg_20
+    char suppress_ui_messages,             // arg_24
+    void* ignore_agent_cap                 // arg_28
+);
+extern FnRecruitCharacterEntryImpl g_recruit_character_entry_impl;
+
+// CHARACTER::get_map_piece (sub_107DCAB0)
+using FnGetCharacterMapPiece = void*(__thiscall*)(void* character);
+extern FnGetCharacterMapPiece g_get_character_map_piece;
+
+// CHARACTER::kill_instant_and_commanded_unit
+using FnKillInstantAndCommandedUnit = int(__thiscall*)(void* character, int death_type);
+extern FnKillInstantAndCommandedUnit g_kill_instant_and_commanded_unit;
+
 // CampaignSettlementCallback::Initialize entry point, resolved by initialize_game_api().
 extern uintptr_t g_settlement_cb_initialize_addr;
 

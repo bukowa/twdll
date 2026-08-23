@@ -392,16 +392,33 @@ struct TW_CharacterDetails {
 
 template <typename T>
 struct TW_OneToOneLink {
-    T* m_object; // 0x00
+    void* _vptr;       // 0x00
+    T**   m_link_node; // 0x04
+
+    inline T* get() const {
+        return (m_link_node && *m_link_node) ? *m_link_node : nullptr;
+    }
+};
+
+struct TW_AvailableCharacterRecruitmentItem {
+    struct TW_Character* m_character;               // 0x00
+    int32_t              m_cost;                    // 0x04
+    void*                m_character_pool_entry;    // 0x08
+    int32_t              m_cost_for_different_bg;   // 0x0C
+    char                 pad_10[0x30];
 };
 
 struct TW_Character {
-    char                            pad_00[0x14];
-    int                             action_points;       // 0x14
-    char                            pad_18[0x1C4];
-    TW_OneToOneLink<struct TW_Unit>* commanded_unit_link; // 0x1DC  m_commanded_unit.m_link.m_object
-    char                            pad_1E0[0x24];
-    TW_CharacterDetails             details;             // 0x204  CHARACTER_DETAILS embedded sub-struct
+    char                                  pad_00[0x14];
+    int                                   action_points;                 // 0x14
+    char                                  pad_18[0x4];                   // 0x18
+    uint32_t                              logical_position;              // 0x1C (uint16_t x, uint16_t y)
+    char                                  pad_20[0x1B0];                 // 0x20
+    TW_OneToOneLink<struct TW_MilitaryForce> commanded_military_force_link; // 0x1D0 (size 8B: 0x1D0..0x1D8)
+    char                                  pad_1D8[0x4];                  // 0x1D8
+    TW_OneToOneLink<struct TW_Unit>*      commanded_unit_link;           // 0x1DC  m_commanded_unit.m_link.m_object
+    char                                  pad_1E0[0x24];
+    TW_CharacterDetails                   details;                       // 0x204  CHARACTER_DETAILS embedded sub-struct
 };
 
 struct TW_World {
@@ -414,11 +431,16 @@ struct TW_MilitaryForceMorale {
 };
 
 struct TW_MilitaryForce {
-    char                    pad_00[0x3E0];
-    void*                   m_morale_vtable;   // 0x3E0 (SAFE_PTR vtable)
-    TW_MilitaryForceMorale* m_morale;          // 0x3E4 (SAFE_PTR object)
-    char                    pad_3E8[0x74];
-    int                     recruitment_queue_size;  // 0x45C
+    char                                  pad_00[0x9D];
+    bool                                  m_cached_bonus_values_invalid; // 0x9D
+    char                                  pad_9E[0x12];
+    TW_OneToOneLink<struct TW_Character>  m_general_link;                // 0xB0 (size 8B: 0xB0..0xB8)
+    TW_OneToOneLink<struct TW_Faction>    m_faction_link;                // 0xB8 (size 8B: 0xB8..0xC0)
+    char                                  pad_C0[0x320];
+    void*                                 m_morale_vtable;               // 0x3E0 (SAFE_PTR vtable)
+    TW_MilitaryForceMorale*               m_morale;                      // 0x3E4 (SAFE_PTR object)
+    char                                  pad_3E8[0x74];
+    int                                   recruitment_queue_size;        // 0x45C
 };
 
 struct TW_UnitContainer {
@@ -716,6 +738,7 @@ TW_ASSERT_OFFSET(TW_CampaignTechnology, m_technologies_for_category, 0x28);
 
 TW_ASSERT_OFFSET(TW_Databases,     agents,                   0x152C);
 TW_ASSERT_OFFSET(TW_Character,        action_points,                        0x14);
+TW_ASSERT_OFFSET(TW_Character,        commanded_military_force_link,        0x1D0);
 TW_ASSERT_OFFSET(TW_Character,        commanded_unit_link,                  0x1DC);
 TW_ASSERT_OFFSET(TW_Character,        details,                              0x204);
 TW_ASSERT_OFFSET(TW_CharacterDetails,  family_member,                        0x4);
@@ -758,6 +781,9 @@ TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_unique_id,        0x1C);
 TW_ASSERT_OFFSET(TW_PortraitCameraSettings, m_unique_id_string, 0x20);
 TW_ASSERT_OFFSET(TW_World,         faction_count,           0x50);
 TW_ASSERT_OFFSET(TW_MilitaryForceMorale, m_morale,          0x00);
+TW_ASSERT_OFFSET(TW_MilitaryForce, m_cached_bonus_values_invalid, 0x9D);
+TW_ASSERT_OFFSET(TW_MilitaryForce, m_general_link,          0xB0);
+TW_ASSERT_OFFSET(TW_MilitaryForce, m_faction_link,          0xB8);
 TW_ASSERT_OFFSET(TW_MilitaryForce, m_morale,                0x3E4);
 TW_ASSERT_OFFSET(TW_MilitaryForce, recruitment_queue_size,  0x45C);
 TW_ASSERT_OFFSET(TW_UnitContainer, m_military_force,        0x0);
@@ -780,7 +806,7 @@ TW_ASSERT_OFFSET(TW_BattleUnit,    num_men_initial,         0x1C24);
 TW_ASSERT_OFFSET(TW_BattleScriptUnit, m_unit,              0x4);
 TW_ASSERT_OFFSET(TW_FamilyMember,    mother,                  0x18);
 TW_ASSERT_OFFSET(TW_FamilyMember,    father,                  0x1C);
-TW_ASSERT_OFFSET(TW_OneToOneLink<TW_Character>, m_object,     0x00);
+TW_ASSERT_OFFSET(TW_OneToOneLink<TW_Character>, m_link_node,  0x04);
 TW_ASSERT_OFFSET(TW_VectorNcc<void*>,       m_capacity_and_allocator, 0x0);
 TW_ASSERT_OFFSET(TW_VectorNcc<void*>,       m_size,                   0x4);
 TW_ASSERT_OFFSET(TW_VectorNcc<void*>,       m_elements,               0x8);
@@ -850,6 +876,11 @@ TW_ASSERT_OFFSET(TW_CharacterDetails, traits,                         0x104);
 TW_ASSERT_OFFSET(TW_CharacterDetails, m_name,                         0x08);
 TW_ASSERT_OFFSET(TW_CharacterDetails, m_is_immortal,                   0x348);
 TW_ASSERT_OFFSET(TW_CharacterDetails, m_turns_to_resurrection,         0x34C);
+TW_ASSERT_OFFSET(TW_Character, action_points,                          0x14);
+TW_ASSERT_OFFSET(TW_Character, logical_position,                       0x1C);
+TW_ASSERT_OFFSET(TW_Character, commanded_military_force_link,          0x1D0);
+TW_ASSERT_OFFSET(TW_Character, commanded_unit_link,                    0x1DC);
+TW_ASSERT_OFFSET(TW_Character, details,                                0x204);
 TW_ASSERT_OFFSET(TW_Traits, m_size,                                   0x8);
 TW_ASSERT_OFFSET(TW_Traits, m_elements,                               0xC);
 TW_ASSERT_OFFSET(TW_CharacterTraitRecord, m_key,                      0x0);

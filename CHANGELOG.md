@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `AppointCharacter(character)` — appoints and assigns the specified character as the commanding general of the military force through the engine's canonical general recruitment path, instantiating the new bodyguard unit, subsuming it into the force, dismissing the former general back to the faction court, and promoting the new general into the force.
+
 ### Fixed
 - Fixed `twdll.tweakers.SetInt(name, val)` returning `true` when setting non-existent tweaker names, properly returning `false` on unresolved names matching `SetFloat` and `SetBool`.
 
