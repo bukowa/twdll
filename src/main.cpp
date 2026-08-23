@@ -36,7 +36,7 @@ static bool g_is_initialized = false;
 
 static int l_twdll_gc_cleanup(lua_State*) {
     if (g_is_initialized) {
-        Log("[twdll] GC destroying Lua state — uninstalling campaign hooks");
+        Log("[twdll] GC destroying Lua state — uninstalling campaign hooks and tweakers");
         uninstall_tweakers();
         uninstall_campaign_hooks();
         g_is_initialized = false;
@@ -85,7 +85,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
         Log("[twdll] luaopen_twdll: returning existing twdll table instance from registry");
         return 1;
     }
-    l_settop(L, -2);
+    l_settop(L, 0);
 
     Log("[twdll] luaopen_twdll: registering modules");
 
