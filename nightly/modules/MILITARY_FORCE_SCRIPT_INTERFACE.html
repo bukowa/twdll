@@ -77,6 +77,10 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#AppointCharacter">AppointCharacter (character)</a></td>
+	<td class="summary">Appoints and assigns the specified character as the commanding general of this military force.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#DisbandUnits">DisbandUnits (...)</a></td>
 	<td class="summary">Disbands one or more units from this military force in a single engine transaction.</td>
 	</tr>
@@ -109,6 +113,40 @@
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
+    <dt>
+    <a name = "AppointCharacter"></a>
+    <strong>AppointCharacter (character)</strong>
+    </dt>
+    <dd>
+    Appoints and assigns the specified character as the commanding general of this military force.
+Instantiates the general's bodyguard unit, subsumes it into the force, dismisses the former general
+back to the faction court, and promotes the character to commanding general.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">character</span>
+            <span class="types"><span class="type">CHARACTER_SCRIPT_INTERFACE</span></span>
+         character object to appoint as commanding general
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the character was successfully appointed, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> candidate = faction:<span class="function-name">character_list</span>():<span class="function-name">item_at</span>(<span class="number">1</span>)
+force:<span class="function-name">AppointCharacter</span>(candidate)</pre>
+    </ul>
+
+</dd>
     <dt>
     <a name = "DisbandUnits"></a>
     <strong>DisbandUnits (...)</strong>
