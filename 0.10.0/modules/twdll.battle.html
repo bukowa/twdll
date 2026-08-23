@@ -1,0 +1,146 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><strong>twdll.battle</strong></li>
+  <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.tweakers.html">twdll.tweakers</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="../topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>twdll.battle</code></h1>
+<p>
+
+</p>
+<p> Battle lifecycle hooks for Total War: Attila.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#GetBattleInfo">GetBattleInfo ()</a></td>
+	<td class="summary">Returns live runtime telemetry and reinforcement structure about the current tactical battle.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "GetBattleInfo"></a>
+    <strong>GetBattleInfo ()</strong>
+    </dt>
+    <dd>
+    Returns live runtime telemetry and reinforcement structure about the current tactical battle.
+Returns nil while no battle is active (e.g. on the campaign map).</p>
+
+<p>When inside a battle, returns a table with fields:
+- <a href="../modules/twdll.battle.html">battle</a> (string): hexadecimal memory address of the <code>BATTLE</code> object.
+- <code>manager</code> (string|nil): hexadecimal memory address of <code>REINFORCEMENTS_MANAGER</code>.
+- <code>cap</code> (integer|nil): active maximum units per army in battle.
+- <code>size</code> (integer|nil): number of reinforcing armies currently queued.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a> or <span class="type">nil</span></span>
+        table containing battle state, or nil when not in a tactical battle
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Example returned table:
+</span><span class="comment">-- {
+</span><span class="comment">--     ["battle"] = "0x2A4F8900",
+</span><span class="comment">--     ["manager"] = "0x2A4F8B40",
+</span><span class="comment">--     ["cap"] = 40,
+</span><span class="comment">--     ["size"] = 2
+</span><span class="comment">-- }
+</span>
+<span class="keyword">local</span> info = twdll.battle.<span class="function-name">GetBattleInfo</span>()
+<span class="keyword">if</span> info <span class="keyword">then</span>
+    <span class="keyword">if</span> info.size <span class="keyword">and</span> info.size &gt; <span class="number">0</span> <span class="keyword">then</span>
+        <span class="comment">-- Reinforcements are queued to enter the battlefield
+</span>    <span class="keyword">end</span>
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

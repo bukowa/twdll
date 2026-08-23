@@ -1,0 +1,1483 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.tweakers.html">twdll.tweakers</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><strong>CHARACTER_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="../topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>CHARACTER_SCRIPT_INTERFACE</code></h1>
+<p>
+
+</p>
+<p> Extensions to the game's character object.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#AddTrait">AddTrait (trait_key[, points=1[, show_message=false]])</a></td>
+	<td class="summary">Adds the specified character trait to this character using the engine's native command queue.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetActionPoints">GetActionPoints ()</a></td>
+	<td class="summary">Current campaign action points remaining for the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetArtSet">GetArtSet ()</a></td>
+	<td class="summary">Returns the <a href="../modules/ARTSET_SCRIPT_INTERFACE.html#">ARTSET_SCRIPT_INTERFACE</a> for this character, or nil if none.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetClanName">GetClanName ()</a></td>
+	<td class="summary">Active onscreen clan name of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetClanNameKey">GetClanNameKey ()</a></td>
+	<td class="summary">Database localisation key for the character's clan name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFamilyName">GetFamilyName ()</a></td>
+	<td class="summary">Active onscreen family name (surname) of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFamilyNameKey">GetFamilyNameKey ()</a></td>
+	<td class="summary">Database localisation key for the character's family name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetForename">GetForename ()</a></td>
+	<td class="summary">Active onscreen forename of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetForenameKey">GetForenameKey ()</a></td>
+	<td class="summary">Database localisation key for the character's forename (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFullName">GetFullName ()</a></td>
+	<td class="summary">Returns the full formatted onscreen name of the character (combining non-empty forename, clan name, family name, and other name).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetInfluence">GetInfluence ()</a></td>
+	<td class="summary">Political influence / gravitas of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetLoyalty">GetLoyalty ()</a></td>
+	<td class="summary">Calculated total loyalty level of the character (0 to 10), taking into account
+ruler authority, gravitas difference, marriage, ministerial offices, traits, and direct modifiers.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetLoyaltyFactorList">GetLoyaltyFactorList ()</a></td>
+	<td class="summary">Returns a key-value dictionary table breakdown of all active loyalty factors contributing to this character's loyalty.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetLoyaltyModifier">GetLoyaltyModifier ()</a></td>
+	<td class="summary">Direct loyalty modifier value applied to this character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Memory address of the character object in hexadecimal format.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetOtherName">GetOtherName ()</a></td>
+	<td class="summary">Active onscreen other name (title / nickname) of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetOtherNameKey">GetOtherNameKey ()</a></td>
+	<td class="summary">Database localisation key for the character's other name/title (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetPoliticalParty">GetPoliticalParty ()</a></td>
+	<td class="summary">Returns the character's political party (<a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html#">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a>), or nil if none.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetResurrectionTurns">GetResurrectionTurns ()</a></td>
+	<td class="summary">Turns remaining until resurrection for a wounded immortal character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetTraitList">GetTraitList ()</a></td>
+	<td class="summary">Returns a table array of all trait record keys currently present on this character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#IsImmortal">IsImmortal ()</a></td>
+	<td class="summary">Checks whether the character is flagged as immortal (will be wounded instead of dying).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#RemoveTrait">RemoveTrait (trait_key)</a></td>
+	<td class="summary">Removes the specified trait from this character and recalculates active character bonus effects and skill attributes.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetActionPoints">SetActionPoints (value)</a></td>
+	<td class="summary">Sets the campaign action points for the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetArtSet">SetArtSet (art_set_key)</a></td>
+	<td class="summary">Sets the art set for this character, immediately updating all 3D models (campaign map avatar, battle commander, politician panel) and 2D UI portholes/portraits.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetClanName">SetClanName (name)</a></td>
+	<td class="summary">Sets the clan name of the character as direct custom text (UTF-8).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetClanNameKey">SetClanNameKey (key)</a></td>
+	<td class="summary">Sets the database localisation key for the character's clan name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetDefaultBodyGuard">SetDefaultBodyGuard (unit_key)</a></td>
+	<td class="summary">Overrides the default bodyguard unit record for a general so that whenever
+the general is recruited into an army (including re-recruitment after being
+wounded or disbanded, or through 'Replace this general' in the UI), they
+receive this unit type as their default bodyguard.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFamilyName">SetFamilyName (name)</a></td>
+	<td class="summary">Sets the family name (surname) of the character as direct custom text (UTF-8).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFamilyNameKey">SetFamilyNameKey (key)</a></td>
+	<td class="summary">Sets the database localisation key for the character's family name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetForename">SetForename (name)</a></td>
+	<td class="summary">Sets the forename of the character as direct custom text (UTF-8).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetForenameKey">SetForenameKey (key)</a></td>
+	<td class="summary">Sets the database localisation key for the character's forename (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetImmortal">SetImmortal (immortal)</a></td>
+	<td class="summary">Sets the immortality flag of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetInfluence">SetInfluence (value)</a></td>
+	<td class="summary">Sets the political influence / gravitas of the character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetLoyaltyModifier">SetLoyaltyModifier (value)</a></td>
+	<td class="summary">Sets a direct loyalty modifier on the character that directly alters their overall loyalty score.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetOtherName">SetOtherName (name)</a></td>
+	<td class="summary">Sets the other name (title / nickname) of the character as direct custom text (UTF-8).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetOtherNameKey">SetOtherNameKey (key)</a></td>
+	<td class="summary">Sets the database localisation key for the character's other name/title (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetPoliticalParty">SetPoliticalParty (party)</a></td>
+	<td class="summary">Sets the character's political party allegiance.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetResurrectionTurns">SetResurrectionTurns (turns)</a></td>
+	<td class="summary">Sets the turns remaining until resurrection for a wounded immortal character.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#TransferToFaction">TransferToFaction (target_faction[, options])</a></td>
+	<td class="summary">Instantly transfers the character and their commanded military force to another faction in the current tick.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "AddTrait"></a>
+    <strong>AddTrait (trait_key[, points=1[, show_message=false]])</strong>
+    </dt>
+    <dd>
+    Adds the specified character trait to this character using the engine's native command queue.
+Automatically calculates and applies all associated trait effect bundles and attribute bonuses.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">trait_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the trait record key from <code>character_traits_tables</code> (e.g. <code>&quot;att_trait_all_personality_brave&quot;</code>)
+        </li>
+        <li><span class="parameter">points</span>
+            <span class="types"><span class="type">integer</span></span>
+         trait level / points to grant (default: 1)
+         (<em>default</em> 1)
+        </li>
+        <li><span class="parameter">show_message</span>
+            <span class="types"><span class="type">boolean</span></span>
+         whether to trigger the on-screen event notification message (default: false)
+         (<em>default</em> false)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Add 1 point of brave trait silently:
+</span>char:<span class="function-name">AddTrait</span>(<span class="string">"att_trait_all_personality_brave"</span>, <span class="number">1</span>, <span class="keyword">false</span>)
+
+<span class="comment">-- Add trait with on-screen notification:
+</span>char:<span class="function-name">AddTrait</span>(<span class="string">"att_trait_all_personality_brave"</span>, <span class="number">1</span>, <span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetActionPoints"></a>
+    <strong>GetActionPoints ()</strong>
+    </dt>
+    <dd>
+    Current campaign action points remaining for the character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        action points
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> ap = char:<span class="function-name">GetActionPoints</span>()
+<span class="keyword">if</span> ap &lt; <span class="number">20</span> <span class="keyword">then</span>
+    <span class="comment">-- Replenish movement points if army is exhausted:
+</span>    char:<span class="function-name">SetActionPoints</span>(<span class="number">100</span>)
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetArtSet"></a>
+    <strong>GetArtSet ()</strong>
+    </dt>
+    <dd>
+    Returns the <a href="../modules/ARTSET_SCRIPT_INTERFACE.html#">ARTSET_SCRIPT_INTERFACE</a> for this character, or nil if none.
+Allows inspecting portrait paths, cultural variations, gender, aging, and faction leader flags.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">ARTSET_SCRIPT_INTERFACE</span> or <span class="type">nil</span></span>
+        character art set interface, or nil if none
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> art_set = char:<span class="function-name">GetArtSet</span>()
+<span class="keyword">if</span> art_set <span class="keyword">then</span>
+    <span class="keyword">local</span> path = art_set:<span class="function-name">GetPortraitPath</span>()
+    <span class="comment">-- Sample path: "UI/Portraits/Portholes/att_cult_nomadic/att_frontend_faction_leader_huns_0.png"
+</span>    <span class="keyword">if</span> <span class="keyword">not</span> art_set:<span class="function-name">IsMale</span>() <span class="keyword">then</span>
+        <span class="comment">-- Process female character art set
+</span>    <span class="keyword">end</span>
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetClanName"></a>
+    <strong>GetClanName ()</strong>
+    </dt>
+    <dd>
+    Active onscreen clan name of the character.
+Returns custom text if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanName">SetClanName</a>, or the translated string from the database if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanNameKey">SetClanNameKey</a>, or the database key as fallback.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        clan name string
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> clan = char:<span class="function-name">GetClanName</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetClanNameKey"></a>
+    <strong>GetClanNameKey ()</strong>
+    </dt>
+    <dd>
+    Database localisation key for the character's clan name (e.g.  <code>&quot;names_name_12345&quot;</code>).
+Returns the raw key string if assigned via database or <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanNameKey">SetClanNameKey</a>, or an empty string if direct custom text was assigned via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanName">SetClanName</a>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        database localisation key string, or empty string if custom text is used
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = char:<span class="function-name">GetClanNameKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetFamilyName"></a>
+    <strong>GetFamilyName ()</strong>
+    </dt>
+    <dd>
+    Active onscreen family name (surname) of the character.
+Returns custom text if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyName">SetFamilyName</a>, or the translated string from the database if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyNameKey">SetFamilyNameKey</a>, or the database key as fallback.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        family name string
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> fam = char:<span class="function-name">GetFamilyName</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetFamilyNameKey"></a>
+    <strong>GetFamilyNameKey ()</strong>
+    </dt>
+    <dd>
+    Database localisation key for the character's family name (e.g.  <code>&quot;names_name_12345&quot;</code>).
+Returns the raw key string if assigned via database or <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyNameKey">SetFamilyNameKey</a>, or an empty string if direct custom text was assigned via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyName">SetFamilyName</a>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        database localisation key string, or empty string if custom text is used
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = char:<span class="function-name">GetFamilyNameKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetForename"></a>
+    <strong>GetForename ()</strong>
+    </dt>
+    <dd>
+    Active onscreen forename of the character.
+Returns custom text if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForename">SetForename</a>, or the translated string from the database if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForenameKey">SetForenameKey</a>, or the database key as fallback.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        forename string
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> fn = char:<span class="function-name">GetForename</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetForenameKey"></a>
+    <strong>GetForenameKey ()</strong>
+    </dt>
+    <dd>
+    Database localisation key for the character's forename (e.g.  <code>&quot;names_name_12345&quot;</code>).
+Returns the raw key string if assigned via database or <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForenameKey">SetForenameKey</a>, or an empty string if direct custom text was assigned via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForename">SetForename</a>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        database localisation key string, or empty string if custom text is used
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = char:<span class="function-name">GetForenameKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetFullName"></a>
+    <strong>GetFullName ()</strong>
+    </dt>
+    <dd>
+    Returns the full formatted onscreen name of the character (combining non-empty forename, clan name, family name, and other name).
+Concatenates active name slots in native UI display order: <code>Forename [ClanName] [FamilyName] [OtherName]</code>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        full composite name (e.g. "Witch-king NazgulClan Angmar the Nazgul")
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> name = char:<span class="function-name">GetFullName</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetInfluence"></a>
+    <strong>GetInfluence ()</strong>
+    </dt>
+    <dd>
+    Political influence / gravitas of the character.
+Used by the politics and senate simulation to evaluate political power and family standing.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        influence value
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> gravitas = char:<span class="function-name">GetInfluence</span>()
+<span class="keyword">if</span> gravitas &lt; <span class="number">15</span> <span class="keyword">then</span>
+    <span class="comment">-- Character lacks gravitas to secure ministerial offices
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetLoyalty"></a>
+    <strong>GetLoyalty ()</strong>
+    </dt>
+    <dd>
+    Calculated total loyalty level of the character (0 to 10), taking into account
+ruler authority, gravitas difference, marriage, ministerial offices, traits, and direct modifiers.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        total loyalty level clamped between 0 and 10
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> loyalty = char:<span class="function-name">GetLoyalty</span>()
+<span class="keyword">if</span> loyalty &lt;= <span class="number">2</span> <span class="keyword">then</span>
+    <span class="comment">-- Character is dangerously disloyal and at imminent risk of civil war or rebellion
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetLoyaltyFactorList"></a>
+    <strong>GetLoyaltyFactorList ()</strong>
+    </dt>
+    <dd>
+    Returns a key-value dictionary table breakdown of all active loyalty factors contributing to this character's loyalty.
+Each key is the database identifier from <code>loyalty_factors_tables</code> mapped to its integer point value (positive for loyalty bonuses, negative for grievances and penalties).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+        map of <code>[db_factor_key] = integer_point_value</code> for all active non-zero factors
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Sample returned table:
+</span><span class="comment">-- {
+</span><span class="comment">--     ["att_loyalty_factor_leader_authority"] = 2,
+</span><span class="comment">--     ["att_loyalty_factor_gravitas_difference"] = -3,
+</span><span class="comment">--     ["att_loyalty_factor_office_held"] = 1,
+</span><span class="comment">--     ["att_loyalty_factor_direct_modifier"] = -10
+</span><span class="comment">-- }
+</span>
+<span class="keyword">local</span> factors = char:<span class="function-name">GetLoyaltyFactorList</span>()
+
+<span class="comment">-- Check a specific grievance penalty:
+</span><span class="keyword">local</span> gravitas_penalty = factors[<span class="string">"att_loyalty_factor_gravitas_difference"</span>] <span class="keyword">or</span> <span class="number">0</span>
+<span class="keyword">if</span> gravitas_penalty &lt; <span class="number">0</span> <span class="keyword">then</span>
+    <span class="comment">-- Character resents the faction leader having lower gravitas
+</span><span class="keyword">end</span>
+
+<span class="comment">-- Sum total negative grievances:
+</span><span class="keyword">local</span> total_grievances = <span class="number">0</span>
+<span class="keyword">for</span> factor_key, points <span class="keyword">in</span> <span class="global">pairs</span>(factors) <span class="keyword">do</span>
+    <span class="keyword">if</span> points &lt; <span class="number">0</span> <span class="keyword">then</span>
+        total_grievances = total_grievances + points
+    <span class="keyword">end</span>
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetLoyaltyModifier"></a>
+    <strong>GetLoyaltyModifier ()</strong>
+    </dt>
+    <dd>
+    Direct loyalty modifier value applied to this character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        loyalty modifier value (between -128 and 127)
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> mod = char:<span class="function-name">GetLoyaltyModifier</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Memory address of the character object in hexadecimal format.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = char:<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetOtherName"></a>
+    <strong>GetOtherName ()</strong>
+    </dt>
+    <dd>
+    Active onscreen other name (title / nickname) of the character.
+Returns custom text if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherName">SetOtherName</a>, or the translated string from the database if set via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherNameKey">SetOtherNameKey</a>, or the database key as fallback.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        other name string
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> on = char:<span class="function-name">GetOtherName</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetOtherNameKey"></a>
+    <strong>GetOtherNameKey ()</strong>
+    </dt>
+    <dd>
+    Database localisation key for the character's other name/title (e.g.  <code>&quot;names_titles_the_great&quot;</code>).
+Returns the raw key string if assigned via database or <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherNameKey">SetOtherNameKey</a>, or an empty string if direct custom text was assigned via <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherName">SetOtherName</a>.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        database localisation key string, or empty string if custom text is used
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> key = char:<span class="function-name">GetOtherNameKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPoliticalParty"></a>
+    <strong>GetPoliticalParty ()</strong>
+    </dt>
+    <dd>
+    Returns the character's political party (<a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html#">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a>), or nil if none.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</span> or <span class="type">nil</span></span>
+        party object, or nil if none
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> party = char:<span class="function-name">GetPoliticalParty</span>()
+<span class="keyword">if</span> party <span class="keyword">and</span> <span class="keyword">not</span> party:<span class="function-name">IsPrimary</span>() <span class="keyword">then</span>
+    <span class="comment">-- Character belongs to an opposition house; reassign to the ruling party:
+</span>    <span class="keyword">local</span> ruler_party = faction:<span class="function-name">GetPrimaryParty</span>()
+    char:<span class="function-name">SetPoliticalParty</span>(ruler_party)
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetResurrectionTurns"></a>
+    <strong>GetResurrectionTurns ()</strong>
+    </dt>
+    <dd>
+    Turns remaining until resurrection for a wounded immortal character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        turns to resurrection
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> turns = char:<span class="function-name">GetResurrectionTurns</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetTraitList"></a>
+    <strong>GetTraitList ()</strong>
+    </dt>
+    <dd>
+    Returns a table array of all trait record keys currently present on this character.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+        array of trait key strings (e.g. <code>{&quot;att_trait_all_personality_brave&quot;, ...}</code>)
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Sample returned table:
+</span><span class="comment">-- {
+</span><span class="comment">--     [1] = "att_trait_all_personality_brave",
+</span><span class="comment">--     [2] = "att_trait_general_cavalry_commander",
+</span><span class="comment">--     [3] = "att_trait_all_political_ambitious"
+</span><span class="comment">-- }
+</span>
+<span class="keyword">local</span> traits = char:<span class="function-name">GetTraitList</span>()
+
+<span class="comment">-- Check if character has a specific trait:
+</span><span class="keyword">local</span> is_brave = <span class="keyword">false</span>
+<span class="keyword">for</span> _, trait_key <span class="keyword">in</span> <span class="global">ipairs</span>(traits) <span class="keyword">do</span>
+    <span class="keyword">if</span> trait_key == <span class="string">"att_trait_all_personality_brave"</span> <span class="keyword">then</span>
+        is_brave = <span class="keyword">true</span>
+        <span class="keyword">break</span>
+    <span class="keyword">end</span>
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "IsImmortal"></a>
+    <strong>IsImmortal ()</strong>
+    </dt>
+    <dd>
+    Checks whether the character is flagged as immortal (will be wounded instead of dying).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if immortal, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> immortal = char:<span class="function-name">IsImmortal</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "RemoveTrait"></a>
+    <strong>RemoveTrait (trait_key)</strong>
+    </dt>
+    <dd>
+    Removes the specified trait from this character and recalculates active character bonus effects and skill attributes.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">trait_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the trait record key to remove
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the trait was found and removed, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Remove a specific personality trait:
+</span><span class="keyword">local</span> ok = char:<span class="function-name">RemoveTrait</span>(<span class="string">"att_trait_all_personality_brave"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetActionPoints"></a>
+    <strong>SetActionPoints (value)</strong>
+    </dt>
+    <dd>
+    Sets the campaign action points for the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new action points (e.g. 0 to immobilize, 100+ for full movement)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Immobilize character for one turn:
+</span>char:<span class="function-name">SetActionPoints</span>(<span class="number">0</span>)
+
+<span class="comment">-- Restore full movement range:
+</span>char:<span class="function-name">SetActionPoints</span>(<span class="number">100</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetArtSet"></a>
+    <strong>SetArtSet (art_set_key)</strong>
+    </dt>
+    <dd>
+    Sets the art set for this character, immediately updating all 3D models (campaign map avatar, battle commander, politician panel) and 2D UI portholes/portraits.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">art_set_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         art set ID key from <code>campaign_character_art_sets_tables</code> (e.g. <code>&quot;att_general_nomadic_16&quot;</code>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false on failure
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Swap general appearance and portrait:
+</span>char:<span class="function-name">SetArtSet</span>(<span class="string">"att_general_nomadic_16"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetClanName"></a>
+    <strong>SetClanName (name)</strong>
+    </dt>
+    <dd>
+    Sets the clan name of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from <code>names.loc</code>, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanNameKey">SetClanNameKey</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         new custom clan name text in UTF-8
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetClanName</span>(<span class="string">"NazgulClan"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetClanNameKey"></a>
+    <strong>SetClanNameKey (key)</strong>
+    </dt>
+    <dd>
+    Sets the database localisation key for the character's clan name (e.g.  <code>&quot;names_name_12345&quot;</code>).
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (<code>names.loc</code>) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetClanName">SetClanName</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database localisation key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetClanNameKey</span>(<span class="string">"names_name_12345"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetDefaultBodyGuard"></a>
+    <strong>SetDefaultBodyGuard (unit_key)</strong>
+    </dt>
+    <dd>
+    Overrides the default bodyguard unit record for a general so that whenever
+the general is recruited into an army (including re-recruitment after being
+wounded or disbanded, or through 'Replace this general' in the UI), they
+receive this unit type as their default bodyguard. </p>
+
+<p>Persisted natively in savegames and read by the recruitment panel as the pre-selected default choice.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         unit record key from <code>main_units_tables</code> (e.g. <code>&quot;att_rom_cav_general_guards&quot;</code>, <code>&quot;att_merc_ger_agathyrsi_warriors&quot;</code>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the record was found and applied, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Assign an elite bodyguard to the general:
+</span><span class="keyword">local</span> ok = char:<span class="function-name">SetDefaultBodyGuard</span>(<span class="string">"att_merc_ger_agathyrsi_warriors"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetFamilyName"></a>
+    <strong>SetFamilyName (name)</strong>
+    </dt>
+    <dd>
+    Sets the family name (surname) of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from <code>names.loc</code>, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyNameKey">SetFamilyNameKey</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         new custom family name text in UTF-8
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetFamilyName</span>(<span class="string">"Angmar"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetFamilyNameKey"></a>
+    <strong>SetFamilyNameKey (key)</strong>
+    </dt>
+    <dd>
+    Sets the database localisation key for the character's family name (e.g.  <code>&quot;names_name_12345&quot;</code>).
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (<code>names.loc</code>) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetFamilyName">SetFamilyName</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database localisation key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetFamilyNameKey</span>(<span class="string">"names_name_12345"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetForename"></a>
+    <strong>SetForename (name)</strong>
+    </dt>
+    <dd>
+    Sets the forename of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from <code>names.loc</code>, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForenameKey">SetForenameKey</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         new custom forename text in UTF-8
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetForename</span>(<span class="string">"Witch-king"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetForenameKey"></a>
+    <strong>SetForenameKey (key)</strong>
+    </dt>
+    <dd>
+    Sets the database localisation key for the character's forename (e.g.  <code>&quot;names_name_12345&quot;</code>).
+Clears any active custom in-memory text, allowing the game engine to translate the name dynamically from localized database files (<code>names.loc</code>) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetForename">SetForename</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database localisation key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetForenameKey</span>(<span class="string">"names_name_12345"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetImmortal"></a>
+    <strong>SetImmortal (immortal)</strong>
+    </dt>
+    <dd>
+    Sets the immortality flag of the character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">immortal</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to make immortal, false to make mortal
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetImmortal</span>(<span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetInfluence"></a>
+    <strong>SetInfluence (value)</strong>
+    </dt>
+    <dd>
+    Sets the political influence / gravitas of the character.
+Persisted in savegames. Directly modifies the character's political weight in the faction senate.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new influence value
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Elevate character influence to qualify for high political office:
+</span>char:<span class="function-name">SetInfluence</span>(<span class="number">60</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetLoyaltyModifier"></a>
+    <strong>SetLoyaltyModifier (value)</strong>
+    </dt>
+    <dd>
+    Sets a direct loyalty modifier on the character that directly alters their overall loyalty score. </p>
+
+<p>To permanently zero out loyalty or prime a character for rebellion/defection, pass a strong negative value (e.g. <code>-100</code>).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new modifier value (-128 to 127)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Prime character for civil war / defection:
+</span>char:<span class="function-name">SetLoyaltyModifier</span>(-<span class="number">100</span>)
+
+<span class="comment">-- Reward character with a loyalty boost (+10):
+</span>char:<span class="function-name">SetLoyaltyModifier</span>(<span class="number">10</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetOtherName"></a>
+    <strong>SetOtherName (name)</strong>
+    </dt>
+    <dd>
+    Sets the other name (title / nickname) of the character as direct custom text (UTF-8).
+Clears any existing database localisation key, ensuring the custom string is displayed directly across all UI panels regardless of game language. Persisted natively across turns and save/load.
+To use a localized string from <code>names_titles_tables</code> / <code>names.loc</code>, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherNameKey">SetOtherNameKey</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         new other name custom text (e.g. "the Nazgul")
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetOtherName</span>(<span class="string">"the Nazgul"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetOtherNameKey"></a>
+    <strong>SetOtherNameKey (key)</strong>
+    </dt>
+    <dd>
+    Sets the database localisation key for the character's other name/title (e.g.  <code>&quot;names_titles_the_great&quot;</code>).
+Clears any active custom in-memory text, allowing the game engine to translate the title dynamically from localized database files (<code>names.loc</code>) based on the player's active language. Persisted natively across turns and save/load.
+To assign arbitrary text without editing database files, use <a href="../modules/CHARACTER_SCRIPT_INTERFACE.html#SetOtherName">SetOtherName</a> instead.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database localisation key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetOtherNameKey</span>(<span class="string">"names_titles_the_great"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetPoliticalParty"></a>
+    <strong>SetPoliticalParty (party)</strong>
+    </dt>
+    <dd>
+    Sets the character's political party allegiance. </p>
+
+<p>Supports two calling styles:
+- <strong>Party userdata</strong>: <code>char:SetPoliticalParty(party_obj)</code>
+- <strong>Party record key string</strong>: <code>char:SetPoliticalParty(&quot;att_politics_hunni_council&quot;)</code></p>
+
+<p>Directly updates the character's party pointer in memory and updates family tree representation.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">party</span>
+            <span class="types"><span class="type">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</span> or <a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         party object or party record key string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if successfully set, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Option 1: Assign via party userdata:
+</span><span class="keyword">local</span> ruler_party = faction:<span class="function-name">GetPrimaryParty</span>()
+char:<span class="function-name">SetPoliticalParty</span>(ruler_party)
+
+<span class="comment">-- Option 2: Assign via database record key:
+</span>char:<span class="function-name">SetPoliticalParty</span>(<span class="string">"att_politics_hunni_council"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetResurrectionTurns"></a>
+    <strong>SetResurrectionTurns (turns)</strong>
+    </dt>
+    <dd>
+    Sets the turns remaining until resurrection for a wounded immortal character.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">turns</span>
+            <span class="types"><span class="type">integer</span></span>
+         resurrection countdown turns (0 for healthy/ready)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">char:<span class="function-name">SetResurrectionTurns</span>(<span class="number">3</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "TransferToFaction"></a>
+    <strong>TransferToFaction (target_faction[, options])</strong>
+    </dt>
+    <dd>
+    Instantly transfers the character and their commanded military force to another faction in the current tick. </p>
+
+<p>Automatic engine side-effects:
+- Unassigns any active governorship or minister post held by the character.
+- Ends active trade commerce raids and updates trade routes.
+- Cancels pending political actions targeting this character.
+- Reassigns all units, recalculates senior unit commander, and re-sorts force containers.
+- Emits native events (<code>MILITARY_FORCE_FACTION_CHANGE</code>, <code>REPORT_CHARACTER_RENDER_DETAILS_CHANGE</code>, <code>CHARACTER_FACTION_CHANGE</code>).
+- Reloads character voiceover culture and lines if the receiving faction is human-controlled.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">target_faction</span>
+            <span class="types"><span class="type">FACTION_SCRIPT_INTERFACE</span></span>
+         target faction receiving the character and their force
+        </li>
+        <li><span class="parameter">options</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+         optional table <code>{ replenish_units = false, rebel_region = nil }</code>:
+- <code>replenish_units</code> (boolean): if true, restores all units in the force to 100% full soldier capacity.
+- <code>rebel_region</code> (<a href="../modules/REGION_SCRIPT_INTERFACE.html#">REGION_SCRIPT_INTERFACE</a>|nil): optional region interface. When provided, binds the army to this region as a provincial rebel force with rebel AI objectives and unrest reduction upon defeat.
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <li><pre class="example"><span class="comment">-- Basic transfer:
+</span>char:<span class="function-name">TransferToFaction</span>(target_faction)</pre></li>
+        <li><pre class="example"> <span class="comment">-- Transfer with options:
+</span>char:<span class="function-name">TransferToFaction</span>(target_faction, {
+    replenish_units = <span class="keyword">true</span>,         <span class="comment">-- replenish all units to 100% strength (default: false)
+</span>    rebel_region = region           <span class="comment">-- bind as provincial rebel army in this region (default: nil)
+</span>})</pre></li>
+    </ul>
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

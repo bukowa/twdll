@@ -1,0 +1,540 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.tweakers.html">twdll.tweakers</a></li>
+  <li><strong>twdll.world</strong></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="../topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>twdll.world</code></h1>
+<p>
+
+</p>
+<p> Campaign world singleton and world-level modifiers for Total War: Attila.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#ExitGame">ExitGame ()</a></td>
+	<td class="summary">Requests the engine to cleanly exit the game process to Windows.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#ExitToMainMenu">ExitToMainMenu ()</a></td>
+	<td class="summary">Requests the engine to cleanly exit the active campaign and return to the main menu.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFactionCount">GetFactionCount ()</a></td>
+	<td class="summary">Gets the total number of factions existing in the current campaign world.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxTraits">GetMaxTraits ()</a></td>
+	<td class="summary">Gets the maximum number of traits a character can hold simultaneously (vanilla default is 10).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxUnitsInArmy">GetMaxUnitsInArmy ()</a></td>
+	<td class="summary">Gets the maximum number of units allowed per land army (vanilla default: 20).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMaxUnitsInNavy">GetMaxUnitsInNavy ()</a></td>
+	<td class="summary">Gets the maximum number of units allowed per naval fleet (vanilla default: 20).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Returns the memory address of the WORLD singleton as a hexadecimal string.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetReinforcementCap">GetReinforcementCap ()</a></td>
+	<td class="summary">Returns the currently applied reinforcement cap override, or nil if the game default is in effect.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#LoadGame">LoadGame (filename)</a></td>
+	<td class="summary">Requests the engine to load a saved game from disk at the end of the current tick.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SaveGame">SaveGame (filename)</a></td>
+	<td class="summary">Saves the active campaign game to disk.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxTraits">SetMaxTraits ([val])</a></td>
+	<td class="summary">Sets the maximum number of traits a character can hold simultaneously.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxUnitsInArmy">SetMaxUnitsInArmy ([val])</a></td>
+	<td class="summary">Sets the maximum number of units allowed per land army.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMaxUnitsInNavy">SetMaxUnitsInNavy ([val])</a></td>
+	<td class="summary">Sets the maximum number of units allowed per naval fleet.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetReinforcementCap">SetReinforcementCap ([max_units])</a></td>
+	<td class="summary">Sets the reinforcement cap (maximum concurrent units per army in tactical battles) for battles started
+after this call.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "ExitGame"></a>
+    <strong>ExitGame ()</strong>
+    </dt>
+    <dd>
+    Requests the engine to cleanly exit the game process to Windows.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        <code>true</code> if the exit request was dispatched
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.world.<span class="function-name">ExitGame</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "ExitToMainMenu"></a>
+    <strong>ExitToMainMenu ()</strong>
+    </dt>
+    <dd>
+    Requests the engine to cleanly exit the active campaign and return to the main menu.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        <code>true</code> if the exit request was dispatched
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.world.<span class="function-name">ExitToMainMenu</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetFactionCount"></a>
+    <strong>GetFactionCount ()</strong>
+    </dt>
+    <dd>
+    Gets the total number of factions existing in the current campaign world.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        number of factions, or nil if not yet initialised
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> total_factions = twdll.world.<span class="function-name">GetFactionCount</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMaxTraits"></a>
+    <strong>GetMaxTraits ()</strong>
+    </dt>
+    <dd>
+    Gets the maximum number of traits a character can hold simultaneously (vanilla default is 10).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum trait count
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> max_traits = twdll.world.<span class="function-name">GetMaxTraits</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMaxUnitsInArmy"></a>
+    <strong>GetMaxUnitsInArmy ()</strong>
+    </dt>
+    <dd>
+    Gets the maximum number of units allowed per land army (vanilla default: 20).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum unit count
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> max_army_units = twdll.world.<span class="function-name">GetMaxUnitsInArmy</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMaxUnitsInNavy"></a>
+    <strong>GetMaxUnitsInNavy ()</strong>
+    </dt>
+    <dd>
+    Gets the maximum number of units allowed per naval fleet (vanilla default: 20).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        maximum unit count
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> max_navy_units = twdll.world.<span class="function-name">GetMaxUnitsInNavy</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Returns the memory address of the WORLD singleton as a hexadecimal string.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">nil</span></span>
+        memory address (e.g. "0x12345678"), or nil if not yet initialised
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = twdll.world.<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetReinforcementCap"></a>
+    <strong>GetReinforcementCap ()</strong>
+    </dt>
+    <dd>
+    Returns the currently applied reinforcement cap override, or nil if the game default is in effect.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        current cap value, or nil if default
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> cap = twdll.world.<span class="function-name">GetReinforcementCap</span>()
+<span class="keyword">if</span> cap <span class="keyword">then</span>
+    <span class="comment">-- An override is currently active
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "LoadGame"></a>
+    <strong>LoadGame (filename)</strong>
+    </dt>
+    <dd>
+    Requests the engine to load a saved game from disk at the end of the current tick.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">filename</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         save game filename (e.g. <code>&quot;my_checkpoint&quot;</code> or <code>&quot;tests.save&quot;</code>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        <code>true</code> if the load request was successfully dispatched
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.world.<span class="function-name">LoadGame</span>(<span class="string">"tests.save"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SaveGame"></a>
+    <strong>SaveGame (filename)</strong>
+    </dt>
+    <dd>
+    Saves the active campaign game to disk.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">filename</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         save game filename (with or without <code>.save</code> extension)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        <code>true</code> if the save succeeded, <code>false</code> otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> success = twdll.world.<span class="function-name">SaveGame</span>(<span class="string">"my_checkpoint"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMaxTraits"></a>
+    <strong>SetMaxTraits ([val])</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of traits a character can hold simultaneously.
+Prevents new traits from being discarded when a character exceeds 10 traits.
+Pass no arguments or <code>nil</code> to restore the vanilla engine default (10).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">val</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum trait count (e.g. 20, 30, 50), or omit/nil to restore the default
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Expand character trait limit to 30:
+</span>twdll.world.<span class="function-name">SetMaxTraits</span>(<span class="number">30</span>)
+
+<span class="comment">-- Restore vanilla default (10):
+</span>twdll.world.<span class="function-name">SetMaxTraits</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMaxUnitsInArmy"></a>
+    <strong>SetMaxUnitsInArmy ([val])</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of units allowed per land army.
+Affects recruitment limits, army stacking, and UI capacity.
+Pass no arguments or <code>nil</code> to restore the vanilla engine default (20).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">val</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum unit count (e.g. 40), or omit/nil to restore the default
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Allow up to 40 units per land army:
+</span>twdll.world.<span class="function-name">SetMaxUnitsInArmy</span>(<span class="number">40</span>)
+
+<span class="comment">-- Restore vanilla default (20):
+</span>twdll.world.<span class="function-name">SetMaxUnitsInArmy</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMaxUnitsInNavy"></a>
+    <strong>SetMaxUnitsInNavy ([val])</strong>
+    </dt>
+    <dd>
+    Sets the maximum number of units allowed per naval fleet.
+Affects naval recruitment limits and fleet stacking.
+Pass no arguments or <code>nil</code> to restore the vanilla engine default (20).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">val</span>
+            <span class="types"><span class="type">integer</span></span>
+         new maximum unit count (e.g. 30), or omit/nil to restore the default
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Allow up to 30 ships per naval fleet:
+</span>twdll.world.<span class="function-name">SetMaxUnitsInNavy</span>(<span class="number">30</span>)
+
+<span class="comment">-- Restore vanilla default (20):
+</span>twdll.world.<span class="function-name">SetMaxUnitsInNavy</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetReinforcementCap"></a>
+    <strong>SetReinforcementCap ([max_units])</strong>
+    </dt>
+    <dd>
+    Sets the reinforcement cap (maximum concurrent units per army in tactical battles) for battles started
+after this call.  Pass no arguments or <code>nil</code> to restore the vanilla engine default.
+Any value <code>&gt;= 0</code> is applied as an absolute cap.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">max_units</span>
+            <span class="types"><span class="type">integer</span></span>
+         new cap value (e.g. 40, 80), or omit/nil to restore the default
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Allow up to 40 reinforcement units simultaneously in tactical battle:
+</span>twdll.world.<span class="function-name">SetReinforcementCap</span>(<span class="number">40</span>)
+
+<span class="comment">-- Restore vanilla behavior:
+</span>twdll.world.<span class="function-name">SetReinforcementCap</span>()</pre>
+    </ul>
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

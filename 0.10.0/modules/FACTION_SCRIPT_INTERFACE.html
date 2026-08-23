@@ -1,0 +1,626 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.tweakers.html">twdll.tweakers</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><strong>FACTION_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="../topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>FACTION_SCRIPT_INTERFACE</code></h1>
+<p>
+
+</p>
+<p> Extensions to the game's faction object.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#CreateAgent">CreateAgent (agent_key[, settlement_or_x[, y]])</a></td>
+	<td class="summary">Creates and spawns a new agent character on the campaign map for this faction in the current tick.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMemoryAddress">GetMemoryAddress ()</a></td>
+	<td class="summary">Memory address of the faction object in hexadecimal format.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetPoliticalParty">GetPoliticalParty (party_key)</a></td>
+	<td class="summary">Retrieves the political party in this faction matching the given record key.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetPoliticalPartyList">GetPoliticalPartyList ()</a></td>
+	<td class="summary">List interface (<a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html#">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a>) for the faction's campaign political parties.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetPrimaryParty">GetPrimaryParty ()</a></td>
+	<td class="summary">Primary (leading / ruling) political party of the faction.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetTechnologyStatus">GetTechnologyStatus (technology_key)</a></td>
+	<td class="summary">Gets the current research status of a technology for this faction.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetTreasury">GetTreasury ()</a></td>
+	<td class="summary">Amount of gold in the faction's treasury.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#HasPoliticalParties">HasPoliticalParties ()</a></td>
+	<td class="summary">Checks whether the faction participates in the campaign politics system and has political parties.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#InstantlyResearchTechnology">InstantlyResearchTechnology (technology_key[, report_to_ui=false])</a></td>
+	<td class="summary">Instantly completes research of the given technology for the faction, using the
+game's own internal path for finishing a technology.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetCapital">SetCapital (region)</a></td>
+	<td class="summary">Makes the specified region the faction's primary capital / home region.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFactionLeader">SetFactionLeader (new_character[, old_character[, heir_coming_of_age=false]])</a></td>
+	<td class="summary">Sets a new leader for the faction.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetTechnologyStatus">SetTechnologyStatus (technology_key, status)</a></td>
+	<td class="summary">Sets the research status of a technology for this faction and recalculates effects and availabilities.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetTreasury">SetTreasury (value)</a></td>
+	<td class="summary">Sets the amount of gold in the faction's treasury.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "CreateAgent"></a>
+    <strong>CreateAgent (agent_key[, settlement_or_x[, y]])</strong>
+    </dt>
+    <dd>
+    Creates and spawns a new agent character on the campaign map for this faction in the current tick. </p>
+
+<p>Supports two calling styles:
+- <strong>Settlement</strong>: <code>faction:CreateAgent(agent_key, settlement)</code> — spawns the agent on the campaign map adjacent to the specified settlement.
+- <strong>Map coordinates</strong>: <code>faction:CreateAgent(agent_key, x, y)</code> — spawns the agent at or adjacent to the specified map coordinates.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">agent_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         database key of the agent (e.g. <code>&quot;champion&quot;</code>, <code>&quot;spy&quot;</code>, <code>&quot;dignitary&quot;</code>, <code>&quot;priest&quot;</code>)
+        </li>
+        <li><span class="parameter">settlement_or_x</span>
+            <span class="types"><span class="type">userdata</span> or <span class="type">number</span></span>
+         <code>SETTLEMENT_SCRIPT_INTERFACE</code> object or map X coordinate (defaults to faction capital)
+         (<em>optional</em>)
+        </li>
+        <li><span class="parameter">y</span>
+            <span class="types"><span class="type">number</span></span>
+         map Y coordinate (required when <code>settlement_or_x</code> is an X coordinate)
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Example 1: Spawn a champion next to a settlement
+</span><span class="keyword">local</span> capital = faction:<span class="function-name">home_region</span>():<span class="function-name">settlement</span>()
+faction:<span class="function-name">CreateAgent</span>(<span class="string">"champion"</span>, capital)
+
+<span class="comment">-- Example 2: Spawn a dignitary at specific map coordinates (x, y)
+</span>faction:<span class="function-name">CreateAgent</span>(<span class="string">"dignitary"</span>, <span class="number">516</span>, <span class="number">381</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMemoryAddress"></a>
+    <strong>GetMemoryAddress ()</strong>
+    </dt>
+    <dd>
+    Memory address of the faction object in hexadecimal format.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        memory address (e.g. "0x12345678")
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> addr = faction:<span class="function-name">GetMemoryAddress</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPoliticalParty"></a>
+    <strong>GetPoliticalParty (party_key)</strong>
+    </dt>
+    <dd>
+    Retrieves the political party in this faction matching the given record key.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">party_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the party record key from <code>political_parties_tables</code> (e.g. <code>&quot;att_politics_hunni_ruler&quot;</code>, <code>&quot;att_politics_hunni_council&quot;</code>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</span> or <span class="type">nil</span></span>
+        political party object, or nil if not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> party = faction:<span class="function-name">GetPoliticalParty</span>(<span class="string">"att_politics_hunni_ruler"</span>)
+<span class="keyword">if</span> party <span class="keyword">then</span>
+    twdll.core.<span class="function-name">Log</span>(<span class="string">"Found party with senators:"</span>, party:<span class="function-name">GetSenators</span>())
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPoliticalPartyList"></a>
+    <strong>GetPoliticalPartyList ()</strong>
+    </dt>
+    <dd>
+    List interface (<a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html#">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a>) for the faction's campaign political parties.
+Use <code>num_items()</code> and zero-based <code>item_at(index)</code> to iterate the parties.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</span></span>
+        list interface for the faction's campaign political parties
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> party_list = faction:<span class="function-name">GetPoliticalPartyList</span>()
+<span class="keyword">for</span> i = <span class="number">0</span>, party_list:<span class="function-name">num_items</span>() - <span class="number">1</span> <span class="keyword">do</span>
+    <span class="keyword">local</span> party = party_list:<span class="function-name">item_at</span>(i)
+    twdll.core.<span class="function-name">Log</span>(<span class="global">string</span>.<span class="function-name">format</span>(<span class="string">"Party [%s]: Senators=%d, Power=%.1f%%, Primary=%s"</span>,
+        party:<span class="function-name">GetKey</span>(), party:<span class="function-name">GetSenators</span>(), party:<span class="function-name">GetPower</span>() * <span class="number">100</span>, <span class="global">tostring</span>(party:<span class="function-name">IsPrimary</span>())))
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPrimaryParty"></a>
+    <strong>GetPrimaryParty ()</strong>
+    </dt>
+    <dd>
+    Primary (leading / ruling) political party of the faction.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</span> or <span class="type">nil</span></span>
+        primary political party object, or nil if none
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> ruler_party = faction:<span class="function-name">GetPrimaryParty</span>()
+<span class="keyword">if</span> ruler_party <span class="keyword">then</span>
+    twdll.core.<span class="function-name">Log</span>(<span class="string">"Ruling party key:"</span>, ruler_party:<span class="function-name">GetKey</span>(), <span class="string">"Senators:"</span>, ruler_party:<span class="function-name">GetSenators</span>())
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetTechnologyStatus"></a>
+    <strong>GetTechnologyStatus (technology_key)</strong>
+    </dt>
+    <dd>
+    Gets the current research status of a technology for this faction. </p>
+
+<p>Status enum values:
+- <code>0</code> = <code>RESEARCHED</code> (fully unlocked and active)
+- <code>1</code> = <code>RESEARCHED_BUT_DISABLED</code> (researched, but effect bundle disabled)
+- <code>2</code> = <code>BEING_RESEARCHED</code> (currently selected in faction research queue)
+- <code>3</code> = <code>AVAILABLE</code> (all prerequisites met, eligible to be researched)
+- <code>4</code> = <code>UNAVAILABLE</code> (prerequisites missing / locked in technology tree)
+- <code>5</code> = <code>NOT_PRESENT</code> (technology node not present in faction's tree)
+- <code>6</code> = <code>LOCKED_FACTION_LEVEL</code> (locked by faction imperium / tier level)
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key from <code>technologies_tables</code>
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        status integer (0=RESEARCHED, 1=RESEARCHED<em>BUT</em>DISABLED, 2=BEING<em>RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT</em>PRESENT, 6=LOCKED<em>FACTION</em>LEVEL), or nil if not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> status = faction:<span class="function-name">GetTechnologyStatus</span>(<span class="string">"att_hunnic_military_tactical_formations"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetTreasury"></a>
+    <strong>GetTreasury ()</strong>
+    </dt>
+    <dd>
+    Amount of gold in the faction's treasury.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        current treasury gold amount
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> gold = faction:<span class="function-name">GetTreasury</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "HasPoliticalParties"></a>
+    <strong>HasPoliticalParties ()</strong>
+    </dt>
+    <dd>
+    Checks whether the faction participates in the campaign politics system and has political parties.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the faction has at least one political party, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> faction:<span class="function-name">HasPoliticalParties</span>() <span class="keyword">then</span>
+    <span class="keyword">local</span> parties = faction:<span class="function-name">GetPoliticalPartyList</span>()
+    twdll.core.<span class="function-name">Log</span>(<span class="string">"Faction has politics with party count:"</span>, parties:<span class="function-name">num_items</span>())
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "InstantlyResearchTechnology"></a>
+    <strong>InstantlyResearchTechnology (technology_key[, report_to_ui=false])</strong>
+    </dt>
+    <dd>
+    Instantly completes research of the given technology for the faction, using the
+game's own internal path for finishing a technology. </p>
+
+<p>This triggers all native engine completion mechanics:
+- Fires research completion campaign events.
+- Grants technology-related campaign achievements.
+- Applies unit upgrades and building unlocks immediately.
+- Completes parent prerequisites automatically.</p>
+
+<p>Note: this differs from the game's built-in <code>cm:unlock_technology</code>, which only
+makes a technology selectable in the UI and never actually finishes research.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key from <code>technologies_tables</code> (e.g. <code>&quot;att_tech_military_barracks&quot;</code>, <code>&quot;att_hunnic_military_combat_at_distance&quot;</code>)
+        </li>
+        <li><span class="parameter">report_to_ui</span>
+            <span class="types"><span class="type">boolean</span></span>
+         whether to generate UI event feed messages (default: false)
+         (<em>default</em> false)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if the technology was found and completed, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> ok = faction:<span class="function-name">InstantlyResearchTechnology</span>(<span class="string">"att_hunnic_military_combat_at_distance"</span>)
+<span class="keyword">if</span> ok <span class="keyword">then</span>
+    twdll.core.<span class="function-name">Log</span>(<span class="string">"Technology researched instantly!"</span>)
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetCapital"></a>
+    <strong>SetCapital (region)</strong>
+    </dt>
+    <dd>
+    Makes the specified region the faction's primary capital / home region. </p>
+
+<p>Works even if the faction currently has no home region (e.g. horde settling): properly assigns
+the faction's capital, original home region, and home theatre.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">region</span>
+            <span class="types"><span class="type">REGION_SCRIPT_INTERFACE</span></span>
+         the region to become the new capital
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> region = game:<span class="function-name">model</span>():<span class="function-name">world</span>():<span class="function-name">region_manager</span>():<span class="function-name">region_by_key</span>(<span class="string">"att_reg_scandza_hafn"</span>)
+faction:<span class="function-name">SetCapital</span>(region)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetFactionLeader"></a>
+    <strong>SetFactionLeader (new_character[, old_character[, heir_coming_of_age=false]])</strong>
+    </dt>
+    <dd>
+    Sets a new leader for the faction. </p>
+
+<p>Supports three operational modes:
+1. <strong>Silent swap</strong> (<code>faction:SetFactionLeader(new_char)</code>): changes the faction leader immediately without firing succession events or modifying political stability.
+2. <strong>Standard succession</strong> (<code>faction:SetFactionLeader(new_char, old_char)</code>): triggers the standard <code>faction_succession</code> (or <code>faction_succession_regency</code>) campaign event.
+3. <strong>Heir coming of age</strong> (<code>faction:SetFactionLeader(new_char, old_char, true)</code>): triggers the <code>faction_succession_heir_comes_of_age</code> campaign event.</p>
+
+<p>Automatically resets the new leader's heir status and aligns political party leadership.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">new_character</span>
+            <span class="types"><span class="type">CHARACTER_SCRIPT_INTERFACE</span></span>
+         the character to become the new leader
+        </li>
+        <li><span class="parameter">old_character</span>
+            <span class="types"><span class="type">CHARACTER_SCRIPT_INTERFACE</span></span>
+         the outgoing leader (triggers succession event if provided)
+         (<em>optional</em>)
+        </li>
+        <li><span class="parameter">heir_coming_of_age</span>
+            <span class="types"><span class="type">boolean</span></span>
+         fire the heir-comes-of-age event variant (default: false)
+         (<em>default</em> false)
+        </li>
+    </ul>
+
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Mode 1: Silent swap without event popup:
+</span>faction:<span class="function-name">SetFactionLeader</span>(new_general)
+
+<span class="comment">-- Mode 2: Standard succession with in-game succession event:
+</span><span class="keyword">local</span> old_leader = faction:<span class="function-name">faction_leader</span>()
+faction:<span class="function-name">SetFactionLeader</span>(new_general, old_leader)
+
+<span class="comment">-- Mode 3: Heir coming of age succession:
+</span>faction:<span class="function-name">SetFactionLeader</span>(heir_general, old_leader, <span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetTechnologyStatus"></a>
+    <strong>SetTechnologyStatus (technology_key, status)</strong>
+    </dt>
+    <dd>
+    Sets the research status of a technology for this faction and recalculates effects and availabilities. </p>
+
+<p>Status enum values:
+- <code>0</code> = <code>RESEARCHED</code> (instantly unlocks and applies all faction effects)
+- <code>1</code> = <code>RESEARCHED_BUT_DISABLED</code> (marks researched, but disables faction bonuses)
+- <code>2</code> = <code>BEING_RESEARCHED</code> (sets as active research target)
+- <code>3</code> = <code>AVAILABLE</code> (makes available to be clicked and researched)
+- <code>4</code> = <code>UNAVAILABLE</code> (locks / disables from research)
+- <code>5</code> = <code>NOT_PRESENT</code> (marks unassigned)
+- <code>6</code> = <code>LOCKED_FACTION_LEVEL</code> (locks under faction level requirements)</p>
+
+<h3>Engine Save / Load Behavior &amp; Persistence Notice:</h3>
+<p>The vanilla Total War save format (<code>.save</code>) only serializes the list of researched technologies (<code>RESEARCHED = 0</code> and <code>RESEARCHED_BUT_DISABLED = 1</code>) in its <code>RESEARCHED_TECHS</code> block. Intermediate non-researched states (<code>AVAILABLE = 3</code>, <code>UNAVAILABLE = 4</code>, <code>BEING_RESEARCHED = 2</code>, <code>LOCKED_FACTION_LEVEL = 6</code>) are never serialized to disk; they are dynamically reconstructed upon campaign load by the engine's database dependency solver (<code>technologies_nodes_tables</code>).</p>
+
+<p>Furthermore, during save loading (<code>post_load_fixup</code>), the engine's native solver recursively ensures that all parent prerequisites of any researched child technology are automatically marked as researched (<code>0</code>).</p>
+
+<h3>Recommendation for Modders:</h3>
+<p>If your script sets non-standard tree states (e.g. locking specific parent nodes while children are researched, or manually setting nodes to <code>UNAVAILABLE = 4</code>), re-apply your <a href="../modules/FACTION_SCRIPT_INTERFACE.html#SetTechnologyStatus">SetTechnologyStatus</a> calls in a <code>FirstTickAfterWorldCreated</code> or <code>LoadingGame</code> campaign event callback upon loading a save game.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">technology_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         the technology record key from <code>technologies_tables</code>
+        </li>
+        <li><span class="parameter">status</span>
+            <span class="types"><span class="type">integer</span></span>
+         status integer (0=RESEARCHED, 1=RESEARCHED<em>BUT</em>DISABLED, 2=BEING<em>RESEARCHED, 3=AVAILABLE, 4=UNAVAILABLE, 5=NOT</em>PRESENT, 6=LOCKED<em>FACTION</em>LEVEL)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Revert a researched technology back to available (unresearched):
+</span>faction:<span class="function-name">SetTechnologyStatus</span>(<span class="string">"att_hunnic_military_tactical_formations"</span>, <span class="number">3</span>)
+
+<span class="comment">-- Re-apply custom lock on campaign load:
+</span>events.FirstTickAfterWorldCreated[#events.FirstTickAfterWorldCreated + <span class="number">1</span>] = <span class="keyword">function</span>()
+    faction:<span class="function-name">SetTechnologyStatus</span>(<span class="string">"att_hunnic_military_supply_acquisition"</span>, <span class="number">4</span>)
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetTreasury"></a>
+    <strong>SetTreasury (value)</strong>
+    </dt>
+    <dd>
+    Sets the amount of gold in the faction's treasury.
+Persisted natively in savegames and immediately available for building and recruitment.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new gold amount
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Give faction 50,000 gold:
+</span>faction:<span class="function-name">SetTreasury</span>(<span class="number">50000</span>)</pre>
+    </ul>
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

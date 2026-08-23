@@ -1,70 +1,195 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>twdll Documentation - Game Selection</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 40px auto;
-            padding: 0 20px;
-            background-color: #f6f8fa;
-        }
-        .game-selector {
-            background-color: #ffffff;
-            border: 1px solid #d1d5da;
-            padding: 30px;
-            border-radius: 6px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-            text-align: center;
-        }
-        h1 { color: #111; margin-bottom: 30px; }
-        .game-buttons {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            margin-top: 30px;
-        }
-        .game-button {
-            display: inline-block;
-            padding: 15px 30px;
-            background-color: #6f42c1;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: background-color 0.2s ease-in-out;
-        }
-        .game-button:hover {
-            background-color: #5833a5;
-        }
-        .game-button.rome2 {
-            background-color: #28a745;
-        }
-        .game-button.rome2:hover {
-            background-color: #218838;
-        }
-        .game-button.attila {
-            background-color: #dc3545;
-        }
-        .game-button.attila:hover {
-            background-color: #c82333;
-        }
-    </style>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="ldoc.css" type="text/css" />
 </head>
 <body>
-    <div class="game-selector">
-        <h1>libtwdll API Documentation</h1>
-        <p>Choose the game version for which you want to view the documentation:</p>
 
-        <div class="game-buttons">
-            <a href="./rome2/" class="game-button rome2">Total War: Rome II</a>
-            <a href="./attila/" class="game-button attila">Total War: Attila</a>
-        </div>
-    </div>
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="modules/twdll.tweakers.html">twdll.tweakers</a></li>
+  <li><a href="modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+
+  <h2>Lua bindings for Total War: Attila</h2>
+  <p>Load the DLL from the campaign script — <code>campaigns/&lt;campaign&gt;/scripting.lua</code> — exactly as the test suite does.</p>
+
+<p>twdll hooks game singletons (world, campaign UI, campaign model) on first load; those are only constructed once a campaign world exists. Calling singleton-dependent functions any earlier (e.g. from the main menu or a global script) can return <code>nil</code> or crash.</p>
+
+<p>Not every function requires this: plain utilities (<a href="modules/twdll.core.html#Log">twdll.core.Log</a>, <a href="modules/twdll.core.html#GameBuild">twdll.core.GameBuild</a>) and functions that read fixed module offsets work regardless of where they are called. This is how the current hook architecture works, not a permanent contract — it may change in the future.</p>
+
+<h2>Modules</h2>
+<table class="module_list">
+	<tr>
+		<td class="name" nowrap><a href="modules/twdll.battle.html">twdll.battle</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/twdll.cai.html">twdll.cai</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/twdll.campaign_ui.html">twdll.campaign_ui</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/twdll.core.html">twdll.core</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/twdll.model.html">twdll.model</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/twdll.tweakers.html">twdll.tweakers</a></td>
+		<td class="summary">Engine tweakers and campaign variables runtime access.</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/twdll.world.html">twdll.world</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+	<tr>
+		<td class="name" nowrap><a href="modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></td>
+		<td class="summary">
+
+</td>
+	</tr>
+</table>
+<h2>Topics</h2>
+<table class="module_list">
+	<tr>
+		<td class="name" nowrap><a href="topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory.md</a></td>
+		<td class="summary"></td>
+	</tr>
+</table>
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
 </body>
 </html>

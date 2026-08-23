@@ -1,0 +1,552 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.tweakers.html">twdll.tweakers</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><strong>ARTSET_SCRIPT_INTERFACE</strong></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="../topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>ARTSET_SCRIPT_INTERFACE</code></h1>
+<p>
+
+</p>
+<p> Art set userdata for character portraits and cultural variations.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#GetAgent">GetAgent ()</a></td>
+	<td class="summary">Allocated agent type key (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetCulture">GetCulture ()</a></td>
+	<td class="summary">Allocated culture key for this art set (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFaction">GetFaction ()</a></td>
+	<td class="summary">Allocated faction key for this art set (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetGroup">GetGroup ()</a></td>
+	<td class="summary">Campaign group key from <code>campaign_character_art_set_groups_tables</code> (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetKey">GetKey ()</a></td>
+	<td class="summary">Art set record key ID from <code>campaign_character_art_sets_tables</code> (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetPortraitPath">GetPortraitPath ()</a></td>
+	<td class="summary">Resolved 2D portrait diffuse PNG file path used by the UI.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetSettingsId">GetSettingsId ()</a></td>
+	<td class="summary">Unique 3D portrait camera settings ID string (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetSubculture">GetSubculture ()</a></td>
+	<td class="summary">Allocated subculture key for this art set (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#HasAging">HasAging ()</a></td>
+	<td class="summary">Checks whether this art set supports visual aging stages (young, middle-aged, old).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#HasHealth">HasHealth ()</a></td>
+	<td class="summary">Checks whether this art set supports health/wound visual variations.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#HasLevelling">HasLevelling ()</a></td>
+	<td class="summary">Checks whether this art set supports rank-based visual upgrades (improved armor/regalia with character rank).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#HasReligion">HasReligion ()</a></td>
+	<td class="summary">Checks whether this art set supports religious visual variations.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#HasSeasonal">HasSeasonal ()</a></td>
+	<td class="summary">Checks whether this art set supports seasonal visual variations (winter furs/gear).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#IsCustom">IsCustom ()</a></td>
+	<td class="summary">Checks whether this art set is a custom unique set (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#IsFactionLeaderSet">IsFactionLeaderSet ()</a></td>
+	<td class="summary">Checks whether this art set is specifically configured for faction leaders (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#IsMale">IsMale ()</a></td>
+	<td class="summary">Checks whether this art set represents a male character model.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "GetAgent"></a>
+    <strong>GetAgent ()</strong>
+    </dt>
+    <dd>
+    Allocated agent type key (e.g.  <code>&quot;general&quot;</code>, <code>&quot;champion&quot;</code>, <code>&quot;spy&quot;</code>, <code>&quot;dignitary&quot;</code>).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        agent database key
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> art_set:<span class="function-name">GetAgent</span>() == <span class="string">"general"</span> <span class="keyword">then</span>
+    <span class="comment">-- Art set is designed for army commanders
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetCulture"></a>
+    <strong>GetCulture ()</strong>
+    </dt>
+    <dd>
+    Allocated culture key for this art set (e.g.  <code>&quot;att_cult_nomadic&quot;</code>, <code>&quot;att_cult_roman&quot;</code>).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        culture database key
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> culture = art_set:<span class="function-name">GetCulture</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetFaction"></a>
+    <strong>GetFaction ()</strong>
+    </dt>
+    <dd>
+    Allocated faction key for this art set (e.g.  <code>&quot;att_fact_hunni&quot;</code>), or empty string if culture-wide.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        faction database key
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> faction_key = art_set:<span class="function-name">GetFaction</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetGroup"></a>
+    <strong>GetGroup ()</strong>
+    </dt>
+    <dd>
+    Campaign group key from <code>campaign_character_art_set_groups_tables</code> (e.g.  <code>&quot;main&quot;</code>), or empty string if none.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        campaign group key
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> group_key = art_set:<span class="function-name">GetGroup</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetKey"></a>
+    <strong>GetKey ()</strong>
+    </dt>
+    <dd>
+    Art set record key ID from <code>campaign_character_art_sets_tables</code> (e.g.  <code>&quot;att_huns_general_01&quot;</code>, <code>&quot;att_general_nomadic_16&quot;</code>).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        art set record key
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> art_key = art_set:<span class="function-name">GetKey</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetPortraitPath"></a>
+    <strong>GetPortraitPath ()</strong>
+    </dt>
+    <dd>
+    Resolved 2D portrait diffuse PNG file path used by the UI.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        portrait diffuse file path (e.g. <code>&quot;UI/Portraits/Portholes/att_cult_nomadic/att_frontend_faction_leader_huns_0.png&quot;</code>)
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> png_path = art_set:<span class="function-name">GetPortraitPath</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetSettingsId"></a>
+    <strong>GetSettingsId ()</strong>
+    </dt>
+    <dd>
+    Unique 3D portrait camera settings ID string (e.g.  <code>&quot;att_huns_general_010&quot;</code>).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        portrait settings unique identifier
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> cam_id = art_set:<span class="function-name">GetSettingsId</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetSubculture"></a>
+    <strong>GetSubculture ()</strong>
+    </dt>
+    <dd>
+    Allocated subculture key for this art set (e.g.  <code>&quot;att_sub_cult_nomadic_hunnic&quot;</code>).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        subculture database key
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> subculture = art_set:<span class="function-name">GetSubculture</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "HasAging"></a>
+    <strong>HasAging ()</strong>
+    </dt>
+    <dd>
+    Checks whether this art set supports visual aging stages (young, middle-aged, old).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if aging variations are enabled
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> has_aging = art_set:<span class="function-name">HasAging</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "HasHealth"></a>
+    <strong>HasHealth ()</strong>
+    </dt>
+    <dd>
+    Checks whether this art set supports health/wound visual variations.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if health variation is enabled
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> has_health = art_set:<span class="function-name">HasHealth</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "HasLevelling"></a>
+    <strong>HasLevelling ()</strong>
+    </dt>
+    <dd>
+    Checks whether this art set supports rank-based visual upgrades (improved armor/regalia with character rank).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if levelling variations are enabled
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> has_levelling = art_set:<span class="function-name">HasLevelling</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "HasReligion"></a>
+    <strong>HasReligion ()</strong>
+    </dt>
+    <dd>
+    Checks whether this art set supports religious visual variations.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if religion variation is enabled
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> has_religion = art_set:<span class="function-name">HasReligion</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "HasSeasonal"></a>
+    <strong>HasSeasonal ()</strong>
+    </dt>
+    <dd>
+    Checks whether this art set supports seasonal visual variations (winter furs/gear).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if seasonal variations are enabled
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> has_seasonal = art_set:<span class="function-name">HasSeasonal</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "IsCustom"></a>
+    <strong>IsCustom ()</strong>
+    </dt>
+    <dd>
+    Checks whether this art set is a custom unique set (e.g.  Attila or historical general).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if this is a custom unique art set, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> art_set:<span class="function-name">IsCustom</span>() <span class="keyword">then</span>
+    <span class="comment">-- Unique historical art set
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "IsFactionLeaderSet"></a>
+    <strong>IsFactionLeaderSet ()</strong>
+    </dt>
+    <dd>
+    Checks whether this art set is specifically configured for faction leaders (e.g.  wearing crowns/diadems).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if configured as a faction leader art set
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> art_set:<span class="function-name">IsFactionLeaderSet</span>() <span class="keyword">then</span>
+    <span class="comment">-- Character wears regal faction leader visual assets
+</span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "IsMale"></a>
+    <strong>IsMale ()</strong>
+    </dt>
+    <dd>
+    Checks whether this art set represents a male character model.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if male, false if female
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> is_male = art_set:<span class="function-name">IsMale</span>()</pre>
+    </ul>
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

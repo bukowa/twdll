@@ -1,0 +1,864 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><strong>twdll.tweakers</strong></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="../topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>twdll.tweakers</code></h1>
+<p>Engine tweakers and campaign variables runtime access.</p>
+<p>
+
+
+<p>Provides unified read/write access to all 3,731 internal engine variables:</p>
+
+<ul>
+    <li><strong>Direct Tweakers (~2,341)</strong>: Shaders, battle physics, camera, terrain and UI — updated in-place in engine memory.</li>
+    <li><strong>KV Tweakers (518)</strong>: Live database row cells in RAM (<code>TWEAKABLE_KV_ITEM</code>).</li>
+    <li><strong>Campaign Variables (714)</strong>: Routed directly to the active <code>CAMPAIGN_MODEL</code> (+0x1100) and <code>EMPIRE_DATABASES</code> (+0x0000).</li>
+    <li><strong>Campaign AI Variables (158)</strong>: CAI evaluator weights and priority thresholds.</li>
+</ul>
+
+<p>All modified values automatically snapshot their original vanilla state and are cleanly
+restored on Lua teardown / game reload.</p>
+
+<h3>Engine Evaluation Timing &amp; Subsystem Mechanics</h3>
+
+<p>Engine tweakers are read and evaluated by different engine subsystems at different times:</p>
+
+<ol>
+    <li><strong>Per-frame / Runtime Dynamic</strong>: Visuals, terrain seasons, camera constraints, shader toggles, and general action points. Changes take effect <strong>immediately</strong>.</li>
+    <li><strong>Subsystem / Event-driven</strong>: CAI strategic goals, autoresolver modifiers, marriage odds, looting income formulas, and cultural conversion. Changes take effect whenever that specific calculation is executed by the engine.</li>
+    <li><strong>Initialization-time / Cache-only</strong>: World generation parameters and static baseline tables. These should be modified as early as possible at top level in the campaign's <code>scripting.lua</code> starting script (before world initialization events fire).</li>
+</ol>
+
+<p>For the complete catalog of all 3,731 variables, categories, and descriptions, see
+<a href="../topics/engine_tweakers_inventory.md.html">Complete Engine Tweakers Inventory</a>.</p>
+
+<h3>Usage:</h3>
+
+
+<pre>
+<span class="comment">-- 1. Direct property access:
+</span>twdll.tweakers.general_admiral_action_point_bonus.value = <span class="number">500</span>
+twdll.tweakers.terrain_override_season.value = <span class="number">3</span>  <span class="comment">-- 0=Spring, 1=Summer, 2=Autumn, 3=Winter
+</span>twdll.tweakers.AI_FORCE_ATTACK_PLAN.value = <span class="keyword">true</span>
+
+<span class="comment">-- 2. Find and inspect a tweaker:
+</span><span class="keyword">local</span> t = twdll.tweakers.<span class="function-name">Find</span>(<span class="string">"max_traits"</span>)
+<span class="keyword">if</span> t <span class="keyword">then</span>
+    <span class="global">print</span>(t.name)         <span class="comment">--&gt; "max_traits"
+</span>    <span class="global">print</span>(t.category)     <span class="comment">--&gt; "all"
+</span>    <span class="global">print</span>(t.description)  <span class="comment">--&gt; description string
+</span>    <span class="global">print</span>(t.value)        <span class="comment">--&gt; 15
+</span>    t.value = <span class="number">30</span>          <span class="comment">-- update value
+</span>    t:<span class="function-name">SetInt</span>(<span class="number">30</span>)          <span class="comment">-- or via method
+</span><span class="keyword">end</span>
+
+<span class="comment">-- 3. Iterate all available tweakers:
+</span><span class="keyword">for</span> _, tw <span class="keyword">in</span> <span class="global">ipairs</span>(twdll.tweakers.<span class="function-name">GetList</span>()) <span class="keyword">do</span>
+    <span class="keyword">if</span> tw.category == <span class="string">"Campaign Variable Tweakers"</span> <span class="keyword">then</span>
+        <span class="global">print</span>(tw.name, tw.value)
+    <span class="keyword">end</span>
+<span class="keyword">end</span>
+</pre>
+
+</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#Dump">Dump ()</a></td>
+	<td class="summary">Dumps all registered engine tweakers from the global registry to twdll.log.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Find">Find (name)</a></td>
+	<td class="summary">Finds an engine tweaker object by name.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetBool">GetBool (name)</a></td>
+	<td class="summary">Gets the boolean value of an engine tweaker by name.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetBool">GetBool ()</a></td>
+	<td class="summary">Gets the current boolean flag value of the tweaker.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetCategory">GetCategory ()</a></td>
+	<td class="summary">Category of the tweaker (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetDescription">GetDescription ()</a></td>
+	<td class="summary">Detailed description / documentation tooltip from the engine developers.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFile">GetFile ()</a></td>
+	<td class="summary">Source code filename in the CA repository where this tweaker was defined.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFloat">GetFloat (name)</a></td>
+	<td class="summary">Gets the float value of an engine tweaker by name.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetFloat">GetFloat ()</a></td>
+	<td class="summary">Gets the current float value of the tweaker.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetInt">GetInt ()</a></td>
+	<td class="summary">Gets the current integer value of the tweaker.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetInt">GetInt (name)</a></td>
+	<td class="summary">Gets the integer value of an engine tweaker by name.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetLine">GetLine ()</a></td>
+	<td class="summary">Source code line number where this tweaker was defined.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetList">GetList ()</a></td>
+	<td class="summary">Returns a list of all registered engine tweakers.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetName">GetName ()</a></td>
+	<td class="summary">Name of the tweaker (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetRawValue">GetRawValue ()</a></td>
+	<td class="summary">Gets the raw 32-bit integer representation of the tweaker's memory value.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetTitle">GetTitle ()</a></td>
+	<td class="summary">Tooltip title of the tweaker.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetValue">GetValue ()</a></td>
+	<td class="summary">Gets the polymorphic value of the tweaker (auto-detected integer/float/bool).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetBool">SetBool (value)</a></td>
+	<td class="summary">Sets the boolean flag value of the tweaker with state rollback on teardown.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetBool">SetBool (name, value)</a></td>
+	<td class="summary">Sets the boolean value of an engine tweaker with state rollback on teardown.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFloat">SetFloat (name, value)</a></td>
+	<td class="summary">Sets the float value of an engine tweaker with state rollback on teardown.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetFloat">SetFloat (value)</a></td>
+	<td class="summary">Sets the float value of the tweaker with state rollback on teardown.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetInt">SetInt (value)</a></td>
+	<td class="summary">Sets the integer value of the tweaker with state rollback on teardown.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetInt">SetInt (name, value)</a></td>
+	<td class="summary">Sets the integer value of an engine tweaker with state rollback on teardown.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetRawValue">SetRawValue (value)</a></td>
+	<td class="summary">Sets the raw 32-bit integer representation of the tweaker's memory value.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetValue">SetValue (value)</a></td>
+	<td class="summary">Sets the polymorphic value of the tweaker with auto-detected type.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "Dump"></a>
+    <strong>Dump ()</strong>
+    </dt>
+    <dd>
+    Dumps all registered engine tweakers from the global registry to twdll.log.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        total count of registered engine tweakers discovered
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.tweakers.<span class="function-name">Dump</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "Find"></a>
+    <strong>Find (name)</strong>
+    </dt>
+    <dd>
+    Finds an engine tweaker object by name.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         tweaker name (e.g. "max<em>traits", "AI</em>FORCE<em>ATTACK</em>PLAN")
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">TWEAKER_SCRIPT_INTERFACE</span> or <span class="type">nil</span></span>
+        tweaker object, or nil if not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> t = twdll.tweakers.<span class="function-name">Find</span>(<span class="string">"max_traits"</span>)
+t.value = <span class="number">30</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetBool"></a>
+    <strong>GetBool (name)</strong>
+    </dt>
+    <dd>
+    Gets the boolean value of an engine tweaker by name.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         tweaker name
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        current boolean value, or nil if not found
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetBool"></a>
+    <strong>GetBool ()</strong>
+    </dt>
+    <dd>
+    Gets the current boolean flag value of the tweaker.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        current boolean flag
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetCategory"></a>
+    <strong>GetCategory ()</strong>
+    </dt>
+    <dd>
+    Category of the tweaker (e.g.  <code>&quot;Campaign Variable Tweakers&quot;</code>, <code>&quot;KV Tweakers&quot;</code>).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        tweaker category
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetDescription"></a>
+    <strong>GetDescription ()</strong>
+    </dt>
+    <dd>
+    Detailed description / documentation tooltip from the engine developers.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        tweaker description
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetFile"></a>
+    <strong>GetFile ()</strong>
+    </dt>
+    <dd>
+    Source code filename in the CA repository where this tweaker was defined.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        source code file path
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetFloat"></a>
+    <strong>GetFloat (name)</strong>
+    </dt>
+    <dd>
+    Gets the float value of an engine tweaker by name.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         tweaker name
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        current float value, or nil if not found
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetFloat"></a>
+    <strong>GetFloat ()</strong>
+    </dt>
+    <dd>
+    Gets the current float value of the tweaker.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        current float value
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetInt"></a>
+    <strong>GetInt ()</strong>
+    </dt>
+    <dd>
+    Gets the current integer value of the tweaker.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        current integer value
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetInt"></a>
+    <strong>GetInt (name)</strong>
+    </dt>
+    <dd>
+    Gets the integer value of an engine tweaker by name.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         tweaker name
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        current value, or nil if not found
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetLine"></a>
+    <strong>GetLine ()</strong>
+    </dt>
+    <dd>
+    Source code line number where this tweaker was defined.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        source line number
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetList"></a>
+    <strong>GetList ()</strong>
+    </dt>
+    <dd>
+    Returns a list of all registered engine tweakers.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+        array of TWEAKER<em>SCRIPT</em>INTERFACE objects
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"> <span class="keyword">local</span> list = twdll.tweakers.<span class="function-name">GetList</span>()
+<span class="keyword">for</span> i, t <span class="keyword">in</span> <span class="global">ipairs</span>(list) <span class="keyword">do</span>
+    <span class="global">print</span>(t.name, t.category, t.value)
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetName"></a>
+    <strong>GetName ()</strong>
+    </dt>
+    <dd>
+    Name of the tweaker (e.g.  <code>&quot;max_traits&quot;</code>).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        tweaker name
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetRawValue"></a>
+    <strong>GetRawValue ()</strong>
+    </dt>
+    <dd>
+    Gets the raw 32-bit integer representation of the tweaker's memory value.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        raw 32-bit integer value
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetTitle"></a>
+    <strong>GetTitle ()</strong>
+    </dt>
+    <dd>
+    Tooltip title of the tweaker.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        tweaker title
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "GetValue"></a>
+    <strong>GetValue ()</strong>
+    </dt>
+    <dd>
+    Gets the polymorphic value of the tweaker (auto-detected integer/float/bool).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">any</span></span>
+        current value
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetBool"></a>
+    <strong>SetBool (value)</strong>
+    </dt>
+    <dd>
+    Sets the boolean flag value of the tweaker with state rollback on teardown.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">boolean</span></span>
+         new boolean flag
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetBool"></a>
+    <strong>SetBool (name, value)</strong>
+    </dt>
+    <dd>
+    Sets the boolean value of an engine tweaker with state rollback on teardown.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         tweaker name
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">boolean</span></span>
+         new boolean flag
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetFloat"></a>
+    <strong>SetFloat (name, value)</strong>
+    </dt>
+    <dd>
+    Sets the float value of an engine tweaker with state rollback on teardown.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         tweaker name
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">number</span></span>
+         new float value
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetFloat"></a>
+    <strong>SetFloat (value)</strong>
+    </dt>
+    <dd>
+    Sets the float value of the tweaker with state rollback on teardown.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">number</span></span>
+         new float value
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetInt"></a>
+    <strong>SetInt (value)</strong>
+    </dt>
+    <dd>
+    Sets the integer value of the tweaker with state rollback on teardown.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new integer value
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetInt"></a>
+    <strong>SetInt (name, value)</strong>
+    </dt>
+    <dd>
+    Sets the integer value of an engine tweaker with state rollback on teardown.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">name</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         tweaker name
+        </li>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         new integer value
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetRawValue"></a>
+    <strong>SetRawValue (value)</strong>
+    </dt>
+    <dd>
+    Sets the raw 32-bit integer representation of the tweaker's memory value.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">integer</span></span>
+         raw 32-bit integer value
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "SetValue"></a>
+    <strong>SetValue (value)</strong>
+    </dt>
+    <dd>
+    Sets the polymorphic value of the tweaker with auto-detected type.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">value</span>
+            <span class="types"><span class="type">any</span></span>
+         new value
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success
+    </ol>
+
+
+
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>
