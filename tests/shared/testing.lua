@@ -2314,7 +2314,7 @@ local function run_twdll_tests()
                     if other_gen then
                         local other_name = other_gen:GetFullName()
                         local other_cqi = other_gen:command_queue_index()
-                        local target_custom_bg = "att_merc_ger_agathyrsi_warriors"
+                        local target_custom_bg = (orig_bg_key == "att_merc_ger_agathyrsi_warriors") and "att_rom_legio" or "att_merc_ger_agathyrsi_warriors"
                         local initial_bg_different = (orig_bg_key ~= target_custom_bg)
                         twdll.core.Log(string.format("[TEST] [APPOINT] Found candidate character: '%s' (CQI %d, memory: %s)",
                             other_name, other_cqi, tostring(other_gen:GetMemoryAddress())))
