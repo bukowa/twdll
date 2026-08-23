@@ -148,26 +148,30 @@ void push_tweaker(lua_State* L, twdll::TW_ITweaker* tweaker) {
 }
 
 void uninstall_tweakers() {
-    for (auto& pair : g_tweaker_snapshots) {
-        pair.first->set_raw_value(pair.second);
-        std::string name = uni_to_utf8(pair.first->m_name);
-        Log("[twdll] Restored tweaker '%s' to original value: 0x%08X", name.c_str(), pair.second);
+    if (!g_tweaker_snapshots.empty()) {
+        Log("[twdll] Restoring %zu tweakers to vanilla defaults...", g_tweaker_snapshots.size());
+        for (auto& pair : g_tweaker_snapshots) {
+            pair.first->set_raw_value(pair.second);
+        }
+        g_tweaker_snapshots.clear();
     }
-    g_tweaker_snapshots.clear();
 
-    if (g_campaign_model) {
-        auto* cm = static_cast<twdll::TW_CampaignModel*>(g_campaign_model);
-        for (auto& pair : g_campaign_var_snapshots) {
-            cm->m_campaign_variables[pair.first] = pair.second;
+    if (!g_campaign_var_snapshots.empty()) {
+        Log("[twdll] Restoring %zu campaign variables to vanilla defaults...", g_campaign_var_snapshots.size());
+        if (g_campaign_model) {
+            auto* cm = static_cast<twdll::TW_CampaignModel*>(g_campaign_model);
+            for (auto& pair : g_campaign_var_snapshots) {
+                cm->m_campaign_variables[pair.first] = pair.second;
+            }
         }
-    }
-    auto* dbs = twdll::TW_Databases::get();
-    if (dbs) {
-        for (auto& pair : g_campaign_var_snapshots) {
-            dbs->m_campaign_variables[pair.first] = pair.second;
+        auto* dbs = twdll::TW_Databases::get();
+        if (dbs) {
+            for (auto& pair : g_campaign_var_snapshots) {
+                dbs->m_campaign_variables[pair.first] = pair.second;
+            }
         }
+        g_campaign_var_snapshots.clear();
     }
-    g_campaign_var_snapshots.clear();
 }
 
 // ============================================================================
