@@ -11,6 +11,7 @@ using twdll::TW_Character;
 using twdll::TW_Unit;
 using twdll::TW_AvailableCharacterRecruitmentItem;
 using twdll::TW_Databases;
+using twdll::TW_MainUnitRecord;
 
 constexpr size_t MIL_FORCE_PTR = twdll::TW_PtrOffset<TW_MilitaryForce>::value;
 
@@ -181,10 +182,13 @@ Instantiates the general's bodyguard unit, subsumes it into the force, dismisses
 back to the faction court, and promotes the character to commanding general.
 @function AppointCharacter
 @tparam CHARACTER_SCRIPT_INTERFACE character character object to appoint as commanding general
+@tparam[opt] table options optional configuration table (`bodyguard_key` = custom bodyguard unit key)
 @treturn boolean true if the character was successfully appointed, false otherwise
 @usage
 local candidate = faction:character_list():item_at(1)
 force:AppointCharacter(candidate)
+-- Or with custom bodyguard unit:
+force:AppointCharacter(candidate, { bodyguard_key = "att_rom_protectores_domestici" })
 */
 static int AppointCharacter(lua_State* L) {
     auto* force = twdll::tw_unwrap<TW_MilitaryForce>(L, 1);
@@ -196,8 +200,24 @@ static int AppointCharacter(lua_State* L) {
         return 1;
     }
 
+    const char* custom_bg_key = nullptr;
+    if (l_type(L, 3) == LUA_TTABLE) {
+        l_getfield(L, 3, "bodyguard_key");
+        if (l_type(L, -1) == LUA_TSTRING) {
+            custom_bg_key = l_checkstring(L, -1);
+        }
+        l_pop(L, 1);
+        if (!custom_bg_key) {
+            l_getfield(L, 3, "bodyguard_unit");
+            if (l_type(L, -1) == LUA_TSTRING) {
+                custom_bg_key = l_checkstring(L, -1);
+            }
+            l_pop(L, 1);
+        }
+    }
+
     auto* current_gen = force->m_general_link.get();
-    if (current_gen == character) {
+    if (current_gen == character && !custom_bg_key) {
         l_pushboolean(L, 1);
         return 1;
     }
@@ -222,8 +242,18 @@ static int AppointCharacter(lua_State* L) {
         agent_rec = dbs->agents->find_record("general");
     }
 
-    // Ensure candidate character has valid initial general bodyguard details:
-    if (!character->details.m_initial_general_bodyguard_details.m_unit && current_gen) {
+    // Configure general's bodyguard details:
+    if (custom_bg_key && dbs && dbs->main_units) {
+        auto* custom_bg_rec = static_cast<TW_MainUnitRecord*>(dbs->main_units->find_record(custom_bg_key));
+        if (custom_bg_rec) {
+            character->details.m_initial_general_bodyguard_details.m_unit = custom_bg_rec;
+            character->details.m_initial_general_bodyguard_details.m_men = static_cast<uint16_t>(custom_bg_rec->m_num_men);
+            character->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = static_cast<uint16_t>(custom_bg_rec->m_num_men);
+            Log("[twdll] force:AppointCharacter: custom bodyguard set to '%s' (%d men)", custom_bg_key, custom_bg_rec->m_num_men);
+        } else {
+            Log("[twdll] force:AppointCharacter: bodyguard unit '%s' not found in main_units database", custom_bg_key);
+        }
+    } else if (!character->details.m_initial_general_bodyguard_details.m_unit && current_gen) {
         character->details.m_initial_general_bodyguard_details.m_unit = current_gen->details.m_initial_general_bodyguard_details.m_unit;
         character->details.m_initial_general_bodyguard_details.m_men = current_gen->details.m_initial_general_bodyguard_details.m_men;
         character->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished = current_gen->details.m_initial_general_bodyguard_details.m_men_in_fully_replenished;

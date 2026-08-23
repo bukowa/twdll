@@ -2283,8 +2283,13 @@ local function run_twdll_tests()
                 if current_gen then
                     local orig_name = current_gen:GetFullName()
                     local orig_cqi = current_gen:command_queue_index()
-                    twdll.core.Log(string.format("[TEST] [APPOINT] Initial commanding general: '%s' (CQI %d, memory: %s)",
-                        orig_name, orig_cqi, tostring(current_gen:GetMemoryAddress())))
+                    local orig_bg_key = "none"
+                    local initial_ulist = force:unit_list()
+                    if initial_ulist and type(initial_ulist.num_items) == "function" and initial_ulist:num_items() > 0 then
+                        orig_bg_key = initial_ulist:item_at(0):unit_key()
+                    end
+                    twdll.core.Log(string.format("[TEST] [APPOINT] Initial commanding general: '%s' (CQI %d, initial bodyguard: '%s', memory: %s)",
+                        orig_name, orig_cqi, orig_bg_key, tostring(current_gen:GetMemoryAddress())))
 
                     local app_self_ok = force:AppointCharacter(current_gen)
                     twdll.core.Log(string.format("[TEST] [APPOINT] Call force:AppointCharacter('%s') [self-assign no-op] -> %s", orig_name, tostring(app_self_ok)))
@@ -2309,22 +2314,42 @@ local function run_twdll_tests()
                     if other_gen then
                         local other_name = other_gen:GetFullName()
                         local other_cqi = other_gen:command_queue_index()
+                        local target_custom_bg = "att_merc_ger_agathyrsi_warriors"
+                        local initial_bg_different = (orig_bg_key ~= target_custom_bg)
                         twdll.core.Log(string.format("[TEST] [APPOINT] Found candidate character: '%s' (CQI %d, memory: %s)",
                             other_name, other_cqi, tostring(other_gen:GetMemoryAddress())))
-                        twdll.core.Log(string.format("[TEST] [APPOINT] >>> APPOINT ACTION: Appointing candidate '%s' (CQI %d) as general",
-                            other_name, other_cqi))
+                        twdll.core.Log(string.format("[TEST] [APPOINT] >>> APPOINT ACTION: Appointing candidate '%s' (CQI %d) as general with custom bodyguard '%s' (initial was '%s')",
+                            other_name, other_cqi, target_custom_bg, orig_bg_key))
 
-                        local swap_ok = force:AppointCharacter(other_gen)
+                        report("force:AppointCharacter initial bodyguard differed from custom target", initial_bg_different == true)
+
+                        local swap_ok = force:AppointCharacter(other_gen, { bodyguard_key = target_custom_bg })
                         local new_active_gen = force:has_general() and force:general_character()
                         local new_active_name = new_active_gen and new_active_gen:GetFullName() or "None"
                         local new_active_cqi = new_active_gen and new_active_gen:command_queue_index() or -1
                         local swap_verified = swap_ok and new_active_gen and (new_active_cqi == other_cqi)
 
-                        twdll.core.Log(string.format("[TEST] [APPOINT] Appointment result: %s | Active General in force is now: '%s' (CQI %d)",
-                            tostring(swap_ok), new_active_name, new_active_cqi))
+                        -- Verify that the custom bodyguard unit exists in the army
+                        local found_bg_unit = false
+                        local u_list = force:unit_list()
+                        if u_list and type(u_list.num_items) == "function" then
+                            for i = 0, u_list:num_items() - 1 do
+                                local u = u_list:item_at(i)
+                                if u and not u:is_null_interface() and u:unit_key() == target_custom_bg then
+                                    found_bg_unit = true
+                                    break
+                                end
+                            end
+                        end
+
+                        twdll.core.Log(string.format("[TEST] [APPOINT] Appointment result: %s | Active General: '%s' (CQI %d) | Custom Bodyguard present: %s",
+                            tostring(swap_ok), new_active_name, new_active_cqi, tostring(found_bg_unit)))
                         report("force:AppointCharacter appoint candidate", swap_verified == true)
+                        report("force:AppointCharacter custom bodyguard key verified in force", found_bg_unit == true)
                     else
                         twdll.core.Log("[TEST] [APPOINT] SKIPPED: No alternative general candidate in faction to test appointment.")
+                        record_skip()
+                        record_skip()
                         record_skip()
                     end
                 else
