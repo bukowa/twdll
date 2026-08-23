@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `twdll.tweakers.SetInt(name, val)` returning `true` when setting non-existent tweaker names, properly returning `false` on unresolved names matching `SetFloat` and `SetBool`.
+
 ## [0.10.0] - 2026-08-23
 
 ### Added

@@ -279,12 +279,14 @@ static int Tweaker_SetInt(lua_State* L) {
     if (!t) { l_pushboolean(L, 0); return 1; }
     int32_t val = static_cast<int32_t>(l_tointeger(L, 2));
     snapshot_tweaker_if_needed(t);
-    t->value<int32_t>() = val;
-    t->m_dirty = 1;
     int var_idx = get_campaign_var_index(t);
     if (var_idx >= 0) {
+        t->value<float>() = static_cast<float>(val);
         sync_campaign_var_to_engine(var_idx, static_cast<float>(val));
+    } else {
+        t->value<int32_t>() = val;
     }
+    t->m_dirty = 1;
     l_pushboolean(L, 1);
     return 1;
 }
@@ -440,13 +442,15 @@ static int Tweaker_SetValue(lua_State* L) {
         }
     } else if (l_type(L, 2) == LUA_TNUMBER) {
         double d = l_tonumber(L, 2);
-        if (d == static_cast<double>(static_cast<int32_t>(d))) {
-            t->value<int32_t>() = static_cast<int32_t>(d);
-        } else {
-            t->value<float>() = static_cast<float>(d);
-        }
         if (var_idx >= 0) {
+            t->value<float>() = static_cast<float>(d);
             sync_campaign_var_to_engine(var_idx, static_cast<float>(d));
+        } else {
+            if (d == static_cast<double>(static_cast<int32_t>(d))) {
+                t->value<int32_t>() = static_cast<int32_t>(d);
+            } else {
+                t->value<float>() = static_cast<float>(d);
+            }
         }
     }
     t->m_dirty = 1;
@@ -576,21 +580,29 @@ static int Tweaker_MetaNewIndex(lua_State* L) {
             if (var_idx >= 0) sync_campaign_var_to_engine(var_idx, b ? 1.0f : 0.0f);
         } else if (l_type(L, 3) == LUA_TNUMBER) {
             double d = l_tonumber(L, 3);
-            if (d == static_cast<double>(static_cast<int32_t>(d))) {
-                t->value<int32_t>() = static_cast<int32_t>(d);
-            } else {
+            if (var_idx >= 0) {
                 t->value<float>() = static_cast<float>(d);
+                sync_campaign_var_to_engine(var_idx, static_cast<float>(d));
+            } else {
+                if (d == static_cast<double>(static_cast<int32_t>(d))) {
+                    t->value<int32_t>() = static_cast<int32_t>(d);
+                } else {
+                    t->value<float>() = static_cast<float>(d);
+                }
             }
-            if (var_idx >= 0) sync_campaign_var_to_engine(var_idx, static_cast<float>(d));
         }
         t->m_dirty = 1;
         return 0;
     }
     if (std::strcmp(key, "int") == 0) {
         int32_t val = static_cast<int32_t>(l_tointeger(L, 3));
-        t->value<int32_t>() = val;
+        if (var_idx >= 0) {
+            t->value<float>() = static_cast<float>(val);
+            sync_campaign_var_to_engine(var_idx, static_cast<float>(val));
+        } else {
+            t->value<int32_t>() = val;
+        }
         t->m_dirty = 1;
-        if (var_idx >= 0) sync_campaign_var_to_engine(var_idx, static_cast<float>(val));
         return 0;
     }
     if (std::strcmp(key, "float") == 0) {
@@ -626,8 +638,20 @@ static int Tweaker_ToString(lua_State* L) {
     char buf[512];
     std::string name = uni_to_utf8(t->m_name);
     std::string cat  = uni_to_utf8(t->m_category);
-    std::snprintf(buf, sizeof(buf), "[Tweaker: '%s' | Category: '%s' | Value: %u]",
-                  name.c_str(), cat.c_str(), t->raw_value());
+    int var_idx = get_campaign_var_index(t);
+    float cv = 0.0f;
+    if (var_idx >= 0 && get_campaign_var_runtime(var_idx, cv)) {
+        if (cv == static_cast<float>(static_cast<int32_t>(cv))) {
+            std::snprintf(buf, sizeof(buf), "[Tweaker: '%s' | Category: '%s' | Value: %d]",
+                          name.c_str(), cat.c_str(), static_cast<int>(cv));
+        } else {
+            std::snprintf(buf, sizeof(buf), "[Tweaker: '%s' | Category: '%s' | Value: %.3f]",
+                          name.c_str(), cat.c_str(), cv);
+        }
+    } else {
+        std::snprintf(buf, sizeof(buf), "[Tweaker: '%s' | Category: '%s' | Value: %u]",
+                      name.c_str(), cat.c_str(), t->raw_value());
+    }
     l_pushstring(L, buf);
     return 1;
 }
@@ -768,8 +792,16 @@ static int Mod_SetInt(lua_State* L) {
     auto* t = find_engine_tweaker(name, len);
     if (t) {
         snapshot_tweaker_if_needed(t);
-        t->value<int32_t>() = val;
+        if (var_idx >= 0) {
+            t->value<float>() = static_cast<float>(val);
+        } else {
+            t->value<int32_t>() = val;
+        }
         t->m_dirty = 1;
+    }
+    if (var_idx < 0 && !t) {
+        l_pushboolean(L, 0);
+        return 1;
     }
     l_pushboolean(L, 1);
     return 1;
@@ -928,12 +960,16 @@ static int Tweakers_ModuleMetaNewIndex(lua_State* L) {
             if (var_idx >= 0) sync_campaign_var_to_engine(var_idx, b ? 1.0f : 0.0f);
         } else if (l_type(L, 3) == LUA_TNUMBER) {
             double d = l_tonumber(L, 3);
-            if (d == static_cast<double>(static_cast<int32_t>(d))) {
-                t->value<int32_t>() = static_cast<int32_t>(d);
-            } else {
+            if (var_idx >= 0) {
                 t->value<float>() = static_cast<float>(d);
+                sync_campaign_var_to_engine(var_idx, static_cast<float>(d));
+            } else {
+                if (d == static_cast<double>(static_cast<int32_t>(d))) {
+                    t->value<int32_t>() = static_cast<int32_t>(d);
+                } else {
+                    t->value<float>() = static_cast<float>(d);
+                }
             }
-            if (var_idx >= 0) sync_campaign_var_to_engine(var_idx, static_cast<float>(d));
         }
         t->m_dirty = 1;
         return 0;
