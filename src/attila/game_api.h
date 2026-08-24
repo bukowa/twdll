@@ -138,6 +138,12 @@ extern uintptr_t g_settlement_cb_initialize_addr;
 // CAI make_occupation_decision entry point, resolved by initialize_game_api().
 extern uintptr_t g_make_occupation_decision_addr;
 
+// UIDLL::BattleLandUnitCardStyle::update_information_changed entry point
+extern uintptr_t g_update_card_info_addr;
+
+// UIDLL::BattleHealthBar::OnUpdatePulse entry point
+extern uintptr_t g_battle_health_bar_on_update_pulse_addr;
+
 int* get_max_units_in_army();
 int* get_max_units_in_navy();
 

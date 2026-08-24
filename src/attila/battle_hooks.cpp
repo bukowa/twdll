@@ -1,5 +1,13 @@
 /// @module twdll.battle
-/// Battle lifecycle hooks for Total War: Attila.
+/// Tactical battle lifecycle, reinforcement telemetry, and real-time combat UI hooks for Total War: Attila.
+///
+/// Total War: Attila instantiates a separate Lua environment during tactical battles.
+/// To access `twdll` and enable battle hooks, load the DLL in `battle_scripted.lua`:
+///
+/// @usage
+/// -- In battle_scripted.lua:
+/// local twdll = package.loadlib("twdll", "luaopen_twdll")()
+/// twdll.battle.EnableSmeHealthBars(true)
 #include "../common/tw.h"
 #include "../common/campaign_hooks.h"
 #include "game_api.h"
@@ -11,12 +19,53 @@
 
 using twdll::TW_Battle;
 using twdll::TW_ReinforcementsManager;
+using twdll::TW_BattleLandUnitCardStyle;
+using twdll::TW_BattleHealthBar;
+using twdll::TW_UnitCardUpdateInfo;
+using twdll::TW_BattleUIUnit;
+using twdll::TW_BattleUnit;
+using twdll::TW_BattleEntity;
 
 static TW_Battle* g_battle = nullptr;
 static void*      orig_battle_ctor = nullptr;
 static void*      orig_battle_dtor = nullptr;
 static uintptr_t  battle_ctor_addr = 0;
 static uintptr_t  battle_dtor_addr = 0;
+
+typedef int(__thiscall* t_update_information_changed)(TW_BattleLandUnitCardStyle* self, TW_UnitCardUpdateInfo* info);
+static t_update_information_changed orig_update_information_changed = nullptr;
+static uintptr_t update_card_info_hook_addr = 0;
+
+typedef void(__thiscall* t_battle_health_bar_on_update_pulse)(TW_BattleHealthBar* self, int a2);
+static t_battle_health_bar_on_update_pulse orig_battle_health_bar_on_update_pulse = nullptr;
+static uintptr_t battle_health_bar_hook_addr = 0;
+
+static void __fastcall HookedBattleHealthBarOnUpdatePulse(TW_BattleHealthBar* self, void* /*edx*/, int a2) {
+    if (self && self->m_unit && self->m_unit->m_num_men_initial == 1) {
+        self->m_is_using_hit_points = true;
+    }
+    orig_battle_health_bar_on_update_pulse(self, a2);
+}
+
+static int __fastcall HookedUpdateInformationChanged(TW_BattleLandUnitCardStyle* self, void* /*edx*/, TW_UnitCardUpdateInfo* info) {
+    int res = orig_update_information_changed(self, info);
+
+    if (self && self->m_unit && info) {
+        TW_BattleUIUnit* ui_unit = self->m_unit;
+
+        // Single Monster Entity check (Sauron / Single hero / 1-man monster)
+        if (ui_unit->m_num_men_initial == 1 && ui_unit->m_unit) {
+            TW_BattleUnit* bunit = ui_unit->m_unit;
+            if (bunit->m_men.size() >= 1 && bunit->m_men.data() && bunit->m_men[0]) {
+                TW_BattleEntity* ent = bunit->m_men[0];
+                if (ent->m_full_hit_points > 0) {
+                    info->percent_men_left = static_cast<float>(ent->m_hit_points) / static_cast<float>(ent->m_full_hit_points);
+                }
+            }
+        }
+    }
+    return res;
+}
 
 static void LogBattleCtor(void* ptr) {
     g_battle = static_cast<TW_Battle*>(ptr);
@@ -50,6 +99,69 @@ __declspec(naked) static void HookedBattleDtor() {
         popad
         jmp dword ptr [orig_battle_dtor]
     }
+}
+
+static bool install_card_hook() {
+    bool card_ok = true;
+    bool bar_ok = true;
+
+    if (!update_card_info_hook_addr && g_update_card_info_addr) {
+        MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(g_update_card_info_addr),
+                                      reinterpret_cast<void*>(HookedUpdateInformationChanged),
+                                      reinterpret_cast<void**>(&orig_update_information_changed));
+        if (mhs == MH_OK) {
+            update_card_info_hook_addr = g_update_card_info_addr;
+            mhs = MH_EnableHook(reinterpret_cast<void*>(update_card_info_hook_addr));
+            if (mhs == MH_OK) {
+                Log("[twdll] [BATTLE] update_information_changed hook enabled via Lua API");
+            } else {
+                Log("[twdll] [BATTLE] MH_EnableHook (update_information_changed) failed (%d)", mhs);
+                card_ok = false;
+            }
+        } else {
+            Log("[twdll] [BATTLE] MH_CreateHook (update_information_changed) failed (%d)", mhs);
+            card_ok = false;
+        }
+    }
+
+    if (!battle_health_bar_hook_addr && g_battle_health_bar_on_update_pulse_addr) {
+        MH_STATUS mhs = MH_CreateHook(reinterpret_cast<void*>(g_battle_health_bar_on_update_pulse_addr),
+                                      reinterpret_cast<void*>(HookedBattleHealthBarOnUpdatePulse),
+                                      reinterpret_cast<void**>(&orig_battle_health_bar_on_update_pulse));
+        if (mhs == MH_OK) {
+            battle_health_bar_hook_addr = g_battle_health_bar_on_update_pulse_addr;
+            mhs = MH_EnableHook(reinterpret_cast<void*>(battle_health_bar_hook_addr));
+            if (mhs == MH_OK) {
+                Log("[twdll] [BATTLE] BattleHealthBar::OnUpdatePulse hook enabled via Lua API");
+            } else {
+                Log("[twdll] [BATTLE] MH_EnableHook (BattleHealthBar::OnUpdatePulse) failed (%d)", mhs);
+                bar_ok = false;
+            }
+        } else {
+            Log("[twdll] [BATTLE] MH_CreateHook (BattleHealthBar::OnUpdatePulse) failed (%d)", mhs);
+            bar_ok = false;
+        }
+    }
+
+    return card_ok && bar_ok;
+}
+
+static void uninstall_card_hook() {
+    if (update_card_info_hook_addr) {
+        MH_DisableHook(reinterpret_cast<void*>(update_card_info_hook_addr));
+        MH_RemoveHook(reinterpret_cast<void*>(update_card_info_hook_addr));
+        update_card_info_hook_addr = 0;
+        Log("[twdll] [BATTLE] update_information_changed hook disabled");
+    }
+    orig_update_information_changed = nullptr;
+
+    if (battle_health_bar_hook_addr) {
+        MH_DisableHook(reinterpret_cast<void*>(battle_health_bar_hook_addr));
+        MH_RemoveHook(reinterpret_cast<void*>(battle_health_bar_hook_addr));
+        battle_health_bar_hook_addr = 0;
+        Log("[twdll] [BATTLE] BattleHealthBar::OnUpdatePulse hook disabled");
+    }
+    orig_battle_health_bar_on_update_pulse = nullptr;
 }
 
 // EMPIREBATTLE::MANAGER ctor/dtor signatures resolve directly to the function
@@ -96,6 +208,8 @@ void install_battle_hook() {
 }
 
 void uninstall_battle_hook() {
+    uninstall_card_hook();
+
     if (battle_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(battle_ctor_addr));
         MH_RemoveHook(reinterpret_cast<void*>(battle_ctor_addr));
@@ -173,7 +287,36 @@ static int GetBattleInfo(lua_State* L) {
     return 1;
 }
 
+/***
+Enables or disables real-time battle unit card health bar calculation and HP tracking for Single Monster Entities (SMEs) and 1-man units.
+When enabled, dynamically updates the unit card health bar based on actual remaining entity hit points.
+Automatically uninstalled and restored to vanilla state on Lua environment teardown.
+
+@function EnableSmeHealthBars
+@tparam[opt=true] boolean enabled whether to enable (true) or disable (false) the real-time health bar hook
+@treturn boolean true on success, false otherwise
+@usage
+-- In battle_scripted.lua:
+local twdll = package.loadlib("twdll", "luaopen_twdll")()
+twdll.battle.EnableSmeHealthBars(true)
+*/
+static int EnableSmeHealthBars(lua_State* L) {
+    bool enable = true;
+    if (l_type(L, 1) != LUA_TNONE && l_type(L, 1) != LUA_TNIL) {
+        enable = l_tobool(L, 1);
+    }
+    if (enable) {
+        bool ok = install_card_hook();
+        l_pushboolean(L, ok ? 1 : 0);
+    } else {
+        uninstall_card_hook();
+        l_pushboolean(L, 1);
+    }
+    return 1;
+}
+
 extern const luaL_Reg battle_functions[] = {
-    {"GetBattleInfo", GetBattleInfo},
+    {"GetBattleInfo",        GetBattleInfo},
+    {"EnableSmeHealthBars",  EnableSmeHealthBars},
     {nullptr, nullptr}
 };

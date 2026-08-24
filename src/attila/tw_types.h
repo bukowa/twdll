@@ -497,20 +497,6 @@ struct TW_LandStats {
     int  melee_defence;   // 0x58
 };
 
-// EMPIREBATTLE::UNIT — selected fields only (32-bit Attila layout)
-struct TW_BattleUnit {
-    char         pad_00[0x1220];
-    TW_LandStats stats;           // 0x1220  (m_stat_modifier_manager.m_stats)
-    char         pad_127C[0x9A8]; // pad to m_num_men_initial (0x127C + 0x9A8 = 0x1C24)
-    int          num_men_initial; // 0x1C24
-};
-
-// EMPIREBATTLE::BATTLE_SCRIPT_UNIT — Lua-facing wrapper
-struct TW_BattleScriptUnit {
-    void*         vtable;  // 0x0
-    TW_BattleUnit* m_unit;  // 0x4
-};
-
 template <typename T = void*>
 struct TW_VectorNcc {
     void* m_capacity_and_allocator;  // 0x0  (low bits: capacity, high bits: allocator ptr)
@@ -527,6 +513,61 @@ struct TW_VectorNcc {
     bool empty() const { return m_size == 0; }
     T& operator[](int idx) { return m_elements[idx]; }
     const T& operator[](int idx) const { return m_elements[idx]; }
+};
+
+// EMPIREBATTLE::ENTITY
+struct TW_BattleEntity {
+    char     pad_00[0x70C];
+    uint32_t m_full_hit_points; // 0x70C
+    uint32_t m_hit_points;      // 0x710
+};
+
+// EMPIREBATTLE::UNIT — selected fields only (32-bit Attila layout)
+struct TW_BattleUnit {
+    char                           pad_00[0x40];
+    TW_VectorNcc<TW_BattleEntity*> m_men;           // 0x40  (m_men array of living entities)
+    char                           pad_4C[0x11D4];
+    TW_LandStats                   stats;           // 0x1220  (m_stat_modifier_manager.m_stats)
+    char                           pad_127C[0x9A8]; // pad to m_num_men_initial (0x127C + 0x9A8 = 0x1C24)
+    int                            num_men_initial; // 0x1C24
+};
+
+// EMPIREBATTLE::BATTLE_SCRIPT_UNIT — Lua-facing wrapper
+struct TW_BattleScriptUnit {
+    void*          vtable;  // 0x0
+    TW_BattleUnit* m_unit;  // 0x4
+};
+
+// EMPIREBATTLE::BATTLE_UI_UNIT
+struct TW_BattleUIUnit {
+    char           pad_00[0xC0];
+    uint32_t       m_num_men_initial; // 0xC0
+    char           pad_C4[0x18];
+    uint32_t       m_num_men;         // 0xDC
+    char           pad_E0[0x58];
+    TW_BattleUnit* m_unit;            // 0x138
+};
+
+// UIDLL::UnitCardUpdateInformation
+struct TW_UnitCardUpdateInfo {
+    uint32_t ammo_count;            // +0x00
+    float    current_ammo_as_unary; // +0x04
+    float    percent_men_left;      // +0x08
+    uint32_t num_display_men;       // +0x0C
+    uint32_t combat_state;          // +0x10
+};
+
+// UIDLL::BattleLandUnitCardStyle
+struct TW_BattleLandUnitCardStyle {
+    char             pad_00[0xAC];
+    TW_BattleUIUnit* m_unit; // 0xAC
+};
+
+// UIDLL::BattleHealthBar
+struct TW_BattleHealthBar {
+    char             pad_00[0x58];
+    TW_BattleUIUnit* m_unit;                 // 0x58
+    bool             m_is_using_hit_points;  // 0x5C
 };
 
 struct TW_ReinforcementsManager {
@@ -800,10 +841,19 @@ TW_ASSERT_OFFSET(TW_CaiSettlement, m_cai_region,            0x10);
 TW_ASSERT_OFFSET(TW_LandStats,     charge_bonus,            0x38);
 TW_ASSERT_OFFSET(TW_LandStats,     morale,                  0x44);
 TW_ASSERT_OFFSET(TW_LandStats,     melee_attack,            0x48);
-TW_ASSERT_OFFSET(TW_LandStats,     melee_defence,           0x58);
-TW_ASSERT_OFFSET(TW_BattleUnit,    stats,                   0x1220);
-TW_ASSERT_OFFSET(TW_BattleUnit,    num_men_initial,         0x1C24);
-TW_ASSERT_OFFSET(TW_BattleScriptUnit, m_unit,              0x4);
+TW_ASSERT_OFFSET(TW_BattleEntity,           m_full_hit_points,       0x70C);
+TW_ASSERT_OFFSET(TW_BattleEntity,           m_hit_points,            0x710);
+TW_ASSERT_OFFSET(TW_BattleUnit,             m_men,                   0x40);
+TW_ASSERT_OFFSET(TW_BattleUnit,             stats,                   0x1220);
+TW_ASSERT_OFFSET(TW_BattleUnit,             num_men_initial,         0x1C24);
+TW_ASSERT_OFFSET(TW_BattleScriptUnit,       m_unit,                  0x4);
+TW_ASSERT_OFFSET(TW_BattleUIUnit,           m_num_men_initial,       0xC0);
+TW_ASSERT_OFFSET(TW_BattleUIUnit,           m_num_men,               0xDC);
+TW_ASSERT_OFFSET(TW_BattleUIUnit,           m_unit,                  0x138);
+TW_ASSERT_OFFSET(TW_UnitCardUpdateInfo,     percent_men_left,        0x8);
+TW_ASSERT_OFFSET(TW_BattleLandUnitCardStyle, m_unit,                 0xAC);
+TW_ASSERT_OFFSET(TW_BattleHealthBar,        m_unit,                  0x58);
+TW_ASSERT_OFFSET(TW_BattleHealthBar,        m_is_using_hit_points,   0x5C);
 TW_ASSERT_OFFSET(TW_FamilyMember,    mother,                  0x18);
 TW_ASSERT_OFFSET(TW_FamilyMember,    father,                  0x1C);
 TW_ASSERT_OFFSET(TW_OneToOneLink<TW_Character>, m_link_node,  0x04);

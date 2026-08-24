@@ -38,6 +38,8 @@
 
 #define RECRUIT_CHARACTER_ENTRY_IMPL_SIG "83 EC 20 53 8B 5C 24 ? 55 56 8B F1 8B 43"
 #define KILL_INSTANT_AND_COMMANDED_UNIT_SIG "83 EC 24 56 8B F1 57 8D 8E"
+#define UPDATE_CARD_INFO_SIG "56 8B F1 57 8B 8E AC 00 00 00 E8 ? ? ? ? 8B 7C 24 0C 84 C0 75 0F 8B 86 AC 00 00 00 8B 80 04 01 00 00"
+#define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG "A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -57,6 +59,8 @@ uintptr_t          g_battle_ctor_addr    = 0;
 uintptr_t          g_battle_dtor_addr    = 0;
 uintptr_t          g_settlement_cb_initialize_addr = 0;
 uintptr_t          g_make_occupation_decision_addr = 0;
+uintptr_t          g_update_card_info_addr = 0;
+uintptr_t          g_battle_health_bar_on_update_pulse_addr = 0;
 static uintptr_t   g_max_units_init_insn_addr = 0;
 static int*        g_max_units_in_army = nullptr;
 static int*        g_max_units_in_navy = nullptr;
@@ -155,5 +159,7 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"CHARACTER_RECRUITMENT_POOL_MANAGER::recruit_character_entry_impl", (void**)&g_recruit_character_entry_impl, RECRUIT_CHARACTER_ENTRY_IMPL_SIG},
     {"CHARACTER::get_map_piece",                           (void**)&g_get_character_map_piece, GET_CHARACTER_MAP_PIECE_SIG},
     {"CHARACTER::kill_instant_and_commanded_unit",         (void**)&g_kill_instant_and_commanded_unit, KILL_INSTANT_AND_COMMANDED_UNIT_SIG},
+    {"UIDLL::BattleLandUnitCardStyle::update_information_changed", (void**)&g_update_card_info_addr, UPDATE_CARD_INFO_SIG},
+    {"UIDLL::BattleHealthBar::OnUpdatePulse",              (void**)&g_battle_health_bar_on_update_pulse_addr, BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG},
     {nullptr, nullptr, nullptr}
 };
