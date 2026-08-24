@@ -1,8 +1,7 @@
 /// @module twdll.battle
-/// Tactical battle lifecycle, reinforcement telemetry, and real-time combat UI hooks for Total War: Attila.
+/// Battle functions and hooks for Total War: Attila.
 ///
-/// Total War: Attila instantiates a separate Lua environment during tactical battles.
-/// To access `twdll` and enable battle hooks, load the DLL in `battle_scripted.lua`:
+/// To use twdll in battles, load it inside `battle_scripted.lua`:
 ///
 ///     -- In battle_scripted.lua:
 ///     local twdll = package.loadlib("twdll", "luaopen_twdll")()
@@ -287,12 +286,10 @@ static int GetBattleInfo(lua_State* L) {
 }
 
 /***
-Enables or disables real-time battle unit card health bar calculation and HP tracking for Single Monster Entities (SMEs) and 1-man units.
-When enabled, dynamically updates the unit card health bar based on actual remaining entity hit points.
-Automatically uninstalled and restored to vanilla state on Lua environment teardown.
+Updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.
 
 @function EnableSmeHealthBars
-@tparam[opt=true] boolean enabled whether to enable (true) or disable (false) the real-time health bar hook
+@tparam[opt=true] boolean enabled whether to enable (true) or disable (false)
 @treturn boolean true on success, false otherwise
 @usage
 -- In battle_scripted.lua:

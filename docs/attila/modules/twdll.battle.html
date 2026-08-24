@@ -73,10 +73,9 @@
 </p>
 <p>
 
-<p> Tactical battle lifecycle, reinforcement telemetry, and real-time combat UI hooks for Total War: Attila.</p>
+<p> Battle functions and hooks for Total War: Attila.</p>
 
-<p> Total War: Attila instantiates a separate Lua environment during tactical battles.
- To access <code>twdll</code> and enable battle hooks, load the DLL in <code>battle_scripted.lua</code>:</p>
+<p> To use twdll in battles, load it inside <code>battle_scripted.lua</code>:</p>
 
 
 <pre>
@@ -92,7 +91,7 @@ twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class=
 <table class="function_list">
 	<tr>
 	<td class="name" nowrap><a href="#EnableSmeHealthBars">EnableSmeHealthBars ([enabled=true])</a></td>
-	<td class="summary">Enables or disables real-time battle unit card health bar calculation and HP tracking for Single Monster Entities (SMEs) and 1-man units.</td>
+	<td class="summary">Updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetBattleInfo">GetBattleInfo ()</a></td>
@@ -112,16 +111,14 @@ twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class=
     <strong>EnableSmeHealthBars ([enabled=true])</strong>
     </dt>
     <dd>
-    Enables or disables real-time battle unit card health bar calculation and HP tracking for Single Monster Entities (SMEs) and 1-man units.
-When enabled, dynamically updates the unit card health bar based on actual remaining entity hit points.
-Automatically uninstalled and restored to vanilla state on Lua environment teardown.
+    Updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">enabled</span>
             <span class="types"><span class="type">boolean</span></span>
-         whether to enable (true) or disable (false) the real-time health bar hook
+         whether to enable (true) or disable (false)
          (<em>default</em> true)
         </li>
     </ul>

@@ -1,5 +1,5 @@
 /// @module twdll.cai
-/// Campaign AI decision logging and telemetry extensions.
+/// Campaign AI logging functions.
 #include "cai_common.h"
 
 bool g_cai_logging_enabled = false;

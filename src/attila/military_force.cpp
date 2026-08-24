@@ -177,9 +177,7 @@ static int HasIntegrity(lua_State* L) {
 }
 
 /***
-Appoints and assigns the specified character as the commanding general of this military force.
-Instantiates the general's bodyguard unit, subsumes it into the force, dismisses the former general
-back to the faction court, and promotes the character to commanding general.
+Assigns a character as the commanding general of this military force, creating their bodyguard unit and returning the previous general to the faction court.
 @function AppointCharacter
 @tparam CHARACTER_SCRIPT_INTERFACE character character object to appoint as commanding general
 @tparam[opt] table options optional configuration table (`bodyguard_key` = custom bodyguard unit key)

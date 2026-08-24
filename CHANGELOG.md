@@ -5,8 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `AppointCharacter(character, [options])` — appoints and assigns the specified character as the commanding general of the military force through the engine's canonical general recruitment path, instantiating the new bodyguard unit (with optional custom bodyguard via `{ bodyguard_key = string }`), subsuming it into the force, dismissing the former general back to the faction court, and promoting the new general into the force.
-- Added `twdll.battle.EnableSmeHealthBars([enabled=true])` — enables or disables real-time tactical battle health bar calculation and entity HP tracking for Single Monster Entities (SMEs) and 1-man units, dynamically updating unit card health bars based on remaining entity hit points with automatic state rollback on Lua teardown.
+- Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `AppointCharacter(character, [options])` — assigns a character as the commanding general of the army, creating their bodyguard unit (supports `{ bodyguard_key = string }`) and returning the previous general to the faction court.
+- Added `twdll.battle.EnableSmeHealthBars([enabled=true])` — updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.
 
 ### Fixed
 - Fixed `twdll.tweakers.SetInt(name, val)` returning `true` when setting non-existent tweaker names, properly returning `false` on unresolved names matching `SetFloat` and `SetBool`.
