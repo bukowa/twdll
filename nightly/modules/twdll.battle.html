@@ -71,17 +71,21 @@
 <p>
 
 </p>
+<p>
+
 <p> Tactical battle lifecycle, reinforcement telemetry, and real-time combat UI hooks for Total War: Attila.</p>
 
 <p> Total War: Attila instantiates a separate Lua environment during tactical battles.
  To access <code>twdll</code> and enable battle hooks, load the DLL in <code>battle_scripted.lua</code>:</p>
-    <h3>Usage:</h3>
-    <ul>
-        <pre class="example">-- In battle_scripted.lua:
-local twdll = package.loadlib(&quot;twdll&quot;, &quot;luaopen_twdll&quot;)()
-twdll.battle.EnableSmeHealthBars(true)
+
+
+<pre>
+<span class="comment">-- In battle_scripted.lua:
+</span><span class="keyword">local</span> twdll = <span class="global">package</span>.<span class="function-name">loadlib</span>(<span class="string">"twdll"</span>, <span class="string">"luaopen_twdll"</span>)()
+twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class="keyword">true</span>)
 </pre>
-    </ul>
+
+</p>
 
 
 <h2><a href="#Functions">Functions</a></h2>
