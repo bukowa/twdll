@@ -71,11 +71,25 @@
 <p>
 
 </p>
-<p> Battle lifecycle hooks for Total War: Attila.</p>
+<p> Tactical battle lifecycle, reinforcement telemetry, and real-time combat UI hooks for Total War: Attila.</p>
+
+<p> Total War: Attila instantiates a separate Lua environment during tactical battles.
+ To access <code>twdll</code> and enable battle hooks, load the DLL in <code>battle_scripted.lua</code>:</p>
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">-- In battle_scripted.lua:
+local twdll = package.loadlib(&quot;twdll&quot;, &quot;luaopen_twdll&quot;)()
+twdll.battle.EnableSmeHealthBars(true)
+</pre>
+    </ul>
 
 
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#EnableSmeHealthBars">EnableSmeHealthBars ([enabled=true])</a></td>
+	<td class="summary">Enables or disables real-time battle unit card health bar calculation and HP tracking for Single Monster Entities (SMEs) and 1-man units.</td>
+	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetBattleInfo">GetBattleInfo ()</a></td>
 	<td class="summary">Returns live runtime telemetry and reinforcement structure about the current tactical battle.</td>
@@ -89,6 +103,42 @@
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
+    <dt>
+    <a name = "EnableSmeHealthBars"></a>
+    <strong>EnableSmeHealthBars ([enabled=true])</strong>
+    </dt>
+    <dd>
+    Enables or disables real-time battle unit card health bar calculation and HP tracking for Single Monster Entities (SMEs) and 1-man units.
+When enabled, dynamically updates the unit card health bar based on actual remaining entity hit points.
+Automatically uninstalled and restored to vanilla state on Lua environment teardown.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         whether to enable (true) or disable (false) the real-time health bar hook
+         (<em>default</em> true)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true on success, false otherwise
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In battle_scripted.lua:
+</span><span class="keyword">local</span> twdll = <span class="global">package</span>.<span class="function-name">loadlib</span>(<span class="string">"twdll"</span>, <span class="string">"luaopen_twdll"</span>)()
+twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
     <dt>
     <a name = "GetBattleInfo"></a>
     <strong>GetBattleInfo ()</strong>
