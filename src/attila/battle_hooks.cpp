@@ -4,10 +4,9 @@
 /// Total War: Attila instantiates a separate Lua environment during tactical battles.
 /// To access `twdll` and enable battle hooks, load the DLL in `battle_scripted.lua`:
 ///
-/// @usage
-/// -- In battle_scripted.lua:
-/// local twdll = package.loadlib("twdll", "luaopen_twdll")()
-/// twdll.battle.EnableSmeHealthBars(true)
+///     -- In battle_scripted.lua:
+///     local twdll = package.loadlib("twdll", "luaopen_twdll")()
+///     twdll.battle.EnableSmeHealthBars(true)
 #include "../common/tw.h"
 #include "../common/campaign_hooks.h"
 #include "game_api.h"
