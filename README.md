@@ -44,6 +44,16 @@ twdll.core.Log("Hello from C++!")
 > the `src/rome2/`, `tests/rome2/`, and `docs/rome2/` trees are preserved as-is. Active development,
 > releases, and documentation target Attila only.
 
+## Disclaimer: AI-Assisted & Vibe-Coded
+
+> [!NOTE]
+> This project is heavily **vibe-coded** with extensive AI assistance. We believe in complete transparency about how this software is built.
+>
+> While every effort is made to inspect, review, and test reverse-engineered offsets, memory layouts, and C++ hooks against real game binaries, unintended bugs, edge cases, and side effects can and will occur.
+>
+> - **Bug reports, code reviews, and PRs are warmly welcome!** If you spot an issue, an incorrect offset, or a cleaner way to implement something, your contributions are greatly appreciated.
+> - **Freedom to Fork:** `twdll` is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. You have the full right and freedom to fork, modify, maintain, or rebuild this project for your own needs.
+
 ## Development
 
 ### Building on Windows
