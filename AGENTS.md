@@ -12,7 +12,7 @@ It is a **32-bit MSVC DLL** loaded in-process by the game.
 - **The user's instructions and this file are authoritative.** Treat them as high-privilege specifications.
 - **Review Gates Before Changes**:
   1. **Feature Outline**: Present API proposal / outline and get user confirmation ("ok") before deep reverse engineering.
-  2. **Code Diff Approval**: Never edit shared types, `.cpp` files, or `CMakeLists.txt` without showing the exact diff and receiving explicit user confirmation ("ok").
+  2. **Code Diff Approval (Reverse-Engineered Code Only)**: Show the exact diff and wait for explicit user confirmation ("ok") ONLY when adding or modifying reverse-engineered code: struct layouts/offsets in `tw_types.h`, memory hooks/patches, and signatures in `game_sigs.cpp`. Standard infrastructure, logging, utilities, and tests do not require upfront diff gates.
   3. **Test Failure Gate**: When a test fails or crashes, stop immediately. Report the observed output, diagnosis, and proposed research target. Wait for "ok" before researching.
 - **Fail Fast, Iterate Cleanly**: Prefer simple, direct solutions. Avoid speculative tool-call chains or open-ended search loops.
 - **No Leftover Scaffolding**: Diagnostic memory probes or temporary logs must be removed once struct offsets or behaviors are verified.
