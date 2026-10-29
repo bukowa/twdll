@@ -7,6 +7,10 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `AppointCharacter(character, [options])` — assigns a character as the commanding general of the army, creating their bodyguard unit (supports `{ bodyguard_key = string }`) and returning the previous general to the faction court.
 - Added `twdll.battle.EnableSmeHealthBars([enabled=true])` — updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.
+- Added `twdll.core.EnableLogging([enabled])` — enables or disables logging output to `twdll.log` (disabled by default), eliminating disk I/O, file handle churn, and thread blocking during gameplay.
+
+### Changed
+- `twdll.core.Log` now outputs only when logging has been enabled via `twdll.core.EnableLogging(true)`.
 
 ### Fixed
 - Fixed `twdll.tweakers.SetInt(name, val)` returning `true` when setting non-existent tweaker names, properly returning `false` on unresolved names matching `SetFloat` and `SetBool`.

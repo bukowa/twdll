@@ -39,6 +39,7 @@ static int l_twdll_gc_cleanup(lua_State*) {
         Log("[twdll] GC destroying Lua state — uninstalling campaign hooks and tweakers");
         uninstall_tweakers();
         uninstall_campaign_hooks();
+        set_logging_enabled(false);
         g_is_initialized = false;
     }
     return 0;

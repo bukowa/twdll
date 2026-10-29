@@ -31,6 +31,10 @@ end
 -- If tests.save is regenerated, these CQIs must be re-verified and updated.
 
 local function run_twdll_tests()
+    if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.EnableLogging) == "function" then
+        twdll.core.EnableLogging(true)
+    end
+
     local f = io.open("twdll.log", "a")
     if f then
         f:write("\n===================================\n")
@@ -201,6 +205,16 @@ local function run_twdll_tests()
 
         -- Smoke tests: Log and GetBuildSha
         test("Core Smoke Tests", function(t)
+            t:assert(type(twdll.core.EnableLogging) == "function", "twdll.core.EnableLogging is a function")
+            local is_enabled = twdll.core.EnableLogging()
+            t:assert(type(is_enabled) == "boolean", "EnableLogging() returns boolean")
+
+            twdll.core.EnableLogging(false)
+            t:assert_eq(twdll.core.EnableLogging(), false, "EnableLogging(false) disables logging")
+
+            twdll.core.EnableLogging(true)
+            t:assert_eq(twdll.core.EnableLogging(), true, "EnableLogging(true) re-enables logging")
+
             local log_test_ok = pcall(function()
                 twdll.core.Log("[TEST] twdll.core.Log multi-type test:", nil, true, 123, { test = 1 })
             end)
