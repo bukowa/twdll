@@ -16,6 +16,7 @@ extern const luaL_Reg battle_functions[];
 extern const luaL_Reg campaign_ui_functions[];
 extern const luaL_Reg cai_functions_export[];
 extern const luaL_Reg twdll_core[];
+#include "common/lua_log.h"
 
 extern void register_character_methods(lua_State *L);
 extern void register_art_set_methods(lua_State *L);
@@ -39,6 +40,8 @@ static int l_twdll_gc_cleanup(lua_State*) {
         Log("[twdll] GC destroying Lua state — uninstalling campaign hooks and tweakers");
         uninstall_tweakers();
         uninstall_campaign_hooks();
+        set_logging_enabled(false);
+        reset_log_registry();
         g_is_initialized = false;
     }
     return 0;
@@ -89,7 +92,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     Log("[twdll] luaopen_twdll: registering modules");
 
-    l_createtable(L, 0, 8);
+    l_createtable(L, 0, 16);
 
     // Save table instance in Lua registry for future loadlib calls in this session
     l_pushvalue(L, -1);
@@ -104,6 +107,9 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     l_register(L, "twdll", twdll_core);
     l_setfield(L, -2, "core");
+
+    register_log_module(L);
+    l_setfield(L, -2, "log");
 
     l_register(L, "twdll_character", character_functions);
     l_setfield(L, -2, "character");

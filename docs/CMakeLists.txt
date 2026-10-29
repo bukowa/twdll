@@ -17,6 +17,7 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/cai/cai_core.cpp"          # twdll.cai
         "${PROJECT_SOURCE_DIR}/src/attila/campaign_ui.cpp"          # twdll.campaign_ui
         "${PROJECT_SOURCE_DIR}/src/common/lua_core.cpp"             # twdll.core
+        "${PROJECT_SOURCE_DIR}/src/common/lua_log.cpp"              # twdll.log
         "${PROJECT_SOURCE_DIR}/src/attila/model.cpp"                # twdll.model
         "${PROJECT_SOURCE_DIR}/src/attila/tweakers.cpp"             # twdll.tweakers
         "${PROJECT_SOURCE_DIR}/src/attila/world.cpp"                # twdll.world

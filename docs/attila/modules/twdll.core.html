@@ -43,6 +43,7 @@
   <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
   <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
   <li><strong>twdll.core</strong></li>
+  <li><a href="../modules/twdll.log.html">twdll.log</a></li>
   <li><a href="../modules/twdll.model.html">twdll.model</a></li>
   <li><a href="../modules/twdll.tweakers.html">twdll.tweakers</a></li>
   <li><a href="../modules/twdll.world.html">twdll.world</a></li>
@@ -77,6 +78,10 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#EnableLogging">EnableLogging ([enabled])</a></td>
+	<td class="summary">Enables or disables logging output to <a href="../modules/twdll.log.html#">twdll.log</a>.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GameBuild">GameBuild ()</a></td>
 	<td class="summary">Returns the target game build name (e.g.</td>
 	</tr>
@@ -86,7 +91,7 @@
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#Log">Log (...)</a></td>
-	<td class="summary">Log a message or arbitrary values to <code>twdll.log</code>.</td>
+	<td class="summary">Log a message or arbitrary values to <a href="../modules/twdll.log.html#">twdll.log</a>.</td>
 	</tr>
 </table>
 
@@ -97,6 +102,46 @@
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
+    <dt>
+    <a name = "EnableLogging"></a>
+    <strong>EnableLogging ([enabled])</strong>
+    </dt>
+    <dd>
+    Enables or disables logging output to <a href="../modules/twdll.log.html#">twdll.log</a>.
+ Logging is disabled by default on initialization.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         whether logging to twdll.log is enabled
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        current enabled state
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- Enable logging:
+</span>twdll.core.<span class="function-name">EnableLogging</span>(<span class="keyword">true</span>)
+
+<span class="comment">-- Query current state:
+</span><span class="keyword">local</span> is_logging = twdll.core.<span class="function-name">EnableLogging</span>()
+
+<span class="comment">-- Disable logging:
+</span>twdll.core.<span class="function-name">EnableLogging</span>(<span class="keyword">false</span>)</pre>
+    </ul>
+
+</dd>
     <dt>
     <a name = "GameBuild"></a>
     <strong>GameBuild ()</strong>
@@ -150,8 +195,9 @@
     <strong>Log (...)</strong>
     </dt>
     <dd>
-    Log a message or arbitrary values to <code>twdll.log</code>.
+    Log a message or arbitrary values to <a href="../modules/twdll.log.html#">twdll.log</a>.
  Accepts any number of arguments of any type, converting them via Lua tostring.
+ Logging is disabled by default; enable it with <code>twdll.core.EnableLogging(true)</code>.
 
 
     <h3>Parameters:</h3>

@@ -1,4 +1,6 @@
 #include "tw.h"
+#include "log.h"
+#include <cstring>
 
 extern const char* GAME_NAME;
 
@@ -9,11 +11,16 @@ extern const char* GAME_NAME;
 
 /// Log a message or arbitrary values to `twdll.log`.
 /// Accepts any number of arguments of any type, converting them via Lua tostring.
+/// Logging is disabled by default; enable it with `twdll.core.EnableLogging(true)`.
 /// @function Log
 /// @tparam any ... values to log
 /// @usage
 /// twdll.core.Log("Campaign initialized. Turn:", 1, "Faction:", faction:name())
 static int script_Log(lua_State* L) {
+    if (!is_logging_enabled()) {
+        return 0;
+    }
+
     std::string full_msg;
     for (int i = 1; l_type(L, i) != LUA_TNONE; ++i) {
         if (i > 1) full_msg += "\t";
@@ -27,8 +34,30 @@ static int script_Log(lua_State* L) {
             l_pop(L, 1);
         }
     }
-    Log("%s", full_msg.c_str());
+    Log(full_msg);
     return 0;
+}
+
+/// Enables or disables logging output to `twdll.log`.
+/// Logging is disabled by default on initialization.
+/// @function EnableLogging
+/// @tparam[opt] boolean enabled whether logging to twdll.log is enabled
+/// @treturn boolean current enabled state
+/// @usage
+/// -- Enable logging:
+/// twdll.core.EnableLogging(true)
+///
+/// -- Query current state:
+/// local is_logging = twdll.core.EnableLogging()
+///
+/// -- Disable logging:
+/// twdll.core.EnableLogging(false)
+static int script_EnableLogging(lua_State* L) {
+    if (l_type(L, 1) != LUA_TNONE && l_type(L, 1) != LUA_TNIL) {
+        set_logging_enabled(l_tobool(L, 1) != 0);
+    }
+    l_pushboolean(L, is_logging_enabled() ? 1 : 0);
+    return 1;
 }
 
 /// Returns the target game build name (e.g. `"Attila"`).
@@ -56,8 +85,10 @@ static int script_GetBuildSha(lua_State* L) {
 }
 
 extern const luaL_Reg twdll_core[] = {
-    {"Log",         script_Log},
-    {"GameBuild",   script_GameBuild},
-    {"GetBuildSha", script_GetBuildSha},
+    {"EnableLogging", script_EnableLogging},
+    {"Log",           script_Log},
+    {"GameBuild",     script_GameBuild},
+    {"GetBuildSha",   script_GetBuildSha},
     {nullptr, nullptr}
 };
+
