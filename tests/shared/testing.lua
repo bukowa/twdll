@@ -31,6 +31,10 @@ end
 -- If tests.save is regenerated, these CQIs must be re-verified and updated.
 
 local function run_twdll_tests()
+    if type(twdll) == "table" and type(twdll.core) == "table" and type(twdll.core.EnableLogging) == "function" then
+        twdll.core.EnableLogging(true)
+    end
+
     local f = io.open("twdll.log", "a")
     if f then
         f:write("\n===================================\n")
@@ -201,6 +205,16 @@ local function run_twdll_tests()
 
         -- Smoke tests: Log and GetBuildSha
         test("Core Smoke Tests", function(t)
+            t:assert(type(twdll.core.EnableLogging) == "function", "twdll.core.EnableLogging is a function")
+            local is_enabled = twdll.core.EnableLogging()
+            t:assert(type(is_enabled) == "boolean", "EnableLogging() returns boolean")
+
+            twdll.core.EnableLogging(false)
+            t:assert_eq(twdll.core.EnableLogging(), false, "EnableLogging(false) disables logging")
+
+            twdll.core.EnableLogging(true)
+            t:assert_eq(twdll.core.EnableLogging(), true, "EnableLogging(true) re-enables logging")
+
             local log_test_ok = pcall(function()
                 twdll.core.Log("[TEST] twdll.core.Log multi-type test:", nil, true, 123, { test = 1 })
             end)
@@ -209,6 +223,71 @@ local function run_twdll_tests()
             local build_sha = twdll.core.GetBuildSha and twdll.core.GetBuildSha()
             twdll.core.Log("[TEST] twdll.core.GetBuildSha = " .. tostring(build_sha))
             t:assert(type(build_sha) == "string" and #build_sha >= 7, "twdll.core.GetBuildSha valid")
+        end)
+
+        -- Modular Logging System (twdll.log) Tests
+        test("Modular Logging System (twdll.log)", function(t)
+            t:assert(type(twdll.log) == "table", "twdll.log table exists")
+            t:assert(type(twdll.log.GetLogger) == "function", "twdll.log.GetLogger exists")
+            t:assert(type(twdll.log.SetLevel) == "function", "twdll.log.SetLevel exists")
+            t:assert(type(twdll.log.GetLevel) == "function", "twdll.log.GetLevel exists")
+            t:assert(type(twdll.log.IsEnabled) == "function", "twdll.log.IsEnabled exists")
+            t:assert(type(twdll.log.Info) == "function", "twdll.log.Info exists")
+            t:assert(type(twdll.log.Warn) == "function", "twdll.log.Warn exists")
+            t:assert(type(twdll.log.Error) == "function", "twdll.log.Error exists")
+            t:assert(type(twdll.log.Flush) == "function", "twdll.log.Flush exists")
+
+            -- Root level control
+            twdll.log.SetLevel("info")
+            t:assert_eq(twdll.log.GetLevel(), "info", "twdll.log.GetLevel() returns info")
+            t:assert(twdll.log.IsEnabled("info"), "info is enabled")
+            t:assert(not twdll.log.IsEnabled("debug"), "debug is disabled when level is info")
+
+            twdll.log.SetLevel("debug")
+            t:assert_eq(twdll.log.GetLevel(), "debug", "twdll.log.GetLevel() returns debug")
+            t:assert(twdll.log.IsEnabled("debug"), "debug is enabled when level is debug")
+
+            -- Named Logger instantiation and inheritance
+            local logger = twdll.log.GetLogger("TestMod")
+            t:assert(type(logger) == "userdata", "GetLogger returns userdata")
+            t:assert_eq(logger:GetName(), "TestMod", "logger:GetName() matches")
+            t:assert_eq(logger:GetLevel(), "debug", "logger inherits root level debug")
+
+            -- Channel override
+            logger:SetLevel("warn")
+            t:assert_eq(logger:GetLevel(), "warn", "logger override level is warn")
+            t:assert(logger:IsEnabled("warn"), "logger:IsEnabled('warn') is true")
+            t:assert(not logger:IsEnabled("info"), "logger:IsEnabled('info') is false")
+            t:assert_eq(twdll.log.GetLevel(), "debug", "root level remains debug")
+
+            -- Reset override
+            logger:SetLevel("inherit")
+            t:assert_eq(logger:GetLevel(), "debug", "logger resets back to inherited debug")
+            logger:SetLevel("warn")
+            t:assert_eq(logger:GetLevel(), "warn", "logger override level is warn again")
+            logger:SetLevel(nil)
+            t:assert_eq(logger:GetLevel(), "debug", "logger resets back to inherited debug via nil")
+
+            -- Variadic safe logging (print-style, nil, non-string, format strings)
+            local log_calls_ok = pcall(function()
+                logger:Fatal("Fatal message", 1, true)
+                logger:Error("Error message", nil)
+                logger:Warn("Warning message", { a = 1 })
+                logger:Info("Completed 100% of tasks with specifiers: %s %d %x %%")
+                logger:Debug("Debug telemetry", 42, 3.14)
+                logger:Trace("Trace message")
+                twdll.log.Info("Root main message", "foo", "bar")
+                twdll.log.Flush()
+                logger:Flush()
+            end)
+            t:assert(log_calls_ok, "variadic logging calls execute safely")
+
+            -- Verify non-logger userdata as argument 1 to static twdll.log.Info does not crash or confuse types
+            local static_ud_call_ok = pcall(function()
+                twdll.log.Info(twdll, "logged table as arg1")
+                twdll.log.Info(twdll.world, "logged world singleton as arg1")
+            end)
+            t:assert(static_ud_call_ok, "static twdll.log.Info accepts objects as first argument")
         end)
 
         -- ======================================================
