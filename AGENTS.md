@@ -166,25 +166,23 @@ keeps "install-time plumbing" visually distinct from the Lua API surface.
 
 ## Building
 
-One command builds the DLL. `cmake` is NOT on PATH — when working in CLion
-(this repo has `.idea`), invoke the CMake bundled with CLion by full path:
+`CMakePresets.json` is the **single source of truth** for toolchain paths and 32-bit MSVC environment variables (`INCLUDE`, `LIB`, `PATH`, `cl.exe`, `ninja.exe`).
+`cmake` is NOT in the system `PATH` — invoke the CMake bundled with Visual Studio by full path:
+`C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe`
 
+Because `CMakePresets.json` defines the complete environment, **do NOT use `VsDevCmd.bat` or `cmd /c`**. Always use CMake presets directly from PowerShell:
+
+### 1. Configure (only needed once or when CMakeLists changes)
 ```powershell
-& "C:\Program Files\JetBrains\CLion 2026.2\bin\cmake\win\x64\bin\cmake.exe" --build build\attila
+& "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --preset attila
 ```
 
-That command only works from a shell that has the MSVC environment loaded
-(CLion provides it automatically). From a plain PowerShell/`pwsh` session the
-build fails with `fatal error C1083: Cannot open include file: 'cstddef'`
-because `INCLUDE`/`LIB` are not set. In that case, first import the VS
-developer environment (32-bit arch), then build the `twdll` target:
-
+### 2. Build DLL (`twdll.dll`)
 ```powershell
-cmd /c "call `"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat`" -arch=x86 && `"C:\Program Files\JetBrains\CLion 2026.2\bin\cmake\win\x64\bin\cmake.exe`" --build build\attila --target twdll"
+& "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build --preset attila
 ```
 
-Note: building the default target also compiles `docs/lua/`, which fails from a
-bare shell for the same missing-include reason — use `--target twdll` to skip it.
+Note: the `attila` preset builds the `twdll` target by default. Building the bare default target compiles `docs/lua/`, which requires Doxygen/LDoc — always build via `--preset attila` or specify `--target twdll`.
 
 Deployment/tests go through `tools/twdll.ps1` (`tw-pack`/`tw-install`/
 `tw-run`/`tw-test` CMake targets). `tw-test` launches the real game and takes
@@ -256,21 +254,48 @@ When committing changes on user request, always follow the **Conventional Commit
 
 ```
 tests/
+├── README.md                # Testing standards and agent instructions
+├── unit/                    # Standalone C++ unit tests (doctest) — mirrors src/ 1:1
+│   ├── main.cpp             # Runner entry point
+│   ├── common/              # Mirrors src/common/
+│   │   └── log_test.cpp
+│   └── attila/              # Mirrors src/attila/
 ├── shared/
-│   └── testing.lua          # SOURCE OF TRUTH — edit only this file
+│   └── testing.lua          # In-game Lua integration test suite (SOURCE OF TRUTH)
 └── attila/
     └── pack/
         └── shared/
             └── testing.lua  # AUTO-GENERATED — do not edit directly
 ```
 
-`tests/shared/testing.lua` is the only file to edit. `tools/twdll.ps1` copies it into
-`tests/attila/pack/shared/` on each `tw-pack`/`tw-test` run.
+### Adversarial & Fault-Seeking Testing Standard
+
+Per `tests/README.md`:
+- **Never Write Tautological Tests**: Tests must NEVER be written solely to mirror the implementation or produce superficial green checks (e.g. testing `is_enabled()` immediately after `set_enabled()`).
+- **Hunt for Errors & Failures**: Actively probe edge cases, `nullptr` guards, extreme buffer sizes (32 KB+), format string malformations, and multi-threaded race conditions.
+- **Physical Ground Truth**: Assert against the actual state of the filesystem (disk file size, raw byte contents), not memory variables.
+- **Mirroring Rule**: Standalone C++ unit tests in `tests/unit/` MUST mirror the `src/` directory hierarchy 1:1.
 
 ### Running Tests
 
+**Standalone C++ Unit Tests (Runs in < 100ms outside the game via ctest)**:
+Never execute test `.exe` binaries directly. Run unit tests via `ctest` preset:
 ```powershell
-cmake --build --preset attila --target tw-test
+& "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe" --preset attila
+```
+or via the custom CMake target (which automatically rebuilds the test binary if source changed):
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build build\attila --target tw-unit-test
+```
+Inside CLion, tests can also be executed graphically via the built-in test runner UI.
+
+**In-Game Lua Integration Tests (Runs inside Attila)**:
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build build\attila --target tw-test
+```
+or directly via the PowerShell task runner:
+```powershell
+.\tools\twdll.ps1 test attila
 ```
 
 Builds the DLL, packages it, launches the game with `tests.save`, runs the Lua test suite at

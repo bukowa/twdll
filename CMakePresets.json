@@ -81,6 +81,20 @@
       "name": "attila",
       "configurePreset": "attila",
       "targets": ["twdll"]
+    },
+    {
+      "name": "attila-unit-tests",
+      "configurePreset": "attila",
+      "targets": ["twdll_unit_tests"]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "attila",
+      "configurePreset": "attila",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }
