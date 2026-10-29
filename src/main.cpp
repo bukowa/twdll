@@ -16,6 +16,7 @@ extern const luaL_Reg battle_functions[];
 extern const luaL_Reg campaign_ui_functions[];
 extern const luaL_Reg cai_functions_export[];
 extern const luaL_Reg twdll_core[];
+extern void register_log_module(lua_State* L);
 
 extern void register_character_methods(lua_State *L);
 extern void register_art_set_methods(lua_State *L);
@@ -90,7 +91,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     Log("[twdll] luaopen_twdll: registering modules");
 
-    l_createtable(L, 0, 8);
+    l_createtable(L, 0, 16);
 
     // Save table instance in Lua registry for future loadlib calls in this session
     l_pushvalue(L, -1);
@@ -105,6 +106,9 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     l_register(L, "twdll", twdll_core);
     l_setfield(L, -2, "core");
+
+    register_log_module(L);
+    l_setfield(L, -2, "log");
 
     l_register(L, "twdll_character", character_functions);
     l_setfield(L, -2, "character");
