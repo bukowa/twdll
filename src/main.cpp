@@ -41,6 +41,7 @@ static int l_twdll_gc_cleanup(lua_State*) {
         uninstall_tweakers();
         uninstall_campaign_hooks();
         set_logging_enabled(false);
+        reset_log_registry();
         g_is_initialized = false;
     }
     return 0;

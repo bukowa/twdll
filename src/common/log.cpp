@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <mutex>
+#include <atomic>
 #include <algorithm>
 #include <cctype>
 
@@ -80,9 +81,21 @@ std::string to_lower(const char* str) {
     return s;
 }
 
+static inline void to_upper_buf(const char* src, char* dst, size_t dst_size) {
+    if (!src || dst_size == 0) {
+        if (dst_size > 0) dst[0] = '\0';
+        return;
+    }
+    size_t i = 0;
+    for (; src[i] != '\0' && i + 1 < dst_size; ++i) {
+        dst[i] = static_cast<char>(std::toupper(static_cast<unsigned char>(src[i])));
+    }
+    dst[i] = '\0';
+}
+
 static std::mutex g_registry_mutex;
-static LogLevel g_root_level = LogLevel::Info;
-static LogLevel g_core_level = LogLevel::Info;
+static std::atomic<LogLevel> g_root_level{LogLevel::Info};
+static std::atomic<LogLevel> g_core_level{LogLevel::Info};
 static std::unordered_map<std::string, std::optional<LogLevel>> g_channel_overrides;
 
 } // namespace
@@ -151,42 +164,57 @@ bool is_logging_enabled() {
 }
 
 void set_root_log_level(LogLevel level) {
-    std::lock_guard<std::mutex> lock(g_registry_mutex);
-    g_root_level = level;
+    g_root_level.store(level, std::memory_order_relaxed);
 }
 
 LogLevel get_root_log_level() {
-    std::lock_guard<std::mutex> lock(g_registry_mutex);
-    return g_root_level;
+    return g_root_level.load(std::memory_order_relaxed);
 }
 
 void set_channel_log_level(const char* channel, std::optional<LogLevel> level) {
     if (!channel) return;
+    char ch_buf[64];
+    to_upper_buf(channel, ch_buf, sizeof(ch_buf));
+
+    if (strcmp(ch_buf, "CORE") == 0) {
+        g_core_level.store(level.value_or(LogLevel::Info), std::memory_order_relaxed);
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(g_registry_mutex);
-    std::string ch = to_upper(channel);
-    if (ch == "CORE") {
-        g_core_level = level.value_or(LogLevel::Info);
+    if (level.has_value()) {
+        g_channel_overrides[ch_buf] = level;
     } else {
-        if (level.has_value()) {
-            g_channel_overrides[ch] = level;
-        } else {
-            g_channel_overrides.erase(ch);
-        }
+        g_channel_overrides.erase(ch_buf);
     }
 }
 
 LogLevel get_channel_effective_level(const char* channel) {
-    if (!channel) return get_root_log_level();
-    std::lock_guard<std::mutex> lock(g_registry_mutex);
-    std::string ch = to_upper(channel);
-    if (ch == "CORE") {
-        return g_core_level;
+    if (!channel) return g_root_level.load(std::memory_order_relaxed);
+
+    char ch_buf[64];
+    to_upper_buf(channel, ch_buf, sizeof(ch_buf));
+
+    if (strcmp(ch_buf, "CORE") == 0) {
+        return g_core_level.load(std::memory_order_relaxed);
     }
-    auto it = g_channel_overrides.find(ch);
+
+    std::lock_guard<std::mutex> lock(g_registry_mutex);
+    if (g_channel_overrides.empty()) {
+        return g_root_level.load(std::memory_order_relaxed);
+    }
+    auto it = g_channel_overrides.find(ch_buf);
     if (it != g_channel_overrides.end() && it->second.has_value()) {
         return it->second.value();
     }
-    return g_root_level;
+    return g_root_level.load(std::memory_order_relaxed);
+}
+
+void reset_log_registry() {
+    std::lock_guard<std::mutex> lock(g_registry_mutex);
+    g_root_level.store(LogLevel::Info, std::memory_order_relaxed);
+    g_core_level.store(LogLevel::Info, std::memory_order_relaxed);
+    g_channel_overrides.clear();
 }
 
 bool is_channel_level_enabled(const char* channel, LogLevel level) {

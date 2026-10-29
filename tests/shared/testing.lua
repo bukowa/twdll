@@ -277,6 +277,13 @@ local function run_twdll_tests()
                 logger:Flush()
             end)
             t:assert(log_calls_ok, "variadic logging calls execute safely")
+
+            -- Verify non-logger userdata as argument 1 to static twdll.log.Info does not crash or confuse types
+            local static_ud_call_ok = pcall(function()
+                twdll.log.Info(twdll, "logged table as arg1")
+                twdll.log.Info(twdll.world, "logged world singleton as arg1")
+            end)
+            t:assert(static_ud_call_ok, "static twdll.log.Info accepts objects as first argument")
         end)
 
         -- ======================================================

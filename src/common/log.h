@@ -49,3 +49,6 @@ void Log(const std::string& message);
 
 // Flushes the log file buffers to physical disk
 void FlushLog();
+
+// Resets root and channel levels back to initial defaults and clears all overrides
+void reset_log_registry();
