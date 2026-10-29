@@ -96,6 +96,57 @@ extern const luaL_Reg twdll_core[] = {
 // twdll.log module & LoggerInstance
 // -----------------------------------------------------------------------------
 
+/// @module twdll.log
+/// Modular multi-channel logging system supporting named loggers and level filtering.
+
+/// Returns a named logger instance writing with origin tag `[<name>]`.
+/// @function GetLogger
+/// @tparam string name Logger channel name (e.g. `"MyMod"`)
+/// @treturn LOGGER_SCRIPT_INTERFACE logger instance
+
+/// Sets the minimum log level for the root logger or a specific channel.
+/// @function SetLevel
+/// @tparam string level Log level name (`"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"none"`, or `"inherit"`)
+/// @tparam[opt] string channel Optional channel name (defaults to root)
+
+/// Gets the effective log level as a lowercase string.
+/// @function GetLevel
+/// @tparam[opt] string channel Optional channel name (defaults to root)
+/// @treturn string effective level name
+
+/// Checks whether a given log level is enabled for a channel.
+/// @function IsEnabled
+/// @tparam string level Log level name
+/// @tparam[opt] string channel Optional channel name (defaults to `"MAIN"`)
+/// @treturn boolean true if level is enabled
+
+/// Flushes unbuffered log outputs to disk.
+/// @function Flush
+
+/// Logs a message under channel `[MAIN]` at FATAL severity.
+/// @function Fatal
+/// @tparam any ... values to log
+
+/// Logs a message under channel `[MAIN]` at ERROR severity.
+/// @function Error
+/// @tparam any ... values to log
+
+/// Logs a message under channel `[MAIN]` at WARN severity.
+/// @function Warn
+/// @tparam any ... values to log
+
+/// Logs a message under channel `[MAIN]` at INFO severity.
+/// @function Info
+/// @tparam any ... values to log
+
+/// Logs a message under channel `[MAIN]` at DEBUG severity.
+/// @function Debug
+/// @tparam any ... values to log
+
+/// Logs a message under channel `[MAIN]` at TRACE severity.
+/// @function Trace
+/// @tparam any ... values to log
+
 static const char* const LOGGER_METATABLE = "LOGGER_SCRIPT_INTERFACE";
 
 struct LoggerUserdata {
