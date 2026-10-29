@@ -55,7 +55,10 @@ target_compile_definitions(twdll PRIVATE
     TWDLL_BUILD_SHA="${TWDLL_BUILD_SHA}"
 )
 
-target_include_directories(twdll PRIVATE src)
+target_include_directories(twdll PRIVATE
+    src
+    vendor/plog/include
+)
 target_link_libraries(twdll PRIVATE minhook)
 
 # Add Windows SDK and compiler standard library paths
@@ -88,6 +91,35 @@ if(TW_GAME STREQUAL "attila")
 elseif(TW_GAME STREQUAL "rome2")
     target_compile_definitions(twdll PRIVATE TW_ROME2)
 endif()
+
+# ── Unit Tests (doctest) ──────────────────────────────────────────────────────
+enable_testing()
+add_executable(twdll_unit_tests
+    tests/unit/main.cpp
+    tests/unit/common/log_test.cpp
+    src/common/log.cpp
+)
+target_include_directories(twdll_unit_tests PRIVATE
+    src
+    vendor
+    vendor/plog/include
+    vendor/doctest
+)
+if(MSVC)
+    target_include_directories(twdll_unit_tests PRIVATE "$ENV{INCLUDE}")
+    string(REPLACE ";" "\\;" LIB_PATHS "$ENV{LIB}")
+    target_link_directories(twdll_unit_tests PRIVATE ${LIB_PATHS})
+endif()
+target_compile_options(twdll_unit_tests PRIVATE /Zi /utf-8 /W4)
+target_compile_definitions(twdll_unit_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
+add_test(NAME unit_tests COMMAND twdll_unit_tests)
+
+add_custom_target(tw-unit-test
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    DEPENDS twdll_unit_tests
+    COMMENT "Running C++ unit tests (ctest)"
+)
 
 # ── Task targets (delegate to tools/twdll.ps1) ────────────────────────────────
 # Logic lives in the script; these targets exist for IDE integration.
