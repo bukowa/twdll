@@ -6,6 +6,7 @@
 #include <vector>
 #include <thread>
 #include <atomic>
+#include <optional>
 
 namespace {
 
@@ -130,6 +131,96 @@ TEST_SUITE("src/common/log.cpp: Adversarial & Edge Case Tests") {
 
         // If threads corrupted memory or deadlocked, we'd never reach here.
         CHECK_EQ(logged_count.load(), 800);
+    }
+}
+
+TEST_SUITE("src/common/log.cpp: Modular Multi-Channel & Severity Hierarchy Tests") {
+
+    TEST_CASE("parse_log_level: parses severity strings case-insensitively with aliases") {
+        CHECK_EQ(parse_log_level("none"), LogLevel::None);
+        CHECK_EQ(parse_log_level("NONE"), LogLevel::None);
+        CHECK_EQ(parse_log_level("fatal"), LogLevel::Fatal);
+        CHECK_EQ(parse_log_level("FATAL"), LogLevel::Fatal);
+        CHECK_EQ(parse_log_level("error"), LogLevel::Error);
+        CHECK_EQ(parse_log_level("warn"), LogLevel::Warn);
+        CHECK_EQ(parse_log_level("warning"), LogLevel::Warn);
+        CHECK_EQ(parse_log_level("WARNING"), LogLevel::Warn);
+        CHECK_EQ(parse_log_level("info"), LogLevel::Info);
+        CHECK_EQ(parse_log_level("INFO"), LogLevel::Info);
+        CHECK_EQ(parse_log_level("debug"), LogLevel::Debug);
+        CHECK_EQ(parse_log_level("DEBUG"), LogLevel::Debug);
+        CHECK_EQ(parse_log_level("trace"), LogLevel::Trace);
+        CHECK_EQ(parse_log_level("verbose"), LogLevel::Trace);
+        CHECK_EQ(parse_log_level("unknown_invalid_level"), LogLevel::Info); // safe fallback
+        CHECK_EQ(parse_log_level(nullptr), LogLevel::Info);
+    }
+
+    TEST_CASE("log_level_to_string: converts levels to canonical lowercase names") {
+        CHECK_EQ(std::string(log_level_to_string(LogLevel::None)), "none");
+        CHECK_EQ(std::string(log_level_to_string(LogLevel::Fatal)), "fatal");
+        CHECK_EQ(std::string(log_level_to_string(LogLevel::Error)), "error");
+        CHECK_EQ(std::string(log_level_to_string(LogLevel::Warn)), "warn");
+        CHECK_EQ(std::string(log_level_to_string(LogLevel::Info)), "info");
+        CHECK_EQ(std::string(log_level_to_string(LogLevel::Debug)), "debug");
+        CHECK_EQ(std::string(log_level_to_string(LogLevel::Trace)), "trace");
+    }
+
+    TEST_CASE("Channel registry & level inheritance") {
+        set_logging_enabled(true);
+
+        set_root_log_level(LogLevel::Info);
+        CHECK_EQ(get_root_log_level(), LogLevel::Info);
+
+        // Child channels inherit root level when no override is set
+        CHECK_EQ(get_channel_effective_level("MyMod"), LogLevel::Info);
+        CHECK(is_channel_level_enabled("MyMod", LogLevel::Info));
+        CHECK(is_channel_level_enabled("MyMod", LogLevel::Warn));
+        CHECK_FALSE(is_channel_level_enabled("MyMod", LogLevel::Debug));
+
+        // When root level changes, inherited channels follow
+        set_root_log_level(LogLevel::Warn);
+        CHECK_EQ(get_channel_effective_level("MyMod"), LogLevel::Warn);
+        CHECK_FALSE(is_channel_level_enabled("MyMod", LogLevel::Info));
+
+        // Channel override decouples from root
+        set_channel_log_level("MyMod", LogLevel::Debug);
+        CHECK_EQ(get_channel_effective_level("MyMod"), LogLevel::Debug);
+        CHECK(is_channel_level_enabled("MyMod", LogLevel::Debug));
+        CHECK(is_channel_level_enabled("MyMod", LogLevel::Info));
+
+        // Root level changes do not affect overridden channel
+        set_root_log_level(LogLevel::Error);
+        CHECK_EQ(get_channel_effective_level("MyMod"), LogLevel::Debug);
+
+        // Reset override restores inheritance
+        set_channel_log_level("MyMod", std::nullopt);
+        CHECK_EQ(get_channel_effective_level("MyMod"), LogLevel::Error);
+
+        // CORE channel isolation
+        CHECK_EQ(get_channel_effective_level("CORE"), LogLevel::Info);
+        set_channel_log_level("CORE", LogLevel::Warn);
+        CHECK_EQ(get_channel_effective_level("CORE"), LogLevel::Warn);
+
+        set_logging_enabled(false);
+        // When master logging is disabled, all channels report false for enabled
+        CHECK_FALSE(is_channel_level_enabled("MyMod", LogLevel::Fatal));
+    }
+
+    TEST_CASE("Log formatting with channel tags and severity in twdll.log") {
+        const char* test_file = "twdll.log";
+        std::remove(test_file);
+
+        set_logging_enabled(true);
+        set_root_log_level(LogLevel::Debug);
+
+        LogChannel("SupplyMod", LogLevel::Info, "Units resupplied: 120");
+        LogChannel("BattleAI", LogLevel::Warn, "Flank exposed on unit 5");
+
+        std::string content = read_entire_file(test_file);
+        CHECK(content.find("[INFO]  [SupplyMod] Units resupplied: 120") != std::string::npos);
+        CHECK(content.find("[WARN]  [BattleAI] Flank exposed on unit 5") != std::string::npos);
+
+        set_logging_enabled(false);
     }
 }
 
