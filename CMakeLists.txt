@@ -93,6 +93,45 @@ elseif(TW_GAME STREQUAL "rome2")
     target_compile_definitions(twdll PRIVATE TW_ROME2)
 endif()
 
+# ── Test Dependencies (vendor/tests) ──────────────────────────────────────────
+set(LUA51_TEST_SOURCES
+    vendor/tests/lua51/src/lapi.c
+    vendor/tests/lua51/src/lcode.c
+    vendor/tests/lua51/src/ldebug.c
+    vendor/tests/lua51/src/ldo.c
+    vendor/tests/lua51/src/ldump.c
+    vendor/tests/lua51/src/lfunc.c
+    vendor/tests/lua51/src/lgc.c
+    vendor/tests/lua51/src/llex.c
+    vendor/tests/lua51/src/lmem.c
+    vendor/tests/lua51/src/lobject.c
+    vendor/tests/lua51/src/lopcodes.c
+    vendor/tests/lua51/src/lparser.c
+    vendor/tests/lua51/src/lstate.c
+    vendor/tests/lua51/src/lstring.c
+    vendor/tests/lua51/src/ltable.c
+    vendor/tests/lua51/src/ltm.c
+    vendor/tests/lua51/src/lundump.c
+    vendor/tests/lua51/src/lvm.c
+    vendor/tests/lua51/src/lzio.c
+    vendor/tests/lua51/src/lauxlib.c
+    vendor/tests/lua51/src/lbaselib.c
+    vendor/tests/lua51/src/ldblib.c
+    vendor/tests/lua51/src/liolib.c
+    vendor/tests/lua51/src/linit.c
+    vendor/tests/lua51/src/lmathlib.c
+    vendor/tests/lua51/src/loadlib.c
+    vendor/tests/lua51/src/loslib.c
+    vendor/tests/lua51/src/lstrlib.c
+    vendor/tests/lua51/src/ltablib.c
+)
+add_library(lua51_test STATIC ${LUA51_TEST_SOURCES})
+target_include_directories(lua51_test PUBLIC vendor/tests/lua51/src)
+target_compile_definitions(lua51_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+if(MSVC)
+    target_compile_options(lua51_test PRIVATE /W3 /wd4996 /wd4244 /wd4305)
+endif()
+
 # ── Unit Tests (doctest) ──────────────────────────────────────────────────────
 enable_testing()
 add_executable(twdll_unit_tests
@@ -104,15 +143,33 @@ target_include_directories(twdll_unit_tests PRIVATE
     src
     vendor
     vendor/plog/include
-    vendor/doctest
+    vendor/tests/doctest
+    vendor/tests/lua51/src
 )
+target_link_libraries(twdll_unit_tests PRIVATE lua51_test)
 if(MSVC)
     target_include_directories(twdll_unit_tests PRIVATE "$ENV{INCLUDE}")
     string(REPLACE ";" "\\;" LIB_PATHS "$ENV{LIB}")
     target_link_directories(twdll_unit_tests PRIVATE ${LIB_PATHS})
 endif()
 target_compile_options(twdll_unit_tests PRIVATE /Zi /utf-8 /W4)
-target_compile_definitions(twdll_unit_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_compile_definitions(twdll_unit_tests PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+    BUILD_TESTING_LUA
+)
+
+# ── Code Coverage ─────────────────────────────────────────────────────────────
+option(ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
+
+if(ENABLE_COVERAGE)
+    if(MSVC)
+        target_link_options(twdll_unit_tests PRIVATE /PROFILE)
+    else()
+        target_compile_options(twdll_unit_tests PRIVATE --coverage)
+        target_link_options(twdll_unit_tests PRIVATE --coverage)
+    endif()
+endif()
+
 add_test(NAME unit_tests COMMAND twdll_unit_tests)
 
 add_custom_target(tw-unit-test
@@ -121,6 +178,50 @@ add_custom_target(tw-unit-test
     DEPENDS twdll_unit_tests
     COMMENT "Running C++ unit tests (ctest)"
 )
+
+# ── Task targets (delegate to tools/twdll.ps1) ────────────────────────────────
+# Logic lives in the script; these targets exist for IDE integration.
+set(TW_PS1 "${CMAKE_SOURCE_DIR}/tools/twdll.ps1")
+
+if(WIN32)
+    add_custom_target(test-coverage
+        DEPENDS twdll_unit_tests
+        COMMAND powershell -ExecutionPolicy Bypass -File "${TW_PS1}" coverage "${TW_GAME}"
+        COMMENT "Running unit tests with code coverage (${TW_GAME})"
+        VERBATIM USES_TERMINAL
+    )
+else()
+    find_program(GCOVR_TOOL gcovr)
+    find_program(LLVM_COV_TOOL llvm-cov)
+    if(GCOVR_TOOL)
+        add_custom_target(test-coverage
+            COMMAND $<TARGET_FILE:twdll_unit_tests>
+            COMMAND ${GCOVR_TOOL} --root "${CMAKE_SOURCE_DIR}" --print-summary
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+            DEPENDS twdll_unit_tests
+            COMMENT "Running unit tests with gcovr coverage"
+            USES_TERMINAL
+        )
+    elseif(LLVM_COV_TOOL)
+        add_custom_target(test-coverage
+            COMMAND $<TARGET_FILE:twdll_unit_tests>
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+            DEPENDS twdll_unit_tests
+            COMMENT "Running unit tests (llvm-cov ready)"
+            USES_TERMINAL
+        )
+    else()
+        add_custom_target(test-coverage
+            COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+            DEPENDS twdll_unit_tests
+            COMMENT "Running unit tests"
+            USES_TERMINAL
+        )
+    endif()
+endif()
+
+add_custom_target(tw-coverage DEPENDS test-coverage)
 
 # ── Task targets (delegate to tools/twdll.ps1) ────────────────────────────────
 # Logic lives in the script; these targets exist for IDE integration.

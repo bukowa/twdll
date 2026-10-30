@@ -483,6 +483,80 @@ function Tail-Mp-Log {
     }
 }
 
+function Run-Coverage {
+    $TestBin = Join-Path $BuildDir "twdll_unit_tests.exe"
+    if (!(Test-Path $TestBin)) {
+        Write-Error "twdll_unit_tests.exe not found at $TestBin. Build the unit tests target first."
+        exit 1
+    }
+
+    $CoverageToolPaths = @(
+        "$env:VSINSTALLDIR\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console\Microsoft.CodeCoverage.Console.exe",
+        "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console\Microsoft.CodeCoverage.Console.exe",
+        "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console\Microsoft.CodeCoverage.Console.exe",
+        "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console\Microsoft.CodeCoverage.Console.exe",
+        "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console\Microsoft.CodeCoverage.Console.exe"
+    )
+
+    $CovTool = $null
+    foreach ($p in $CoverageToolPaths) {
+        if ($p -and (Test-Path $p)) {
+            $CovTool = $p
+            break
+        }
+    }
+
+    if (!$CovTool) {
+        Write-Host "Microsoft.CodeCoverage.Console not found. Running tests without coverage:"
+        & $TestBin
+        return
+    }
+
+    $CovXml = Join-Path $BuildDir "coverage.cobertura.xml"
+    $SessionId = "twdll_cov_" + [guid]::NewGuid().ToString("N").Substring(0, 8)
+
+    Write-Host "Instrumenting binary for code coverage..."
+    & $CovTool instrument $TestBin --session-id $SessionId --nologo
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Instrumentation failed. Running tests without coverage."
+        & $TestBin
+        return
+    }
+
+    try {
+        & $CovTool collect --server-mode --session-id $SessionId --output $CovXml --output-format cobertura --background --nologo
+        & $TestBin
+        & $CovTool shutdown $SessionId --nologo
+    }
+    finally {
+        & $CovTool uninstrument $TestBin --nologo | Out-Null
+    }
+
+    if (Test-Path $CovXml) {
+        Write-Host "`nCode Coverage Summary (src/):" -ForegroundColor Cyan
+        [xml]$xml = Get-Content $CovXml
+        $classes = $xml.coverage.packages.package.classes.class
+        $rows = foreach ($c in $classes) {
+            if ($c.filename -match "src[\\/]") {
+                $lines = $c.lines.line
+                $total = ($lines | Measure-Object).Count
+                $covered = ($lines | Where-Object { [int]$_.hits -gt 0 } | Measure-Object).Count
+                $pct = if ($total -gt 0) { [math]::Round(100.0 * $covered / $total, 1) } else { 100.0 }
+                [PSCustomObject]@{
+                    Path = $c.filename -replace "^.*src", "src"
+                    Total = $total
+                    Covered = $covered
+                    "Coverage%" = "$pct%"
+                }
+            }
+        }
+        if ($rows) {
+            $rows | Format-Table Path, Total, Covered, "Coverage%" -AutoSize
+        }
+        Write-Host "Full coverage report written to: $CovXml`n"
+    }
+}
+
 $c = $Command.ToLower().Trim()
 switch ($c) {
     "pack"         { Build-Pack $ModPack $ModDir; Build-Pack $TestPack $TestSrcDir }
@@ -500,9 +574,11 @@ switch ($c) {
     "test-keep-nosavereload" { Install-Test-NoSaveReload; Launch-Game; Tail-Log-Keep }
     "install-tdd"  { Install-Tdd }
     "tdd"          { Install-Tdd; Launch-Game; Tail-Log-Keep }
+    "coverage"      { Run-Coverage }
+    "test-coverage" { Run-Coverage }
     "help" {
         Write-Host "Usage: .\tools\twdll.ps1 <command> <game> [-Steam]"
-        Write-Host "Commands: pack, install, install-test, install-mp, run, run-test, run-mp, tail, tail-mp, test, test-keep, test-keep-nosavereload, install-tdd, tdd"
+        Write-Host "Commands: pack, install, install-test, install-mp, run, run-test, run-mp, tail, tail-mp, test, test-keep, test-keep-nosavereload, install-tdd, tdd, coverage"
     }
     Default {
         Write-Error "Unknown command: $Command"

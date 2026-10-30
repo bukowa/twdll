@@ -24,7 +24,7 @@ extern "C" {
 #define l_setmetatable  lua_setmetatable
 #define l_setfield      lua_setfield
 #define l_checklstring  luaL_checklstring
-#define l_checkstring   luaL_checkstring
+#define l_checkstring(L, n) luaL_checklstring(L, n, nullptr)
 #define l_register      luaL_register
 #define l_createtable   lua_createtable
 #define l_touserdata    lua_touserdata
@@ -36,9 +36,17 @@ extern "C" {
 #define l_pushnil       lua_pushnil
 #define l_pushvalue     lua_pushvalue
 #define l_pcall         lua_pcall
-#define l_loadstring    luaB_loadstring
+#define l_loadstring    luaL_loadstring
 #define l_getglobal     lua_getglobal
 #define l_newtable      lua_newtable
+#define l_getfield      lua_getfield
+#define l_type          lua_type
+#define l_settop        lua_settop
+#define l_pop(L, n)     lua_pop(L, n)
+
+inline bool l_tobool(lua_State* L, int idx) {
+    return lua_toboolean(L, idx) != 0;
+}
 
 #else
 // ── Production mode — function pointers resolved from the game binary ────────
