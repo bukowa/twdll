@@ -38,3 +38,4 @@ config.ld.*.generated
 todo.md
 __pycache__/
 *.pyc
+codegraph*

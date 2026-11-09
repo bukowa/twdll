@@ -1,4 +1,4 @@
-# twdll — Agent Conventions
+**DO NOT BE OBSEQUIOUS**
 
 **twdll** is a script extender that injects C++ logic into Total War: Attila's Lua engine.
 It is a **32-bit MSVC DLL** loaded in-process by the game.
