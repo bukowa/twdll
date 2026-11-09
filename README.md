@@ -54,6 +54,13 @@ twdll.core.Log("Hello from C++!")
 > - **Bug reports, code reviews, and PRs are warmly welcome!** If you spot an issue, an incorrect offset, or a cleaner way to implement something, your contributions are greatly appreciated.
 > - **Freedom to Fork:** `twdll` is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. You have the full right and freedom to fork, modify, maintain, or rebuild this project for your own needs.
 
+## License
+
+Licensed under the **GPL-3.0** ([`LICENSE`](LICENSE)).
+
+* **The code:** The C++/Lua code, tests, and header files are GPL-3.0.
+* **The offsets & ideas:** Raw facts about the game binary (offsets, addresses, and how the engine works) aren't ours to copyright or license. You don't need permission or attribution to read the repo and use those numbers or ideas in your own projects under any license.
+
 ## Development
 
 ### Building on Windows
