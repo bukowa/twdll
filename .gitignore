@@ -39,3 +39,9 @@ todo.md
 __pycache__/
 *.pyc
 codegraph*
+
+# twdll CLI local state & configuration
+.twdll/
+twdll.toml
+.xwin-cache
+.codegraph
