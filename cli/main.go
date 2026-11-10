@@ -133,7 +133,7 @@ func ensureLatestBinary(repoRoot string) {
 	_ = os.Remove(tmpExe)
 	buildCmd := exec.Command(goBin, "build", "-buildvcs=false", "-o", tmpExe, ".")
 	buildCmd.Dir = cliDir
-	buildCmd.Stdout = os.Stdout
+	buildCmd.Stdout = os.Stderr
 	buildCmd.Stderr = os.Stderr
 	if err := buildCmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "[twdll] Recompilation failed: %v\n", err)
