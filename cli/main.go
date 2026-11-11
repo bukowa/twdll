@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/alecthomas/kong"
+	"twdll/cli/internal/analyze"
 	"twdll/cli/internal/cmd"
 	"twdll/cli/internal/ui"
 	"twdll/cli/internal/workspace"
@@ -61,14 +62,37 @@ func (c *InitCmd) Run(ctx *Context) error {
 }
 
 type AnalyzeCmd struct {
-	Force   bool     `help:"Force re-analysis even if hash matches."`
-	Jobs    int      `short:"j" help:"Max concurrent decompiler jobs (0 for auto)."`
-	Targets []string `arg:"" optional:"" help:"Specific targets to analyze (e.g. attila_64, attila_32)."`
+	Decompiler string   `short:"d" help:"Decompiler backend (ghidra, ida). Overrides twdll.toml."`
+	Clean      bool     `help:"Wipe existing target database before analyzing."`
+	Force      bool     `help:"Force re-analysis even if hash matches."`
+	Jobs       int      `short:"j" help:"Max concurrent decompiler jobs (0 for auto)."`
+	Targets    []string `arg:"" optional:"" help:"Specific targets to analyze (e.g. attila_64, attila_32)."`
 }
 
 func (c *AnalyzeCmd) Run(ctx *Context) error {
-	ctx.Printer.Info("[analyze] Placeholder - wiring analyze command next")
-	return nil
+	opts := analyze.Options{
+		Decompiler: c.Decompiler,
+		Clean:      c.Clean,
+		Force:      c.Force,
+		Jobs:       c.Jobs,
+		Targets:    c.Targets,
+	}
+	return analyze.RunAnalyze(context.Background(), ctx.Paths, opts, ctx.Printer)
+}
+
+type CleanCmd struct {
+	Decompiler string   `short:"d" help:"Decompiler backend to clean (ghidra, ida, all). Default: all."`
+	All        bool     `help:"Clean databases for all targets."`
+	Targets    []string `arg:"" optional:"" help:"Specific targets to clean (e.g. attila_64, attila_32)."`
+}
+
+func (c *CleanCmd) Run(ctx *Context) error {
+	opts := cmd.CleanOptions{
+		Decompiler: c.Decompiler,
+		All:        c.All,
+		Targets:    c.Targets,
+	}
+	return cmd.RunClean(context.Background(), ctx.Paths, opts, ctx.Printer)
 }
 
 type CLI struct {
@@ -78,6 +102,7 @@ type CLI struct {
 	Status  StatusCmd  `cmd:"" help:"Check workspace readiness, tools, and binary status."`
 	Init    InitCmd    `cmd:"" help:"Initialize portable toolchains and acquire game binaries."`
 	Analyze AnalyzeCmd `cmd:"" help:"Build headless decompiler databases from scratch."`
+	Clean   CleanCmd   `cmd:"" help:"Delete decompiler databases and logs to re-analyze fresh."`
 }
 
 const Version = "0.1.0"

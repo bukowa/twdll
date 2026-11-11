@@ -172,3 +172,59 @@ func TestInitClearWorkspace(t *testing.T) {
 		t.Errorf("expected dummy tool file to be deleted")
 	}
 }
+
+func TestRunClean(t *testing.T) {
+	tmp := t.TempDir()
+	paths := workspace.NewPaths(tmp)
+	_ = paths.EnsureBaseDirs()
+
+	// Stage a mock db and log
+	dbDir := paths.DatabaseDir(workspace.DecompilerIDA, workspace.TargetAttila32)
+	_ = os.MkdirAll(dbDir, 0o755)
+	dbFile := filepath.Join(dbDir, "attila_32.i64")
+	_ = os.WriteFile(dbFile, []byte("mock db"), 0o644)
+
+	logFile := paths.AnalyzeLogPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	_ = os.MkdirAll(filepath.Dir(logFile), 0o755)
+	_ = os.WriteFile(logFile, []byte("mock log"), 0o644)
+
+	// Save initial state
+	st := workspace.NewState()
+	st.SetBinary(workspace.TargetAttila32, workspace.BinaryState{
+		BinarySHA256: "abc123",
+		Analyzed: workspace.AnalyzedState{
+			IDA: "abc123",
+		},
+	})
+	_ = workspace.SaveState(paths.StateFile, st)
+
+	var buf bytes.Buffer
+	printer := &ui.Printer{
+		Out: &buf,
+		Err: &buf,
+	}
+
+	opts := CleanOptions{
+		Decompiler: "ida",
+		Targets:    []string{"attila_32"},
+	}
+
+	if err := RunClean(context.Background(), paths, opts, printer); err != nil {
+		t.Fatalf("RunClean failed: %v", err)
+	}
+
+	// Verify db directory was removed
+	if _, err := os.Stat(dbDir); !os.IsNotExist(err) {
+		t.Errorf("expected dbDir to be removed")
+	}
+	// Verify log was removed
+	if _, err := os.Stat(logFile); !os.IsNotExist(err) {
+		t.Errorf("expected logFile to be removed")
+	}
+
+	// Verify state record was cleared
+	updatedState, _, _ := workspace.LoadState(paths.StateFile)
+	if updatedState.Binaries[workspace.TargetAttila32].Analyzed.IDA != "" {
+		t.Errorf("expected analyzed state for ida to be empty, got: %q", updatedState.Binaries[workspace.TargetAttila32].Analyzed.IDA)
+	}
+}

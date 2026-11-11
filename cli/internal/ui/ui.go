@@ -299,7 +299,7 @@ func (tp *TerminalPrompter) Input(prompt string, defaultValue string) (string, e
 	return ans, nil
 }
 
-// isTerminal checks if f is connected to a character device (console/terminal).
+// isTerminal checks if f is connected to a character device (console/terminal) or MSYS/Git Bash pty.
 func isTerminal(f *os.File) bool {
 	if f == nil {
 		return false
@@ -308,7 +308,19 @@ func isTerminal(f *os.File) bool {
 	if err != nil {
 		return false
 	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
+	if (fi.Mode() & os.ModeCharDevice) != 0 {
+		return true
+	}
+	// Under Git Bash / MSYS2 / MinGW (mintty), standard handles are named pipes,
+	// but TERM is set to "xterm", "xterm-256color", etc. or MSYSTEM is set.
+	term := os.Getenv("TERM")
+	if term != "" && term != "dumb" {
+		return true
+	}
+	if os.Getenv("MSYSTEM") != "" {
+		return true
+	}
+	return false
 }
 
 // IsStdinTerminal checks if os.Stdin is an interactive terminal.

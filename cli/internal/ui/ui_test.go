@@ -3,8 +3,10 @@ package ui
 import (
 	"bytes"
 	"errors"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDiagnosticErrorFormatting(t *testing.T) {
@@ -97,5 +99,69 @@ func TestColorHelpers(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	if got := pTTY.Green("ok"); got != "ok" {
 		t.Errorf("expected plain string with NO_COLOR, got %q", got)
+	}
+}
+
+func TestProcessTracker(t *testing.T) {
+	tracker := NewProcessTracker(os.Getpid())
+	metrics := tracker.Sample()
+	if metrics.RAMBytes == 0 {
+		t.Logf("Process memory for current PID was 0 (expected > 0 on Windows)")
+	} else {
+		t.Logf("Current PID metrics: %s", metrics.Format())
+	}
+}
+
+func TestMultiSpinner(t *testing.T) {
+	tmp := t.TempDir()
+	logPath := tmp + "/test.log"
+	_ = os.WriteFile(logPath, []byte("line 1\nline 2: DWARF parsing\n\n"), 0o644)
+
+	var buf bytes.Buffer
+	printer := &Printer{
+		Out:      &buf,
+		IsTTYOut: true,
+	}
+
+	ms := NewMultiSpinner(printer)
+	slot := ms.AddSlot(1, 1, "test_target", logPath)
+	ms.Start()
+	time.Sleep(150 * time.Millisecond)
+	slot.Finish("test_target finished cleanly")
+	ms.Stop()
+
+	output := buf.String()
+	if !strings.Contains(output, "test_target finished cleanly") {
+		t.Errorf("expected output to contain final message, got: %q", output)
+	}
+}
+
+func TestMultiSpinnerParallel(t *testing.T) {
+	tmp := t.TempDir()
+	log1 := tmp + "/test1.log"
+	log2 := tmp + "/test2.log"
+	_ = os.WriteFile(log1, []byte("target 1 line\n"), 0o644)
+	_ = os.WriteFile(log2, []byte("target 2 line\n"), 0o644)
+
+	var buf bytes.Buffer
+	printer := &Printer{
+		Out:      &buf,
+		IsTTYOut: true,
+	}
+
+	ms := NewMultiSpinner(printer)
+	slot1 := ms.AddSlot(1, 2, "target1", log1)
+	slot2 := ms.AddSlot(2, 2, "target2", log2)
+	ms.Start()
+	slot1.Start()
+	slot2.Start()
+	time.Sleep(150 * time.Millisecond)
+	slot1.Finish("  [1/2] target1 finished")
+	slot2.Finish("  [2/2] target2 finished")
+	ms.Stop()
+
+	output := buf.String()
+	if !strings.Contains(output, "target1 finished") || !strings.Contains(output, "target2 finished") {
+		t.Errorf("expected multi-slot output to contain both finish messages, got: %q", output)
 	}
 }

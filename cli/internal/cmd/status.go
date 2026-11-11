@@ -188,22 +188,24 @@ func RunStatus(ctx context.Context, paths workspace.Paths, jsonOut bool, printer
 			Path:          fullPath,
 		})
 
-		// 3. Database status per target
-		dbDir := filepath.Join(paths.DBDir, string(cfg.Decompiler), string(t.target))
-		analyzed := false
-		if saved, ok := state.Binaries[t.target]; ok && sha != "" {
-			analyzedSHA := saved.Analyzed.Get(cfg.Decompiler)
-			if analyzedSHA != "" && strings.EqualFold(analyzedSHA, sha) {
-				analyzed = true
+		// 3. Database status per target across both decompilers
+		for _, engine := range []workspace.DecompilerID{workspace.DecompilerGhidra, workspace.DecompilerIDA} {
+			dbDir := filepath.Join(paths.DBDir, string(engine), string(t.target))
+			analyzed := false
+			if saved, ok := state.Binaries[t.target]; ok && sha != "" {
+				analyzedSHA := saved.Analyzed.Get(engine)
+				if analyzedSHA != "" && strings.EqualFold(analyzedSHA, sha) {
+					analyzed = true
+				}
 			}
-		}
 
-		report.Databases = append(report.Databases, DBStatus{
-			Target:   t.target,
-			Engine:   string(cfg.Decompiler),
-			Analyzed: analyzed,
-			Path:     dbDir,
-		})
+			report.Databases = append(report.Databases, DBStatus{
+				Target:   t.target,
+				Engine:   string(engine),
+				Analyzed: analyzed,
+				Path:     dbDir,
+			})
+		}
 	}
 
 	if jsonOut {
@@ -290,12 +292,67 @@ func renderHumanStatus(report *StatusReport, printer *ui.Printer) {
 	}
 	printer.Info("")
 
-	printer.Info("%s", printer.Bold(fmt.Sprintf("Decompiler Databases (.twdll/db/%s/):", report.Decompiler)))
-	for _, db := range report.Databases {
-		status := printer.Green("[x] Analyzed      ")
-		if !db.Analyzed {
-			status = printer.Yellow("[ ] Needs Analysis")
-		}
-		printer.Info("  %s %-20s", status, db.Target)
+	printer.Info("%s", printer.Bold("Decompiler Databases (.twdll/db/):"))
+	ghidraHeader := "Ghidra"
+	idaHeader := "IDA"
+	if report.Decompiler == string(workspace.DecompilerGhidra) {
+		ghidraHeader += " (active)"
+	} else if report.Decompiler == string(workspace.DecompilerIDA) {
+		idaHeader += " (active)"
 	}
+
+	const col1Width = 16
+	const col2Width = 24
+
+	h1 := printer.Bold(padRight(report, "Target", col1Width))
+	h2 := printer.Bold(padRight(report, ghidraHeader, col2Width))
+	h3 := printer.Bold(idaHeader)
+	printer.Info("  %s%s%s", h1, h2, h3)
+
+	for _, b := range report.Binaries {
+		var ghidraAnalyzed, idaAnalyzed bool
+		for _, db := range report.Databases {
+			if db.Target == b.Target {
+				if db.Engine == string(workspace.DecompilerGhidra) {
+					ghidraAnalyzed = db.Analyzed
+				} else if db.Engine == string(workspace.DecompilerIDA) {
+					idaAnalyzed = db.Analyzed
+				}
+			}
+		}
+
+		c1 := padRight(report, string(b.Target), col1Width)
+
+		var ghidraText string
+		var ghidraColored string
+		if ghidraAnalyzed {
+			ghidraText = "[x] Analyzed"
+			ghidraColored = printer.Green(ghidraText)
+		} else if report.Decompiler == string(workspace.DecompilerGhidra) {
+			ghidraText = "[ ] Needs Analysis"
+			ghidraColored = printer.Yellow(ghidraText)
+		} else {
+			ghidraText = "[-] Not Analyzed"
+			ghidraColored = printer.Dim(ghidraText)
+		}
+		c2 := ghidraColored + strings.Repeat(" ", col2Width-len(ghidraText))
+
+		var idaColored string
+		if idaAnalyzed {
+			idaColored = printer.Green("[x] Analyzed")
+		} else if report.Decompiler == string(workspace.DecompilerIDA) {
+			idaColored = printer.Yellow("[ ] Needs Analysis")
+		} else {
+			idaColored = printer.Dim("[-] Not Analyzed")
+		}
+
+		printer.Info("  %s%s%s", c1, c2, idaColored)
+	}
+}
+
+func padRight(_ *StatusReport, s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-len(s))
 }

@@ -77,8 +77,12 @@ func (p Paths) DatabaseMarkerPath(d DecompilerID, t TargetID) string {
 		// Headless Ghidra creates <dir>/<target>.gpr
 		return filepath.Join(dir, string(t)+".gpr")
 	case DecompilerIDA:
-		// IDA 8.x/9.x creates .i64 (or .idb on legacy 32-bit idat)
-		return filepath.Join(dir, t.BinaryFileName()+".i64")
+		// Check if legacy 32-bit .idb exists, otherwise use canonical .i64
+		idbPath := filepath.Join(dir, string(t)+".idb")
+		if _, err := os.Stat(idbPath); err == nil {
+			return idbPath
+		}
+		return filepath.Join(dir, string(t)+".i64")
 	default:
 		return dir
 	}
