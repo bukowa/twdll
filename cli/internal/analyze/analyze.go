@@ -49,6 +49,9 @@ func RunAnalyze(ctx context.Context, paths workspace.Paths, opts Options, printe
 		return nil
 	}
 
+	releasePower := acquirePowerAssertion()
+	defer releasePower()
+
 	concurrency := opts.Jobs
 	if concurrency <= 0 {
 		if toRun[0].Decompiler == workspace.DecompilerIDA {
