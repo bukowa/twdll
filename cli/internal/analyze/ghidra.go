@@ -25,8 +25,46 @@ func FindGhidraHeadlessScript(toolsDir string) (string, error) {
 	return path, nil
 }
 
+const tuneReferenceAnalysisScript = `import java.util.Arrays;
+import java.util.Map;
+
+import ghidra.app.script.GhidraScript;
+
+public class TuneReferenceAnalysis extends GhidraScript {
+	private static final String[] DISABLE_ANALYZERS = new String[] {
+		"Decompiler Switch Analysis",
+		"Decompiler Parameter ID",
+		"Call Convention ID",
+		"Non-Returning Functions - Discovered",
+		"Stack",
+		"Shared Return Calls",
+		"Aggressive Instruction Finder"
+	};
+
+	@Override
+	protected void run() throws Exception {
+		Map<String, String> options = getCurrentAnalysisOptionsAndValues(currentProgram);
+		for (String name : DISABLE_ANALYZERS) {
+			if (options.containsKey(name)) {
+				setAnalysisOption(currentProgram, name, "false");
+				println("[twdll] Disabled analyzer: " + name);
+			}
+		}
+
+		Map<String, String> updated = getCurrentAnalysisOptionsAndValues(currentProgram);
+		String[] keys = updated.keySet().toArray(new String[0]);
+		Arrays.sort(keys);
+		for (String key : keys) {
+			if (!key.contains(".") && "true".equals(updated.get(key))) {
+				println("[twdll] Active analyzer: " + key);
+			}
+		}
+	}
+}
+`
+
 // RunGhidraHeadless executes Ghidra headless analysis on a target binary.
-func RunGhidraHeadless(ctx context.Context, toolsDir string, item Item, maxMem string, slot *ui.TaskSlot, printer *ui.Printer) error {
+func RunGhidraHeadless(ctx context.Context, toolsDir string, item Item, maxMem string, stripHeavyAnalyzers bool, slot *ui.TaskSlot, printer *ui.Printer) error {
 	scriptPath, err := FindGhidraHeadlessScript(toolsDir)
 	if err != nil {
 		return err
@@ -68,20 +106,35 @@ func RunGhidraHeadless(ctx context.Context, toolsDir string, item Item, maxMem s
 	}
 	defer logOut.Close()
 
+	fmt.Fprintf(logOut, "[twdll] Target: %s | Heap: %s | Stripped Reference Analyzers: %v\n", item.Target, maxMem, stripHeavyAnalyzers)
+
 	startTime := time.Now()
 	cleanLog := filepath.ToSlash(item.LogFile)
 	if slot == nil && printer != nil {
 		printer.Info("  [ghidra] Analyzing %s (heap: %s, logs: %s)...", printer.Bold(string(item.Target)), maxMem, printer.Dim(cleanLog))
 	}
 
-	// analyzeHeadless <output_dir> <project_name> -import <binary_path> -overwrite
+	// analyzeHeadless <output_dir> <project_name> -import <binary_path> [-scriptPath ... -preScript ...] -overwrite
 	args := []string{
 		stageDir,
 		string(item.Target),
 		"-import",
 		item.BinaryPath,
-		"-overwrite",
 	}
+
+	if stripHeavyAnalyzers {
+		scriptDir := filepath.Join(stageDir, "scripts")
+		if err := os.MkdirAll(scriptDir, 0o755); err != nil {
+			return fmt.Errorf("create ghidra script dir: %w", err)
+		}
+		preScriptPath := filepath.Join(scriptDir, "TuneReferenceAnalysis.java")
+		if err := os.WriteFile(preScriptPath, []byte(tuneReferenceAnalysisScript), 0o644); err != nil {
+			return fmt.Errorf("write ghidra pre-script: %w", err)
+		}
+		args = append(args, "-scriptPath", scriptDir, "-preScript", "TuneReferenceAnalysis.java")
+	}
+
+	args = append(args, "-overwrite")
 
 	cmd := exec.CommandContext(ctx, scriptPath, args...)
 	cmd.Stdout = logOut

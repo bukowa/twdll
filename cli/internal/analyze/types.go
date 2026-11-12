@@ -17,9 +17,11 @@ type Item struct {
 
 // Options configures the analyze command run.
 type Options struct {
-	Decompiler string   // optional decompiler backend override ("ghidra", "ida")
-	Clean      bool     // wipe existing database before analyzing
-	Force      bool     // ignore existing state and re-analyze
-	Jobs       int      // concurrency limit (default 1 for Ghidra, up to 2 for IDA)
-	Targets    []string // optional target filter (e.g. "attila_32")
+	Decompiler   string   // optional decompiler backend override ("ghidra", "ida")
+	Clean        bool     // wipe existing database before analyzing
+	Force        bool     // ignore existing state and re-analyze
+	Jobs         int      // concurrency limit (default 1 for Ghidra, up to 2 for IDA)
+	MaxMem       string   // optional Ghidra max JVM heap override (e.g. "16G", "32G")
+	FullAnalysis bool     // keep all default Ghidra analyzers enabled even on attila_64
+	Targets      []string // optional target filter (e.g. "attila_32")
 }

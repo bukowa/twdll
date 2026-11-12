@@ -62,20 +62,24 @@ func (c *InitCmd) Run(ctx *Context) error {
 }
 
 type AnalyzeCmd struct {
-	Decompiler string   `short:"d" help:"Decompiler backend (ghidra, ida). Overrides twdll.toml."`
-	Clean      bool     `help:"Wipe existing target database before analyzing."`
-	Force      bool     `help:"Force re-analysis even if hash matches."`
-	Jobs       int      `short:"j" help:"Max concurrent decompiler jobs (0 for auto)."`
-	Targets    []string `arg:"" optional:"" help:"Specific targets to analyze (e.g. attila_64, attila_32)."`
+	Decompiler   string   `short:"d" help:"Decompiler backend (ghidra, ida). Overrides twdll.toml."`
+	Clean        bool     `help:"Wipe existing target database before analyzing."`
+	Force        bool     `help:"Force re-analysis even if hash matches."`
+	Jobs         int      `short:"j" help:"Max concurrent decompiler jobs (0 for auto)."`
+	MaxMem       string   `short:"m" help:"Override Ghidra max JVM heap (e.g. 16G, 32G)."`
+	FullAnalysis bool     `help:"Keep all default Ghidra analyzers enabled even on attila_64."`
+	Targets      []string `arg:"" optional:"" help:"Specific targets to analyze (e.g. attila_64, attila_32)."`
 }
 
 func (c *AnalyzeCmd) Run(ctx *Context) error {
 	opts := analyze.Options{
-		Decompiler: c.Decompiler,
-		Clean:      c.Clean,
-		Force:      c.Force,
-		Jobs:       c.Jobs,
-		Targets:    c.Targets,
+		Decompiler:   c.Decompiler,
+		Clean:        c.Clean,
+		Force:        c.Force,
+		Jobs:         c.Jobs,
+		MaxMem:       c.MaxMem,
+		FullAnalysis: c.FullAnalysis,
+		Targets:      c.Targets,
 	}
 	return analyze.RunAnalyze(context.Background(), ctx.Paths, opts, ctx.Printer)
 }

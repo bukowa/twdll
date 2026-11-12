@@ -52,6 +52,8 @@ func RunAnalyze(ctx context.Context, paths workspace.Paths, opts Options, printe
 	releasePower := acquirePowerAssertion()
 	defer releasePower()
 
+	sysMem, _ := getSystemMemory()
+
 	concurrency := opts.Jobs
 	if concurrency <= 0 {
 		if toRun[0].Decompiler == workspace.DecompilerIDA {
@@ -69,6 +71,10 @@ func RunAnalyze(ctx context.Context, paths workspace.Paths, opts Options, printe
 
 	if printer != nil {
 		engine := toRun[0].Decompiler
+		if engine == workspace.DecompilerGhidra && sysMem.TotalPhysBytes > 0 {
+			const gb = 1024 * 1024 * 1024
+			printer.Info("[analyze] System memory: %d GB RAM (%d GB virtual commit limit)", sysMem.TotalPhysBytes/gb, sysMem.TotalCommitBytes/gb)
+		}
 		if concurrency > 1 {
 			printer.Info("[analyze] Starting analysis of %d target(s) using %s (parallel jobs: %d)...", len(toRun), printer.Bold(string(engine)), concurrency)
 		} else {
@@ -84,70 +90,103 @@ func RunAnalyze(ctx context.Context, paths workspace.Paths, opts Options, printe
 	defer multiSpinner.Stop()
 
 	overallStart := time.Now()
-	sem := make(chan struct{}, concurrency)
-	var wg sync.WaitGroup
 	var stateMu sync.Mutex
 	errCh := make(chan error, len(toRun))
 
-	for i, it := range toRun {
-		slot := multiSpinner.Slot(i)
-		wg.Add(1)
+	executeItem := func(it Item, slot *ui.TaskSlot, workerConcurrency int) {
+		slot.Start()
 
-		go func(it Item, slot *ui.TaskSlot) {
-			defer wg.Done()
+		if opts.Clean {
+			_ = os.RemoveAll(it.OutputDir)
+			_ = os.Remove(it.LogFile)
+		}
 
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
+		var runErr error
+		switch it.Decompiler {
+		case workspace.DecompilerIDA:
+			runErr = RunIDABatch(ctx, cfg.IDADir, it, slot, printer)
+		case workspace.DecompilerGhidra:
+			maxMem := opts.MaxMem
+			if maxMem == "" {
+				maxMem = ComputeGhidraMaxMem(sysMem, it.Target, workerConcurrency)
 			}
-			defer func() { <-sem }()
+			stripHeavy := it.Target == workspace.TargetAttila64 && !opts.FullAnalysis
+			runErr = RunGhidraHeadless(ctx, paths.ToolsDir, it, maxMem, stripHeavy, slot, printer)
+		default:
+			runErr = fmt.Errorf("unsupported decompiler: %q", it.Decompiler)
+		}
 
-			slot.Start()
-
-			if opts.Clean {
-				_ = os.RemoveAll(it.OutputDir)
-				_ = os.Remove(it.LogFile)
+		if runErr != nil {
+			prefix := fmt.Sprintf("  [%s] %s failed", it.Decompiler, it.Target)
+			if slot.Total > 1 {
+				prefix = fmt.Sprintf("  [%d/%d] [%s] %s failed", slot.Index, slot.Total, it.Decompiler, it.Target)
 			}
+			slot.Finish(fmt.Sprintf("%s: %v", prefix, runErr))
+			errCh <- fmt.Errorf("failed analyzing %s: %w", it.Target, runErr)
+			return
+		}
 
-			var runErr error
-			switch it.Decompiler {
-			case workspace.DecompilerIDA:
-				runErr = RunIDABatch(ctx, cfg.IDADir, it, slot, printer)
-			case workspace.DecompilerGhidra:
-				runErr = RunGhidraHeadless(ctx, paths.ToolsDir, it, "8G", slot, printer)
-			default:
-				runErr = fmt.Errorf("unsupported decompiler: %q", it.Decompiler)
+		// Atomically record completion in state
+		stateMu.Lock()
+		binState, exists := state.Binaries[it.Target]
+		if !exists {
+			binState = workspace.BinaryState{
+				SourcePath:   it.BinaryPath,
+				BinarySHA256: it.BinarySHA256,
 			}
-
-			if runErr != nil {
-				prefix := fmt.Sprintf("  [%s] %s failed", it.Decompiler, it.Target)
-				if slot.Total > 1 {
-					prefix = fmt.Sprintf("  [%d/%d] [%s] %s failed", slot.Index, slot.Total, it.Decompiler, it.Target)
-				}
-				slot.Finish(fmt.Sprintf("%s: %v", prefix, runErr))
-				errCh <- fmt.Errorf("failed analyzing %s: %w", it.Target, runErr)
-				return
-			}
-
-			// Atomically record completion in state
-			stateMu.Lock()
-			binState, exists := state.Binaries[it.Target]
-			if !exists {
-				binState = workspace.BinaryState{
-					SourcePath:   it.BinaryPath,
-					BinarySHA256: it.BinarySHA256,
-				}
-			}
-			binState.BinarySHA256 = it.BinarySHA256
-			binState.Analyzed.Set(it.Decompiler, it.BinarySHA256)
-			state.SetBinary(it.Target, binState)
-			_ = workspace.SaveState(paths.StateFile, state)
-			stateMu.Unlock()
-		}(it, slot)
+		}
+		binState.BinarySHA256 = it.BinarySHA256
+		binState.Analyzed.Set(it.Decompiler, it.BinarySHA256)
+		state.SetBinary(it.Target, binState)
+		_ = workspace.SaveState(paths.StateFile, state)
+		stateMu.Unlock()
 	}
 
-	wg.Wait()
+	var soloIndices []int
+	var parallelIndices []int
+	for i, it := range toRun {
+		if it.Decompiler == workspace.DecompilerGhidra && it.Target == workspace.TargetAttila64 {
+			soloIndices = append(soloIndices, i)
+		} else {
+			parallelIndices = append(parallelIndices, i)
+		}
+	}
+
+	// Phase 1: Run heavy 64-bit Ghidra reference binary solo with full RAM headroom.
+	for _, idx := range soloIndices {
+		if ctx.Err() != nil {
+			break
+		}
+		executeItem(toRun[idx], multiSpinner.Slot(idx), 1)
+	}
+
+	// Phase 2: Run remaining targets concurrently up to concurrency limit.
+	if len(parallelIndices) > 0 && ctx.Err() == nil {
+		sem := make(chan struct{}, concurrency)
+		var wg sync.WaitGroup
+
+		for _, idx := range parallelIndices {
+			it := toRun[idx]
+			slot := multiSpinner.Slot(idx)
+			wg.Add(1)
+
+			go func(it Item, slot *ui.TaskSlot) {
+				defer wg.Done()
+
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+				defer func() { <-sem }()
+
+				executeItem(it, slot, concurrency)
+			}(it, slot)
+		}
+
+		wg.Wait()
+	}
+
 	close(errCh)
 	multiSpinner.Stop()
 
