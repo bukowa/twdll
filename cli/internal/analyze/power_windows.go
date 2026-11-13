@@ -3,31 +3,39 @@
 package analyze
 
 import (
-	"syscall"
-)
-
-var (
-	modkernel32Power            = syscall.NewLazyDLL("kernel32.dll")
-	procSetThreadExecutionState = modkernel32Power.NewProc("SetThreadExecutionState")
+	"runtime"
+	"sync"
 )
 
 const (
-	esSystemRequired = 0x00000001
 	esContinuous     = 0x80000000
+	esSystemRequired = 0x00000001
 )
 
-// acquirePowerAssertion requests Windows to stay awake (prevent idle sleep)
-// while long-running decompiler analysis batches are in progress.
-// It returns a cleanup function that restores default power/sleep behavior.
-func acquirePowerAssertion() func() {
-	if procSetThreadExecutionState.Find() != nil {
-		return func() {}
-	}
-	// ES_CONTINUOUS | ES_SYSTEM_REQUIRED
-	procSetThreadExecutionState.Call(uintptr(esContinuous | esSystemRequired))
+var procSetThreadExecutionState = modKernel32.NewProc("SetThreadExecutionState")
 
+func acquirePowerAssertion() func() {
+	readyCh := make(chan struct{})
+	releaseCh := make(chan struct{})
+	doneCh := make(chan struct{})
+
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
+		_, _, _ = procSetThreadExecutionState.Call(uintptr(esContinuous | esSystemRequired))
+		close(readyCh)
+		<-releaseCh
+		_, _, _ = procSetThreadExecutionState.Call(uintptr(esContinuous))
+		close(doneCh)
+	}()
+
+	<-readyCh
+	var once sync.Once
 	return func() {
-		// Clear ES_SYSTEM_REQUIRED by setting ES_CONTINUOUS alone
-		procSetThreadExecutionState.Call(uintptr(esContinuous))
+		once.Do(func() {
+			close(releaseCh)
+			<-doneCh
+		})
 	}
 }

@@ -5,178 +5,328 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 
+	"twdll/cli/internal/term"
 	"twdll/cli/internal/workspace"
 )
 
-func TestIsToolInstalled(t *testing.T) {
-	tmp := t.TempDir()
-	paths := workspace.NewPaths(tmp)
+func TestEnsureTool_DownloadsVerifiesStripsAndSkipsWhenInstalled(t *testing.T) {
+	// Given a zip archive served over HTTP containing a top-level directory and bin/cmake.exe
+	zipBytes, zipSHA := buildTestZip(t, map[string]string{
+		"cmake-4.4.5-windows-x86_64/bin/cmake.exe": "fake-cmake-binary",
+	})
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Length", strconv.Itoa(len(zipBytes)))
+		_, _ = w.Write(zipBytes)
+	}))
+	defer srv.Close()
 
-	tool := ToolDef{
-		ID:        workspace.ToolNinja,
-		Name:      "Ninja",
-		MarkerRel: "ninja.exe",
+	root := t.TempDir()
+	paths := workspace.NewPaths(root, "", filepath.Join(root, ".twdll"))
+	st := workspace.NewState()
+	var stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{Err: &stderr, ColorMode: term.ColorNever})
+
+	toolDef := ToolDef{
+		ID:          workspace.ToolCMake,
+		Name:        "CMake",
+		Version:     "4.4.5",
+		URL:         srv.URL + "/cmake.zip",
+		SHA256:      zipSHA,
+		ArchiveType: "zip",
+		StripDirs:   1,
+		MarkerRel:   "bin/cmake.exe",
+	}
+	env := InstallEnv{Paths: paths, State: &st, UI: ui}
+
+	// When EnsureTool runs the first time, then a second time, and then with a mismatched SHA-256 on a missing tool
+	if err := EnsureTool(context.Background(), env, toolDef); err != nil {
+		t.Fatalf("first EnsureTool failed: %v", err)
+	}
+	st.Tools = map[workspace.ToolID]workspace.ToolState{}
+	if err := EnsureTool(context.Background(), env, toolDef); err != nil {
+		t.Fatalf("second EnsureTool failed: %v", err)
 	}
 
-	if IsToolInstalled(paths, tool) {
-		t.Errorf("expected tool not installed")
+	badTool := toolDef
+	badTool.ID = workspace.ToolNinja
+	badTool.SHA256 = strings.Repeat("0", 64)
+	badErr := EnsureTool(context.Background(), env, badTool)
+
+	// Then the marker exists, StripDirs=1 flattened the prefix, the second run skipped HTTP download and backfilled state, and bad SHA failed
+	if !IsInstalled(paths, toolDef) {
+		t.Fatalf("expected IsInstalled(CMake) to be true")
 	}
-
-	toolDir := paths.ToolDir(tool.ID)
-	_ = os.MkdirAll(toolDir, 0o755)
-	_ = os.WriteFile(filepath.Join(toolDir, "ninja.exe"), []byte("mock_ninja"), 0o755)
-
-	if !IsToolInstalled(paths, tool) {
-		t.Errorf("expected tool to be reported as installed")
+	if hits.Load() != 2 {
+		t.Fatalf("HTTP hits = %d, want 2 (1 for initial CMake + 1 for bad Ninja, 0 for idempotent CMake)", hits.Load())
+	}
+	if st.Tools[workspace.ToolCMake].Version != "4.4.5" || st.Tools[workspace.ToolCMake].SHA256 != zipSHA {
+		t.Fatalf("state not updated for CMake: %+v", st.Tools[workspace.ToolCMake])
+	}
+	if badErr == nil || !strings.Contains(badErr.Error(), "SHA-256 mismatch") {
+		t.Fatalf("expected SHA-256 mismatch error, got: %v", badErr)
 	}
 }
 
-func TestStripPath(t *testing.T) {
-	tests := []struct {
-		input    string
-		count    int
-		expected string
-	}{
-		{"cmake-3.31.5/bin/cmake.exe", 1, filepath.Join("bin", "cmake.exe")},
-		{"ninja.exe", 0, "ninja.exe"},
-		{"a/b/c/d.txt", 2, filepath.Join("c", "d.txt")},
-		{"root/only", 1, "only"},
-		{"single", 1, ""},
-	}
-
-	for _, tt := range tests {
-		got := stripPath(tt.input, tt.count)
-		if got != tt.expected {
-			t.Errorf("stripPath(%q, %d) = %q, want %q", tt.input, tt.count, got, tt.expected)
+func TestExtractArchive_RejectsZipSlipTraversal(t *testing.T) {
+	t.Run("zip_traversal", func(t *testing.T) {
+		zipBytes, _ := buildTestZip(t, map[string]string{
+			"root/../../evil.txt": "pwned",
+		})
+		dir := t.TempDir()
+		archivePath := filepath.Join(dir, "evil.zip")
+		if err := os.WriteFile(archivePath, zipBytes, 0o644); err != nil {
+			t.Fatal(err)
 		}
+
+		err := ExtractArchive(context.Background(), ExtractSpec{
+			ArchivePath: archivePath,
+			ArchiveType: "zip",
+			DestDir:     filepath.Join(dir, "out"),
+			StripDirs:   1,
+		})
+		if err == nil {
+			t.Fatalf("expected ExtractArchive to reject zip-slip path traversal")
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "evil.txt")); statErr == nil {
+			t.Fatalf("zip-slip wrote outside destination directory")
+		}
+	})
+
+	t.Run("targz_traversal", func(t *testing.T) {
+		tgzBytes := buildTestTarGz(t, map[string]string{
+			"root/../../evil.txt": "pwned",
+		})
+		dir := t.TempDir()
+		archivePath := filepath.Join(dir, "evil.tar.gz")
+		if err := os.WriteFile(archivePath, tgzBytes, 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		err := ExtractArchive(context.Background(), ExtractSpec{
+			ArchivePath: archivePath,
+			ArchiveType: "tar.gz",
+			DestDir:     filepath.Join(dir, "out"),
+			StripDirs:   1,
+		})
+		if err == nil {
+			t.Fatalf("expected ExtractArchive to reject tar.gz path traversal")
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, "evil.txt")); statErr == nil {
+			t.Fatalf("tar.gz traversal wrote outside destination directory")
+		}
+	})
+
+	if runtime.GOOS == "windows" {
+		t.Run("windows_reserved_device_name", func(t *testing.T) {
+			zipBytes, _ := buildTestZip(t, map[string]string{
+				"root/NUL": "pwned",
+			})
+			dir := t.TempDir()
+			archivePath := filepath.Join(dir, "reserved.zip")
+			if err := os.WriteFile(archivePath, zipBytes, 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			err := ExtractArchive(context.Background(), ExtractSpec{
+				ArchivePath: archivePath,
+				ArchiveType: "zip",
+				DestDir:     filepath.Join(dir, "out"),
+				StripDirs:   1,
+			})
+			if err == nil {
+				t.Fatalf("expected ExtractArchive to reject Windows reserved device name NUL")
+			}
+		})
 	}
 }
 
-func TestSafePath_ZipSlipPrevention(t *testing.T) {
-	dest := filepath.Join(os.TempDir(), "twdll_test_safe")
+func TestFindIDAExecutable_ResolvesHeadlessAndOrdersVersionsDescending(t *testing.T) {
+	// Given fake IDA 8.4 and IDA 9.5 directories under ProgramFiles
+	pf := t.TempDir()
+	t.Setenv("ProgramFiles", pf)
+	t.Setenv("ProgramFiles(x86)", pf)
 
-	// Valid path
-	valid, err := safePath(dest, "bin/tool.exe")
+	ida84 := filepath.Join(pf, "IDA Pro 8.4")
+	ida95 := filepath.Join(pf, "IDA Professional 9.5")
+	if err := os.MkdirAll(ida84, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(ida95, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ida84, "idat64.exe"), []byte("exe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ida95, "idat.exe"), []byte("exe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// When FindIDAExecutable and AutoDetectIDADir run
+	exe64, err := FindIDAExecutable(ida95, true)
 	if err != nil {
-		t.Errorf("safePath failed for valid path: %v", err)
+		t.Fatalf("FindIDAExecutable failed: %v", err)
 	}
-	expected := filepath.Join(dest, "bin", "tool.exe")
-	if valid != expected {
-		t.Errorf("got %q, want %q", valid, expected)
-	}
+	bestDir := AutoDetectIDADir()
 
-	// Zip-slip attacks
-	attacks := []string{
-		"../evil.exe",
-		"../../windows/system32/cmd.exe",
-		"sub/../../outside.txt",
+	// Then idat.exe is resolved for IDA 9.5 and AutoDetectIDADir selects 9.5 over 8.4
+	if exe64 != filepath.ToSlash(filepath.Join(ida95, "idat.exe")) {
+		t.Fatalf("FindIDAExecutable = %q, want idat.exe in IDA 9.5", exe64)
 	}
-
-	for _, attack := range attacks {
-		if _, err := safePath(dest, attack); err == nil {
-			t.Errorf("safePath allowed malicious path %q", attack)
-		}
+	if bestDir != filepath.ToSlash(ida95) {
+		t.Fatalf("AutoDetectIDADir = %q, want %q", bestDir, filepath.ToSlash(ida95))
 	}
 }
 
-func TestExtractZipWithStrip(t *testing.T) {
-	tmp := t.TempDir()
-	zipFile := filepath.Join(tmp, "test.zip")
-	destDir := filepath.Join(tmp, "out")
-
-	// Create synthetic zip archive with root wrapper
+func buildTestZip(t *testing.T, files map[string]string) ([]byte, string) {
+	t.Helper()
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
-
-	f, err := zw.Create("wrapper-dir/bin/test.exe")
-	if err != nil {
-		t.Fatalf("create zip entry: %v", err)
-	}
-	_, _ = f.Write([]byte("binary_contents"))
-	_ = zw.Close()
-
-	if err := os.WriteFile(zipFile, buf.Bytes(), 0o644); err != nil {
-		t.Fatalf("write test zip: %v", err)
-	}
-
-	// Extract stripping 1 level
-	if err := extractZip(zipFile, destDir, 1); err != nil {
-		t.Fatalf("extractZip failed: %v", err)
-	}
-
-	extracted := filepath.Join(destDir, "bin", "test.exe")
-	content, err := os.ReadFile(extracted)
-	if err != nil {
-		t.Fatalf("read extracted file: %v", err)
-	}
-	if string(content) != "binary_contents" {
-		t.Errorf("got %q, want 'binary_contents'", string(content))
-	}
-}
-
-func TestExtractTarGzWithStrip(t *testing.T) {
-	tmp := t.TempDir()
-	tarFile := filepath.Join(tmp, "test.tar.gz")
-	destDir := filepath.Join(tmp, "out")
-
-	var buf bytes.Buffer
-	gw := gzip.NewWriter(&buf)
-	tw := tar.NewWriter(gw)
-
-	body := []byte("tar_contents")
-	hdr := &tar.Header{
-		Name: "root-folder/xwin.exe",
-		Mode: 0o755,
-		Size: int64(len(body)),
-	}
-	_ = tw.WriteHeader(hdr)
-	_, _ = tw.Write(body)
-	_ = tw.Close()
-	_ = gw.Close()
-
-	if err := os.WriteFile(tarFile, buf.Bytes(), 0o644); err != nil {
-		t.Fatalf("write tar.gz: %v", err)
-	}
-
-	if err := extractTarGz(tarFile, destDir, 1); err != nil {
-		t.Fatalf("extractTarGz failed: %v", err)
-	}
-
-	extracted := filepath.Join(destDir, "xwin.exe")
-	content, err := os.ReadFile(extracted)
-	if err != nil {
-		t.Fatalf("read extracted file: %v", err)
-	}
-	if string(content) != "tar_contents" {
-		t.Errorf("got %q, want 'tar_contents'", string(content))
-	}
-}
-
-func TestValidateIDADir(t *testing.T) {
-	tmp := t.TempDir()
-
-	// Empty dir fails
-	if err := ValidateIDADir(tmp); err == nil {
-		t.Errorf("expected error for empty dir")
-	}
-
-	// Add ida.exe (IDA 9.x unified)
-	_ = os.WriteFile(filepath.Join(tmp, "ida.exe"), []byte("mock"), 0o755)
-	if err := ValidateIDADir(tmp); err != nil {
-		t.Errorf("expected success with ida.exe, got: %v", err)
-	}
-}
-
-func TestAutoDetectIDADir(t *testing.T) {
-	// AutoDetectIDADir returns a non-empty path if IDA is installed on this host
-	detected := AutoDetectIDADir()
-	if detected != "" {
-		if err := ValidateIDADir(detected); err != nil {
-			t.Errorf("AutoDetectIDADir returned invalid path %s: %v", detected, err)
+	for name, content := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatal(err)
 		}
 	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(buf.Bytes())
+	return buf.Bytes(), hex.EncodeToString(sum[:])
+}
+
+func TestExtractArchive_OnProgress_ReportsMonotonicBytesForZipTarGzAndTarXz(t *testing.T) {
+	files := map[string]string{
+		"pkg-1.0/bin/tool.exe": strings.Repeat("A", 12000),
+		"pkg-1.0/lib/core.a":   strings.Repeat("B", 8000),
+	}
+
+	t.Run("zip", func(t *testing.T) {
+		dir := t.TempDir()
+		zipBytes, _ := buildTestZip(t, files)
+		archivePath := filepath.Join(dir, "pkg.zip")
+		if err := os.WriteFile(archivePath, zipBytes, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		assertExtractProgressMonotonic(t, archivePath, "zip", filepath.Join(dir, "out"))
+	})
+
+	t.Run("tar.gz", func(t *testing.T) {
+		dir := t.TempDir()
+		tgzBytes := buildTestTarGz(t, files)
+		archivePath := filepath.Join(dir, "pkg.tar.gz")
+		if err := os.WriteFile(archivePath, tgzBytes, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		assertExtractProgressMonotonic(t, archivePath, "tar.gz", filepath.Join(dir, "out"))
+	})
+
+	t.Run("tar.xz", func(t *testing.T) {
+		tarBin := "tar"
+		if runtime.GOOS == "windows" {
+			if _, err := os.Stat(`C:\Windows\System32\tar.exe`); err == nil {
+				tarBin = `C:\Windows\System32\tar.exe`
+			}
+		}
+		if _, err := exec.LookPath(tarBin); err != nil {
+			t.Skip("tar binary not available on host")
+		}
+		dir := t.TempDir()
+		srcDir := filepath.Join(dir, "src")
+		for rel, body := range files {
+			p := filepath.Join(srcDir, filepath.FromSlash(rel))
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		archivePath := filepath.Join(dir, "pkg.tar.xz")
+		cmd := exec.Command(tarBin, "-cJf", archivePath, "-C", srcDir, "pkg-1.0")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Skipf("host tar does not support -cJf: %v (%s)", err, strings.TrimSpace(string(out)))
+		}
+		assertExtractProgressMonotonic(t, archivePath, "tar.xz", filepath.Join(dir, "out"))
+	})
+}
+
+func assertExtractProgressMonotonic(t *testing.T, archivePath, archiveType, destDir string) {
+	t.Helper()
+	var events []ExtractProgress
+	err := ExtractArchive(context.Background(), ExtractSpec{
+		ArchivePath: archivePath,
+		ArchiveType: archiveType,
+		DestDir:     destDir,
+		StripDirs:   1,
+		OnProgress: func(p ExtractProgress) {
+			events = append(events, p)
+		},
+	})
+	if err != nil {
+		t.Fatalf("ExtractArchive(%s) failed: %v", archiveType, err)
+	}
+	if len(events) == 0 {
+		t.Fatalf("ExtractArchive(%s) emitted 0 progress events", archiveType)
+	}
+	var prev int64
+	for i, ev := range events {
+		if ev.DoneBytes < prev {
+			t.Fatalf("event %d DoneBytes regressed: %d < %d", i, ev.DoneBytes, prev)
+		}
+		prev = ev.DoneBytes
+	}
+	last := events[len(events)-1]
+	if last.TotalBytes <= 0 || last.DoneBytes != last.TotalBytes {
+		t.Fatalf("final progress for %s = %+v, want DoneBytes == TotalBytes > 0", archiveType, last)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "bin", "tool.exe")); err != nil {
+		t.Fatalf("expected extracted bin/tool.exe: %v", err)
+	}
+}
+
+func buildTestTarGz(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for name, content := range files {
+		hdr := &tar.Header{
+			Name:     name,
+			Mode:     0o644,
+			Size:     int64(len(content)),
+			Typeflag: tar.TypeReg,
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }

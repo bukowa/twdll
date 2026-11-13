@@ -1,2 +1,33 @@
 #!/bin/sh
-exec "$(dirname "$0")/twdll.cmd" "$@"
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+export TWDLL_WRAPPER_ROOT="$SCRIPT_DIR"
+BIN="$SCRIPT_DIR/.twdll/bin/twdll"
+
+if [ -x "$BIN" ]; then
+    exec "$BIN" "$@"
+fi
+
+PORTABLE_GO="$SCRIPT_DIR/.twdll/tools/go/bin/go"
+if [ ! -x "$PORTABLE_GO" ]; then
+    GO_VER="$(awk '$1 == "go" { print $2 }' "$SCRIPT_DIR/cli/go.mod" 2>/dev/null || true)"
+    [ -z "$GO_VER" ] && GO_VER="1.27.3"
+    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    ARCH="$(uname -m)"
+    case "$ARCH" in
+        x86_64|amd64) ARCH="amd64" ;;
+        aarch64|arm64) ARCH="arm64" ;;
+    esac
+    echo "[twdll] Bootstrapping portable Go $GO_VER ($OS/$ARCH) into .twdll/tools/go..." >&2
+    mkdir -p "$SCRIPT_DIR/.twdll/tools"
+    GO_TAR="$SCRIPT_DIR/.twdll/tools/go.tar.gz"
+    curl -fL --progress-bar -o "$GO_TAR" "https://go.dev/dl/go${GO_VER}.${OS}-${ARCH}.tar.gz"
+    tar -xzf "$GO_TAR" -C "$SCRIPT_DIR/.twdll/tools"
+    rm -f "$GO_TAR"
+fi
+
+echo "[twdll] Compiling CLI executable..." >&2
+mkdir -p "$SCRIPT_DIR/.twdll/bin"
+(cd "$SCRIPT_DIR/cli" && TWDLL_NO_REBUILD=1 "$PORTABLE_GO" build -buildvcs=false -o "$BIN" .)
+exec "$BIN" "$@"

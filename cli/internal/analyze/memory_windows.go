@@ -3,42 +3,39 @@
 package analyze
 
 import (
-	"fmt"
-	"syscall"
 	"unsafe"
-)
 
-var (
-	modkernel32Mem           = syscall.NewLazyDLL("kernel32.dll")
-	procGlobalMemoryStatusEx = modkernel32Mem.NewProc("GlobalMemoryStatusEx")
+	"golang.org/x/sys/windows"
 )
 
 type memoryStatusEx struct {
-	Length               uint32
-	MemoryLoad           uint32
-	TotalPhys            uint64
-	AvailPhys            uint64
-	TotalPageFile        uint64
-	AvailPageFile        uint64
-	TotalVirtual         uint64
-	AvailVirtual         uint64
-	AvailExtendedVirtual uint64
+	length               uint32
+	memoryLoad           uint32
+	totalPhys            uint64
+	availPhys            uint64
+	totalPageFile        uint64
+	availPageFile        uint64
+	totalVirtual         uint64
+	availVirtual         uint64
+	availExtendedVirtual uint64
 }
 
-func getSystemMemory() (SystemMemory, error) {
-	if err := procGlobalMemoryStatusEx.Find(); err != nil {
-		return SystemMemory{}, fmt.Errorf("GlobalMemoryStatusEx not found: %w", err)
-	}
-	var ms memoryStatusEx
-	ms.Length = uint32(unsafe.Sizeof(ms))
-	ret, _, callErr := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&ms)))
-	if ret == 0 {
-		return SystemMemory{}, fmt.Errorf("GlobalMemoryStatusEx failed: %w", callErr)
+var (
+	modKernel32              = windows.NewLazySystemDLL("kernel32.dll")
+	procGlobalMemoryStatusEx = modKernel32.NewProc("GlobalMemoryStatusEx")
+)
+
+func ProbeSystemMemory() SystemMemory {
+	var msx memoryStatusEx
+	msx.length = uint32(unsafe.Sizeof(msx))
+	r1, _, _ := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&msx)))
+	if r1 == 0 {
+		return SystemMemory{}
 	}
 	return SystemMemory{
-		TotalPhysBytes:   ms.TotalPhys,
-		AvailPhysBytes:   ms.AvailPhys,
-		TotalCommitBytes: ms.TotalPageFile,
-		AvailCommitBytes: ms.AvailPageFile,
-	}, nil
+		TotalPhysBytes:   msx.totalPhys,
+		AvailPhysBytes:   msx.availPhys,
+		TotalCommitBytes: msx.totalPageFile,
+		AvailCommitBytes: msx.availPageFile,
+	}
 }

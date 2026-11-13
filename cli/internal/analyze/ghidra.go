@@ -3,197 +3,199 @@ package analyze
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"time"
+	"strings"
 
-	"twdll/cli/internal/ui"
+	"twdll/cli/internal/term"
+	"twdll/cli/internal/workspace"
 )
 
-// FindGhidraHeadlessScript locates analyzeHeadless.bat on Windows or analyzeHeadless on Linux.
-func FindGhidraHeadlessScript(toolsDir string) (string, error) {
-	scriptName := "analyzeHeadless"
-	if runtime.GOOS == "windows" {
-		scriptName = "analyzeHeadless.bat"
-	}
-	path := filepath.Join(toolsDir, "ghidra", "support", scriptName)
-	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
-		return "", fmt.Errorf("ghidra headless script not found at %s (run `twdll init` to install)", path)
-	}
-	return path, nil
+type ghidraToolchain struct {
+	headlessPath string
+	jdkDir       string
 }
 
-const tuneReferenceAnalysisScript = `import java.util.Arrays;
+type ghidraJobSpec struct {
+	toolchain      ghidraToolchain
+	item           PlanItem
+	opts           Options
+	mem            SystemMemory
+	concurrentJobs int
+	onLogLine      func(string)
+	onSample       func(LiveProcessStats)
+}
+
+const tuneReferenceAnalysisJava = `import ghidra.app.script.GhidraScript;
 import java.util.Map;
 
-import ghidra.app.script.GhidraScript;
-
 public class TuneReferenceAnalysis extends GhidraScript {
-	private static final String[] DISABLE_ANALYZERS = new String[] {
-		"Decompiler Switch Analysis",
-		"Decompiler Parameter ID",
-		"Call Convention ID",
-		"Non-Returning Functions - Discovered",
-		"Stack",
-		"Shared Return Calls",
-		"Aggressive Instruction Finder"
-	};
+    private static final String[] HEAVY_ANALYZERS = new String[] {
+        "Decompiler Switch Analysis",
+        "Decompiler Parameter ID",
+        "Call Convention ID",
+        "Non-Returning Functions - Discovered",
+        "Stack",
+        "Shared Return Calls",
+        "Aggressive Instruction Finder"
+    };
 
-	@Override
-	protected void run() throws Exception {
-		Map<String, String> options = getCurrentAnalysisOptionsAndValues(currentProgram);
-		for (String name : DISABLE_ANALYZERS) {
-			if (options.containsKey(name)) {
-				setAnalysisOption(currentProgram, name, "false");
-				println("[twdll] Disabled analyzer: " + name);
-			}
-		}
-
-		Map<String, String> updated = getCurrentAnalysisOptionsAndValues(currentProgram);
-		String[] keys = updated.keySet().toArray(new String[0]);
-		Arrays.sort(keys);
-		for (String key : keys) {
-			if (!key.contains(".") && "true".equals(updated.get(key))) {
-				println("[twdll] Active analyzer: " + key);
-			}
-		}
-	}
+    @Override
+    public void run() throws Exception {
+        if (currentProgram == null) {
+            return;
+        }
+        Map<String, String> options = getCurrentAnalysisOptionsAndValues(currentProgram);
+        for (String name : HEAVY_ANALYZERS) {
+            if (options.containsKey(name)) {
+                setAnalysisOption(currentProgram, name, "false");
+            }
+        }
+    }
 }
 `
 
-// RunGhidraHeadless executes Ghidra headless analysis on a target binary.
-func RunGhidraHeadless(ctx context.Context, toolsDir string, item Item, maxMem string, stripHeavyAnalyzers bool, slot *ui.TaskSlot, printer *ui.Printer) error {
-	scriptPath, err := FindGhidraHeadlessScript(toolsDir)
-	if err != nil {
-		return err
-	}
-
-	jdkDir := filepath.Join(toolsDir, "jdk")
-	javaExe := filepath.Join(jdkDir, "bin", "java")
+func resolveGhidraToolchain(paths workspace.Paths) (ghidraToolchain, error) {
+	launcherName := "analyzeHeadless"
 	if runtime.GOOS == "windows" {
-		javaExe += ".exe"
+		launcherName = "analyzeHeadless.bat"
 	}
-	if _, err := os.Stat(javaExe); err != nil {
-		return fmt.Errorf("jdk not found at %s (run `twdll init` to install)", jdkDir)
-	}
-
-	if maxMem == "" {
-		maxMem = "8G"
-	}
-
-	// Ghidra forbids any path component starting with '.' (e.g. .twdll).
-	// To ensure 100% cross-platform reliability across Windows, Linux, and WSL,
-	// we stage the project in a dot-free temporary directory, then atomically
-	// move the verified .gpr and .rep into item.OutputDir on clean exit code 0.
-	stageDir, err := os.MkdirTemp("", "twdll_ghidra_"+string(item.Target)+"_*")
-	if err != nil {
-		return fmt.Errorf("create staging dir: %w", err)
-	}
-	defer os.RemoveAll(stageDir)
-
-	if err := os.MkdirAll(item.OutputDir, 0o755); err != nil {
-		return fmt.Errorf("create output dir: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(item.LogFile), 0o755); err != nil {
-		return fmt.Errorf("create log dir: %w", err)
-	}
-
-	logOut, err := os.Create(item.LogFile)
-	if err != nil {
-		return fmt.Errorf("create log file: %w", err)
-	}
-	defer logOut.Close()
-
-	fmt.Fprintf(logOut, "[twdll] Target: %s | Heap: %s | Stripped Reference Analyzers: %v\n", item.Target, maxMem, stripHeavyAnalyzers)
-
-	startTime := time.Now()
-	cleanLog := filepath.ToSlash(item.LogFile)
-	if slot == nil && printer != nil {
-		printer.Info("  [ghidra] Analyzing %s (heap: %s, logs: %s)...", printer.Bold(string(item.Target)), maxMem, printer.Dim(cleanLog))
-	}
-
-	// analyzeHeadless <output_dir> <project_name> -import <binary_path> [-scriptPath ... -preScript ...] -overwrite
-	args := []string{
-		stageDir,
-		string(item.Target),
-		"-import",
-		item.BinaryPath,
-	}
-
-	if stripHeavyAnalyzers {
-		scriptDir := filepath.Join(stageDir, "scripts")
-		if err := os.MkdirAll(scriptDir, 0o755); err != nil {
-			return fmt.Errorf("create ghidra script dir: %w", err)
+	headlessPath := filepath.Join(paths.ToolDir(workspace.ToolGhidra), "support", launcherName)
+	if info, err := os.Stat(headlessPath); err != nil || info.IsDir() {
+		return ghidraToolchain{}, &term.DiagnosticError{
+			Message:  fmt.Sprintf("Ghidra headless launcher not found at %s", filepath.ToSlash(headlessPath)),
+			Expected: "installed Ghidra toolchain in workspace",
+			Help:     []string{"Run `twdll init --decompiler ghidra` to download and install Ghidra and OpenJDK."},
 		}
-		preScriptPath := filepath.Join(scriptDir, "TuneReferenceAnalysis.java")
-		if err := os.WriteFile(preScriptPath, []byte(tuneReferenceAnalysisScript), 0o644); err != nil {
-			return fmt.Errorf("write ghidra pre-script: %w", err)
+	}
+
+	jdkDir := paths.ToolDir(workspace.ToolJDK)
+	javaPath := filepath.Join(jdkDir, "bin", "java"+workspace.ExeSuffix())
+	if info, err := os.Stat(javaPath); err != nil || info.IsDir() {
+		return ghidraToolchain{}, &term.DiagnosticError{
+			Message:  fmt.Sprintf("Java runtime not found at %s", filepath.ToSlash(javaPath)),
+			Expected: "installed Adoptium OpenJDK toolchain in workspace",
+			Help:     []string{"Run `twdll init --decompiler ghidra` to download and install Ghidra and OpenJDK."},
 		}
+	}
+
+	return ghidraToolchain{
+		headlessPath: headlessPath,
+		jdkDir:       jdkDir,
+	}, nil
+}
+
+func buildGhidraArgs(stageDir string, target workspace.TargetID, binaryPath, scriptDir string) []string {
+	args := []string{stageDir, string(target), "-import", binaryPath}
+	if scriptDir != "" {
 		args = append(args, "-scriptPath", scriptDir, "-preScript", "TuneReferenceAnalysis.java")
 	}
+	return append(args, "-overwrite")
+}
 
-	args = append(args, "-overwrite")
-
-	cmd := exec.CommandContext(ctx, scriptPath, args...)
-	cmd.Stdout = logOut
-	cmd.Stderr = logOut
-
-	// Set JAVA_HOME and memory environment
-	env := os.Environ()
-	env = append(env, "JAVA_HOME="+jdkDir)
-	env = append(env, "GHIDRA_HEADLESS_MAXMEM="+maxMem)
-	cmd.Env = env
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start ghidra: %w", err)
+func runGhidraTarget(ctx context.Context, spec ghidraJobSpec) (targetRunResult, error) {
+	target := spec.item.Target
+	stageDir, err := os.MkdirTemp("", "twdll_ghidra_"+string(target)+"_*")
+	if err != nil {
+		return targetRunResult{}, fmt.Errorf("create Ghidra staging dir for %s: %w", target, err)
 	}
+	defer func() { _ = os.RemoveAll(stageDir) }()
 
-	if slot != nil && cmd.Process != nil {
-		slot.SetPID(cmd.Process.Pid)
-	}
-
-	runErr := cmd.Wait()
-	if runErr != nil {
-		return fmt.Errorf("ghidra headless analysis failed for %s (see %s): %w", item.Target, item.LogFile, runErr)
-	}
-
-	// Move staged files into destination
-	stagedGpr := filepath.Join(stageDir, string(item.Target)+".gpr")
-	stagedRep := filepath.Join(stageDir, string(item.Target)+".rep")
-
-	if _, err := os.Stat(stagedGpr); err != nil {
-		return fmt.Errorf("ghidra finished with exit 0 but project file is missing: %s", stagedGpr)
-	}
-	if repStat, err := os.Stat(stagedRep); err != nil || !repStat.IsDir() {
-		return fmt.Errorf("ghidra finished with exit 0 but project repository folder is missing: %s", stagedRep)
-	}
-
-	_ = os.RemoveAll(item.OutputDir)
-	if err := os.MkdirAll(item.OutputDir, 0o755); err != nil {
-		return fmt.Errorf("create destination dir: %w", err)
-	}
-
-	destGpr := filepath.Join(item.OutputDir, string(item.Target)+".gpr")
-	destRep := filepath.Join(item.OutputDir, string(item.Target)+".rep")
-
-	if err := os.Rename(stagedGpr, destGpr); err != nil {
-		return fmt.Errorf("move project file to destination: %w", err)
-	}
-	if err := os.Rename(stagedRep, destRep); err != nil {
-		return fmt.Errorf("move project repository to destination: %w", err)
-	}
-
-	elapsed := time.Since(startTime).Round(time.Second)
-	finishMsg := fmt.Sprintf("  [ghidra] %s finished in %s", printer.Green(string(item.Target)), elapsed)
-	if slot != nil {
-		if slot.Total > 1 {
-			finishMsg = fmt.Sprintf("  [%d/%d] [ghidra] %s finished in %s", slot.Index, slot.Total, printer.Green(string(item.Target)), elapsed)
+	stripHeavy := target == workspace.TargetAttila64 && !spec.opts.FullAnalysis
+	scriptDir := ""
+	if stripHeavy {
+		scriptDir = filepath.Join(stageDir, "scripts")
+		if err := os.MkdirAll(scriptDir, 0o755); err != nil {
+			return targetRunResult{}, fmt.Errorf("create Ghidra script dir for %s: %w", target, err)
 		}
-		slot.Finish(finishMsg)
-	} else if printer != nil {
-		printer.Info("%s", finishMsg)
+		scriptFile := filepath.Join(scriptDir, "TuneReferenceAnalysis.java")
+		if err := os.WriteFile(scriptFile, []byte(tuneReferenceAnalysisJava), 0o644); err != nil {
+			return targetRunResult{}, fmt.Errorf("write TuneReferenceAnalysis.java for %s: %w", target, err)
+		}
 	}
-	return nil
+
+	maxMem := strings.TrimSpace(spec.opts.MaxMem)
+	if maxMem == "" {
+		maxMem = ComputeGhidraMaxMem(spec.mem, target, spec.concurrentJobs)
+	}
+
+	jdkBin := filepath.Join(spec.toolchain.jdkDir, "bin")
+	pathVal := jdkBin
+	if existingPath := os.Getenv("PATH"); existingPath != "" {
+		pathVal = jdkBin + string(os.PathListSeparator) + existingPath
+	}
+
+	env, err := prepareStageEnv(stageDir, true, map[string]string{
+		"JAVA_HOME":              spec.toolchain.jdkDir,
+		"GHIDRA_HEADLESS_MAXMEM": maxMem,
+		"PATH":                   pathVal,
+	})
+	if err != nil {
+		return targetRunResult{}, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(spec.item.LogPath), 0o755); err != nil {
+		return targetRunResult{}, fmt.Errorf("ensure log dir for %s: %w", target, err)
+	}
+	logFile, err := os.OpenFile(spec.item.LogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return targetRunResult{}, fmt.Errorf("open log file %s: %w", spec.item.LogPath, err)
+	}
+
+	args := buildGhidraArgs(stageDir, target, spec.item.BinaryPath, scriptDir)
+	cmd := exec.CommandContext(ctx, spec.toolchain.headlessPath, args...)
+	cmd.Dir = stageDir
+	cmd.Env = env
+	var sink *lineSink
+	var logWriter io.Writer = logFile
+	if spec.onLogLine != nil {
+		sink = newLineSink(spec.onLogLine)
+		logWriter = io.MultiWriter(logFile, sink)
+	}
+	cmd.Stdout = logWriter
+	cmd.Stderr = logWriter
+
+	metrics, runErr := runObservedCommand(ctx, cmd, spec.onSample)
+	res := targetRunResult{
+		Metrics:      metrics,
+		GhidraMaxMem: maxMem,
+		Started:      true,
+	}
+	if sink != nil {
+		sink.Flush()
+	}
+	_ = logFile.Close()
+	if runErr != nil {
+		if ctx.Err() != nil {
+			return res, fmt.Errorf("Ghidra analysis cancelled for %s: %w", target, ctx.Err())
+		}
+		return res, fmt.Errorf("Ghidra headless analysis failed for %s (%w); see %s", target, runErr, filepath.ToSlash(spec.item.LogPath))
+	}
+
+	stagedGPR := filepath.Join(stageDir, string(target)+".gpr")
+	if info, err := os.Stat(stagedGPR); err != nil || info.IsDir() {
+		return res, fmt.Errorf("Ghidra exited 0 for %s but project marker %s was not created (see %s)", target, stagedGPR, filepath.ToSlash(spec.item.LogPath))
+	}
+	stagedRep := filepath.Join(stageDir, string(target)+".rep")
+	if info, err := os.Stat(stagedRep); err != nil || !info.IsDir() {
+		return res, fmt.Errorf("Ghidra exited 0 for %s but project repository %s was not created (see %s)", target, stagedRep, filepath.ToSlash(spec.item.LogPath))
+	}
+
+	destDir := spec.item.DatabaseDir
+	if err := os.RemoveAll(destDir); err != nil {
+		return res, fmt.Errorf("clear existing Ghidra database %s: %w", destDir, err)
+	}
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return res, fmt.Errorf("create Ghidra database dir %s: %w", destDir, err)
+	}
+	if err := moveFile(stagedGPR, filepath.Join(destDir, string(target)+".gpr")); err != nil {
+		return res, fmt.Errorf("install Ghidra .gpr for %s: %w", target, err)
+	}
+	if err := moveDir(stagedRep, filepath.Join(destDir, string(target)+".rep")); err != nil {
+		return res, fmt.Errorf("install Ghidra .rep for %s: %w", target, err)
+	}
+	return res, nil
 }

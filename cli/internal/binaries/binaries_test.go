@@ -1,209 +1,252 @@
 package binaries
 
 import (
+	"bytes"
+	"debug/elf"
+	"debug/pe"
+	"encoding/binary"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+
 	"twdll/cli/internal/workspace"
 )
 
-func TestParseVDF(t *testing.T) {
-	vdfContent := `
-// This is a test comment
-"AppState"
+func TestParseVDF_HandlesCommentsEscapesAndInsertionOrder(t *testing.T) {
+	// Given a Valve KeyValues document with comments, escapes, bare words, and nested sections
+	raw := `
+// Top comment
+"LibraryFolders"
 {
-	"appid"		"325610"
-	"name"		"Total War: ATTILA"
-	"installdir"		"Total War Attila"
-	"StateFlags"		"4"
-	"UserConfig"
+	"0"
 	{
-		"language"		"english"
+		"path"		"C:\\Program Files (x86)\\Steam"
+		"label"		"Main\tDrive\nLine2"
+	}
+	"1"
+	{
+		"path"		"G:\\SteamLibrary"
+		bare_flag	42
 	}
 }
 `
-	root, err := ParseVDF(vdfContent)
+
+	// When ParseVDF parses the text
+	root, err := ParseVDF(raw)
 	if err != nil {
 		t.Fatalf("ParseVDF failed: %v", err)
 	}
 
-	appState := root.Get("appstate")
-	if appState == nil {
-		t.Fatalf("missing appstate node")
+	// Then case-insensitive lookup, escapes, integer parsing, and child order work
+	lf := root.Get("libraryfolders")
+	if lf == nil {
+		t.Fatalf("expected case-insensitive lookup for libraryfolders")
 	}
-
-	if got := appState.GetString("installdir", ""); got != "Total War Attila" {
-		t.Errorf("got installdir %q, want 'Total War Attila'", got)
+	children := lf.ChildrenOrdered()
+	if len(children) != 2 || children[0].Name != "0" || children[1].Name != "1" {
+		t.Fatalf("unexpected children order: %+v", children)
 	}
-	if got := appState.GetInt("stateflags", 0); got != 4 {
-		t.Errorf("got stateflags %d, want 4", got)
+	if got := children[0].GetString("PATH", ""); got != `C:\Program Files (x86)\Steam` {
+		t.Fatalf("escaped path = %q, want C:\\Program Files (x86)\\Steam", got)
 	}
-	userConfig := appState.Get("userconfig")
-	if userConfig == nil || userConfig.GetString("language", "") != "english" {
-		t.Errorf("failed to parse nested section: %+v", userConfig)
+	if got := children[0].GetString("label", ""); got != "Main\tDrive\nLine2" {
+		t.Fatalf("escaped label = %q", got)
 	}
-}
-
-func TestSteamDir_Libraries(t *testing.T) {
-	tmp := t.TempDir()
-	steamRoot := filepath.Join(tmp, "Steam")
-	secLib := filepath.Join(tmp, "SteamLibrary")
-	_ = os.MkdirAll(filepath.Join(steamRoot, "steamapps"), 0o755)
-	_ = os.MkdirAll(filepath.Join(secLib, "steamapps"), 0o755)
-
-	// Create appmanifests
-	_ = os.WriteFile(filepath.Join(steamRoot, "steamapps", "appmanifest_214950.acf"), []byte(`"AppState" { "appid" "214950" }`), 0o644)
-	_ = os.WriteFile(filepath.Join(secLib, "steamapps", "appmanifest_325610.acf"), []byte(`"AppState" { "appid" "325610" }`), 0o644)
-
-	vdfContent := `
-"libraryfolders"
-{
-	"0"
-	{
-		"path"		"` + strings.ReplaceAll(steamRoot, `\`, `\\`) + `"
-	}
-	"1"
-	{
-		"path"		"` + strings.ReplaceAll(secLib, `\`, `\\`) + `"
+	if got := children[1].GetInt("bare_flag", 0); got != 42 {
+		t.Fatalf("bare_flag = %d, want 42", got)
 	}
 }
-`
-	_ = os.WriteFile(filepath.Join(steamRoot, "steamapps", "libraryfolders.vdf"), []byte(vdfContent), 0o644)
 
-	steamDir := &SteamDir{Path: steamRoot}
-	libs, err := steamDir.Libraries()
+func TestSteamDir_FindGameDir_FiltersByStateFlagsAndBinaryPresence(t *testing.T) {
+	// Given a temporary Steam installation with two libraries and depot content
+	steamRoot := t.TempDir()
+	lib2 := t.TempDir()
+	t.Setenv("STEAM_DIR", steamRoot)
+
+	if err := os.MkdirAll(filepath.Join(steamRoot, "steamapps"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(lib2, "steamapps", "common", "Total War Attila"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(lib2, "steamapps", "common", "Total War Rome II"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	vdfText := `"libraryfolders" { "0" { "path" "` + filepath.ToSlash(steamRoot) + `" } "1" { "path" "` + filepath.ToSlash(lib2) + `" } }`
+	if err := os.WriteFile(filepath.Join(steamRoot, "steamapps", "libraryfolders.vdf"), []byte(vdfText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	attilaACF := `"AppState" { "appid" "325610" "StateFlags" "4" "installdir" "Total War Attila" }`
+	if err := os.WriteFile(filepath.Join(lib2, "steamapps", "appmanifest_325610.acf"), []byte(attilaACF), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(lib2, "steamapps", "common", "Total War Attila", "empire.retail.dll"), []byte("pe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rome2CorruptACF := `"AppState" { "appid" "214950" "StateFlags" "36" "installdir" "Total War Rome II" }`
+	if err := os.WriteFile(filepath.Join(lib2, "steamapps", "appmanifest_214950.acf"), []byte(rome2CorruptACF), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(lib2, "steamapps", "common", "Total War Rome II", "empire.retail.dll"), []byte("pe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	depotBin := filepath.Join(steamRoot, "steamapps", "content", "app_325610", "depot_325624", "Attila")
+	if err := os.MkdirAll(filepath.Dir(depotBin), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(depotBin, []byte("elf"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// When LocateSteam, FindGameDir, and FindAttila64Depot are called
+	sd, err := LocateSteam()
 	if err != nil {
-		t.Fatalf("Libraries() failed: %v", err)
+		t.Fatalf("LocateSteam: %v", err)
 	}
-	if len(libs) != 2 {
-		t.Fatalf("expected 2 libraries, got %d", len(libs))
-	}
+	attilaDir, attilaOK := sd.FindGameDir(workspace.GameAttila)
+	_, rome2OK := sd.FindGameDir(workspace.GameRome2)
+	gotDepot, depotOK := sd.FindAttila64Depot()
 
-	// Guaranteed order from steamlocate-rs: library 0 then library 1
-	if libs[0].Path != filepath.Clean(steamRoot) {
-		t.Errorf("libs[0].Path = %q, want %q", libs[0].Path, steamRoot)
+	// Then Attila resolves from the secondary library, corrupt Rome 2 is rejected, and the 64-bit depot is found
+	wantAttila := filepath.ToSlash(filepath.Join(lib2, "steamapps", "common", "Total War Attila"))
+	if !attilaOK || attilaDir != wantAttila {
+		t.Fatalf("FindGameDir(Attila) = (%q, %v), want (%q, true)", attilaDir, attilaOK, wantAttila)
 	}
-	if libs[1].Path != filepath.Clean(secLib) {
-		t.Errorf("libs[1].Path = %q, want %q", libs[1].Path, secLib)
+	if rome2OK {
+		t.Fatalf("expected corrupt StateFlags=36 Rome 2 install to be rejected")
 	}
-
-	// Verify app discovered in secLib
-	app, lib, err := steamDir.FindApp(325610)
-	if err != nil || app == nil || lib == nil {
-		t.Fatalf("FindApp(325610) failed: %v", err)
+	if !depotOK || gotDepot != filepath.ToSlash(depotBin) {
+		t.Fatalf("FindAttila64Depot = (%q, %v), want (%q, true)", gotDepot, depotOK, filepath.ToSlash(depotBin))
 	}
-	if app.AppID != 325610 {
-		t.Errorf("expected AppID 325610, got %d", app.AppID)
-	}
-	if lib.Path != filepath.Clean(secLib) {
-		t.Errorf("expected lib path %q, got %q", secLib, lib.Path)
+	if DepotCommand() != "download_depot 325610 325624 3804137149572368482" {
+		t.Fatalf("unexpected DepotCommand: %q", DepotCommand())
 	}
 }
 
-func TestFindGameDirGroundTruth(t *testing.T) {
-	tmp := t.TempDir()
-	steamRoot := filepath.Join(tmp, "Steam")
-	secLib := filepath.Join(tmp, "SecondaryDrive", "SteamLibrary")
-	_ = os.MkdirAll(filepath.Join(steamRoot, "steamapps"), 0o755)
-	_ = os.MkdirAll(filepath.Join(secLib, "steamapps"), 0o755)
-
-	// Create installed game in secondary drive
-	gameDir := filepath.Join(secLib, "steamapps", "common", "Total War Attila")
-	_ = os.MkdirAll(gameDir, 0o755)
-	dllPath := filepath.Join(gameDir, "empire.retail.dll")
-	_ = os.WriteFile(dllPath, []byte("fake_pe"), 0o644)
-
-	// Write appmanifest_325610.acf with StateFlags = 4
-	acfContent := `
-"AppState"
-{
-	"appid"		"325610"
-	"installdir"		"Total War Attila"
-	"StateFlags"		"4"
-}
-`
-	_ = os.WriteFile(filepath.Join(secLib, "steamapps", "appmanifest_325610.acf"), []byte(acfContent), 0o644)
-
-	vdfContent := `
-"libraryfolders"
-{
-	"0"
-	{
-		"path"		"` + strings.ReplaceAll(steamRoot, `\`, `\\`) + `"
+func TestVerifyPE32_AcceptsI386AndRejectsAMD64(t *testing.T) {
+	// Given synthetic i386 and amd64 PE files
+	dir := t.TempDir()
+	pe32Path := filepath.Join(dir, "i386.dll")
+	pe64Path := filepath.Join(dir, "amd64.dll")
+	if err := os.WriteFile(pe32Path, buildSyntheticPE(pe.IMAGE_FILE_MACHINE_I386), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	"1"
-	{
-		"path"		"` + strings.ReplaceAll(secLib, `\`, `\\`) + `"
-	}
-}
-`
-	_ = os.WriteFile(filepath.Join(steamRoot, "steamapps", "libraryfolders.vdf"), []byte(vdfContent), 0o644)
-
-	steamDir := &SteamDir{Path: steamRoot}
-	foundDir, ok := steamDir.FindGameDir(workspace.GameAttila)
-	if !ok {
-		t.Fatalf("FindGameDir failed to locate Attila")
-	}
-	expected := filepath.ToSlash(gameDir)
-	if foundDir != expected {
-		t.Errorf("got %q, want %q", foundDir, expected)
-	}
-}
-
-func TestComputeFileSHA256(t *testing.T) {
-	tmp := t.TempDir()
-	f := filepath.Join(tmp, "test.txt")
-	if err := os.WriteFile(f, []byte("hello world\n"), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
+	if err := os.WriteFile(pe64Path, buildSyntheticPE(pe.IMAGE_FILE_MACHINE_AMD64), 0o644); err != nil {
+		t.Fatal(err)
 	}
 
-	hash, err := ComputeFileSHA256(f)
+	// When VerifyPE32 inspects both binaries
+	info, err := VerifyPE32(pe32Path, workspace.TargetAttila32)
+	_, err64 := VerifyPE32(pe64Path, workspace.TargetAttila32)
+
+	// Then i386 succeeds with a computed SHA-256 while amd64 fails
 	if err != nil {
-		t.Fatalf("ComputeFileSHA256 error: %v", err)
+		t.Fatalf("VerifyPE32(i386) failed: %v", err)
 	}
-	expected := "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447"
-	if hash != expected {
-		t.Errorf("got %s, want %s", hash, expected)
+	if info.Machine != pe.IMAGE_FILE_MACHINE_I386 || len(info.SHA256) != 64 || info.KnownOfficial {
+		t.Fatalf("unexpected PE32Info: %+v", info)
 	}
-}
-
-func TestVerifyInvalidFiles(t *testing.T) {
-	tmp := t.TempDir()
-	junk := filepath.Join(tmp, "junk.bin")
-	if err := os.WriteFile(junk, []byte("NOT_A_PE_OR_ELF"), 0o644); err != nil {
-		t.Fatalf("write junk: %v", err)
+	if err64 == nil {
+		t.Fatalf("expected VerifyPE32 to reject amd64 binary")
 	}
-
-	if _, err := VerifyPE32(junk, "test"); err == nil {
-		t.Errorf("expected error for non-PE file")
-	}
-
-	if _, err := VerifyELF64DWARF(junk); err == nil {
-		t.Errorf("expected error for non-ELF file")
+	if !IsKnownOfficialHash(workspace.TargetAttila32, KnownOfficialHashes[workspace.TargetAttila32]) {
+		t.Fatalf("expected KnownOfficialHashes[TargetAttila32] to be recognized")
 	}
 }
 
-func TestLiveSteamLocate(t *testing.T) {
-	steam, err := Locate()
-	if err != nil {
-		t.Skipf("no live steam on this machine: %v", err)
+func TestVerifyELF64DWARF_AcceptsDebugInfoAndRejectsStripped(t *testing.T) {
+	// Given a synthetic 64-bit x86_64 ELF with .debug_info and a stripped one without it
+	dir := t.TempDir()
+	dwarfPath := filepath.Join(dir, "Attila.dwarf")
+	strippedPath := filepath.Join(dir, "Attila.stripped")
+	if err := os.WriteFile(dwarfPath, buildSyntheticELF64(true), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	t.Logf("Found live Steam at: %s", steam.Path)
-
-	libs, err := steam.Libraries()
-	if err != nil {
-		t.Fatalf("Libraries() failed: %v", err)
-	}
-	t.Logf("Discovered %d libraries:", len(libs))
-	for _, lib := range libs {
-		t.Logf("  - Library: %s (%d apps)", lib.Path, len(lib.AppIDs))
+	if err := os.WriteFile(strippedPath, buildSyntheticELF64(false), 0o644); err != nil {
+		t.Fatal(err)
 	}
 
-	attilaDir, ok := steam.FindGameDir(workspace.GameAttila)
-	if ok {
-		t.Logf("Found Attila at: %s", attilaDir)
-	} else {
-		t.Logf("Attila not installed or not found")
+	// When VerifyELF64DWARF validates both files
+	info, err := VerifyELF64DWARF(dwarfPath)
+	_, strippedErr := VerifyELF64DWARF(strippedPath)
+
+	// Then the DWARF binary is accepted and the stripped binary is rejected
+	if err != nil {
+		t.Fatalf("VerifyELF64DWARF(dwarf) failed: %v", err)
 	}
+	if len(info.SHA256) != 64 || info.KnownOfficial {
+		t.Fatalf("unexpected ELF64Info: %+v", info)
+	}
+	if strippedErr == nil {
+		t.Fatalf("expected VerifyELF64DWARF to reject stripped ELF64 without .debug_info")
+	}
+}
+
+func buildSyntheticPE(machine uint16) []byte {
+	buf := make([]byte, 128)
+	buf[0] = 'M'
+	buf[1] = 'Z'
+	binary.LittleEndian.PutUint32(buf[0x3c:], 0x40)
+	copy(buf[0x40:], []byte{'P', 'E', 0, 0})
+	binary.LittleEndian.PutUint16(buf[0x44:], machine)
+	return buf
+}
+
+func buildSyntheticELF64(withDebugInfo bool) []byte {
+	shstrtab := []byte("\x00.shstrtab\x00.debug_info\x00")
+	debugPayload := []byte{1, 2, 3, 4}
+
+	var hdr elf.Header64
+	hdr.Ident[0] = 0x7f
+	hdr.Ident[1] = 'E'
+	hdr.Ident[2] = 'L'
+	hdr.Ident[3] = 'F'
+	hdr.Ident[elf.EI_CLASS] = byte(elf.ELFCLASS64)
+	hdr.Ident[elf.EI_DATA] = byte(elf.ELFDATA2LSB)
+	hdr.Ident[elf.EI_VERSION] = byte(elf.EV_CURRENT)
+	hdr.Type = uint16(elf.ET_EXEC)
+	hdr.Machine = uint16(elf.EM_X86_64)
+	hdr.Version = uint32(elf.EV_CURRENT)
+	hdr.Ehsize = 64
+	hdr.Shentsize = 64
+	hdr.Shoff = 64
+	hdr.Shstrndx = 1
+	numSec := uint16(2)
+	if withDebugInfo {
+		numSec = 3
+	}
+	hdr.Shnum = numSec
+
+	dataStart := uint64(64 + int(numSec)*64)
+	shstrSec := elf.Section64{
+		Name:      1,
+		Type:      uint32(elf.SHT_STRTAB),
+		Off:       dataStart,
+		Size:      uint64(len(shstrtab)),
+		Addralign: 1,
+	}
+
+	var out bytes.Buffer
+	_ = binary.Write(&out, binary.LittleEndian, &hdr)
+	_ = binary.Write(&out, binary.LittleEndian, &elf.Section64{})
+	_ = binary.Write(&out, binary.LittleEndian, &shstrSec)
+	if withDebugInfo {
+		dbgSec := elf.Section64{
+			Name:      11,
+			Type:      uint32(elf.SHT_PROGBITS),
+			Off:       dataStart + uint64(len(shstrtab)),
+			Size:      uint64(len(debugPayload)),
+			Addralign: 1,
+		}
+		_ = binary.Write(&out, binary.LittleEndian, &dbgSec)
+	}
+	out.Write(shstrtab)
+	if withDebugInfo {
+		out.Write(debugPayload)
+	}
+	return out.Bytes()
 }

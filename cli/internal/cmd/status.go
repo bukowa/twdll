@@ -9,18 +9,33 @@ import (
 	"strings"
 
 	"twdll/cli/internal/binaries"
+	"twdll/cli/internal/term"
 	"twdll/cli/internal/toolchain"
-	"twdll/cli/internal/ui"
 	"twdll/cli/internal/workspace"
 )
+
+type StatusRequest struct {
+	Layout workspace.Layout
+	JSON   bool
+	UI     *term.UI
+}
 
 type ToolStatus struct {
 	ID        workspace.ToolID `json:"id"`
 	Name      string           `json:"name"`
 	Version   string           `json:"version"`
 	Installed bool             `json:"installed"`
-	Required  bool             `json:"required"`
 	Path      string           `json:"path,omitempty"`
+}
+
+type DecompilerStatus struct {
+	Engine    string `json:"engine"`
+	Name      string `json:"name"`
+	Active    bool   `json:"active"`
+	Installed bool   `json:"installed"`
+	Valid     bool   `json:"valid"`
+	Path      string `json:"path,omitempty"`
+	Details   string `json:"details,omitempty"`
 }
 
 type BinaryStatus struct {
@@ -35,322 +50,277 @@ type BinaryStatus struct {
 
 type DBStatus struct {
 	Target   workspace.TargetID `json:"target"`
-	Engine   string             `json:"engine"` // "ghidra" | "ida"
+	Engine   string             `json:"engine"`
 	Analyzed bool               `json:"analyzed"`
 	Path     string             `json:"path,omitempty"`
 }
 
-type DecompilerEngineStatus struct {
-	Engine    string `json:"engine"` // "ida" | "ghidra"
-	Name      string `json:"name"`
-	Active    bool   `json:"active"`
-	Installed bool   `json:"installed"`
-	Valid     bool   `json:"valid"`
-	Path      string `json:"path,omitempty"`
-	Details   string `json:"details,omitempty"`
-}
-
 type StatusReport struct {
-	Initialized bool                     `json:"initialized"`
-	DefaultGame string                   `json:"default_game"`
-	Decompiler  string                   `json:"decompiler"`
-	IDADir      string                   `json:"ida_dir,omitempty"`
-	IDAValid    bool                     `json:"ida_valid,omitempty"`
-	Tools       []ToolStatus             `json:"tools"`
-	Decompilers []DecompilerEngineStatus `json:"decompilers"`
-	Binaries    []BinaryStatus           `json:"binaries"`
-	Databases   []DBStatus               `json:"databases"`
+	Initialized     bool               `json:"initialized"`
+	ConfigPath      string             `json:"config_path"`
+	DataDir         string             `json:"data_dir"`
+	DefaultGame     string             `json:"default_game"`
+	Decompiler      string             `json:"decompiler"`
+	IDADir          string             `json:"ida_dir,omitempty"`
+	IDAValid        bool               `json:"ida_valid,omitempty"`
+	XWinProvisioned bool               `json:"xwin_provisioned"`
+	Tools           []ToolStatus       `json:"tools"`
+	Decompilers     []DecompilerStatus `json:"decompilers"`
+	Binaries        []BinaryStatus     `json:"binaries"`
+	Databases       []DBStatus         `json:"databases"`
 }
 
-// RunStatus inspects workspace readiness, installed tools, raw binaries, and decompiler DB states.
-func RunStatus(ctx context.Context, paths workspace.Paths, jsonOut bool, printer *ui.Printer) (*StatusReport, error) {
-	cfg, exists, err := workspace.LoadConfig(paths.Config)
-	isInit := exists && (err == nil)
-	if err != nil || !exists {
-		cfg = workspace.DefaultConfig()
-	}
-
+func RunStatus(_ context.Context, req StatusRequest) (*StatusReport, error) {
+	paths := req.Layout.Paths
+	cfg := req.Layout.Config
 	state, _, _ := workspace.LoadState(paths.StateFile)
 
+	idaValid := cfg.IDADir != "" && toolchain.ValidateIDADir(cfg.IDADir) == nil
+	xwinReady := toolchain.IsXWinProvisioned(paths)
+
 	report := &StatusReport{
-		Initialized: isInit,
-		DefaultGame: string(cfg.DefaultGame),
-		Decompiler:  string(cfg.Decompiler),
-		IDADir:      cfg.IDADir,
-		IDAValid:    cfg.IDADir != "" && toolchain.ValidateIDADir(cfg.IDADir) == nil,
-		Tools:       make([]ToolStatus, 0),
-		Decompilers: make([]DecompilerEngineStatus, 0),
-		Binaries:    make([]BinaryStatus, 0),
-		Databases:   make([]DBStatus, 0),
+		Initialized:     req.Layout.ConfigExists,
+		ConfigPath:      filepath.ToSlash(paths.Config),
+		DataDir:         filepath.ToSlash(paths.DataDir),
+		DefaultGame:     string(cfg.DefaultGame),
+		Decompiler:      string(cfg.Decompiler),
+		IDADir:          filepath.ToSlash(cfg.IDADir),
+		IDAValid:        idaValid,
+		XWinProvisioned: xwinReady,
+		Tools:           collectToolStatuses(paths, xwinReady),
+		Decompilers:     collectDecompilerStatuses(paths, cfg, idaValid),
+		Binaries:        make([]BinaryStatus, 0, 4),
+		Databases:       make([]DBStatus, 0, 8),
 	}
 
-	// 1. Core build toolchain inventory
-	manifest := toolchain.CurrentPlatformManifest()
-	for _, toolID := range toolchain.StandardToolOrder {
-		tool, ok := manifest[toolID]
-		if !ok {
-			continue
+	for _, tid := range workspace.AllTargets() {
+		binStat := inspectTargetBinary(paths, state, tid)
+		report.Binaries = append(report.Binaries, binStat)
+		for _, engine := range workspace.AllDecompilers() {
+			report.Databases = append(report.Databases, inspectTargetDB(paths, state, tid, engine, binStat.SHA256))
 		}
-		installed := toolchain.IsToolInstalled(paths, tool)
-		toolDir := paths.ToolDir(tool.ID)
-
-		report.Tools = append(report.Tools, ToolStatus{
-			ID:        tool.ID,
-			Name:      tool.Name,
-			Version:   tool.Version,
-			Installed: installed,
-			Required:  true,
-			Path:      toolDir,
-		})
 	}
 
-	// 2. Decompiler engines inventory
-	// IDA Pro
-	report.Decompilers = append(report.Decompilers, DecompilerEngineStatus{
-		Engine:    "ida",
-		Name:      "IDA Pro",
-		Active:    cfg.Decompiler == workspace.DecompilerIDA,
-		Installed: report.IDAValid,
-		Valid:     report.IDAValid,
-		Path:      cfg.IDADir,
-	})
-
-	// Ghidra
-	ghidraDef, hasGhidra := manifest[workspace.ToolGhidra]
-	jdkDef, hasJDK := manifest[workspace.ToolJDK]
-	ghidraInstalled := hasGhidra && toolchain.IsToolInstalled(paths, ghidraDef)
-	jdkInstalled := hasJDK && toolchain.IsToolInstalled(paths, jdkDef)
-	ghidraValid := ghidraInstalled && jdkInstalled
-	ghidraDetails := ""
-	if cfg.Decompiler == workspace.DecompilerGhidra && !jdkInstalled {
-		ghidraDetails = "Missing Adoptium OpenJDK runtime"
-	}
-	report.Decompilers = append(report.Decompilers, DecompilerEngineStatus{
-		Engine:    "ghidra",
-		Name:      "Ghidra",
-		Active:    cfg.Decompiler == workspace.DecompilerGhidra,
-		Installed: ghidraInstalled,
-		Valid:     ghidraValid,
-		Path:      paths.ToolDir(workspace.ToolGhidra),
-		Details:   ghidraDetails,
-	})
-
-	// 2. Binaries inventory
-	targets := []struct {
-		target   workspace.TargetID
-		name     string
-		fileName string
-	}{
-		{workspace.TargetAttila64, "Attila Linux 64-bit DWARF", "Attila"},
-		{workspace.TargetAttila32, "Total War: Attila 32-bit", "empire.retail.dll"},
-		{workspace.TargetRome2_32, "Total War: Rome II 32-bit", "empire.retail.dll"},
-		{workspace.TargetToB32, "Total War Saga: ToB 32-bit", "empire.retail.dll"},
-	}
-
-	for _, t := range targets {
-		binDir := paths.BinaryDir(t.target)
-		fullPath := filepath.Join(binDir, t.fileName)
-		present := false
-		sha := ""
-		sourcePath := ""
-
-		if stat, err := os.Stat(fullPath); err == nil && !stat.IsDir() {
-			present = true
-			if saved, ok := state.Binaries[t.target]; ok && saved.BinarySHA256 != "" {
-				sha = saved.BinarySHA256
-				sourcePath = saved.SourcePath
-			} else {
-				if computed, err := binaries.ComputeFileSHA256(fullPath); err == nil {
-					sha = computed
-				}
+	if req.UI != nil {
+		if req.JSON {
+			data, err := json.MarshalIndent(report, "", "  ")
+			if err != nil {
+				return nil, fmt.Errorf("encode json status: %w", err)
 			}
-		}
-
-		known := false
-		if sha != "" {
-			if officialMap, ok := binaries.KnownOfficialHashes[t.target]; ok {
-				for _, h := range officialMap {
-					if h != "" && strings.EqualFold(h, sha) {
-						known = true
-						break
-					}
-				}
-			}
-		}
-
-		report.Binaries = append(report.Binaries, BinaryStatus{
-			Target:        t.target,
-			Name:          t.name,
-			Present:       present,
-			SHA256:        sha,
-			KnownOfficial: known,
-			SourcePath:    sourcePath,
-			Path:          fullPath,
-		})
-
-		// 3. Database status per target across both decompilers
-		for _, engine := range []workspace.DecompilerID{workspace.DecompilerGhidra, workspace.DecompilerIDA} {
-			dbDir := filepath.Join(paths.DBDir, string(engine), string(t.target))
-			analyzed := false
-			if saved, ok := state.Binaries[t.target]; ok && sha != "" {
-				analyzedSHA := saved.Analyzed.Get(engine)
-				if analyzedSHA != "" && strings.EqualFold(analyzedSHA, sha) {
-					analyzed = true
-				}
-			}
-
-			report.Databases = append(report.Databases, DBStatus{
-				Target:   t.target,
-				Engine:   string(engine),
-				Analyzed: analyzed,
-				Path:     dbDir,
-			})
+			req.UI.WriteData("%s\n", string(data))
+		} else {
+			renderHumanStatus(report, req.UI)
 		}
 	}
-
-	if jsonOut {
-		enc := json.NewEncoder(printer.Out)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(report); err != nil {
-			return nil, fmt.Errorf("encode json status: %w", err)
-		}
-		return report, nil
-	}
-
-	// Human-readable output formatting
-	renderHumanStatus(report, printer)
 	return report, nil
 }
 
-func renderHumanStatus(report *StatusReport, printer *ui.Printer) {
-	printer.Info("%s", printer.Bold("Workspace Configuration:"))
-	if report.Initialized {
-		printer.Info("  Status:       %s", printer.Green("Initialized"))
-		printer.Info("  Default Game: %s", report.DefaultGame)
-		printer.Info("  Decompiler:   %s", report.Decompiler)
-	} else {
-		printer.Info("  Status:       %s %s", printer.Yellow("Not initialized"), printer.Dim("(run `twdll init` to set up)"))
+func collectToolStatuses(paths workspace.Paths, xwinReady bool) []ToolStatus {
+	manifest := toolchain.HostManifest()
+	out := make([]ToolStatus, 0, len(toolchain.BuildToolOrder))
+	for _, id := range toolchain.BuildToolOrder {
+		def, ok := manifest[id]
+		if !ok {
+			continue
+		}
+		installed := toolchain.IsInstalled(paths, def)
+		if id == workspace.ToolXwin && installed && !xwinReady {
+			installed = false
+		}
+		out = append(out, ToolStatus{
+			ID:        def.ID,
+			Name:      def.Name,
+			Version:   def.Version,
+			Installed: installed,
+			Path:      filepath.ToSlash(paths.ToolDir(def.ID)),
+		})
 	}
-	printer.Info("")
+	return out
+}
 
-	printer.Info("%s", printer.Bold("Build Toolchain (.twdll/tools/):"))
-	for _, t := range report.Tools {
-		status := printer.Green("[x] Installed")
-		if !t.Installed {
-			status = printer.Red("[ ] Missing  ")
-		}
-		printer.Info("  %s %-18s %s", status, t.Name, printer.Dim("("+t.Version+")"))
-	}
-	printer.Info("")
+func collectDecompilerStatuses(paths workspace.Paths, cfg workspace.Config, idaValid bool) []DecompilerStatus {
+	manifest := toolchain.HostManifest()
+	ghidraDef, hasGhidra := manifest[workspace.ToolGhidra]
+	jdkDef, hasJDK := manifest[workspace.ToolJDK]
+	ghidraInstalled := hasGhidra && toolchain.IsInstalled(paths, ghidraDef)
+	jdkInstalled := hasJDK && toolchain.IsInstalled(paths, jdkDef)
 
-	printer.Info("%s", printer.Bold("Decompiler Engines:"))
-	for _, d := range report.Decompilers {
-		status := printer.Green("[x] Active   ")
-		if !d.Active {
-			status = printer.Dim("[-] Inactive ")
-		}
-
-		readyTag := ""
-		pathStr := ""
-		cleanPath := filepath.ToSlash(d.Path)
-		if d.Valid {
-			readyTag = " " + printer.Green("[ready]")
-			pathStr = printer.Dim("(" + cleanPath + ")")
-		} else if d.Installed {
-			readyTag = " " + printer.Yellow("[needs setup]")
-			pathStr = printer.Dim("(" + cleanPath + ")")
-		} else {
-			if d.Engine == "ghidra" {
-				pathStr = printer.Dim("(not installed)")
-			} else {
-				pathStr = printer.Dim("(not configured)")
-			}
-		}
-
-		printer.Info("  %s %-12s %s%s", status, d.Name, pathStr, readyTag)
-		if d.Active && d.Details != "" {
-			printer.Info("    %s", printer.Yellow("Note: "+d.Details))
-		}
-	}
-	printer.Info("")
-
-	printer.Info("%s", printer.Bold("Game Binaries (.twdll/binaries/):"))
-	for _, b := range report.Binaries {
-		status := printer.Green("[x] Present")
-		if !b.Present {
-			status = printer.Red("[ ] Missing")
-		}
-		tag := ""
-		if b.SHA256 != "" && len(b.SHA256) >= 12 {
-			if b.KnownOfficial {
-				tag = fmt.Sprintf(" %s %s", printer.Dim("(SHA: "+b.SHA256[:12]+"...)"), printer.Green("[official]"))
-			} else {
-				tag = fmt.Sprintf(" %s", printer.Dim("(SHA: "+b.SHA256[:12]+"...)"))
-			}
-		}
-		printer.Info("  %s %-28s%s", status, b.Name, tag)
-	}
-	printer.Info("")
-
-	printer.Info("%s", printer.Bold("Decompiler Databases (.twdll/db/):"))
-	ghidraHeader := "Ghidra"
-	idaHeader := "IDA"
-	if report.Decompiler == string(workspace.DecompilerGhidra) {
-		ghidraHeader += " (active)"
-	} else if report.Decompiler == string(workspace.DecompilerIDA) {
-		idaHeader += " (active)"
+	ghidraDetails := ""
+	if ghidraInstalled && !jdkInstalled {
+		ghidraDetails = "Missing Adoptium OpenJDK 25 runtime"
 	}
 
-	const col1Width = 16
-	const col2Width = 24
-
-	h1 := printer.Bold(padRight(report, "Target", col1Width))
-	h2 := printer.Bold(padRight(report, ghidraHeader, col2Width))
-	h3 := printer.Bold(idaHeader)
-	printer.Info("  %s%s%s", h1, h2, h3)
-
-	for _, b := range report.Binaries {
-		var ghidraAnalyzed, idaAnalyzed bool
-		for _, db := range report.Databases {
-			if db.Target == b.Target {
-				if db.Engine == string(workspace.DecompilerGhidra) {
-					ghidraAnalyzed = db.Analyzed
-				} else if db.Engine == string(workspace.DecompilerIDA) {
-					idaAnalyzed = db.Analyzed
-				}
-			}
-		}
-
-		c1 := padRight(report, string(b.Target), col1Width)
-
-		var ghidraText string
-		var ghidraColored string
-		if ghidraAnalyzed {
-			ghidraText = "[x] Analyzed"
-			ghidraColored = printer.Green(ghidraText)
-		} else if report.Decompiler == string(workspace.DecompilerGhidra) {
-			ghidraText = "[ ] Needs Analysis"
-			ghidraColored = printer.Yellow(ghidraText)
-		} else {
-			ghidraText = "[-] Not Analyzed"
-			ghidraColored = printer.Dim(ghidraText)
-		}
-		c2 := ghidraColored + strings.Repeat(" ", col2Width-len(ghidraText))
-
-		var idaColored string
-		if idaAnalyzed {
-			idaColored = printer.Green("[x] Analyzed")
-		} else if report.Decompiler == string(workspace.DecompilerIDA) {
-			idaColored = printer.Yellow("[ ] Needs Analysis")
-		} else {
-			idaColored = printer.Dim("[-] Not Analyzed")
-		}
-
-		printer.Info("  %s%s%s", c1, c2, idaColored)
+	return []DecompilerStatus{
+		{
+			Engine:    string(workspace.DecompilerIDA),
+			Name:      "IDA Pro",
+			Active:    cfg.Decompiler == workspace.DecompilerIDA,
+			Installed: idaValid,
+			Valid:     idaValid,
+			Path:      filepath.ToSlash(cfg.IDADir),
+		},
+		{
+			Engine:    string(workspace.DecompilerGhidra),
+			Name:      "Ghidra",
+			Active:    cfg.Decompiler == workspace.DecompilerGhidra,
+			Installed: ghidraInstalled,
+			Valid:     ghidraInstalled && jdkInstalled,
+			Path:      filepath.ToSlash(paths.ToolDir(workspace.ToolGhidra)),
+			Details:   ghidraDetails,
+		},
 	}
 }
 
-func padRight(_ *StatusReport, s string, width int) string {
+func inspectTargetBinary(paths workspace.Paths, state workspace.State, tid workspace.TargetID) BinaryStatus {
+	fullPath := paths.BinaryPath(tid)
+	present := false
+	sha := ""
+	sourcePath := ""
+
+	if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
+		present = true
+		if saved, ok := state.Binaries[tid]; ok && saved.BinarySHA256 != "" {
+			sha = saved.BinarySHA256
+			sourcePath = saved.SourcePath
+		} else if computed, hErr := workspace.ComputeFileSHA256(fullPath); hErr == nil {
+			sha = computed
+		}
+	}
+
+	return BinaryStatus{
+		Target:        tid,
+		Name:          tid.DisplayName(),
+		Present:       present,
+		SHA256:        sha,
+		KnownOfficial: sha != "" && binaries.IsKnownOfficialHash(tid, sha),
+		SourcePath:    filepath.ToSlash(sourcePath),
+		Path:          filepath.ToSlash(fullPath),
+	}
+}
+
+func inspectTargetDB(paths workspace.Paths, state workspace.State, tid workspace.TargetID, engine workspace.DecompilerID, currentSHA string) DBStatus {
+	analyzed := false
+	if saved, ok := state.Binaries[tid]; ok && currentSHA != "" {
+		if strings.EqualFold(saved.Analyzed.Get(engine), currentSHA) && paths.HasValidDatabase(engine, tid) {
+			analyzed = true
+		}
+	}
+	return DBStatus{
+		Target:   tid,
+		Engine:   string(engine),
+		Analyzed: analyzed,
+		Path:     filepath.ToSlash(paths.DatabaseDir(engine, tid)),
+	}
+}
+
+func renderHumanStatus(r *StatusReport, ui *term.UI) {
+	st := ui.OutStyle()
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "%s\n", st.Bold("Workspace Configuration:"))
+	if r.Initialized {
+		fmt.Fprintf(&b, "  Status:       %s\n", st.Green("Initialized"))
+	} else {
+		fmt.Fprintf(&b, "  Status:       %s %s\n", st.Yellow("Not initialized"), st.Dim("(run `twdll init` to set up)"))
+	}
+	fmt.Fprintf(&b, "  Config:       %s\n", st.Dim(r.ConfigPath))
+	fmt.Fprintf(&b, "  Data Dir:     %s\n", st.Dim(r.DataDir))
+	fmt.Fprintf(&b, "  Default Game: %s\n", r.DefaultGame)
+	fmt.Fprintf(&b, "  Decompiler:   %s\n\n", r.Decompiler)
+
+	fmt.Fprintf(&b, "%s\n", st.Bold("Build Toolchain:"))
+	for _, t := range r.Tools {
+		badge := st.Red("[ ] Missing  ")
+		if t.Installed {
+			badge = st.Green("[x] Installed")
+		}
+		fmt.Fprintf(&b, "  %s %-18s %s\n", badge, t.Name, st.Dim("("+t.Version+")"))
+	}
+	b.WriteByte('\n')
+
+	fmt.Fprintf(&b, "%s\n", st.Bold("Decompiler Engines:"))
+	for _, d := range r.Decompilers {
+		role := st.Dim("[-] Inactive ")
+		if d.Active {
+			role = st.Green("[x] Active   ")
+		}
+		tag := st.Dim("(not configured)")
+		if d.Valid {
+			tag = st.Dim("("+d.Path+")") + " " + st.Green("[ready]")
+		} else if d.Installed {
+			tag = st.Dim("("+d.Path+")") + " " + st.Yellow("[needs setup]")
+		} else if d.Engine == string(workspace.DecompilerGhidra) {
+			tag = st.Dim("(not installed)")
+		}
+		fmt.Fprintf(&b, "  %s %-12s %s\n", role, d.Name, tag)
+		if d.Active && d.Details != "" {
+			fmt.Fprintf(&b, "    %s\n", st.Yellow("Note: "+d.Details))
+		}
+	}
+	b.WriteByte('\n')
+
+	fmt.Fprintf(&b, "%s\n", st.Bold("Game Binaries:"))
+	for _, bin := range r.Binaries {
+		badge := st.Red("[ ] Missing")
+		if bin.Present {
+			badge = st.Green("[x] Present")
+		}
+		suffix := ""
+		if len(bin.SHA256) >= 12 {
+			suffix = " " + st.Dim("(SHA: "+bin.SHA256[:12]+"...)")
+			if bin.KnownOfficial {
+				suffix += " " + st.Green("[official]")
+			}
+		}
+		fmt.Fprintf(&b, "  %s %-28s%s\n", badge, bin.Name, suffix)
+	}
+	b.WriteByte('\n')
+
+	fmt.Fprintf(&b, "%s\n", st.Bold("Decompiler Databases:"))
+	ghLabel := "Ghidra"
+	idaLabel := "IDA"
+	if r.Decompiler == string(workspace.DecompilerGhidra) {
+		ghLabel += " (active)"
+	} else if r.Decompiler == string(workspace.DecompilerIDA) {
+		idaLabel += " (active)"
+	}
+	fmt.Fprintf(&b, "  %s%s%s\n", st.Bold(padRight("Target", 16)), st.Bold(padRight(ghLabel, 24)), st.Bold(idaLabel))
+
+	for _, bin := range r.Binaries {
+		var ghOK, idaOK bool
+		for _, db := range r.Databases {
+			if db.Target == bin.Target && db.Engine == string(workspace.DecompilerGhidra) {
+				ghOK = db.Analyzed
+			}
+			if db.Target == bin.Target && db.Engine == string(workspace.DecompilerIDA) {
+				idaOK = db.Analyzed
+			}
+		}
+		ghCell := formatDBCell(st, ghOK, r.Decompiler == string(workspace.DecompilerGhidra), 24)
+		idaCell := formatDBCell(st, idaOK, r.Decompiler == string(workspace.DecompilerIDA), 0)
+		fmt.Fprintf(&b, "  %s%s%s\n", padRight(string(bin.Target), 16), ghCell, idaCell)
+	}
+
+	ui.WriteData("%s", b.String())
+}
+
+func formatDBCell(st term.Style, analyzed, isActive bool, width int) string {
+	raw := "[-] Not Analyzed"
+	styled := st.Dim(raw)
+	if analyzed {
+		raw = "[x] Analyzed"
+		styled = st.Green(raw)
+	} else if isActive {
+		raw = "[ ] Needs Analysis"
+		styled = st.Yellow(raw)
+	}
+	if width <= len(raw) {
+		return styled
+	}
+	return styled + strings.Repeat(" ", width-len(raw))
+}
+
+func padRight(s string, width int) string {
 	if len(s) >= width {
 		return s
 	}

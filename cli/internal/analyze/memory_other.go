@@ -2,6 +2,6 @@
 
 package analyze
 
-func getSystemMemory() (SystemMemory, error) {
-	return SystemMemory{}, nil
+func ProbeSystemMemory() SystemMemory {
+	return SystemMemory{}
 }

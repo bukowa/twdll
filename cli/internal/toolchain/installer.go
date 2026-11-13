@@ -1,463 +1,309 @@
 package toolchain
 
 import (
-	"archive/tar"
-	"archive/zip"
-	"compress/gzip"
+	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"sort"
 	"strings"
 	"time"
 
-	"twdll/cli/internal/ui"
+	"twdll/cli/internal/term"
 	"twdll/cli/internal/workspace"
 )
 
-// IsToolInstalled checks whether the tool's marker file exists.
-func IsToolInstalled(paths workspace.Paths, tool ToolDef) bool {
-	markerPath := filepath.Join(paths.ToolDir(tool.ID), filepath.FromSlash(tool.MarkerRel))
-	info, err := os.Stat(markerPath)
+type InstallEnv struct {
+	Paths workspace.Paths
+	State *workspace.State
+	UI    *term.UI
+}
+
+type stageRequest struct {
+	paths       workspace.Paths
+	tool        ToolDef
+	archivePath string
+	ui          *term.UI
+}
+
+func IsInstalled(paths workspace.Paths, tool ToolDef) bool {
+	if tool.MarkerRel == "" {
+		return false
+	}
+	marker := filepath.Join(paths.ToolDir(tool.ID), filepath.FromSlash(tool.MarkerRel))
+	info, err := os.Stat(marker)
 	return err == nil && !info.IsDir()
 }
 
-// InstallTool downloads and extracts a tool into .twdll/tools/<id>/ if not already installed.
-func InstallTool(ctx context.Context, paths workspace.Paths, tool ToolDef, printer *ui.Printer) error {
-	if IsToolInstalled(paths, tool) {
-		if printer != nil {
-			printer.Info("Tool %s (%s) is already installed.", tool.Name, tool.Version)
-		}
-		return nil
-	}
-
-	targetDir := paths.ToolDir(tool.ID)
-	toolsRoot := paths.ToolsDir
-	if err := os.MkdirAll(toolsRoot, 0o755); err != nil {
-		return fmt.Errorf("create tools directory: %w", err)
-	}
-
-	tempDownload := filepath.Join(toolsRoot, fmt.Sprintf("%s.download.tmp", tool.ID))
-	tempExtract := filepath.Join(toolsRoot, fmt.Sprintf("%s.extract.tmp", tool.ID))
-
-	// Clean up any stale temp files from previous interrupted runs
-	_ = os.Remove(tempDownload)
-	_ = os.RemoveAll(tempExtract)
-
-	defer func() {
-		_ = os.Remove(tempDownload)
-		_ = os.RemoveAll(tempExtract)
-	}()
-
-	if printer != nil {
-		printer.Info("Downloading %s %s from %s...", tool.Name, tool.Version, tool.URL)
-	}
-
-	if err := downloadFile(ctx, tool.URL, tempDownload, tool.Name, printer); err != nil {
-		return fmt.Errorf("download %s: %w", tool.Name, err)
-	}
-
-	if tool.SHA256 != "" {
-		if printer != nil {
-			printer.Info("Verifying checksum for %s...", tool.Name)
-		}
-		if err := verifyFileSHA256(tempDownload, tool.SHA256); err != nil {
-			return fmt.Errorf("verify %s: %w", tool.Name, err)
-		}
-	}
-
-	if printer != nil {
-		printer.Info("Extracting %s...", tool.Name)
-	}
-
-	if err := os.MkdirAll(tempExtract, 0o755); err != nil {
-		return fmt.Errorf("create staging extract directory: %w", err)
-	}
-
-	switch tool.ArchiveType {
-	case "zip":
-		if err := extractZip(tempDownload, tempExtract, tool.StripDirs); err != nil {
-			return fmt.Errorf("extract zip %s: %w", tool.Name, err)
-		}
-	case "tar.gz":
-		if err := extractTarGz(tempDownload, tempExtract, tool.StripDirs); err != nil {
-			return fmt.Errorf("extract tar.gz %s: %w", tool.Name, err)
-		}
-	default:
-		return fmt.Errorf("unsupported archive type %q for tool %s", tool.ArchiveType, tool.Name)
-	}
-
-	// Verify marker exists in staging before swapping
-	stagingMarker := filepath.Join(tempExtract, filepath.FromSlash(tool.MarkerRel))
-	if _, err := os.Stat(stagingMarker); err != nil {
-		return fmt.Errorf("marker file %q missing in extracted archive for %s", tool.MarkerRel, tool.Name)
-	}
-
-	// Swap staging folder to target destination
-	_ = os.RemoveAll(targetDir)
-	if err := os.Rename(tempExtract, targetDir); err != nil {
-		return fmt.Errorf("install %s to %s: %w", tool.Name, targetDir, err)
-	}
-
-	if printer != nil {
-		printer.Success("Installed %s %s to %s", tool.Name, tool.Version, targetDir)
-	}
-
-	return nil
-}
-
-// ProvisionXWin runs xwin splat to unpack 32-bit MSVC CRT and Windows SDK headers/libraries.
-func ProvisionXWin(ctx context.Context, paths workspace.Paths, printer *ui.Printer) error {
+func IsXWinProvisioned(paths workspace.Paths) bool {
 	xwinDir := paths.ToolDir(workspace.ToolXwin)
-	sdkDir := filepath.Join(xwinDir, "sdk")
-
-	if isXWinProvisioned(sdkDir) {
-		if printer != nil {
-			printer.Info("xwin 32-bit CRT and Windows SDK already provisioned.")
-		}
-		return nil
-	}
-
-	xwinExe := filepath.Join(xwinDir, "xwin.exe")
-	if runtime.GOOS != "windows" {
-		xwinExe = filepath.Join(xwinDir, "xwin")
-	}
-
-	if _, err := os.Stat(xwinExe); err != nil {
-		return fmt.Errorf("xwin executable not found at %s: run toolchain installer first", xwinExe)
-	}
-
-	if printer != nil {
-		printer.Info("Provisioning 32-bit MSVC CRT and Windows SDK via xwin splat (may take a minute)...")
-	}
-
-	// Clean sdkDir first to remove any failed/partial attempts
-	_ = os.RemoveAll(sdkDir)
-
-	// --use-winsysroot-style and --disable-symlinks prevent Windows error 1314 (ERROR_PRIVILEGE_NOT_HELD)
-	// by omitting casing symlinks and preserving official versioned directories without requiring Developer Mode or Admin.
-	cmd := exec.CommandContext(ctx, xwinExe, "--accept-license", "--arch", "x86", "splat", "--output", sdkDir, "--use-winsysroot-style", "--disable-symlinks")
-	cmd.Dir = xwinDir
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("xwin splat failed: %w\nOutput: %s", err, string(output))
-	}
-
-	if !isXWinProvisioned(sdkDir) {
-		return fmt.Errorf("xwin completed but 32-bit CRT libcmt.lib was not found in %s", sdkDir)
-	}
-
-	if printer != nil {
-		printer.Success("Provisioned 32-bit MSVC CRT and Windows SDK in %s", sdkDir)
-	}
-	return nil
-}
-
-func isXWinProvisioned(sdkDir string) bool {
-	legacyMarker := filepath.Join(sdkDir, "crt", "lib", "x86", "libcmt.lib")
-	if _, err := os.Stat(legacyMarker); err == nil {
+	direct := filepath.Join(xwinDir, "sdk", "crt", "lib", "x86", "libcmt.lib")
+	if info, err := os.Stat(direct); err == nil && !info.IsDir() {
 		return true
 	}
-	matches, err := filepath.Glob(filepath.Join(sdkDir, "VC", "Tools", "MSVC", "*", "lib", "x86", "libcmt.lib"))
+	matches, err := filepath.Glob(filepath.Join(xwinDir, "sdk", "VC", "Tools", "MSVC", "*", "lib", "x86", "libcmt.lib"))
 	return err == nil && len(matches) > 0
 }
 
-// ValidateIDADir checks that the specified IDA Pro directory contains headless idat/idat64 or ida executables.
-func ValidateIDADir(dir string) error {
-	if dir == "" {
-		return fmt.Errorf("ida_dir cannot be empty")
-	}
-	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		return fmt.Errorf("ida_dir %q is not a valid directory", dir)
-	}
-
-	var candidates []string
-	if runtime.GOOS == "windows" {
-		candidates = []string{
-			filepath.Join(dir, "idat.exe"),
-			filepath.Join(dir, "idat64.exe"),
-			filepath.Join(dir, "ida.exe"),
-			filepath.Join(dir, "ida64.exe"),
+func EnsureTool(ctx context.Context, env InstallEnv, tool ToolDef) error {
+	if IsInstalled(env.Paths, tool) {
+		if env.State != nil && env.State.Tools[tool.ID].Version != tool.Version {
+			env.State.SetTool(tool.ID, workspace.ToolState{Version: tool.Version, SHA256: tool.SHA256})
 		}
-	} else {
-		candidates = []string{
-			filepath.Join(dir, "idat"),
-			filepath.Join(dir, "idat64"),
-			filepath.Join(dir, "ida"),
-			filepath.Join(dir, "ida64"),
+		if env.UI != nil {
+			env.UI.Success("%s %s ready", tool.Name, tool.Version)
 		}
+		return nil
 	}
-
-	for _, c := range candidates {
-		if stat, err := os.Stat(c); err == nil && !stat.IsDir() {
-			return nil
-		}
+	if err := os.MkdirAll(env.Paths.ToolsDir, 0o755); err != nil {
+		return fmt.Errorf("ensure tools dir %s: %w", env.Paths.ToolsDir, err)
 	}
-
-	return fmt.Errorf("neither idat nor ida found in %s", dir)
-}
-
-// AutoDetectIDADir searches standard installation paths for IDA Pro and returns the latest valid directory.
-func AutoDetectIDADir() string {
-	if runtime.GOOS != "windows" {
-		return ""
-	}
-
-	var searchRoots = []string{
-		`C:\Program Files`,
-		`C:\Program Files (x86)`,
-	}
-
-	var found []string
-	for _, root := range searchRoots {
-		entries, err := os.ReadDir(root)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			name := strings.ToLower(e.Name())
-			if strings.Contains(name, "ida") {
-				dirPath := filepath.Join(root, e.Name())
-				if ValidateIDADir(dirPath) == nil {
-					found = append(found, dirPath)
-				}
-			}
-		}
-	}
-
-	if len(found) == 0 {
-		return ""
-	}
-
-	// Sort descending so highest version (e.g. IDA Professional 9.5) comes first
-	sort.Slice(found, func(i, j int) bool {
-		return found[i] > found[j]
-	})
-
-	return found[0]
-}
-
-func downloadFile(ctx context.Context, url string, destFile string, toolName string, printer *ui.Printer) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	archivePath, err := downloadToolArchive(ctx, env, tool)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = os.Remove(archivePath) }()
+
+	sp := env.UI.StartSpinner("Verifying " + tool.Name + " SHA-256")
+	gotSHA, err := workspace.ComputeFileSHA256(archivePath)
+	sp.Stop()
+	if err != nil {
+		return fmt.Errorf("compute SHA-256 for %s: %w", tool.Name, err)
+	}
+	if !strings.EqualFold(gotSHA, tool.SHA256) {
+		return fmt.Errorf("%s SHA-256 mismatch: got %s, expected %s", tool.Name, gotSHA, tool.SHA256)
+	}
+	if err := stageAndSwapTool(ctx, stageRequest{paths: env.Paths, tool: tool, archivePath: archivePath, ui: env.UI}); err != nil {
+		return err
+	}
+	if env.State != nil {
+		env.State.SetTool(tool.ID, workspace.ToolState{Version: tool.Version, SHA256: tool.SHA256})
+	}
+	if env.UI != nil {
+		env.UI.Success("Installed %s %s", tool.Name, tool.Version)
+	}
+	return nil
+}
+
+func downloadToolArchive(ctx context.Context, env InstallEnv, tool ToolDef) (string, error) {
+	if env.UI != nil {
+		env.UI.Info("Downloading %s %s...", tool.Name, tool.Version)
+	}
+	sp := env.UI.StartSpinner("Downloading " + tool.Name + " " + tool.Version)
+	defer sp.Stop()
+
+	tmpFile, err := os.CreateTemp(env.Paths.ToolsDir, string(tool.ID)+"-*.archive")
+	if err != nil {
+		return "", fmt.Errorf("create temp download file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpPath)
+		}
+	}()
 
 	client := &http.Client{Timeout: 30 * time.Minute}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, tool.URL, nil)
+	if err != nil {
+		return "", fmt.Errorf("build download request for %s: %w", tool.Name, err)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return "", fmt.Errorf("download %s: %w", tool.Name, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+		return "", fmt.Errorf("download %s failed with HTTP %d", tool.Name, resp.StatusCode)
 	}
-
-	out, err := os.Create(destFile)
-	if err != nil {
-		return err
+	if err := copyWithProgress(tmpFile, resp.Body, downloadLog{ui: env.UI, sp: sp, label: tool.Name, total: resp.ContentLength}); err != nil {
+		return "", fmt.Errorf("save %s archive: %w", tool.Name, err)
 	}
-	defer out.Close()
-
-	var reader io.Reader = resp.Body
-	total := resp.ContentLength
-	if total > 0 && printer != nil {
-		reader = &progressTracker{
-			reader:  resp.Body,
-			total:   total,
-			label:   toolName,
-			printer: printer,
-		}
+	if err := tmpFile.Close(); err != nil {
+		return "", fmt.Errorf("close %s archive: %w", tool.Name, err)
 	}
-
-	if _, err := io.Copy(out, reader); err != nil {
-		return err
-	}
-	return out.Sync()
+	cleanup = false
+	return tmpPath, nil
 }
 
-type progressTracker struct {
-	reader     io.Reader
-	total      int64
-	current    int64
-	label      string
-	printer    *ui.Printer
-	lastLogged int
+type downloadLog struct {
+	ui    *term.UI
+	sp    *term.Spinner
+	label string
+	total int64
 }
 
-func (pt *progressTracker) Read(p []byte) (int, error) {
-	n, err := pt.reader.Read(p)
-	if n > 0 {
-		pt.current += int64(n)
-		if pt.total > 0 {
-			pct := int((pt.current * 100) / pt.total)
-			if pct >= pt.lastLogged+25 || (pct == 100 && pt.lastLogged < 100) {
-				pt.lastLogged = (pct / 25) * 25
-				if pt.printer != nil {
-					mbCurrent := float64(pt.current) / (1024 * 1024)
-					mbTotal := float64(pt.total) / (1024 * 1024)
-					pt.printer.Info("%s: %d%% (%.1f / %.1f MB)", pt.label, pct, mbCurrent, mbTotal)
+func copyWithProgress(dst io.Writer, src io.Reader, log downloadLog) error {
+	buf := make([]byte, 64*1024)
+	var written int64
+	nextMilestone := 25
+	animated := log.ui != nil && log.ui.CanAnimate()
+	for {
+		n, rErr := src.Read(buf)
+		if n > 0 {
+			if _, wErr := dst.Write(buf[:n]); wErr != nil {
+				return wErr
+			}
+			written += int64(n)
+			if animated {
+				if log.total > 0 {
+					pct := int((written * 100) / log.total)
+					if log.sp != nil {
+						log.sp.SetText(fmt.Sprintf("Downloading %s: %d%% (%d / %d MB)", log.label, pct, written/(1024*1024), log.total/(1024*1024)))
+					}
+				} else if log.sp != nil {
+					log.sp.SetText(fmt.Sprintf("Downloading %s: %d MB", log.label, written/(1024*1024)))
+				}
+			} else if log.ui != nil && log.total > 0 {
+				pct := int((written * 100) / log.total)
+				for pct >= nextMilestone && nextMilestone <= 100 {
+					log.ui.Info("  %s: %d%%", log.label, nextMilestone)
+					nextMilestone += 25
 				}
 			}
 		}
+		if errors.Is(rErr, io.EOF) {
+			return nil
+		}
+		if rErr != nil {
+			return rErr
+		}
 	}
-	return n, err
 }
 
-func verifyFileSHA256(filePath, expectedHex string) error {
-	f, err := os.Open(filePath)
+func stageAndSwapTool(ctx context.Context, req stageRequest) error {
+	stageDir, err := os.MkdirTemp(req.paths.ToolsDir, string(req.tool.ID)+"-stage-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("create staging dir for %s: %w", req.tool.Name, err)
 	}
-	defer f.Close()
+	defer func() { _ = os.RemoveAll(stageDir) }()
 
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return err
+	sp := req.ui.StartSpinner("Extracting " + req.tool.Name + " " + req.tool.Version)
+	defer sp.Stop()
+
+	animated := req.ui != nil && req.ui.CanAnimate()
+	loggedExtractHeader := false
+	nextMilestone := 25
+	spec := ExtractSpec{
+		ArchivePath: req.archivePath,
+		ArchiveType: req.tool.ArchiveType,
+		DestDir:     stageDir,
+		StripDirs:   req.tool.StripDirs,
+		OnProgress: func(p ExtractProgress) {
+			if animated {
+				if p.TotalBytes > 0 {
+					pct := int((p.DoneBytes * 100) / p.TotalBytes)
+					sp.SetText(fmt.Sprintf("Extracting %s: %d%%", req.tool.Name, pct))
+				} else {
+					sp.SetText(fmt.Sprintf("Extracting %s: %d files", req.tool.Name, p.DoneFiles))
+				}
+				return
+			}
+			if req.ui == nil {
+				return
+			}
+			if !loggedExtractHeader {
+				req.ui.Info("Extracting %s %s...", req.tool.Name, req.tool.Version)
+				loggedExtractHeader = true
+			}
+			if p.TotalBytes > 0 {
+				pct := int((p.DoneBytes * 100) / p.TotalBytes)
+				for pct >= nextMilestone && nextMilestone <= 100 {
+					req.ui.Info("  %s extract: %d%%", req.tool.Name, nextMilestone)
+					nextMilestone += 25
+				}
+			}
+		},
 	}
-	actual := hex.EncodeToString(h.Sum(nil))
-	if !strings.EqualFold(actual, expectedHex) {
-		return fmt.Errorf("checksum mismatch: got %s, expected %s", actual, expectedHex)
+	if err := ExtractArchive(ctx, spec); err != nil {
+		return fmt.Errorf("extract %s: %w", req.tool.Name, err)
+	}
+	markerPath := filepath.Join(stageDir, filepath.FromSlash(req.tool.MarkerRel))
+	if info, err := os.Stat(markerPath); err != nil || info.IsDir() {
+		return fmt.Errorf("extracted %s is missing expected marker %s", req.tool.Name, req.tool.MarkerRel)
+	}
+	sp.SetText("Installing " + req.tool.Name + "...")
+	finalDir := req.paths.ToolDir(req.tool.ID)
+	_ = os.RemoveAll(finalDir)
+	if err := os.Rename(stageDir, finalDir); err != nil {
+		return fmt.Errorf("install %s into %s: %w", req.tool.Name, finalDir, err)
 	}
 	return nil
 }
 
-func extractZip(zipPath, destDir string, stripDirs int) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
+// ProvisionXWin passes --disable-symlinks to avoid Windows privilege error 1314 on non-elevated shells.
+func ProvisionXWin(ctx context.Context, paths workspace.Paths, ui *term.UI) error {
+	if IsXWinProvisioned(paths) {
+		if ui != nil {
+			ui.Success("MSVC SDK (xwin x86) ready")
+		}
+		return nil
 	}
-	defer r.Close()
+	xwinDir := paths.ToolDir(workspace.ToolXwin)
+	xwinBin := filepath.Join(xwinDir, "xwin"+workspace.ExeSuffix())
+	sdkDir := filepath.Join(xwinDir, "sdk")
+	if ui != nil {
+		ui.Info("Provisioning 32-bit MSVC & Windows SDK via xwin...")
+	}
+	sp := ui.StartSpinner("Provisioning MSVC & Windows SDK (xwin x86)")
+	defer sp.Stop()
 
-	for _, f := range r.File {
-		targetRel := stripPath(f.Name, stripDirs)
-		if targetRel == "" {
-			continue
-		}
-
-		targetPath, err := safePath(destDir, targetRel)
-		if err != nil {
-			return err
-		}
-
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(targetPath, 0o755); err != nil {
-				return err
-			}
-			continue
-		}
-
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-			return err
-		}
-
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
-
-		outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-		if err != nil {
-			rc.Close()
-			return err
-		}
-
-		_, copyErr := io.Copy(outFile, rc)
-		rc.Close()
-		closeErr := outFile.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
+	cmd := exec.CommandContext(ctx, xwinBin, "--accept-license", "--arch", "x86", "splat", "--output", sdkDir, "--use-winsysroot-style", "--disable-symlinks")
+	var diagBuf bytes.Buffer
+	lw := &xwinLineWriter{onLine: func(line string) {
+		sp.SetText("Provisioning MSVC SDK: " + line)
+	}}
+	mw := io.MultiWriter(&diagBuf, lw)
+	cmd.Stdout = mw
+	cmd.Stderr = mw
+	runErr := cmd.Run()
+	lw.Flush()
+	if runErr != nil {
+		return fmt.Errorf("xwin splat failed: %w (%s)", runErr, strings.TrimSpace(diagBuf.String()))
+	}
+	if !IsXWinProvisioned(paths) {
+		return errors.New("xwin completed but libcmt.lib was not found in x86 SDK output")
+	}
+	if ui != nil {
+		ui.Success("Provisioned MSVC SDK (xwin x86)")
 	}
 	return nil
 }
 
-func extractTarGz(tarGzPath, destDir string, stripDirs int) error {
-	f, err := os.Open(tarGzPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+type xwinLineWriter struct {
+	buf    bytes.Buffer
+	onLine func(string)
+}
 
-	gzr, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer gzr.Close()
-
-	tr := tar.NewReader(gzr)
-	for {
-		header, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		targetRel := stripPath(header.Name, stripDirs)
-		if targetRel == "" {
+func (w *xwinLineWriter) Write(p []byte) (int, error) {
+	for _, b := range p {
+		if b == '\n' || b == '\r' {
+			w.emit()
 			continue
 		}
-
-		targetPath, err := safePath(destDir, targetRel)
-		if err != nil {
-			return err
-		}
-
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, 0o755); err != nil {
-				return err
-			}
-		case tar.TypeReg, tar.TypeRegA:
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
-				return err
-			}
-			outFile, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode))
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(outFile, tr); err != nil {
-				outFile.Close()
-				return err
-			}
-			if err := outFile.Close(); err != nil {
-				return err
-			}
-		}
+		w.buf.WriteByte(b)
 	}
-	return nil
+	return len(p), nil
 }
 
-func stripPath(p string, count int) string {
-	clean := filepath.ToSlash(filepath.Clean(p))
-	parts := strings.Split(clean, "/")
-	if len(parts) <= count {
-		return ""
-	}
-	return filepath.Join(parts[count:]...)
+func (w *xwinLineWriter) Flush() {
+	w.emit()
 }
 
-func safePath(destDir, relPath string) (string, error) {
-	cleanDest := filepath.Clean(destDir)
-	target := filepath.Clean(filepath.Join(cleanDest, relPath))
-	if !strings.HasPrefix(target, cleanDest+string(filepath.Separator)) && target != cleanDest {
-		return "", fmt.Errorf("illegal path escaping destination: %s", relPath)
+func (w *xwinLineWriter) emit() {
+	if w.buf.Len() == 0 {
+		return
 	}
-	return target, nil
+	line := strings.TrimSpace(w.buf.String())
+	w.buf.Reset()
+	if line != "" && w.onLine != nil {
+		w.onLine(line)
+	}
 }

@@ -1,6 +1,6 @@
 # twdll CLI & Reverse-Engineering Pipeline — Architecture & Scope Specification
 
-**Status:** Approved Scope for Stage 1 (Environment Setup & Decompiler Analysis)  
+**Status:** Stage 1 Complete — Entering Stage 2 Design (RE Extraction & Search)  
 **Target Games:** Total War: Rome II (`rome2`), Total War: Attila (`attila`), Total War: Thrones of Britannia (`tob`)  
 **Reference Binary:** Total War: Attila 64-bit Linux ELF with DWARF debug symbols (`attila_64`)
 
@@ -21,11 +21,11 @@ Create a **single, deterministic, self-contained workflow** driven by a clean **
 ### Strict Stage Boundaries (Anti-Rushing Protocol)
 To prevent agents from implementing everything at once or making premature assumptions, development is gated into **three strictly sequential stages**:
 
-- **Stage 1 — Toolchain Bootstrap, `status`, `init` & `analyze` (ACTIVE SCOPE):**
-  Only three CLI commands exist in Stage 1: **`twdll status`**, **`twdll init`**, and **`twdll analyze`**.
-  Stage 1 downloads all pinned portable tools (including both build tools and RE tools), copies and hashes all game binaries, and builds clean IDA/Ghidra databases in `.twdll/db/`.
-- **Stage 2 — RE Extraction & Search (`extract`, `search`, `show`) (DESIGN GATE — DO NOT IMPLEMENT YET):**
-  Once Stage 1 produces working databases in `.twdll/db/`, **STOP**. Do not write extraction or database storage code until the user and agent discuss and reach explicit consensus on the extraction format and storage schema.
+- **Stage 1 — Toolchain Bootstrap, `status`, `init`, `analyze` & `clean` (COMPLETE):**
+  Four CLI commands (`twdll status`, `twdll init`, `twdll analyze`, and `twdll clean`, plus global `--config`, `--data-dir`, `--root`, and `--color` flags) are implemented and verified.
+  Stage 1 downloads all pinned portable tools, stages and verifies all binaries, and builds clean IDA/Ghidra databases in `.twdll/db/`.
+- **Stage 2 — RE Extraction & Search (`extract`, `search`, `show`) (ACTIVE DESIGN SCOPE):**
+  Stage 1 databases are ready in `.twdll/db/`. Now designing and agreeing on extraction format, `.twdll/extracted/` storage schema, and `extract` / `search` / `show` commands before implementation.
 - **Stage 3 — Multi-Game C++ Rewrite & Build/Test Commands (FUTURE SCOPE — DO NOT IMPLEMENT YET):**
   Rewriting `src/` for 3-game (`rome2`, `attila`, `tob`) interoperability and implementing `build`, `pack`, `install`, `run`, `test`, and `docs` commands happen **only after** Stages 1 and 2 are complete.
 
@@ -35,7 +35,7 @@ To prevent agents from implementing everything at once or making premature assum
 
 Previous prototype branches failed because agents invented unrequested subsystems, stubbed future commands prematurely, or wrote parallel codepaths. The following rules are **mandatory**:
 
-1. **ONLY implement `status`, `init`, and `analyze` in Stage 1:** Do NOT implement, wire flags for, or stub `extract`, `search`, `show`, `build`, `pack`, `install`, `run`, `test`, or `docs`.
+1. **ONLY implement `status`, `init`, `analyze`, and `clean` in Stage 1:** Do NOT implement, wire flags for, or stub `extract`, `search`, `show`, `build`, `pack`, `install`, `run`, `test`, or `docs`.
 2. **Do NOT touch `src/` or `CMakeLists.txt` in Stage 1:** C++ source changes and build/test wiring belong to Stage 3.
 3. **No Python / `uv` CLI runtime:** The CLI is written in **Go**, compiled to a single native binary with minimal dependencies.
 4. **No dual interactive-TUI vs headless-heuristic codepaths:** Never implement two separate onboarding flows (`if isatty` TUI wizard vs `--yes` silent path-guessing). Every command follows one unified `Options` -> optional TTY `Prompter` -> pure `Run(ctx, opts)` pipeline.
@@ -148,24 +148,27 @@ Idempotent 5-step linear setup process (loads existing `twdll.toml` as defaults 
 - Runs headless IDA (`idat`) or Ghidra (`analyzeHeadless`) from scratch in parallel, governed by available system RAM and CPU cores (e.g., up to 4 concurrent processes for lightweight IDA; RAM-budgeted concurrency for JVM-heavy Ghidra).
 - Writes verbose decompiler output to `.twdll/logs/analyze_<target>.log`, emits sparse progress updates, and records `analyzed_sha256` atomically **only** on clean exit code `0` (interrupted runs are wiped and restarted cleanly on next run).
 
+#### 4. `twdll clean [-d ghidra|ida|all] [--all] [targets...]`
+- Removes generated decompiler databases under `.twdll/db/<decompiler>/<target>` and matching `.twdll/logs/analyze_<target>.log` files, and clears `analyzed_sha256` in `.twdll/state.json` without deleting `.twdll/tools/` or `.twdll/binaries/`.
+
 ---
 
 ## 5. Stage 1 Implementation Plan (Two Focused Milestones)
 
 Execute Stage 1 in two separate, verified milestones before stopping for the Stage 2 design discussion:
 
-- [ ] **Milestone 1.1 — Bootstrap, Core Config, `status` & `init`:**
+- [x] **Milestone 1.1 — Bootstrap, Core Config, `status` & `init`:**
   - Create `twdll.cmd` + `./twdll` wrappers and Go module under `cli/`.
   - Implement `twdll.toml` + `.twdll/state.json` + SHA-256 verification + `gh`-style `Options`/`Prompter`/TTY output layer.
   - Implement `twdll status [--json]` and all 5 steps of `twdll init` (portable `cmake`, `ninja`, `llvm`, `xwin`, `rpfm_cli`, `ghidra`/`jdk` downloads, 32-bit game binary copy, Steam Console `attila_64` ELF+DWARF acquisition).
   - *Exit Gate:* `.\twdll init` populates `.twdll/tools/` and `.twdll/binaries/` cleanly and `.\twdll status --json` reports all tools and binaries ready.
 
-- [ ] **Milestone 1.2 — Headless Decompiler Database Builder (`twdll analyze`):**
+- [x] **Milestone 1.2 — Headless Decompiler Database Builder (`twdll analyze`):**
   - Implement headless fresh-database builders for both IDA (`idat`) and Ghidra (`analyzeHeadless`) over `.twdll/binaries/`.
   - Implement RAM/CPU-aware parallel runner, `.twdll/logs/` routing, clean progress reporting, and atomic `analyzed_sha256` checkpointing in `.twdll/state.json`.
   - *Exit Gate:* `.\twdll analyze` builds verified databases in `.twdll/db/` from scratch and skips up-to-date targets on re-run.
 
-> **HARD STOP AFTER MILESTONE 1.2:** Once `twdll init` and `twdll analyze` are verified, **stop and discuss Stage 2 with the user** to design the extraction format, `.twdll/extracted/` storage layout, and `extract` / `search` / `show` commands.
+> **STAGE 1 COMPLETE:** `twdll init` and `twdll analyze` are verified across all targets (`attila_64`, `attila_32`, `rome2_32`, `tob_32`). Stage 2 extraction design is now open.
 
 ---
 
@@ -187,3 +190,7 @@ The notes below preserve agreed decisions from initial architecture discussions 
   - Compile via portable `.twdll/tools/` (`clang-cl` + `xwin` + `cmake` + `ninja`), exporting `compile_commands.json` with explicit `/imsvc` paths for `clangd` IDE autocomplete.
   - Unattended Windows game launch in `run` / `test` must: (1) ensure `steam_appid.txt` next to `<game>.exe`, (2) set `HKCU\SOFTWARE\The Creative Assembly\<Game>\last_game_version = 131076` to suppress post-crash dialogs, (3) exclude `CPU0` from processor affinity on Windows 11, and (4) automatically back up and restore the user's `user.script.txt` around test runs.
   - Legacy `tools/twdll.ps1` (along with private `tdd`, `mp`, and `consulscriptum` logic) will be removed when Stage 3 replaces it; Linux/WSL end-to-end verification will run once the pipeline is complete.
+- **Preserved Warscape & Lua API Conventions (from `git show c9a35e9:AGENTS.md` / tag `archive/legacy-agents-v1`):**
+  - *32-bit vs 64-bit Warscape ABI Ground Truth:* `CA::String` (`32b`: `+0x0 len`, `+0x4 cap`, `+0x8 char*`, `0xC` bytes; `64b`: `+0x0 len`, `+0x8 cap`, `+0x10 char*`, `0x18` bytes — never dereference `+0x0` as `char*`), `SAFE_PTR<T>` (`+0x0 vtable`, `+0x4`/`+0x8 T*`), `CA_STD::VECTOR<T>` (`start*`, `finish*`, `end_of_storage*`).
+  - *Typed Structs & Signatures Only:* Model all engine paths and entity links as typed C++ structs/templates guarded by compile-time offset assertions; resolve all native functions via byte signatures rather than hardcoded RVAs; strip temporary memory probes before finalizing.
+  - *Lua API Surface & Lifecycle:* One canonical `PascalCase` name per method (no aliases); `Get<Thing>List` suffix for list-interface returns; explicit symmetric `Set<Prop>` (UTF-8 in-memory) vs `Set<Prop>Key` (DB localisation key) pairs; mandatory snapshot-and-restore rollback of all global engine patches/hooks on Lua environment teardown; reasoning-first CAI telemetry (`docs/cai_telemetry_architecture_standard.md`).

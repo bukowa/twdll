@@ -6,60 +6,116 @@ import (
 	"twdll/cli/internal/workspace"
 )
 
-// SystemMemory captures physical RAM and virtual commit capacity reported by the OS.
+const giB = uint64(1024 * 1024 * 1024)
+
 type SystemMemory struct {
 	TotalPhysBytes   uint64
 	AvailPhysBytes   uint64
-	TotalCommitBytes uint64 // Physical RAM + pagefile / swap commit limit
+	TotalCommitBytes uint64
 	AvailCommitBytes uint64
 }
 
-// ComputeGhidraMaxMem determines the optimal JVM max heap string (e.g. "14G", "48G")
-// for the given target and concurrency budget, using physical RAM and pagefile headroom.
-func ComputeGhidraMaxMem(mem SystemMemory, target workspace.TargetID, concurrentJobs int) string {
-	const gb = 1024 * 1024 * 1024
+func (m SystemMemory) PhysGB() int {
+	if m.TotalPhysBytes == 0 {
+		return 0
+	}
+	gb := int((m.TotalPhysBytes + giB/2) / giB)
+	if gb < 1 {
+		return 1
+	}
+	return gb
+}
 
-	if mem.TotalPhysBytes == 0 {
+func (m SystemMemory) CommitGB() int {
+	if m.TotalCommitBytes == 0 {
+		return 0
+	}
+	return int((m.TotalCommitBytes + giB/2) / giB)
+}
+
+func ComputeGhidraMaxMem(mem SystemMemory, target workspace.TargetID, concurrentJobs int) string {
+	if mem.TotalPhysBytes == 0 && mem.AvailPhysBytes == 0 {
 		if target == workspace.TargetAttila64 {
 			return "16G"
 		}
 		return "8G"
 	}
 
-	physGB := int(mem.TotalPhysBytes / gb)
-	commitGB := int(mem.TotalCommitBytes / gb)
-
-	if concurrentJobs < 1 {
+	if concurrentJobs <= 0 {
 		concurrentJobs = 1
 	}
 
-	if target == workspace.TargetAttila64 {
-		// attila_64 is a 758 MB ELF with complete DWARF info; give it generous headroom
-		// (~75% of physical RAM, leveraging Windows pagefile when physical RAM <= 16 GB).
-		budgetGB := physGB * 3 / 4
-		if physGB <= 16 && commitGB >= 24 && budgetGB < 14 {
-			budgetGB = 14
+	totalBudgetGB := 16
+	if mem.TotalPhysBytes > 0 {
+		physGB := mem.PhysGB()
+		commitGB := mem.CommitGB()
+		totalBudgetGB = (physGB * 3) / 4
+		if physGB <= 16 && commitGB >= 24 && totalBudgetGB < 14 {
+			totalBudgetGB = 14
 		}
-		if budgetGB < 8 {
-			budgetGB = 8
-		}
-		if budgetGB > 48 {
-			budgetGB = 48
-		}
-		return fmt.Sprintf("%dG", budgetGB)
 	}
 
-	// 32-bit targets (~30 MB DLLs) analyze reliably in 6-8 GB per worker.
-	totalBudgetGB := physGB * 3 / 4
-	if physGB <= 16 && commitGB >= 24 && totalBudgetGB < 14 {
-		totalBudgetGB = 14
+	if target == workspace.TargetAttila64 {
+		xmxGB := clampInt(totalBudgetGB, 8, 48)
+		if mem.AvailPhysBytes > 0 {
+			availCap := max(8, int(mem.AvailPhysBytes/giB)-2)
+			xmxGB = clampInt(min(xmxGB, availCap/concurrentJobs), 8, 48)
+		}
+		return fmt.Sprintf("%dG", xmxGB)
 	}
-	perJobGB := totalBudgetGB / concurrentJobs
-	if perJobGB < 4 {
-		perJobGB = 4
+
+	xmxGB := clampInt(totalBudgetGB/concurrentJobs, 4, 8)
+	if mem.AvailPhysBytes > 0 {
+		availCap := max(4, int(mem.AvailPhysBytes/giB)-2)
+		xmxGB = clampInt(min(xmxGB, availCap/concurrentJobs), 4, 8)
 	}
-	if perJobGB > 8 {
-		perJobGB = 8
+	return fmt.Sprintf("%dG", xmxGB)
+}
+
+func resolveIDA32WorkerCount(numItems, explicitJobs, numCPU int, mem SystemMemory) int {
+	if numItems <= 0 {
+		return 0
 	}
-	return fmt.Sprintf("%dG", perJobGB)
+	if explicitJobs > 0 {
+		return min(numItems, explicitJobs)
+	}
+	byCPU := max(1, min(3, numCPU/2))
+	if mem.AvailPhysBytes > 0 {
+		availGB := int(mem.AvailPhysBytes / giB)
+		byAvail := max(1, min(3, max(0, availGB-2)/2))
+		byCPU = min(byCPU, byAvail)
+	} else if mem.TotalPhysBytes > 0 {
+		byCPU = min(byCPU, max(1, min(3, mem.PhysGB()/4)))
+	}
+	return min(numItems, byCPU)
+}
+
+func resolveGhidra32WorkerCount(numItems, explicitJobs int, mem SystemMemory) int {
+	if numItems <= 0 {
+		return 0
+	}
+	if explicitJobs > 0 {
+		return min(numItems, explicitJobs)
+	}
+	workers := max(1, min(3, mem.PhysGB()/8))
+	if mem.AvailPhysBytes > 0 {
+		availGB := int(mem.AvailPhysBytes / giB)
+		byAvail := max(1, min(3, max(0, availGB-2)/4))
+		if mem.TotalPhysBytes > 0 {
+			workers = min(workers, byAvail)
+		} else {
+			workers = byAvail
+		}
+	}
+	return min(numItems, workers)
+}
+
+func clampInt(val, low, high int) int {
+	if val < low {
+		return low
+	}
+	if val > high {
+		return high
+	}
+	return val
 }

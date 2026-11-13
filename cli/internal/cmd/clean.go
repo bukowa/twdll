@@ -6,103 +6,117 @@ import (
 	"os"
 	"strings"
 
-	"twdll/cli/internal/ui"
+	"twdll/cli/internal/term"
 	"twdll/cli/internal/workspace"
 )
 
-// CleanOptions configures database wiping.
 type CleanOptions struct {
-	Decompiler string   // "ghidra", "ida", or "" / "all"
-	All        bool     // clean all targets
-	Targets    []string // specific targets (e.g. "attila_64")
+	Decompiler string
+	All        bool
+	Targets    []string
 }
 
-// RunClean removes database artifacts, temporary files, logs, and resets state for requested targets.
-func RunClean(ctx context.Context, paths workspace.Paths, opts CleanOptions, printer *ui.Printer) error {
+type CleanRequest struct {
+	Layout  workspace.Layout
+	Options CleanOptions
+	UI      *term.UI
+}
+
+func RunClean(_ context.Context, req CleanRequest) error {
+	paths := req.Layout.Paths
+	opts := req.Options
+	ui := req.UI
+
+	engines, err := resolveCleanEngines(opts.Decompiler)
+	if err != nil {
+		return err
+	}
+	targets, err := resolveCleanTargets(opts.Targets)
+	if err != nil {
+		return err
+	}
+
 	state, _, err := workspace.LoadState(paths.StateFile)
 	if err != nil {
 		return fmt.Errorf("load state: %w", err)
 	}
 
-	var engines []workspace.DecompilerID
-	decLower := strings.ToLower(strings.TrimSpace(opts.Decompiler))
-	switch decLower {
-	case "ida":
-		engines = []workspace.DecompilerID{workspace.DecompilerIDA}
-	case "ghidra":
-		engines = []workspace.DecompilerID{workspace.DecompilerGhidra}
-	case "", "all":
-		engines = []workspace.DecompilerID{workspace.DecompilerGhidra, workspace.DecompilerIDA}
-	default:
-		return fmt.Errorf("unknown decompiler: %q (valid: ghidra, ida, all)", opts.Decompiler)
-	}
-
-	var targets []workspace.TargetID
-	if len(opts.Targets) > 0 {
-		for _, raw := range opts.Targets {
-			tid := workspace.TargetID(strings.ToLower(strings.TrimSpace(raw)))
-			if !tid.IsValid() {
-				return fmt.Errorf("unknown target: %q (valid targets: %v)", raw, workspace.AllTargets())
-			}
-			targets = append(targets, tid)
-		}
-	} else if opts.All {
-		targets = workspace.AllTargets()
-	} else {
-		// If neither targets nor --all is specified, default to all targets
-		targets = workspace.AllTargets()
-	}
-
-	clearedCount := 0
-	for _, target := range targets {
+	cleared := 0
+	for _, tid := range targets {
 		for _, engine := range engines {
-			dbDir := paths.DatabaseDir(engine, target)
-			logFile := paths.AnalyzeLogPath(engine, target)
+			dbDir := paths.DatabaseDir(engine, tid)
+			logFile := paths.AnalyzeLogPath(engine, tid)
+			removed := false
 
-			removedAny := false
-
-			if stat, err := os.Stat(dbDir); err == nil {
-				if err := os.RemoveAll(dbDir); err == nil {
-					removedAny = true
-				}
-				_ = stat
-			}
-
-			if _, err := os.Stat(logFile); err == nil {
-				if err := os.Remove(logFile); err == nil {
-					removedAny = true
+			if _, sErr := os.Stat(dbDir); sErr == nil {
+				if rErr := os.RemoveAll(dbDir); rErr == nil {
+					removed = true
 				}
 			}
-
-			// Clear state record
-			if binState, ok := state.Binaries[target]; ok {
-				if binState.Analyzed.Get(engine) != "" {
-					binState.Analyzed.Set(engine, "")
-					state.SetBinary(target, binState)
-					removedAny = true
+			if _, sErr := os.Stat(logFile); sErr == nil {
+				if rErr := os.Remove(logFile); rErr == nil {
+					removed = true
 				}
 			}
+			if binState, ok := state.Binaries[tid]; ok && binState.Analyzed.Get(engine) != "" {
+				binState.Analyzed.Set(engine, "")
+				state.Binaries[tid] = binState
+				removed = true
+			}
 
-			if removedAny {
-				clearedCount++
-				if printer != nil {
-					printer.Info("  [clean] Removed %s database for %s", printer.Bold(string(engine)), printer.Bold(string(target)))
+			if removed {
+				cleared++
+				if ui != nil {
+					ui.Info("Removed %s database for %s", engine, tid)
 				}
 			}
 		}
 	}
 
-	if err := workspace.SaveState(paths.StateFile, state); err != nil {
-		return fmt.Errorf("save state: %w", err)
+	if cleared > 0 {
+		if err := workspace.SaveState(paths.StateFile, state); err != nil {
+			return fmt.Errorf("save state: %w", err)
+		}
 	}
 
-	if printer != nil {
-		if clearedCount == 0 {
-			printer.Info("[clean] No databases needed cleaning.")
+	if ui != nil {
+		if cleared == 0 {
+			ui.Info("No databases needed cleaning.")
 		} else {
-			printer.Info("%s Cleared %d database(s). Run `twdll analyze` to rebuild.", printer.Green("[clean] Done!"), clearedCount)
+			ui.Success("Cleared %d database(s).", cleared)
 		}
 	}
-
 	return nil
+}
+
+func resolveCleanEngines(raw string) ([]workspace.DecompilerID, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "all":
+		return workspace.AllDecompilers(), nil
+	default:
+		d, ok := workspace.ParseDecompilerID(raw)
+		if !ok {
+			return nil, fmt.Errorf("unknown decompiler %q (expected ghidra, ida, or all)", raw)
+		}
+		return []workspace.DecompilerID{d}, nil
+	}
+}
+
+func resolveCleanTargets(rawTargets []string) ([]workspace.TargetID, error) {
+	if len(rawTargets) == 0 {
+		return workspace.AllTargets(), nil
+	}
+	seen := make(map[workspace.TargetID]bool, len(rawTargets))
+	out := make([]workspace.TargetID, 0, len(rawTargets))
+	for _, raw := range rawTargets {
+		tid, ok := workspace.ParseTargetID(raw)
+		if !ok {
+			return nil, fmt.Errorf("unknown target %q (valid: %v)", raw, workspace.AllTargets())
+		}
+		if !seen[tid] {
+			seen[tid] = true
+			out = append(out, tid)
+		}
+	}
+	return out, nil
 }

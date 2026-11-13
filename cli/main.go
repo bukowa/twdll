@@ -2,240 +2,237 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
+	"os/signal"
+	"syscall"
 
 	"github.com/alecthomas/kong"
-	"twdll/cli/internal/analyze"
+
+	"twdll/cli/internal/bootstrap"
 	"twdll/cli/internal/cmd"
-	"twdll/cli/internal/ui"
+	"twdll/cli/internal/term"
 	"twdll/cli/internal/workspace"
 )
 
-type Context struct {
-	Paths   workspace.Paths
-	Printer *ui.Printer
+var Version = "0.1.0-dev"
+
+type CLI struct {
+	Version kong.VersionFlag `short:"v" name:"version" help:"Show CLI version."`
+	Config  string           `short:"c" name:"config" help:"Path to configuration file (default: <root>/twdll.toml, env: TWDLL_CONFIG)."`
+	DataDir string           `name:"data-dir" help:"Override workspace data directory (default: .twdll or config data_dir, env: TWDLL_DATA_DIR)."`
+	Root    string           `name:"root" help:"Override repository root directory (env: TWDLL_ROOT)."`
+	Color   string           `name:"color" enum:"auto,always,never" default:"auto" help:"Color output mode (auto, always, never)."`
+
+	Status  StatusCmd  `cmd:"" help:"Show workspace, toolchain, binary, and database status."`
+	Init    InitCmd    `cmd:"" help:"Initialize workspace toolchains, game binaries, and decompiler setup."`
+	Analyze AnalyzeCmd `cmd:"" help:"Run headless decompiler analysis on staged binaries."`
+	Clean   CleanCmd   `cmd:"" help:"Remove decompiler databases and analysis logs."`
+}
+
+type runContext struct {
+	ctx    context.Context
+	layout workspace.Layout
+	ui     *term.UI
 }
 
 type StatusCmd struct {
-	JSON bool `help:"Output machine-readable JSON status."`
+	JSON bool `name:"json" help:"Emit machine-readable JSON to stdout."`
 }
 
-func (c *StatusCmd) Run(ctx *Context) error {
-	_, err := cmd.RunStatus(context.Background(), ctx.Paths, c.JSON, ctx.Printer)
+func (c *StatusCmd) Run(rctx *runContext) error {
+	_, err := cmd.RunStatus(rctx.ctx, cmd.StatusRequest{
+		Layout: rctx.layout,
+		JSON:   c.JSON,
+		UI:     rctx.ui,
+	})
 	return err
 }
 
 type InitCmd struct {
-	Clear       bool   `help:"Clear all existing tools, binaries, databases, and config to re-initialize from scratch."`
-	Clean       bool   `help:"Alias for --clear."`
-	NoInput     bool   `help:"Disable interactive prompts."`
-	DefaultGame string `enum:"attila,rome2,tob" default:"attila" help:"Default game (attila, rome2, tob)."`
-	Decompiler  string `enum:"ghidra,ida" default:"ghidra" help:"Decompiler backend (ghidra, ida)."`
-	IDADir      string `name:"ida-dir" help:"Directory containing IDA Pro installation."`
-	AttilaDir   string `name:"attila-dir" help:"Install directory for Total War: Attila."`
-	Rome2Dir    string `name:"rome2-dir" help:"Install directory for Total War: Rome II."`
-	ToBDir      string `name:"tob-dir" help:"Install directory for Total War: Thrones of Britannia."`
-	Attila64Src string `name:"attila-64" help:"Path to 64-bit Linux Attila ELF binary with DWARF."`
+	Clear       bool   `name:"clear" help:"Wipe workspace data directory and re-initialize from scratch."`
+	Clean       bool   `name:"clean" hidden:"" help:"Alias for --clear."`
+	NoInput     bool   `name:"no-input" help:"Disable interactive prompts and fail fast on missing inputs."`
+	DefaultGame string `name:"default-game" placeholder:"GAME" help:"Default game (attila, rome2, tob)."`
+	Decompiler  string `name:"decompiler" placeholder:"ENGINE" help:"Decompiler backend (ghidra, ida)."`
+	IDADir      string `name:"ida-dir" help:"Path to IDA Pro installation directory."`
+	AttilaDir   string `name:"attila-dir" help:"Path to Total War: Attila installation directory."`
+	Rome2Dir    string `name:"rome2-dir" help:"Path to Total War: Rome II installation directory."`
+	ToBDir      string `name:"tob-dir" help:"Path to Total War Saga: Thrones of Britannia installation directory."`
+	Attila64    string `name:"attila-64" help:"Path to 64-bit Linux Attila ELF binary with DWARF symbols."`
 }
 
-func (c *InitCmd) Run(ctx *Context) error {
-	opts := cmd.InitOptions{
-		Clear:       c.Clear || c.Clean,
-		NoInput:     c.NoInput,
-		DefaultGame: c.DefaultGame,
-		Decompiler:  c.Decompiler,
-		IDADir:      c.IDADir,
-		AttilaDir:   c.AttilaDir,
-		Rome2Dir:    c.Rome2Dir,
-		ToBDir:      c.ToBDir,
-		Attila64Src: c.Attila64Src,
+func (c *InitCmd) Run(rctx *runContext) error {
+	var prompter term.Prompter
+	if rctx.ui.IsInteractive() && !c.NoInput {
+		prompter = term.NewLinePrompter(rctx.ui)
 	}
-	var prompter ui.Prompter
-	if ui.IsStdinTerminal() {
-		prompter = ui.NewTerminalPrompter(os.Stdin, os.Stdout)
-	}
-	return cmd.RunInit(context.Background(), ctx.Paths, opts, prompter, ctx.Printer)
+	return cmd.RunInit(rctx.ctx, cmd.InitRequest{
+		Layout: rctx.layout,
+		Options: cmd.InitOptions{
+			Clear:       c.Clear || c.Clean,
+			NoInput:     c.NoInput,
+			DefaultGame: c.DefaultGame,
+			Decompiler:  c.Decompiler,
+			IDADir:      c.IDADir,
+			AttilaDir:   c.AttilaDir,
+			Rome2Dir:    c.Rome2Dir,
+			ToBDir:      c.ToBDir,
+			Attila64Src: c.Attila64,
+		},
+		Prompter: prompter,
+		UI:       rctx.ui,
+	})
 }
 
 type AnalyzeCmd struct {
-	Decompiler   string   `short:"d" help:"Decompiler backend (ghidra, ida). Overrides twdll.toml."`
-	Clean        bool     `help:"Wipe existing target database before analyzing."`
-	Force        bool     `help:"Force re-analysis even if hash matches."`
-	Jobs         int      `short:"j" help:"Max concurrent decompiler jobs (0 for auto)."`
-	MaxMem       string   `short:"m" help:"Override Ghidra max JVM heap (e.g. 16G, 32G)."`
-	FullAnalysis bool     `help:"Keep all default Ghidra analyzers enabled even on attila_64."`
-	Targets      []string `arg:"" optional:"" help:"Specific targets to analyze (e.g. attila_64, attila_32)."`
+	Decompiler   string   `short:"d" name:"decompiler" help:"Decompiler backend override (ghidra, ida)."`
+	Clean        bool     `name:"clean" help:"Remove existing target database before analyzing."`
+	Force        bool     `name:"force" help:"Re-analyze even when database SHA-256 is up to date."`
+	Jobs         int      `short:"j" name:"jobs" help:"Maximum concurrent analysis jobs (0 = auto)."`
+	MaxMem       string   `short:"m" name:"max-mem" help:"Override Ghidra JVM max heap (e.g. 16G, 32G)."`
+	FullAnalysis bool     `name:"full-analysis" help:"Keep heavy reference/stack analysis passes enabled on attila_64."`
+	Targets      []string `arg:"" optional:"" help:"Targets to analyze (attila_64, attila_32, rome2_32, tob_32)."`
 }
 
-func (c *AnalyzeCmd) Run(ctx *Context) error {
-	opts := analyze.Options{
-		Decompiler:   c.Decompiler,
-		Clean:        c.Clean,
-		Force:        c.Force,
-		Jobs:         c.Jobs,
-		MaxMem:       c.MaxMem,
-		FullAnalysis: c.FullAnalysis,
-		Targets:      c.Targets,
-	}
-	return analyze.RunAnalyze(context.Background(), ctx.Paths, opts, ctx.Printer)
+func (c *AnalyzeCmd) Run(rctx *runContext) error {
+	return cmd.RunAnalyze(rctx.ctx, cmd.AnalyzeRequest{
+		Layout: rctx.layout,
+		Options: cmd.AnalyzeOptions{
+			Decompiler:   c.Decompiler,
+			Clean:        c.Clean,
+			Force:        c.Force,
+			Jobs:         c.Jobs,
+			MaxMem:       c.MaxMem,
+			FullAnalysis: c.FullAnalysis,
+			Targets:      c.Targets,
+		},
+		UI: rctx.ui,
+	})
 }
 
 type CleanCmd struct {
-	Decompiler string   `short:"d" help:"Decompiler backend to clean (ghidra, ida, all). Default: all."`
-	All        bool     `help:"Clean databases for all targets."`
-	Targets    []string `arg:"" optional:"" help:"Specific targets to clean (e.g. attila_64, attila_32)."`
+	Decompiler string   `short:"d" name:"decompiler" help:"Decompiler databases to remove (ghidra, ida, all). Default: all."`
+	All        bool     `name:"all" help:"Clean databases across all targets."`
+	Targets    []string `arg:"" optional:"" help:"Specific targets to clean."`
 }
 
-func (c *CleanCmd) Run(ctx *Context) error {
-	opts := cmd.CleanOptions{
-		Decompiler: c.Decompiler,
-		All:        c.All,
-		Targets:    c.Targets,
-	}
-	return cmd.RunClean(context.Background(), ctx.Paths, opts, ctx.Printer)
-}
-
-type CLI struct {
-	Version kong.VersionFlag `short:"v" help:"Show version."`
-	Color   string           `enum:"auto,always,never" default:"auto" help:"Color output mode (auto, always, never)."`
-
-	Status  StatusCmd  `cmd:"" help:"Check workspace readiness, tools, and binary status."`
-	Init    InitCmd    `cmd:"" help:"Initialize portable toolchains and acquire game binaries."`
-	Analyze AnalyzeCmd `cmd:"" help:"Build headless decompiler databases from scratch."`
-	Clean   CleanCmd   `cmd:"" help:"Delete decompiler databases and logs to re-analyze fresh."`
-}
-
-const Version = "0.1.0"
-
-func ensureLatestBinary(repoRoot string) {
-	if os.Getenv("TWDLL_NO_REBUILD") == "1" {
-		return
-	}
-
-	exePath, err := os.Executable()
-	if err != nil {
-		return
-	}
-	exeInfo, err := os.Stat(exePath)
-	if err != nil {
-		return
-	}
-	exeTime := exeInfo.ModTime()
-
-	_ = os.Remove(exePath + ".old")
-
-	cliDir := filepath.Join(repoRoot, "cli")
-	needsRebuild := false
-	_ = filepath.Walk(cliDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		ext := filepath.Ext(path)
-		name := filepath.Base(path)
-		if ext == ".go" || name == "go.mod" || name == "go.sum" {
-			if info.ModTime().After(exeTime) {
-				needsRebuild = true
-				return filepath.SkipAll
-			}
-		}
-		return nil
+func (c *CleanCmd) Run(rctx *runContext) error {
+	return cmd.RunClean(rctx.ctx, cmd.CleanRequest{
+		Layout: rctx.layout,
+		Options: cmd.CleanOptions{
+			Decompiler: c.Decompiler,
+			All:        c.All,
+			Targets:    c.Targets,
+		},
+		UI: rctx.ui,
 	})
+}
 
-	if !needsRebuild {
-		return
-	}
+type kongExit struct {
+	code int
+}
 
-	goBin := filepath.Join(repoRoot, ".twdll", "tools", "go", "bin", "go.exe")
-	if runtime.GOOS != "windows" {
-		goBin = filepath.Join(repoRoot, ".twdll", "tools", "go", "bin", "go")
+func Execute(ctx context.Context, args []string, streams term.Streams) int {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	if _, err := os.Stat(goBin); err != nil {
-		return
+	if streams.Out == nil {
+		streams.Out = io.Discard
 	}
-
-	fmt.Fprintln(os.Stderr, "[twdll] Sources modified, recompiling CLI...")
-	tmpExe := exePath + ".tmp"
-	_ = os.Remove(tmpExe)
-	buildCmd := exec.Command(goBin, "build", "-buildvcs=false", "-o", tmpExe, ".")
-	buildCmd.Dir = cliDir
-	buildCmd.Stdout = os.Stderr
-	buildCmd.Stderr = os.Stderr
-	if err := buildCmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "[twdll] Recompilation failed: %v\n", err)
-		return
+	if streams.Err == nil {
+		streams.Err = io.Discard
 	}
 
-	oldExe := exePath + ".old"
-	_ = os.Remove(oldExe)
-	if err := os.Rename(exePath, oldExe); err != nil {
-		_ = os.Remove(tmpExe)
-		return
-	}
-	if err := os.Rename(tmpExe, exePath); err != nil {
-		_ = os.Rename(oldExe, exePath)
-		return
+	var cli CLI
+	var exited *kongExit
+
+	parser, err := kong.New(
+		&cli,
+		kong.Name("twdll"),
+		kong.Description("Unified reverse-engineering and build CLI for twdll."),
+		kong.Vars{"version": "twdll " + Version},
+		kong.Writers(streams.Out, streams.Err),
+		kong.ConfigureHelp(kong.HelpOptions{
+			Compact: true,
+		}),
+		kong.Exit(func(code int) {
+			panic(kongExit{code: code})
+		}),
+	)
+	if err != nil {
+		ui := term.NewUI(streams)
+		ui.Error(err)
+		return 1
 	}
 
-	reExec := exec.Command(exePath, os.Args[1:]...)
-	reExec.Stdin = os.Stdin
-	reExec.Stdout = os.Stdout
-	reExec.Stderr = os.Stderr
-	reExec.Env = append(os.Environ(), "TWDLL_NO_REBUILD=1")
-	if err := reExec.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
-		}
-		os.Exit(1)
+	kctx, parseErr := func() (kctx *kong.Context, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				if ke, ok := r.(kongExit); ok {
+					exited = &ke
+					return
+				}
+				panic(r)
+			}
+		}()
+		return parser.Parse(args)
+	}()
+	if exited != nil {
+		return exited.code
 	}
-	os.Exit(0)
+	if parseErr != nil {
+		ui := term.NewUI(streams)
+		ui.Error(&term.DiagnosticError{
+			Message: parseErr.Error(),
+			Help:    []string{"run `twdll --help` to see available commands and flags"},
+		})
+		return 2
+	}
+
+	colorMode, err := term.ParseColorMode(cli.Color)
+	if err != nil {
+		ui := term.NewUI(streams)
+		ui.Error(err)
+		return 2
+	}
+	streams.ColorMode = colorMode
+	ui := term.NewUI(streams)
+
+	layout, err := workspace.Resolve(workspace.ResolveSpec{
+		RootOverride:    cli.Root,
+		ConfigOverride:  cli.Config,
+		DataDirOverride: cli.DataDir,
+	})
+	if err != nil {
+		ui.Error(err)
+		return 1
+	}
+
+	if err := kctx.Run(&runContext{
+		ctx:    ctx,
+		layout: layout,
+		ui:     ui,
+	}); err != nil {
+		ui.Error(err)
+		return 1
+	}
+	return 0
 }
 
 func main() {
-	var cli CLI
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
+	repoRoot := workspace.ResolveRepoRoot(workspace.ResolveSpec{})
+	if rebuilt, code := bootstrap.MaybeRebuildAndExec(repoRoot, os.Args[1:]); rebuilt {
+		os.Exit(code)
 	}
 
-	ensureLatestBinary(repoRoot)
-
-	appCtx := &Context{
-		Paths:   workspace.NewPaths(repoRoot),
-		Printer: ui.NewDefaultPrinter(),
-	}
-
-	parser, err := kong.New(&cli,
-		kong.Name("twdll"),
-		kong.Description("Total War Script Extender & Reverse-Engineering Framework"),
-		kong.Vars{"version": Version},
-		kong.UsageOnError(),
-	)
-	if err != nil {
-		appCtx.Printer.Error(err)
-		os.Exit(1)
-	}
-
-	kctx, err := parser.Parse(os.Args[1:])
-	if err != nil {
-		parser.FatalIfErrorf(err)
-	}
-
-	switch cli.Color {
-	case "always":
-		appCtx.Printer.ColorMode = ui.ColorAlways
-	case "never":
-		appCtx.Printer.ColorMode = ui.ColorNever
-	default:
-		appCtx.Printer.ColorMode = ui.ColorAuto
-	}
-
-	if err := kctx.Run(appCtx); err != nil {
-		appCtx.Printer.Error(err)
-		os.Exit(1)
-	}
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := Execute(sigCtx, os.Args[1:], term.Streams{
+		In:        os.Stdin,
+		Out:       os.Stdout,
+		Err:       os.Stderr,
+		ColorMode: term.ColorAuto,
+	})
+	stop()
+	os.Exit(code)
 }
