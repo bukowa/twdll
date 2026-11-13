@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"twdll/cli/internal/fslink"
 	"twdll/cli/internal/term"
 	"twdll/cli/internal/toolchain"
 	"twdll/cli/internal/workspace"
@@ -233,6 +234,99 @@ func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
 	after, _, _ := workspace.LoadState(layout.Paths.StateFile)
 	if after.Binaries[workspace.TargetAttila32].Analyzed.IDA != "" {
 		t.Fatalf("expected IDA analyzed hash cleared, got %q", after.Binaries[workspace.TargetAttila32].Analyzed.IDA)
+	}
+}
+
+func TestRunClean_RefusesLinkedWorktreeDBAndPreservesSharedSentinel(t *testing.T) {
+	base := t.TempDir()
+	primaryDB := filepath.Join(base, "primary", ".twdll", "db")
+	sentinel := filepath.Join(primaryDB, "ghidra", "attila_32", "attila_32.gpr")
+	if err := os.MkdirAll(filepath.Dir(sentinel), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sentinel, []byte("shared-ghidra-db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wtRoot := filepath.Join(base, "wt-feat")
+	wtDotDir := filepath.Join(wtRoot, ".twdll")
+	if err := os.MkdirAll(wtDotDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := fslink.EnsureDirLink(primaryDB, filepath.Join(wtDotDir, "db")); err != nil {
+		t.Fatal(err)
+	}
+
+	layout, err := workspace.Resolve(workspace.ResolveSpec{
+		RootOverride: wtRoot,
+		WorkingDir:   wtRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = RunClean(context.Background(), CleanRequest{
+		Layout: layout,
+		UI:     term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+	})
+	var diag *term.DiagnosticError
+	if !errors.As(err, &diag) {
+		t.Fatalf("expected *term.DiagnosticError from RunClean in linked worktree, got %T (%v)", err, err)
+	}
+	if !strings.Contains(diag.Message, "refusing to delete shared decompiler databases") {
+		t.Fatalf("unexpected diagnostic message: %q", diag.Message)
+	}
+
+	data, rErr := os.ReadFile(sentinel)
+	if rErr != nil || string(data) != "shared-ghidra-db" {
+		t.Fatalf("shared sentinel was modified or deleted: err=%v data=%q", rErr, string(data))
+	}
+}
+
+func TestRunInit_Clear_RefusesLinkedWorktreeToolsAndPreservesSharedSentinel(t *testing.T) {
+	base := t.TempDir()
+	primaryTools := filepath.Join(base, "primary", ".twdll", "tools")
+	sentinel := filepath.Join(primaryTools, "ghidra", "sentinel.txt")
+	if err := os.MkdirAll(filepath.Dir(sentinel), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sentinel, []byte("shared-tools-sentinel"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	wtRoot := filepath.Join(base, "wt-feat")
+	wtDotDir := filepath.Join(wtRoot, ".twdll")
+	if err := os.MkdirAll(wtDotDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := fslink.EnsureDirLink(primaryTools, filepath.Join(wtDotDir, "tools")); err != nil {
+		t.Fatal(err)
+	}
+
+	layout, err := workspace.Resolve(workspace.ResolveSpec{
+		RootOverride: wtRoot,
+		WorkingDir:   wtRoot,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = RunInit(context.Background(), InitRequest{
+		Layout:  layout,
+		Options: InitOptions{Clear: true, NoInput: true},
+		UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+	})
+	var diag *term.DiagnosticError
+	if !errors.As(err, &diag) {
+		t.Fatalf("expected *term.DiagnosticError from RunInit --clear in linked worktree, got %T (%v)", err, err)
+	}
+	if !strings.Contains(diag.Message, "refusing to run `twdll init --clear` inside a linked worktree") {
+		t.Fatalf("unexpected diagnostic message: %q", diag.Message)
+	}
+
+	data, rErr := os.ReadFile(sentinel)
+	if rErr != nil || string(data) != "shared-tools-sentinel" {
+		t.Fatalf("shared tools sentinel was modified or deleted: err=%v data=%q", rErr, string(data))
 	}
 }
 

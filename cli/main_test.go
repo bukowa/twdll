@@ -11,9 +11,11 @@ import (
 	"testing"
 
 	"twdll/cli/internal/cmd"
+	"twdll/cli/internal/fslink"
 	"twdll/cli/internal/term"
 	"twdll/cli/internal/toolchain"
 	"twdll/cli/internal/workspace"
+	"twdll/cli/internal/worktree"
 )
 
 func TestExecute_StatusJSON_RoutesStrictlyToStdoutWithIsolatedSandbox(t *testing.T) {
@@ -109,7 +111,7 @@ func TestExecute_HelpAndVersion_ReturnZeroWithoutOsExit(t *testing.T) {
 			t.Fatalf("expected 0 bytes on stderr for --help, got %q", stderr.String())
 		}
 		helpText := stdout.String()
-		for _, sub := range []string{"status", "init", "analyze", "clean"} {
+		for _, sub := range []string{"status", "init", "analyze", "clean", "wt"} {
 			if !strings.Contains(helpText, sub) {
 				t.Fatalf("expected --help output to mention command %q:\n%s", sub, helpText)
 			}
@@ -328,6 +330,7 @@ func writeTestELF64DWARF(t *testing.T, path string) {
 	binary.LittleEndian.PutUint64(s1[24:], shstrOff)
 	binary.LittleEndian.PutUint64(s1[32:], uint64(len(shstrtab)))
 
+	// Section 2: .debug_info
 	s2 := buf[int(shOff)+2*shentSize:]
 	binary.LittleEndian.PutUint32(s2[0:], 11)
 	binary.LittleEndian.PutUint32(s2[4:], 1)
@@ -336,5 +339,139 @@ func writeTestELF64DWARF(t *testing.T, path string) {
 
 	if err := os.WriteFile(path, buf, 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestExecute_WorktreeCommands_EndToEndWithIsolatedRepo(t *testing.T) {
+	t.Setenv("TWDLL_ROOT", "")
+	t.Setenv("TWDLL_WRAPPER_ROOT", "")
+	t.Setenv("TWDLL_CONFIG", "")
+	t.Setenv("TWDLL_DATA_DIR", "")
+
+	base := t.TempDir()
+	primaryRoot := filepath.Join(base, "twdll")
+	if err := os.MkdirAll(filepath.Join(primaryRoot, "cli"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test User"},
+		{"config", "commit.gpgsign", "false"},
+	} {
+		if _, err := worktree.RunGit(ctx, primaryRoot, args...); err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(primaryRoot, "cli", "go.mod"), []byte("module twdll/cli\n\ngo 1.24\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worktree.RunGit(ctx, primaryRoot, "add", "cli/go.mod"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worktree.RunGit(ctx, primaryRoot, "commit", "-m", "init"); err != nil {
+		t.Fatal(err)
+	}
+
+	dataDir := filepath.Join(primaryRoot, ".twdll")
+	sentinels := make(map[string]string, len(worktree.SharedSubdirs))
+	for _, sub := range worktree.SharedSubdirs {
+		subDir := filepath.Join(dataDir, sub)
+		if err := os.MkdirAll(subDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		sentinel := filepath.Join(subDir, "sentinel-"+sub+".txt")
+		if err := os.WriteFile(sentinel, []byte("keep-"+sub), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sentinels[sub] = sentinel
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "state.json"), []byte(`{"version":1}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := workspace.SaveConfig(filepath.Join(primaryRoot, "twdll.toml"), workspace.Config{
+		DefaultGame: workspace.GameAttila,
+		Decompiler:  workspace.DecompilerGhidra,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	runExec := func(args ...string) (int, string, string) {
+		var stdout, stderr bytes.Buffer
+		code := Execute(ctx, args, term.Streams{
+			Out:       &stdout,
+			Err:       &stderr,
+			ColorMode: term.ColorNever,
+		})
+		return code, stdout.String(), stderr.String()
+	}
+
+	// 1. wt add
+	code, out, errStr := runExec("--root", primaryRoot, "wt", "add", "feat-e2e")
+	if code != 0 {
+		t.Fatalf("wt add exit=%d, stderr=%s", code, errStr)
+	}
+	wtPath := strings.TrimSpace(out)
+	if wtPath == "" || errStr == "" {
+		t.Fatalf("expected worktree path on stdout and status on stderr; out=%q err=%q", out, errStr)
+	}
+
+	// 2. wt ls --json and worktree list --json
+	for _, cmdArgs := range [][]string{
+		{"--root", primaryRoot, "wt", "ls", "--json"},
+		{"--root", primaryRoot, "worktree", "list", "--json"},
+	} {
+		code, out, errStr = runExec(cmdArgs...)
+		if code != 0 || errStr != "" {
+			t.Fatalf("%v exit=%d err=%q", cmdArgs, code, errStr)
+		}
+		var rep cmd.WTListReport
+		if err := json.Unmarshal([]byte(out), &rep); err != nil {
+			t.Fatalf("unmarshal %v: %v\nraw: %s", cmdArgs, err, out)
+		}
+		if len(rep.Worktrees) != 2 {
+			t.Fatalf("expected 2 worktrees, got %d", len(rep.Worktrees))
+		}
+	}
+
+	// 3. wt path
+	code, out, errStr = runExec("--root", primaryRoot, "wt", "path", "feat-e2e")
+	if code != 0 || errStr != "" {
+		t.Fatalf("wt path exit=%d err=%q", code, errStr)
+	}
+	if !fslink.SamePath(strings.TrimSpace(out), wtPath) {
+		t.Fatalf("wt path = %q, want %q", strings.TrimSpace(out), wtPath)
+	}
+
+	// 4. wt sync
+	code, out, errStr = runExec("--root", primaryRoot, "wt", "sync", "feat-e2e")
+	if code != 0 || out != "" || errStr == "" {
+		t.Fatalf("wt sync exit=%d out=%q err=%q", code, out, errStr)
+	}
+
+	// 5. clean & init --clear guards inside the linked worktree
+	code, out, errStr = runExec("--root", wtPath, "clean")
+	if code == 0 || out != "" || !strings.Contains(errStr, "refusing to delete shared decompiler databases") {
+		t.Fatalf("expected clean in linked worktree to fail with guard; exit=%d out=%q err=%q", code, out, errStr)
+	}
+	code, out, errStr = runExec("--root", wtPath, "init", "--clear", "--no-input")
+	if code == 0 || out != "" || !strings.Contains(errStr, "refusing to run `twdll init --clear` inside a linked worktree") {
+		t.Fatalf("expected init --clear in linked worktree to fail with guard; exit=%d out=%q err=%q", code, out, errStr)
+	}
+
+	// 6. wt rm
+	code, out, errStr = runExec("--root", primaryRoot, "wt", "rm", "feat-e2e", "--delete-branch")
+	if code != 0 || out != "" || errStr == "" {
+		t.Fatalf("wt rm exit=%d out=%q err=%q", code, out, errStr)
+	}
+
+	for sub, p := range sentinels {
+		data, err := os.ReadFile(p)
+		if err != nil || string(data) != "keep-"+sub {
+			t.Fatalf("sentinel %s (%s) damaged: err=%v data=%q", sub, p, err, string(data))
+		}
 	}
 }

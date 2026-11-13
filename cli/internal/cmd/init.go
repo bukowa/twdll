@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"twdll/cli/internal/binaries"
+	"twdll/cli/internal/fslink"
 	"twdll/cli/internal/term"
 	"twdll/cli/internal/toolchain"
 	"twdll/cli/internal/workspace"
@@ -49,6 +51,22 @@ func RunInit(ctx context.Context, req InitRequest) error {
 
 	preservedDataDir := req.Layout.Config.DataDir
 	if opts.Clear {
+		for _, p := range []string{paths.DataDir, paths.ToolsDir, paths.BinsDir, paths.DBDir} {
+			isLink, err := fslink.IsLinkOrReparsePoint(p)
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("check link status of %s: %w", p, err)
+			}
+			if isLink {
+				return &term.DiagnosticError{
+					Message:  "refusing to run `twdll init --clear` inside a linked worktree because shared directories would be affected",
+					Expected: "a primary workspace or `twdll wt sync` inside a worktree",
+					Help: []string{
+						"run `twdll wt sync` to repair worktree links",
+						"run `twdll init --clear` from the primary repository root if you intend to reset shared data",
+					},
+				}
+			}
+		}
 		if err := clearWorkspaceData(paths, ui); err != nil {
 			return err
 		}

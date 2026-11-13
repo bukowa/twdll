@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
+	"twdll/cli/internal/fslink"
 	"twdll/cli/internal/term"
 	"twdll/cli/internal/workspace"
 )
@@ -26,6 +28,20 @@ func RunClean(_ context.Context, req CleanRequest) error {
 	paths := req.Layout.Paths
 	opts := req.Options
 	ui := req.UI
+
+	for _, p := range []string{paths.DataDir, paths.DBDir} {
+		isLink, err := fslink.IsLinkOrReparsePoint(p)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("check link status of %s: %w", p, err)
+		}
+		if isLink {
+			return &term.DiagnosticError{
+				Message:  "refusing to delete shared decompiler databases from a linked worktree",
+				Expected: "a primary workspace with local .twdll/db",
+				Help:     []string{"run `twdll clean` from the primary repository root if you intend to delete shared databases"},
+			}
+		}
+	}
 
 	engines, err := resolveCleanEngines(opts.Decompiler)
 	if err != nil {

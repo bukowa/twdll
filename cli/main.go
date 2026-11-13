@@ -24,10 +24,11 @@ type CLI struct {
 	Root    string           `name:"root" help:"Override repository root directory (env: TWDLL_ROOT)."`
 	Color   string           `name:"color" enum:"auto,always,never" default:"auto" help:"Color output mode (auto, always, never)."`
 
-	Status  StatusCmd  `cmd:"" help:"Show workspace, toolchain, binary, and database status."`
-	Init    InitCmd    `cmd:"" help:"Initialize workspace toolchains, game binaries, and decompiler setup."`
-	Analyze AnalyzeCmd `cmd:"" help:"Run headless decompiler analysis on staged binaries."`
-	Clean   CleanCmd   `cmd:"" help:"Remove decompiler databases and analysis logs."`
+	Status   StatusCmd   `cmd:"" help:"Show workspace, toolchain, binary, and database status."`
+	Init     InitCmd     `cmd:"" help:"Initialize workspace toolchains, game binaries, and decompiler setup."`
+	Analyze  AnalyzeCmd  `cmd:"" help:"Run headless decompiler analysis on staged binaries."`
+	Clean    CleanCmd    `cmd:"" help:"Remove decompiler databases and analysis logs."`
+	Worktree WorktreeCmd `cmd:"" name:"wt" aliases:"worktree" help:"Manage linked git worktrees sharing .twdll assets."`
 }
 
 type runContext struct {
@@ -127,6 +128,117 @@ func (c *CleanCmd) Run(rctx *runContext) error {
 		},
 		UI: rctx.ui,
 	})
+}
+
+type WorktreeCmd struct {
+	List   WTListCmd   `cmd:"" aliases:"ls" help:"List git worktrees and their .twdll link status."`
+	Add    WTAddCmd    `cmd:"" aliases:"new,create" help:"Create a linked git worktree and share .twdll assets."`
+	Remove WTRemoveCmd `cmd:"" aliases:"rm" help:"Safely unlink .twdll and remove a git worktree."`
+	Sync   WTSyncCmd   `cmd:"" aliases:"repair" help:"Provision or repair .twdll links for existing worktrees."`
+	Path   WTPathCmd   `cmd:"" help:"Print the filesystem path of a git worktree."`
+}
+
+type WTListCmd struct {
+	JSON bool `name:"json" help:"Emit machine-readable JSON to stdout."`
+}
+
+func (c *WTListCmd) Run(rctx *runContext) error {
+	_, err := cmd.RunWTList(rctx.ctx, cmd.WTListRequest{
+		Layout: rctx.layout,
+		JSON:   c.JSON,
+		UI:     rctx.ui,
+	})
+	return err
+}
+
+type WTAddCmd struct {
+	Name   string `arg:"" name:"name" help:"Branch or worktree name to create."`
+	Base   string `name:"base" help:"Base commit, tag, or branch for a new branch."`
+	Path   string `name:"path" help:"Custom filesystem path for the new worktree."`
+	Detach bool   `name:"detach" help:"Create worktree with a detached HEAD."`
+	Force  bool   `short:"f" name:"force" help:"Force worktree creation and link provisioning."`
+	JSON   bool   `name:"json" help:"Emit machine-readable JSON to stdout."`
+}
+
+func (c *WTAddCmd) Run(rctx *runContext) error {
+	_, err := cmd.RunWTAdd(rctx.ctx, cmd.WTAddRequest{
+		Layout: rctx.layout,
+		Options: cmd.WTAddOptions{
+			Name:   c.Name,
+			Base:   c.Base,
+			Path:   c.Path,
+			Detach: c.Detach,
+			Force:  c.Force,
+			JSON:   c.JSON,
+		},
+		UI: rctx.ui,
+	})
+	return err
+}
+
+type WTRemoveCmd struct {
+	Target       string `arg:"" name:"target" help:"Worktree name, branch, or path to remove."`
+	Force        bool   `short:"f" name:"force" help:"Force removal even if dirty or locked."`
+	DeleteBranch bool   `name:"delete-branch" help:"Also delete the worktree's local git branch."`
+	JSON         bool   `name:"json" help:"Emit machine-readable JSON to stdout."`
+}
+
+func (c *WTRemoveCmd) Run(rctx *runContext) error {
+	cwd, _ := os.Getwd()
+	exe, _ := os.Executable()
+	_, err := cmd.RunWTRemove(rctx.ctx, cmd.WTRemoveRequest{
+		Layout: rctx.layout,
+		Options: cmd.WTRemoveOptions{
+			Target:       c.Target,
+			Force:        c.Force,
+			DeleteBranch: c.DeleteBranch,
+			JSON:         c.JSON,
+			CWD:          cwd,
+			ExePath:      exe,
+		},
+		UI: rctx.ui,
+	})
+	return err
+}
+
+type WTSyncCmd struct {
+	Target string `arg:"" optional:"" name:"target" help:"Worktree name, branch, or path to sync."`
+	All    bool   `name:"all" help:"Sync all linked worktrees."`
+	Force  bool   `short:"f" name:"force" help:"Overwrite local directories/files when repairing links."`
+	JSON   bool   `name:"json" help:"Emit machine-readable JSON to stdout."`
+}
+
+func (c *WTSyncCmd) Run(rctx *runContext) error {
+	cwd, _ := os.Getwd()
+	_, err := cmd.RunWTSync(rctx.ctx, cmd.WTSyncRequest{
+		Layout: rctx.layout,
+		Options: cmd.WTSyncOptions{
+			Target: c.Target,
+			All:    c.All,
+			Force:  c.Force,
+			JSON:   c.JSON,
+			CWD:    cwd,
+		},
+		UI: rctx.ui,
+	})
+	return err
+}
+
+type WTPathCmd struct {
+	Target string `arg:"" name:"target" help:"Worktree name, branch, or path to resolve."`
+}
+
+func (c *WTPathCmd) Run(rctx *runContext) error {
+	cwd, _ := os.Getwd()
+	_, err := cmd.RunWTPath(rctx.ctx, cmd.WTPathRequest{
+		Layout: rctx.layout,
+		Options: cmd.WTPathOptions{
+			Target: c.Target,
+			CWD:    cwd,
+		},
+		UI: rctx.ui,
+	})
+	return err
 }
 
 type kongExit struct {
