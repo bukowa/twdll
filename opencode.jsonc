@@ -1,0 +1,63 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "HYDROGEN",
+
+  // Raise headerTimeout for google-vertex from 5m (300s) to 10m (600s) for deep-thinking models like gemini-4-carbon
+  "providers": {
+    "google-vertex": {
+      "settings": {
+        "headerTimeout": 600000
+      }
+    }
+  },
+
+  // Auto-format edited files (gofmt for .go; flip to false if it causes edit retries)
+  "formatter": true,
+
+  // Keep OpenCode's file watcher out of large binary/tool/index trees
+  "watcher": {
+    "ignore": [".twdll/**", ".codegraph/**"]
+  },
+
+  "commands": {
+    "commit": {
+      "description": "Review and commit only the current task's changes (Conventional Commit)",
+      "agent": "HYDROGEN",
+      "template": "Review and commit ONLY the changes belonging to the current task in this session (or the scope specified below), NOT unrelated dirty files in the working tree.\n\nCurrent `git status --short`:\n!`git status --short`\n\nSteps:\n1. Identify the exact files changed for the current task (or user-specified scope). Ignore unrelated modified/untracked files and briefly note them so they are not staged by mistake.\n2. Inspect `git diff` (and new file contents) for ONLY the scoped files: check for bugs, unintended edits, secrets, or Stage 3 / `.twdll/` / `twdll.toml` violations.\n3. If `cli/` files are in scope, run `cd cli && go vet ./... && go test ./...`.\n4. Report a concise summary (blockers first), list the exact scoped files to stage + excluded files (if any), and propose a Conventional Commit message (`<type>(<scope>): <short lowercase description>`).\n5. If the review is clean, stage ONLY the scoped files (`git add -- <files>`) and run `git commit` (the permission prompt will ask for final confirmation)."
+    }
+  },
+
+  "permissions": [
+    // --- External Directory Protection ---
+    { "action": "external_directory", "resource": "*", "effect": "ask" },
+
+    // --- Stage 3 Freeze (AGENTS.md) ---
+    { "action": "edit", "resource": "src/*", "effect": "deny" },
+    { "action": "edit", "resource": "CMakeLists.txt", "effect": "deny" },
+    { "action": "edit", "resource": "*/CMakeLists.txt", "effect": "deny" },
+    { "action": "edit", "resource": "tests/*", "effect": "deny" },
+    { "action": "edit", "resource": "docs/*", "effect": "deny" },
+    // Exception: active Stage 2 spec lives in docs/
+    { "action": "edit", "resource": "docs/cli_re_pipeline_spec.md", "effect": "allow" },
+
+    // --- Workspace & Data Safety (.twdll/ and twdll.toml) ---
+    { "action": "edit", "resource": "twdll.toml", "effect": "ask" },
+    { "action": "edit", "resource": ".twdll/*", "effect": "ask" },
+    { "action": "shell", "resource": "*twdll*clean*", "effect": "ask" },
+    { "action": "shell", "resource": "*go run*clean*", "effect": "ask" },
+    { "action": "shell", "resource": "*analyze*--force*", "effect": "ask" },
+    { "action": "shell", "resource": "*rm *.twdll*", "effect": "ask" },
+    { "action": "shell", "resource": "*del *.twdll*", "effect": "ask" },
+    { "action": "shell", "resource": "*rmdir*.twdll*", "effect": "ask" },
+    { "action": "shell", "resource": "*Remove-Item*.twdll*", "effect": "ask" },
+
+    // --- Git Hygiene (explicit user request only) ---
+    { "action": "shell", "resource": "git commit *", "effect": "ask" },
+    { "action": "shell", "resource": "git push *", "effect": "ask" },
+    { "action": "shell", "resource": "git tag *", "effect": "ask" },
+    { "action": "shell", "resource": "git reset --hard *", "effect": "ask" },
+    { "action": "shell", "resource": "git checkout -- *", "effect": "ask" },
+    { "action": "shell", "resource": "git restore *", "effect": "ask" },
+    { "action": "shell", "resource": "git clean *", "effect": "ask" }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "exclude": [
+    "docs/",
+    "src/rome2/",
+    "tests/rome2/"
+  ],
+  "deprioritize": [
+    ".github/",
+    "tests/attila/pack/",
+    "tests/manual/"
+  ],
+  "extensions": {
+    ".inc": "cpp",
+    ".h": "cpp"
+  }
+}

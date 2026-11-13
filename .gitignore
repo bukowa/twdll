@@ -39,9 +39,13 @@ todo.md
 __pycache__/
 *.pyc
 codegraph*
+!codegraph.json
 
 # twdll CLI local state & configuration
 .twdll/
 twdll.toml
 .xwin-cache
 .codegraph
+
+# OpenCode local friction/catch log
+.opencode/friction.md
