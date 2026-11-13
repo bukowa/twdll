@@ -22,11 +22,12 @@ var LocalSubdirs = []string{"bin", "logs"}
 
 // LinkStatus summarizes the provisioning health of a worktree's .twdll directory and config.
 type LinkStatus struct {
-	Ready           bool
-	MissingLinks    []string
-	MismatchedLinks []string
-	HasConfig       bool
-	HasState        bool
+	Ready           bool     `json:"ready"`
+	MissingLinks    []string `json:"missing_links"`
+	MismatchedLinks []string `json:"mismatched_links"`
+	HasConfig       bool     `json:"has_config"`
+	HasState        bool     `json:"has_state"`
+	HasCodeGraph    bool     `json:"has_codegraph"`
 }
 
 // ResolvePrimaryLayout resolves the workspace Layout strictly anchored at primaryRoot,
@@ -287,6 +288,7 @@ func Inspect(wtPath, primaryDataDir string) LinkStatus {
 	if fi, err := os.Stat(filepath.Join(wtDotDir, "state.json")); err == nil && !fi.IsDir() {
 		status.HasState = true
 	}
+	status.HasCodeGraph = hasCodeGraphDB(cleanWT)
 
 	localReady := true
 	if dotFi, err := os.Lstat(wtDotDir); err != nil || !dotFi.IsDir() {

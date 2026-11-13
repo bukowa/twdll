@@ -280,7 +280,7 @@ func invalidWorktreeNameError(name string) error {
 
 // IsDirty reports whether wtPath has uncommitted or untracked changes according to
 // `git -C <wtPath> status --porcelain --untracked-files=normal`, ignoring untracked
-// `.twdll/` and `twdll.toml` artifacts managed by twdll itself.
+// `.twdll/`, `.codegraph/`, and `twdll.toml` artifacts managed by twdll itself.
 func IsDirty(ctx context.Context, wtPath string) (bool, error) {
 	out, err := RunGit(ctx, wtPath, "status", "--porcelain", "--untracked-files=normal")
 	if err != nil {
@@ -291,7 +291,9 @@ func IsDirty(ctx context.Context, wtPath string) (bool, error) {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		if line == "?? .twdll" || line == "?? .twdll/" || strings.HasPrefix(line, "?? .twdll/") || line == "?? twdll.toml" {
+		if line == "?? .twdll" || line == "?? .twdll/" || strings.HasPrefix(line, "?? .twdll/") ||
+			line == "?? .codegraph" || line == "?? .codegraph/" || strings.HasPrefix(line, "?? .codegraph/") ||
+			line == "?? twdll.toml" {
 			continue
 		}
 		return true, nil

@@ -152,24 +152,26 @@ func (c *WTListCmd) Run(rctx *runContext) error {
 }
 
 type WTAddCmd struct {
-	Name   string `arg:"" name:"name" help:"Branch or worktree name to create."`
-	Base   string `name:"base" help:"Base commit, tag, or branch for a new branch."`
-	Path   string `name:"path" help:"Custom filesystem path for the new worktree."`
-	Detach bool   `name:"detach" help:"Create worktree with a detached HEAD."`
-	Force  bool   `short:"f" name:"force" help:"Force worktree creation and link provisioning."`
-	JSON   bool   `name:"json" help:"Emit machine-readable JSON to stdout."`
+	Name        string `arg:"" name:"name" help:"Branch or worktree name to create."`
+	Base        string `name:"base" help:"Base commit, tag, or branch for a new branch."`
+	Path        string `name:"path" help:"Custom filesystem path for the new worktree."`
+	Detach      bool   `name:"detach" help:"Create worktree with a detached HEAD."`
+	Force       bool   `short:"f" name:"force" help:"Force worktree creation and link provisioning."`
+	NoCodeGraph bool   `name:"no-codegraph" help:"Skip automatic CodeGraph indexing for the worktree."`
+	JSON        bool   `name:"json" help:"Emit machine-readable JSON to stdout."`
 }
 
 func (c *WTAddCmd) Run(rctx *runContext) error {
 	_, err := cmd.RunWTAdd(rctx.ctx, cmd.WTAddRequest{
 		Layout: rctx.layout,
 		Options: cmd.WTAddOptions{
-			Name:   c.Name,
-			Base:   c.Base,
-			Path:   c.Path,
-			Detach: c.Detach,
-			Force:  c.Force,
-			JSON:   c.JSON,
+			Name:        c.Name,
+			Base:        c.Base,
+			Path:        c.Path,
+			Detach:      c.Detach,
+			Force:       c.Force,
+			NoCodeGraph: c.NoCodeGraph,
+			JSON:        c.JSON,
 		},
 		UI: rctx.ui,
 	})
@@ -202,10 +204,11 @@ func (c *WTRemoveCmd) Run(rctx *runContext) error {
 }
 
 type WTSyncCmd struct {
-	Target string `arg:"" optional:"" name:"target" help:"Worktree name, branch, or path to sync."`
-	All    bool   `name:"all" help:"Sync all linked worktrees."`
-	Force  bool   `short:"f" name:"force" help:"Overwrite local directories/files when repairing links."`
-	JSON   bool   `name:"json" help:"Emit machine-readable JSON to stdout."`
+	Target      string `arg:"" optional:"" name:"target" help:"Worktree name, branch, or path to sync."`
+	All         bool   `name:"all" help:"Sync all linked worktrees."`
+	Force       bool   `short:"f" name:"force" help:"Overwrite local directories/files when repairing links."`
+	NoCodeGraph bool   `name:"no-codegraph" help:"Skip automatic CodeGraph indexing for the worktree."`
+	JSON        bool   `name:"json" help:"Emit machine-readable JSON to stdout."`
 }
 
 func (c *WTSyncCmd) Run(rctx *runContext) error {
@@ -213,11 +216,12 @@ func (c *WTSyncCmd) Run(rctx *runContext) error {
 	_, err := cmd.RunWTSync(rctx.ctx, cmd.WTSyncRequest{
 		Layout: rctx.layout,
 		Options: cmd.WTSyncOptions{
-			Target: c.Target,
-			All:    c.All,
-			Force:  c.Force,
-			JSON:   c.JSON,
-			CWD:    cwd,
+			Target:      c.Target,
+			All:         c.All,
+			Force:       c.Force,
+			NoCodeGraph: c.NoCodeGraph,
+			JSON:        c.JSON,
+			CWD:         cwd,
 		},
 		UI: rctx.ui,
 	})

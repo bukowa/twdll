@@ -339,3 +339,116 @@ func TestRunWT_LifecycleAndStreamSeparation(t *testing.T) {
 
 	repo.assertSentinels(t)
 }
+
+type fakeCmdCodeGraphRunner struct {
+	available   bool
+	initCalls   []string
+	syncCalls   []string
+	uninitCalls []string
+}
+
+func (f *fakeCmdCodeGraphRunner) Available() bool { return f.available }
+
+func (f *fakeCmdCodeGraphRunner) Init(_ context.Context, wtPath string) error {
+	f.initCalls = append(f.initCalls, wtPath)
+	dotCG := filepath.Join(wtPath, ".codegraph")
+	if err := os.MkdirAll(dotCG, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dotCG, "codegraph.db"), []byte("db"), 0o644)
+}
+
+func (f *fakeCmdCodeGraphRunner) Sync(_ context.Context, wtPath string) error {
+	f.syncCalls = append(f.syncCalls, wtPath)
+	return nil
+}
+
+func (f *fakeCmdCodeGraphRunner) Uninit(_ context.Context, wtPath string) error {
+	f.uninitCalls = append(f.uninitCalls, wtPath)
+	return os.RemoveAll(filepath.Join(wtPath, ".codegraph"))
+}
+
+func TestRunWT_CodeGraphAndSnakeCaseJSON(t *testing.T) {
+	repo := setupWTTestRepo(t)
+	ctx := context.Background()
+
+	// Seed .gitignore and primary .codegraph directory so auto-CodeGraph triggers.
+	if err := os.WriteFile(filepath.Join(repo.primaryRoot, ".gitignore"), []byte(".codegraph/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worktree.RunGit(ctx, repo.primaryRoot, "add", ".gitignore"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worktree.RunGit(ctx, repo.primaryRoot, "commit", "-m", "ignore .codegraph"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(repo.primaryRoot, ".codegraph"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	ui := term.NewUI(term.Streams{Out: &outBuf, Err: &errBuf, ColorMode: term.ColorNever})
+	cgRunner := &fakeCmdCodeGraphRunner{available: true}
+
+	// 1. RunWTAdd human mode with CodeGraph enabled:
+	// stdout must ONLY contain "<cleanPath>\n", while stderr contains the CodeGraph initialization message.
+	addHumanRes, err := RunWTAdd(ctx, WTAddRequest{
+		Layout: repo.layout,
+		Options: WTAddOptions{
+			Name:            "feat/cg-human",
+			CodeGraphRunner: cgRunner,
+		},
+		UI: ui,
+	})
+	if err != nil {
+		t.Fatalf("RunWTAdd human with CodeGraph failed: %v", err)
+	}
+	if outBuf.String() != addHumanRes.Worktree.Path+"\n" {
+		t.Fatalf("RunWTAdd stdout = %q, want exact %q", outBuf.String(), addHumanRes.Worktree.Path+"\n")
+	}
+	if !strings.Contains(errBuf.String(), "Initialized CodeGraph index in "+addHumanRes.Worktree.Path) {
+		t.Fatalf("expected stderr to mention CodeGraph initialization, got %q", errBuf.String())
+	}
+
+	// 2. RunWTAdd --json mode: verify snake_case LinkStatus keys and has_codegraph=true.
+	outBuf.Reset()
+	errBuf.Reset()
+	_, err = RunWTAdd(ctx, WTAddRequest{
+		Layout: repo.layout,
+		Options: WTAddOptions{
+			Name:            "feat/cg-json",
+			JSON:            true,
+			CodeGraphRunner: cgRunner,
+		},
+		UI: ui,
+	})
+	if err != nil {
+		t.Fatalf("RunWTAdd --json with CodeGraph failed: %v", err)
+	}
+	if errBuf.Len() != 0 {
+		t.Fatalf("expected empty stderr in --json mode, got %q", errBuf.String())
+	}
+	rawAddJSON := outBuf.String()
+	for _, wantKey := range []string{`"ready": true`, `"missing_links":`, `"mismatched_links":`, `"has_config": true`, `"has_state": true`, `"has_codegraph": true`} {
+		if !strings.Contains(rawAddJSON, wantKey) {
+			t.Fatalf("expected RunWTAdd JSON to contain %s, got:\n%s", wantKey, rawAddJSON)
+		}
+	}
+
+	// 3. RunWTList --json mode: verify snake_case status fields across worktrees.
+	outBuf.Reset()
+	errBuf.Reset()
+	if _, err := RunWTList(ctx, WTListRequest{
+		Layout: repo.layout,
+		JSON:   true,
+		UI:     ui,
+	}); err != nil {
+		t.Fatalf("RunWTList --json failed: %v", err)
+	}
+	rawListJSON := outBuf.String()
+	for _, wantKey := range []string{`"ready": true`, `"missing_links":`, `"mismatched_links":`, `"has_config": true`, `"has_state": true`, `"has_codegraph": true`} {
+		if !strings.Contains(rawListJSON, wantKey) {
+			t.Fatalf("expected RunWTList JSON to contain %s, got:\n%s", wantKey, rawListJSON)
+		}
+	}
+}

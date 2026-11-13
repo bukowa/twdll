@@ -14,12 +14,14 @@ import (
 
 // AddOptions configures the creation and provisioning of a new git worktree.
 type AddOptions struct {
-	RepoDir string
-	Name    string
-	Base    string
-	Path    string
-	Detach  bool
-	Force   bool
+	RepoDir         string
+	Name            string
+	Base            string
+	Path            string
+	Detach          bool
+	Force           bool
+	NoCodeGraph     bool
+	CodeGraphRunner CodeGraphRunner
 }
 
 // AddResult describes a newly created and provisioned git worktree.
@@ -31,12 +33,13 @@ type AddResult struct {
 
 // RemoveOptions configures the safe teardown and removal of an existing git worktree.
 type RemoveOptions struct {
-	RepoDir      string
-	Target       string
-	CWD          string
-	ExePath      string
-	Force        bool
-	DeleteBranch bool
+	RepoDir         string
+	Target          string
+	CWD             string
+	ExePath         string
+	Force           bool
+	DeleteBranch    bool
+	CodeGraphRunner CodeGraphRunner
 }
 
 // RemoveResult describes a removed git worktree and any deleted local branch.
@@ -47,11 +50,13 @@ type RemoveResult struct {
 
 // SyncOptions configures the provisioning/repair of one or all linked worktrees.
 type SyncOptions struct {
-	RepoDir string
-	Target  string
-	CWD     string
-	All     bool
-	Force   bool
+	RepoDir         string
+	Target          string
+	CWD             string
+	All             bool
+	Force           bool
+	NoCodeGraph     bool
+	CodeGraphRunner CodeGraphRunner
 }
 
 // SyncEntry records the updated link status of a synced git worktree.
@@ -160,6 +165,19 @@ func Add(ctx context.Context, opts AddOptions) (AddResult, error) {
 		return AddResult{}, err
 	}
 
+	cgRunner := opts.CodeGraphRunner
+	if cgRunner == nil {
+		cgRunner = DefaultCodeGraphRunner()
+	}
+	if !opts.NoCodeGraph && ShouldAutoCodeGraph(primary.Path, cgRunner) {
+		if err := ProvisionCodeGraph(ctx, targetPath, cgRunner); err != nil {
+			_ = TeardownCodeGraph(ctx, targetPath, cgRunner)
+			_ = TeardownData(ctx, targetPath)
+			_, _ = RunGit(ctx, primary.Path, "worktree", "remove", "--force", targetPath)
+			return AddResult{}, err
+		}
+	}
+
 	updatedList, err := List(ctx, primary.Path)
 	if err != nil {
 		return AddResult{}, err
@@ -265,8 +283,11 @@ func Remove(ctx context.Context, opts RemoveOptions) (RemoveResult, error) {
 		}
 	}
 
-	// Unlink .twdll junctions/symlinks before `git worktree remove` touches the filesystem.
+	// Unlink CodeGraph and .twdll junctions/symlinks before `git worktree remove` touches the filesystem.
 	if pathExists {
+		if err := TeardownCodeGraph(ctx, wt.Path, opts.CodeGraphRunner); err != nil {
+			return RemoveResult{}, err
+		}
 		if err := TeardownData(ctx, wt.Path); err != nil {
 			return RemoveResult{}, err
 		}
@@ -389,6 +410,11 @@ func Sync(ctx context.Context, opts SyncOptions) (SyncResult, error) {
 		targets = append(targets, currentWT)
 	}
 
+	cgRunner := opts.CodeGraphRunner
+	if cgRunner == nil {
+		cgRunner = DefaultCodeGraphRunner()
+	}
+
 	res := SyncResult{
 		PrimaryRoot: primary.Path,
 		Synced:      make([]SyncEntry, 0, len(targets)),
@@ -396,6 +422,11 @@ func Sync(ctx context.Context, opts SyncOptions) (SyncResult, error) {
 	for _, wt := range targets {
 		if err := Provision(wt.Path, primaryLayout, opts.Force); err != nil {
 			return res, err
+		}
+		if !opts.NoCodeGraph && (ShouldAutoCodeGraph(primary.Path, cgRunner) || (hasCodeGraphDB(wt.Path) && cgRunner.Available())) {
+			if err := ProvisionCodeGraph(ctx, wt.Path, cgRunner); err != nil {
+				return res, err
+			}
 		}
 		status := Inspect(wt.Path, primaryLayout.Paths.DataDir)
 		res.Synced = append(res.Synced, SyncEntry{

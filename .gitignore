@@ -38,8 +38,8 @@ config.ld.*.generated
 todo.md
 __pycache__/
 *.pyc
-codegraph*
-!codegraph.json
+/codegraph*
+!/codegraph.json
 
 # twdll CLI local state & configuration
 .twdll/

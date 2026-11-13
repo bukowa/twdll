@@ -157,12 +157,14 @@ func renderHumanWTList(r *WTListReport, ui *term.UI) {
 }
 
 type WTAddOptions struct {
-	Name   string
-	Base   string
-	Path   string
-	Detach bool
-	Force  bool
-	JSON   bool
+	Name            string
+	Base            string
+	Path            string
+	Detach          bool
+	Force           bool
+	NoCodeGraph     bool
+	JSON            bool
+	CodeGraphRunner worktree.CodeGraphRunner
 }
 
 type WTAddRequest struct {
@@ -173,12 +175,14 @@ type WTAddRequest struct {
 
 func RunWTAdd(ctx context.Context, req WTAddRequest) (worktree.AddResult, error) {
 	res, err := worktree.Add(ctx, worktree.AddOptions{
-		RepoDir: req.Layout.Paths.Root,
-		Name:    req.Options.Name,
-		Base:    req.Options.Base,
-		Path:    req.Options.Path,
-		Detach:  req.Options.Detach,
-		Force:   req.Options.Force,
+		RepoDir:         req.Layout.Paths.Root,
+		Name:            req.Options.Name,
+		Base:            req.Options.Base,
+		Path:            req.Options.Path,
+		Detach:          req.Options.Detach,
+		Force:           req.Options.Force,
+		NoCodeGraph:     req.Options.NoCodeGraph,
+		CodeGraphRunner: req.Options.CodeGraphRunner,
 	})
 	if err != nil {
 		return worktree.AddResult{}, err
@@ -197,6 +201,9 @@ func RunWTAdd(ctx context.Context, req WTAddRequest) (worktree.AddResult, error)
 			req.UI.WriteData("%s\n", string(data))
 		} else {
 			req.UI.Success("Created linked worktree at %s", cleanPath)
+			if !req.Options.NoCodeGraph && res.Status.HasCodeGraph {
+				req.UI.Info("Initialized CodeGraph index in %s", cleanPath)
+			}
 			req.UI.WriteData("%s\n", cleanPath)
 		}
 	}
@@ -205,12 +212,13 @@ func RunWTAdd(ctx context.Context, req WTAddRequest) (worktree.AddResult, error)
 }
 
 type WTRemoveOptions struct {
-	Target       string
-	Force        bool
-	DeleteBranch bool
-	JSON         bool
-	CWD          string
-	ExePath      string
+	Target          string
+	Force           bool
+	DeleteBranch    bool
+	JSON            bool
+	CWD             string
+	ExePath         string
+	CodeGraphRunner worktree.CodeGraphRunner
 }
 
 type WTRemoveRequest struct {
@@ -221,12 +229,13 @@ type WTRemoveRequest struct {
 
 func RunWTRemove(ctx context.Context, req WTRemoveRequest) (worktree.RemoveResult, error) {
 	res, err := worktree.Remove(ctx, worktree.RemoveOptions{
-		RepoDir:      req.Layout.Paths.Root,
-		Target:       req.Options.Target,
-		CWD:          req.Options.CWD,
-		ExePath:      req.Options.ExePath,
-		Force:        req.Options.Force,
-		DeleteBranch: req.Options.DeleteBranch,
+		RepoDir:         req.Layout.Paths.Root,
+		Target:          req.Options.Target,
+		CWD:             req.Options.CWD,
+		ExePath:         req.Options.ExePath,
+		Force:           req.Options.Force,
+		DeleteBranch:    req.Options.DeleteBranch,
+		CodeGraphRunner: req.Options.CodeGraphRunner,
 	})
 	if err != nil {
 		return res, err
@@ -255,11 +264,13 @@ func RunWTRemove(ctx context.Context, req WTRemoveRequest) (worktree.RemoveResul
 }
 
 type WTSyncOptions struct {
-	Target string
-	All    bool
-	Force  bool
-	JSON   bool
-	CWD    string
+	Target          string
+	All             bool
+	Force           bool
+	NoCodeGraph     bool
+	JSON            bool
+	CWD             string
+	CodeGraphRunner worktree.CodeGraphRunner
 }
 
 type WTSyncRequest struct {
@@ -270,11 +281,13 @@ type WTSyncRequest struct {
 
 func RunWTSync(ctx context.Context, req WTSyncRequest) (worktree.SyncResult, error) {
 	res, err := worktree.Sync(ctx, worktree.SyncOptions{
-		RepoDir: req.Layout.Paths.Root,
-		Target:  req.Options.Target,
-		CWD:     req.Options.CWD,
-		All:     req.Options.All,
-		Force:   req.Options.Force,
+		RepoDir:         req.Layout.Paths.Root,
+		Target:          req.Options.Target,
+		CWD:             req.Options.CWD,
+		All:             req.Options.All,
+		Force:           req.Options.Force,
+		NoCodeGraph:     req.Options.NoCodeGraph,
+		CodeGraphRunner: req.Options.CodeGraphRunner,
 	})
 	if err != nil {
 		return res, err
