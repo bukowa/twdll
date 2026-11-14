@@ -1,7 +1,7 @@
 ---
 description: Deep reasoning architect and planner. Takes a pre-gathered Context Packet and returns an execution blueprint. Has NO tools.
 mode: subagent
-model: google-vertex/gemini-4-carbon
+model: google-vertex/gemini-4-carbon#high
 permissions:
   - action: "*"
     resource: "*"

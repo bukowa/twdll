@@ -1,7 +1,7 @@
 ---
 description: Senior software engineer for implementing code changes and running tests based on Carbon's blueprint.
 mode: subagent
-model: google-vertex/gemini-4-argon
+model: google-vertex/gemini-4-argon#high
 permissions:
   - action: subagent
     resource: "*"
