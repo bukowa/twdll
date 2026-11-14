@@ -37,8 +37,9 @@
     { "action": "edit", "resource": "*/CMakeLists.txt", "effect": "deny" },
     { "action": "edit", "resource": "tests/*", "effect": "deny" },
     { "action": "edit", "resource": "docs/*", "effect": "deny" },
-    // Exception: active Stage 2 spec lives in docs/
+    // Exception: active Stage 2 spec and git-tracked execution plans live in docs/
     { "action": "edit", "resource": "docs/cli_re_pipeline_spec.md", "effect": "allow" },
+    { "action": "edit", "resource": "docs/plans/*", "effect": "allow" },
 
     // --- Workspace & Data Safety (.twdll/ and twdll.toml) ---
     { "action": "edit", "resource": "twdll.toml", "effect": "ask" },
