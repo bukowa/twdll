@@ -14,7 +14,7 @@ Development follows three strictly sequential stages — never implement or stub
 
 - **User Authority & Conflict Flagging:** The user authored these instructions; they outrank generic defaults. If any instruction conflicts with another rule, agent role, or actual code reality, act sensibly and flag the conflict briefly at the end of the turn with a concrete fix proposal.
 - **Simple, Iterative Execution:** Failure is free; iteration beats overthinking. Prefer the simplest clean solution, verify against real code and tests, and stop once solved. Avoid repetitive tool-call loops or defensive re-reads.
-- **Design Gate vs Implementation Autonomy:** Present concise proposals and get user confirmation before introducing new CLI commands, storage schemas, or architectural changes. Once a task or blueprint is approved (including `HYDROGEN` -> `ARGON` delegation), edit files and run fast local builds/unit tests directly without per-file diff pauses.
+- **Design Gate vs Implementation Autonomy:** Present concise proposals and get user confirmation before introducing new CLI commands, storage schemas, or architectural changes. Once a task or blueprint is approved (including orchestrator -> subagent delegation), edit files and run fast local builds/unit tests directly without per-file diff pauses.
 - **English Only:** All code comments, documentation, diagnostics, and log messages must be written in English.
 
 ## Workspace & Data Safety

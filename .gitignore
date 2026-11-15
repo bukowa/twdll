@@ -18,7 +18,7 @@ out
 .vs
 !/.idea/runConfigurations
 !.idea/cmake.xml
-research
+/research
 cmakeenv
 build
 rome2.do.ser
@@ -47,5 +47,10 @@ twdll.toml
 .xwin-cache
 .codegraph
 
-# OpenCode local friction/catch log
-.opencode/friction.md
+# Local agent harness configs & scratchpads (keep .agents/skills/ tracked)
+/.opencode/
+/opencode.jsonc
+/.claude/
+/CLAUDE.local.md
+/.agents/plans/
+/.agents/research/

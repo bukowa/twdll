@@ -8,6 +8,16 @@
 
 Run custom C++ code inside Total War: Attila's Lua engine. (Rome 2 support is frozen.)
 
+## RE Pipeline & Go CLI (`./twdll`)
+
+`twdll` is transitioning to a multi-game (`rome2`, `attila`, `tob`) reverse-engineering and build pipeline driven by a self-contained Go CLI (`./twdll` / `twdll.cmd`):
+
+- **Stage 1 (Complete):** Portable toolchain bootstrap (`init`), workspace status (`status`), tuned headless Ghidra/IDA analysis (`analyze`), cleanup (`clean`), and 3-tier E2E verification.
+- **Stage 2 (Active Design):** Decompiler-agnostic RE extraction and query layer (`.twdll/extracted/`).
+- **Stage 3 (Planned):** Multi-game C++ `src/` rewrite and `build`/`pack`/`install`/`run`/`test` CLI commands.
+
+See [`cli/README.md`](cli/README.md) for CLI usage and testing instructions, [`cli/AGENTS.md`](cli/AGENTS.md) for Go CLI invariants, and [`docs/cli_re_pipeline_spec.md`](docs/cli_re_pipeline_spec.md) for the full architecture specification. (The legacy Attila C++ DLL instructions below remain active until Stage 3.)
+
 ## Installation
 
 1. Download the latest development build: [**`libtwdll-nightly.zip`**](https://github.com/bukowa/twdll/releases/download/nightly/libtwdll-nightly.zip) (or check all releases on the [Dev Build page](https://github.com/bukowa/twdll/releases/tag/nightly))
