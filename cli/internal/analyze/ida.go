@@ -46,15 +46,27 @@ func buildIDABatchScript(stripHeavy bool) string {
 		"}\n"
 }
 
-func buildIDAArgs(scriptPath, stagedDBPath, logPath, binaryPath string) []string {
-	return []string{
+// buildIDAArgs constructs IDA headless batch flags without inner quotes.
+// Note: Do NOT pass -Odwarf:lazy_types=1 (it degrades forward-declared C++ structs
+// to gap0 byte arrays) and do NOT pass -DANALYSIS2=0x0000000C / clear AF2_DOEH
+// (which fragments 168,382 .eh_frame functions into 254,112 pieces).
+func buildIDAArgs(target workspace.TargetID, traits BinaryTraits, fullAnalysis bool, scriptPath, stagedDBPath, logPath, binaryPath string) []string {
+	args := []string{
 		"-c",
 		"-A",
-		"-S" + scriptPath,
-		"-o" + stagedDBPath,
-		"-L" + logPath,
-		binaryPath,
 	}
+	if (!target.Is64Bit() || traits.Format == "pe") && !traits.HasLocalPDB {
+		args = append(args, "-Opdb:off")
+	}
+	if target == workspace.TargetAttila64 && !fullAnalysis {
+		args = append(args, "-Odwarf:import_lnnums=0")
+	}
+	return append(args,
+		"-S"+scriptPath,
+		"-o"+stagedDBPath,
+		"-L"+logPath,
+		binaryPath,
+	)
 }
 
 func runIDATarget(ctx context.Context, spec idaJobSpec) (targetRunResult, error) {
@@ -82,7 +94,7 @@ func runIDATarget(ctx context.Context, spec idaJobSpec) (targetRunResult, error)
 		return targetRunResult{}, err
 	}
 
-	args := buildIDAArgs(scriptPath, stagedDBPath, spec.item.LogPath, spec.item.BinaryPath)
+	args := buildIDAArgs(target, spec.item.Traits, spec.opts.FullAnalysis, scriptPath, stagedDBPath, spec.item.LogPath, spec.item.BinaryPath)
 	cmd := exec.CommandContext(ctx, spec.exePath, args...)
 	cmd.Dir = stageDir
 	cmd.Env = env

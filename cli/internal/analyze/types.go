@@ -21,9 +21,10 @@ type Options struct {
 }
 
 type Request struct {
-	Layout  workspace.Layout
-	Options Options
-	UI      *term.UI
+	Layout      workspace.Layout
+	Options     Options
+	UI          *term.UI
+	ProbeMemory func() SystemMemory
 }
 
 type PlanInput struct {
@@ -37,6 +38,7 @@ type PlanItem struct {
 	BinaryPath   string
 	BinarySHA256 string
 	SourcePath   string
+	Traits       BinaryTraits
 	DatabaseDir  string
 	LogPath      string
 	NeedsRun     bool
@@ -90,6 +92,7 @@ func BuildPlan(in PlanInput) (workspace.DecompilerID, []PlanItem, error) {
 			BinaryPath:   binPath,
 			BinarySHA256: currentSHA,
 			SourcePath:   saved.SourcePath,
+			Traits:       InspectBinary(binPath, saved.SourcePath),
 			DatabaseDir:  paths.DatabaseDir(engine, tid),
 			LogPath:      paths.AnalyzeLogPath(engine, tid),
 			NeedsRun:     !upToDate,
