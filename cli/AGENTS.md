@@ -23,3 +23,4 @@ See `./README.md` for commands, env vars, and test workflows, and `../docs/cli_r
 - **Native APIs Only:** Read DWARF (Go `debug/dwarf` / `debug/elf`), Ghidra, and IDA APIs directly — never write ad-hoc C++ string lexers or regex syntax parsers.
 - **Incremental Vertical Slices:** Build one small extraction/query slice at a time, inspect real extracted records from `.twdll/db/` with the user, then prune or extend.
 - **Zero Speculative Bloat:** Do not add cross-binary fuzzy matching hashes, speculative heuristics, or extra tables/indexes before concrete data proves they are needed.
+- **Bulk State vs Curated RE Docs:** `twdll extract` writes machine-generated artifacts to gitignored `.twdll/extracted/`; agreed schemas/CLI contracts belong in `docs/cli_re_pipeline_spec.md`, and curated Warscape RE findings (when approved for Git) belong in `docs/research/`.
