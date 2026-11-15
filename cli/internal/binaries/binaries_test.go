@@ -153,8 +153,16 @@ func TestVerifyPE32_AcceptsI386AndRejectsAMD64(t *testing.T) {
 	if err64 == nil {
 		t.Fatalf("expected VerifyPE32 to reject amd64 binary")
 	}
-	if !IsKnownOfficialHash(workspace.TargetAttila32, KnownOfficialHashes[workspace.TargetAttila32]) {
-		t.Fatalf("expected KnownOfficialHashes[TargetAttila32] to be recognized")
+	if len(KnownOfficialHashes) != 1 {
+		t.Fatalf("len(KnownOfficialHashes) = %d, want 1", len(KnownOfficialHashes))
+	}
+	if !IsKnownOfficialHash(workspace.TargetAttila64, KnownOfficialHashes[workspace.TargetAttila64]) {
+		t.Fatalf("expected KnownOfficialHashes[TargetAttila64] to be recognized")
+	}
+	for _, tid := range []workspace.TargetID{workspace.TargetAttila32, workspace.TargetRome2_32, workspace.TargetToB32} {
+		if IsKnownOfficialHash(tid, info.SHA256) || IsKnownOfficialHash(tid, KnownOfficialHashes[workspace.TargetAttila64]) {
+			t.Fatalf("expected IsKnownOfficialHash(%s, ...) to be false", tid)
+		}
 	}
 }
 

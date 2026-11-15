@@ -10,6 +10,9 @@ if [ -x "$BIN" ]; then
 fi
 
 PORTABLE_GO="$SCRIPT_DIR/.twdll/tools/go/bin/go"
+if [ -n "${TWDLL_TOOLS_DIR:-}" ] && [ -x "$TWDLL_TOOLS_DIR/go/bin/go" ]; then
+    PORTABLE_GO="$TWDLL_TOOLS_DIR/go/bin/go"
+fi
 if [ ! -x "$PORTABLE_GO" ]; then
     GO_VER="$(awk '$1 == "go" { print $2 }' "$SCRIPT_DIR/cli/go.mod" 2>/dev/null || true)"
     [ -z "$GO_VER" ] && GO_VER="1.27.3"

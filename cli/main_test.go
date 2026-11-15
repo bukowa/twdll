@@ -114,7 +114,7 @@ func TestExecute_HelpAndVersion_ReturnZeroWithoutOsExit(t *testing.T) {
 				t.Fatalf("expected --help output to mention command %q:\n%s", sub, helpText)
 			}
 		}
-		for _, forbidden := range []string{"extract", "search", "show"} {
+		for _, forbidden := range []string{"extract", "search", "show", "wt"} {
 			if strings.Contains(helpText, "\n  "+forbidden) {
 				t.Fatalf("unexpected non-Stage-1 command %q in --help:\n%s", forbidden, helpText)
 			}
@@ -146,6 +146,7 @@ func TestExecute_UnknownCommandAndInvalidFlag_WriteErrorsStrictlyToStderr(t *tes
 		args []string
 	}{
 		{name: "unregistered command extract", args: []string{"extract"}},
+		{name: "unregistered command wt", args: []string{"wt"}},
 		{name: "invalid flag on status", args: []string{"status", "--bogus-flag"}},
 	}
 
@@ -328,6 +329,7 @@ func writeTestELF64DWARF(t *testing.T, path string) {
 	binary.LittleEndian.PutUint64(s1[24:], shstrOff)
 	binary.LittleEndian.PutUint64(s1[32:], uint64(len(shstrtab)))
 
+	// Section 2: .debug_info
 	s2 := buf[int(shOff)+2*shentSize:]
 	binary.LittleEndian.PutUint32(s2[0:], 11)
 	binary.LittleEndian.PutUint32(s2[4:], 1)

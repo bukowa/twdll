@@ -236,6 +236,61 @@ func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
 	}
 }
 
+func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
+	root := t.TempDir()
+	extTools := filepath.Join(t.TempDir(), "shared-tools")
+	t.Setenv("TWDLL_TOOLS_DIR", extTools)
+
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-ext-clear")
+	if !layout.Paths.HasExternalToolsDir() {
+		t.Fatalf("expected HasExternalToolsDir() = true for %q", layout.Paths.ToolsDir)
+	}
+
+	sentinel := filepath.Join(extTools, "ghidra", "sentinel.txt")
+	if err := os.WriteFile(sentinel, []byte("shared-tools-sentinel"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	staleDB := filepath.Join(layout.Paths.DBDir, "ida", "attila_32", "attila_32.i64")
+	if err := os.MkdirAll(filepath.Dir(staleDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(staleDB, []byte("stale-db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	gameDir := filepath.Join(root, "FakeAttila")
+	if err := os.MkdirAll(gameDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeMinimalPE32(t, filepath.Join(gameDir, "empire.retail.dll"))
+
+	elfPath := filepath.Join(root, "Attila64")
+	writeMinimalELF64DWARF(t, elfPath)
+
+	err := RunInit(context.Background(), InitRequest{
+		Layout: layout,
+		Options: InitOptions{
+			Clear:       true,
+			NoInput:     true,
+			AttilaDir:   gameDir,
+			Attila64Src: elfPath,
+		},
+		UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+	})
+	if err != nil {
+		t.Fatalf("RunInit(--clear) with external tools dir failed: %v", err)
+	}
+
+	data, rErr := os.ReadFile(sentinel)
+	if rErr != nil || string(data) != "shared-tools-sentinel" {
+		t.Fatalf("external tools sentinel was modified or deleted: err=%v data=%q", rErr, string(data))
+	}
+	if _, sErr := os.Stat(staleDB); !errors.Is(sErr, os.ErrNotExist) {
+		t.Fatalf("expected stale DB in sandbox DataDir to be removed by init --clear, stat err = %v", sErr)
+	}
+}
+
 func newPreseededToolchainSandbox(t *testing.T, root, dataDir string) workspace.Layout {
 	t.Helper()
 	cfgPath := filepath.Join(root, "twdll.test.toml")

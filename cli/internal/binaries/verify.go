@@ -10,11 +10,11 @@ import (
 	"twdll/cli/internal/workspace"
 )
 
+// KnownOfficialHashes tracks pinned reference binary SHA-256 digests.
+// Only attila_64 is pinned by Steam depot manifest 3804137149572368482; 32-bit
+// empire.retail.dll targets validate via PE32 i386 header and local state.json hashes.
 var KnownOfficialHashes = map[workspace.TargetID]string{
 	workspace.TargetAttila64: "217e14350c26d5edfd4e4205516b3498e45e4b6c675923c0e0b0df7190fd8784",
-	workspace.TargetAttila32: "8a40cbcff108e1cba14cc7eb6c7f4dfb054c7745b236d1bfc0fde5c85e2a353d",
-	workspace.TargetRome2_32: "07cb2215b80591224a5f8889963344d560492f09c4d22696c988b957ca49b2b7",
-	workspace.TargetToB32:    "89b7d958d2f8906d301b4be3cbe7b36fe7a544c90ce5c92c7fbaa319c1427a03",
 }
 
 func IsKnownOfficialHash(target workspace.TargetID, sha256Hex string) bool {

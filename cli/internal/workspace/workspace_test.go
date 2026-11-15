@@ -13,6 +13,7 @@ func TestResolve_UsesCustomConfigAndDataDirPrecedence(t *testing.T) {
 	t.Setenv("TWDLL_WRAPPER_ROOT", "")
 	t.Setenv("TWDLL_CONFIG", "")
 	t.Setenv("TWDLL_DATA_DIR", "")
+	t.Setenv("TWDLL_TOOLS_DIR", "")
 
 	repoRoot := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(repoRoot, "cli"), 0o755); err != nil {
@@ -150,5 +151,96 @@ func TestPaths_HasValidDatabase_AcceptsZeroByteGhidraGPRWithRepAndRequiresNonEmp
 	}
 	if !idaNonEmptyValid {
 		t.Fatalf("expected populated IDA .i64 to be accepted")
+	}
+}
+
+func TestResolve_ToolsDirOverrideAndEnv_PrecedenceAndExternalGuards(t *testing.T) {
+	t.Setenv("TWDLL_ROOT", "")
+	t.Setenv("TWDLL_WRAPPER_ROOT", "")
+	t.Setenv("TWDLL_CONFIG", "")
+	t.Setenv("TWDLL_DATA_DIR", "")
+	t.Setenv("TWDLL_TOOLS_DIR", "")
+
+	repoRoot := t.TempDir()
+	cwd := filepath.Join(repoRoot, "sub", "cwd")
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Default layout has HasExternalToolsDir() == false
+	defLayout, err := Resolve(ResolveSpec{
+		RootOverride: repoRoot,
+		WorkingDir:   cwd,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defLayout.Paths.HasExternalToolsDir() {
+		t.Fatalf("expected default Paths.HasExternalToolsDir() = false, got true (%s)", defLayout.Paths.ToolsDir)
+	}
+
+	// 2. Relative TWDLL_TOOLS_DIR resolves against cwd (not repoRoot)
+	t.Setenv("TWDLL_TOOLS_DIR", "../rel-tools")
+	relLayout, err := Resolve(ResolveSpec{
+		RootOverride: repoRoot,
+		WorkingDir:   cwd,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRel := filepath.Clean(filepath.Join(cwd, "..", "rel-tools"))
+	if relLayout.Paths.ToolsDir != wantRel {
+		t.Fatalf("relative TWDLL_TOOLS_DIR = %q, want %q", relLayout.Paths.ToolsDir, wantRel)
+	}
+	if !relLayout.Paths.HasExternalToolsDir() {
+		t.Fatalf("expected HasExternalToolsDir() = true for relative external tools dir")
+	}
+
+	// 3. Absolute TWDLL_TOOLS_DIR and ToolsDirOverride precedence
+	absEnvTools := filepath.Join(t.TempDir(), "env-tools")
+	overrideTools := filepath.Join(t.TempDir(), "override-tools")
+	if err := os.MkdirAll(overrideTools, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TWDLL_TOOLS_DIR", absEnvTools)
+
+	envLayout, err := Resolve(ResolveSpec{
+		RootOverride: repoRoot,
+		WorkingDir:   cwd,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envLayout.Paths.ToolsDir != filepath.Clean(absEnvTools) {
+		t.Fatalf("abs TWDLL_TOOLS_DIR = %q, want %q", envLayout.Paths.ToolsDir, filepath.Clean(absEnvTools))
+	}
+
+	overrideLayout, err := Resolve(ResolveSpec{
+		RootOverride:     repoRoot,
+		ToolsDirOverride: overrideTools,
+		WorkingDir:       cwd,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overrideLayout.Paths.ToolsDir != filepath.Clean(overrideTools) {
+		t.Fatalf("ToolsDirOverride = %q, want %q", overrideLayout.Paths.ToolsDir, filepath.Clean(overrideTools))
+	}
+	if !overrideLayout.Paths.HasExternalToolsDir() {
+		t.Fatalf("expected HasExternalToolsDir() = true for ToolsDirOverride")
+	}
+
+	// 4. EnsureDirs() succeeds with existing external tools directory and creates sandbox dirs without creating <DataDir>/tools
+	if err := overrideLayout.Paths.EnsureDirs(); err != nil {
+		t.Fatalf("EnsureDirs with existing external tools dir: %v", err)
+	}
+	for _, d := range []string{overrideLayout.Paths.BinsDir, overrideLayout.Paths.DBDir, overrideLayout.Paths.LogsDir} {
+		if info, statErr := os.Stat(d); statErr != nil || !info.IsDir() {
+			t.Fatalf("expected EnsureDirs to create %s, err=%v", d, statErr)
+		}
+	}
+	defaultToolsInSandbox := filepath.Join(overrideLayout.Paths.DataDir, "tools")
+	if _, statErr := os.Stat(defaultToolsInSandbox); !os.IsNotExist(statErr) {
+		t.Fatalf("EnsureDirs must not create %s when external ToolsDir is configured", defaultToolsInSandbox)
 	}
 }

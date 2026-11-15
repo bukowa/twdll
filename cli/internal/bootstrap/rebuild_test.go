@@ -76,7 +76,41 @@ func TestMaybeRebuildAndExec_NoRebuildEnvGuard(t *testing.T) {
 	}
 }
 
+func TestResolveGoToolchain_PrefersToolsDirEnvOverPortableAndSystemPath(t *testing.T) {
+	repoRoot := t.TempDir()
+	portable := portableGoPath(repoRoot)
+	if err := os.MkdirAll(filepath.Dir(portable), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(portable, []byte("stub-portable"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	fakeBin := t.TempDir()
+	sysGo := filepath.Join(fakeBin, goBinName())
+	if err := os.WriteFile(sysGo, []byte("stub-sys"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakeBin)
+
+	extTools := t.TempDir()
+	extGo := filepath.Join(extTools, "go", "bin", goBinName())
+	if err := os.MkdirAll(filepath.Dir(extGo), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(extGo, []byte("stub-ext"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TWDLL_TOOLS_DIR", extTools)
+
+	got := resolveGoToolchain(repoRoot)
+	if got != extGo {
+		t.Fatalf("resolveGoToolchain = %q, want TWDLL_TOOLS_DIR Go %q", got, extGo)
+	}
+}
+
 func TestResolveGoToolchain_PrefersPortableGoOverSystemPath(t *testing.T) {
+	t.Setenv("TWDLL_TOOLS_DIR", "")
 	repoRoot := t.TempDir()
 	portable := portableGoPath(repoRoot)
 	if err := os.MkdirAll(filepath.Dir(portable), 0o755); err != nil {
@@ -93,6 +127,7 @@ func TestResolveGoToolchain_PrefersPortableGoOverSystemPath(t *testing.T) {
 }
 
 func TestResolveGoToolchain_FallsBackToSystemPathWhenPortableMissing(t *testing.T) {
+	t.Setenv("TWDLL_TOOLS_DIR", "")
 	repoRoot := t.TempDir()
 	fakeBin := t.TempDir()
 	sysGo := filepath.Join(fakeBin, filepath.Base(portableGoPath(repoRoot)))

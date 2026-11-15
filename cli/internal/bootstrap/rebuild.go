@@ -128,6 +128,12 @@ func isWatchedSourceFile(name string) bool {
 }
 
 func resolveGoToolchain(repoRoot string) string {
+	if toolsDir := strings.TrimSpace(os.Getenv("TWDLL_TOOLS_DIR")); toolsDir != "" {
+		extGo := filepath.Join(filepath.FromSlash(toolsDir), "go", "bin", goBinName())
+		if info, err := os.Stat(extGo); err == nil && !info.IsDir() {
+			return extGo
+		}
+	}
 	if repoRoot != "" {
 		portable := portableGoPath(repoRoot)
 		if info, err := os.Stat(portable); err == nil && !info.IsDir() {
@@ -141,9 +147,12 @@ func resolveGoToolchain(repoRoot string) string {
 }
 
 func portableGoPath(repoRoot string) string {
-	name := "go"
+	return filepath.Join(repoRoot, ".twdll", "tools", "go", "bin", goBinName())
+}
+
+func goBinName() string {
 	if runtime.GOOS == "windows" {
-		name = "go.exe"
+		return "go.exe"
 	}
-	return filepath.Join(repoRoot, ".twdll", "tools", "go", "bin", name)
+	return "go"
 }

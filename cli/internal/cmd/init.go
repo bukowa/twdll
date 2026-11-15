@@ -148,10 +148,12 @@ func clearWorkspaceData(paths workspace.Paths, ui *term.UI) error {
 	_ = os.Remove(paths.Config)
 	_ = os.Remove(paths.StateFile)
 
-	if entries, err := os.ReadDir(paths.ToolsDir); err == nil {
-		for _, e := range entries {
-			if e.Name() != string(workspace.ToolGo) {
-				_ = os.RemoveAll(filepath.Join(paths.ToolsDir, e.Name()))
+	if !paths.HasExternalToolsDir() {
+		if entries, err := os.ReadDir(paths.ToolsDir); err == nil {
+			for _, e := range entries {
+				if e.Name() != string(workspace.ToolGo) {
+					_ = os.RemoveAll(filepath.Join(paths.ToolsDir, e.Name()))
+				}
 			}
 		}
 	}

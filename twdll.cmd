@@ -10,6 +10,13 @@ if exist "%BIN%" (
     exit /b !errorlevel!
 )
 
+if defined TWDLL_TOOLS_DIR (
+    if exist "%TWDLL_TOOLS_DIR%\go\bin\go.exe" (
+        set "PORTABLE_GO=%TWDLL_TOOLS_DIR%\go\bin\go.exe"
+        goto :build
+    )
+)
+
 set "PORTABLE_GO=%ROOT%.twdll\tools\go\bin\go.exe"
 if exist "%PORTABLE_GO%" goto :build
 

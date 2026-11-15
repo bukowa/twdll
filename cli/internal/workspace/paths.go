@@ -8,11 +8,12 @@ import (
 )
 
 type ResolveSpec struct {
-	RootOverride    string
-	ConfigOverride  string
-	DataDirOverride string
-	WorkingDir      string
-	ExecutablePath  string
+	RootOverride     string
+	ConfigOverride   string
+	DataDirOverride  string
+	ToolsDirOverride string
+	WorkingDir       string
+	ExecutablePath   string
 }
 
 type Layout struct {
@@ -68,8 +69,21 @@ func Resolve(spec ResolveSpec) (Layout, error) {
 		dataDir = filepath.Clean(filepath.Join(root, filepath.FromSlash(rawDataDir)))
 	}
 
+	paths := NewPaths(root, cfgPath, dataDir)
+	if rawToolsDir := firstNonEmpty(spec.ToolsDirOverride, os.Getenv("TWDLL_TOOLS_DIR")); rawToolsDir != "" {
+		toolsDir := filepath.FromSlash(strings.TrimSpace(rawToolsDir))
+		if !filepath.IsAbs(toolsDir) && cwd != "" {
+			toolsDir = filepath.Join(cwd, toolsDir)
+		}
+		if abs, err := filepath.Abs(toolsDir); err == nil {
+			paths.ToolsDir = filepath.Clean(abs)
+		} else {
+			paths.ToolsDir = filepath.Clean(toolsDir)
+		}
+	}
+
 	return Layout{
-		Paths:        NewPaths(root, cfgPath, dataDir),
+		Paths:        paths,
 		Config:       cfg,
 		ConfigExists: exists,
 	}, nil
@@ -142,8 +156,31 @@ func NewPaths(repoRoot, configPath, dataDir string) Paths {
 	}
 }
 
+func (p Paths) HasExternalToolsDir() bool {
+	if strings.TrimSpace(p.ToolsDir) == "" {
+		return false
+	}
+	norm := func(v string) string {
+		if abs, err := filepath.Abs(v); err == nil {
+			return filepath.Clean(abs)
+		}
+		return filepath.Clean(v)
+	}
+	actual := norm(p.ToolsDir)
+	defaultTools := norm(filepath.Join(p.DataDir, "tools"))
+	if runtime.GOOS == "windows" {
+		return !strings.EqualFold(actual, defaultTools)
+	}
+	return actual != defaultTools
+}
+
 func (p Paths) EnsureDirs() error {
 	for _, dir := range []string{p.ToolsDir, p.BinsDir, p.DBDir, p.LogsDir} {
+		if dir == p.ToolsDir && p.HasExternalToolsDir() {
+			if info, err := os.Stat(p.ToolsDir); err == nil && info.IsDir() {
+				continue
+			}
+		}
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
