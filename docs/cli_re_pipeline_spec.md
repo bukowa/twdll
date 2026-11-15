@@ -1,6 +1,6 @@
 # twdll CLI & Reverse-Engineering Pipeline — Architecture & Scope Specification
 
-**Status:** Stage 1 Complete — Entering Stage 2 Design (RE Extraction & Search)  
+**Status:** Stage 1 Complete (Analyze Tuning & 2-Tier E2E Hardening Complete) — Entering Stage 2 Design (RE Extraction & Search)  
 **Target Games:** Total War: Rome II (`rome2`), Total War: Attila (`attila`), Total War: Thrones of Britannia (`tob`)  
 **Reference Binary:** Total War: Attila 64-bit Linux ELF with DWARF debug symbols (`attila_64`)
 
@@ -22,10 +22,12 @@ Create a **single, deterministic, self-contained workflow** driven by a clean **
 To prevent agents from implementing everything at once or making premature assumptions, development is gated into **three strictly sequential stages**:
 
 - **Stage 1 — Toolchain Bootstrap, `status`, `init`, `analyze` & `clean` (COMPLETE):**
-  Four CLI commands (`twdll status`, `twdll init`, `twdll analyze`, and `twdll clean`, plus global `--config`, `--data-dir`, `--root`, and `--color` flags) are implemented and verified.
-  Stage 1 downloads all pinned portable tools, stages and verifies all binaries, and builds clean IDA/Ghidra databases in `.twdll/db/`.
+  Stage 1 commands (`twdll status`, `twdll init`, `twdll analyze`, and `twdll clean`, plus global `--config`, `--data-dir`, `--root`, `--color`, and `--version` flags) are implemented and verified.
+  Stage 1 downloads all pinned portable tools, stages and verifies all binaries, and builds tuned IDA/Ghidra databases in `.twdll/db/`.
+- **Stage 1.5 — Pre-Testing Hardening & 2-Tier E2E (COMPLETE):**
+  Restricted `KnownOfficialHashes` to pinned `attila_64`, added `TWDLL_TOOLS_DIR` for zero-junction isolation (with `init --clear` guard), and implemented Tier 1 (`go test -tags=e2e`) + Tier 2 (`cli/scripts/run-e2e-bg.ps1`) real-decompiler E2E tests before starting Stage 2 extraction.
 - **Stage 2 — RE Extraction & Search (`extract`, `search`, `show`) (ACTIVE DESIGN SCOPE):**
-  Stage 1 databases are ready in `.twdll/db/`. Now designing and agreeing on extraction format, `.twdll/extracted/` storage schema, and `extract` / `search` / `show` commands before implementation.
+  Stage 1 databases are ready in `.twdll/db/` and DWARF feasibility analysis is complete. Designing and agreeing on extraction format, `.twdll/extracted/` storage schema, and `extract` / `search` / `show` commands before implementation.
 - **Stage 3 — Multi-Game C++ Rewrite & Build/Test Commands (FUTURE SCOPE — DO NOT IMPLEMENT YET):**
   Rewriting `src/` for 3-game (`rome2`, `attila`, `tob`) interoperability and implementing `build`, `pack`, `install`, `run`, `test`, and `docs` commands happen **only after** Stages 1 and 2 are complete.
 
@@ -35,7 +37,7 @@ To prevent agents from implementing everything at once or making premature assum
 
 Previous prototype branches failed because agents invented unrequested subsystems, stubbed future commands prematurely, or wrote parallel codepaths. The following rules are **mandatory**:
 
-1. **ONLY implement `status`, `init`, `analyze`, and `clean` in Stage 1:** Do NOT implement, wire flags for, or stub `extract`, `search`, `show`, `build`, `pack`, `install`, `run`, `test`, or `docs`.
+1. **ONLY implement `status`, `init`, `analyze`, and `clean` before Stage 2:** Do NOT implement, wire flags for, or stub `extract`, `search`, `show`, `build`, `pack`, `install`, `run`, `test`, or `docs`.
 2. **Do NOT touch `src/` or `CMakeLists.txt` in Stage 1:** C++ source changes and build/test wiring belong to Stage 3.
 3. **No Python / `uv` CLI runtime:** The CLI is written in **Go**, compiled to a single native binary with minimal dependencies.
 4. **No dual interactive-TUI vs headless-heuristic codepaths:** Never implement two separate onboarding flows (`if isatty` TUI wizard vs `--yes` silent path-guessing). Every command follows one unified `Options` -> optional TTY `Prompter` -> pure `Run(ctx, opts)` pipeline.
@@ -56,7 +58,7 @@ To run on clean machines without Go pre-installed:
   2. Otherwise, ensure portable Go exists in `.twdll/tools/go/` (downloading the pinned official Go archive if needed without admin privileges), compile `./cli` into `.twdll/bin/twdll(.exe)`, and execute it.
 
 ### 3.2 User Configuration (`twdll.toml`)
-Located at repository root (gitignored). Stores **only explicit user choices and external machine paths** — zero internal `.twdll/` paths:
+Located at repository root (gitignored). Default `twdll.toml` stores **only explicit user choices and external machine paths** — zero internal `.twdll/` paths (`data_dir` is `omitempty` and only used for custom isolated `--config` files):
 
 ```toml
 default_game = "attila" # "attila" | "rome2" | "tob"
@@ -70,7 +72,7 @@ tob    = ""
 ```
 
 ### 3.3 Self-Contained Local Directory (`.twdll/`)
-All downloaded tools, copied binaries, decompiler databases, logs, and machine state live under **one single gitignored directory** at `.twdll/` using fixed convention-over-configuration paths:
+All downloaded tools, copied binaries, decompiler databases, extracted RE artifacts, logs, and machine state live under **one single gitignored directory** at `.twdll/` using fixed convention-over-configuration paths:
 
 ```text
 .twdll/
@@ -92,7 +94,8 @@ All downloaded tools, copied binaries, decompiler databases, logs, and machine s
 ├── db/                         # Clean databases built from scratch by `twdll analyze`:
 │   ├── ghidra/                 # Headless Ghidra projects
 │   └── ida/                    # Headless IDA .i64 / .idb databases
-├── logs/                       # Raw headless decompiler logs
+├── extracted/                  # Stage 2 decompiler-agnostic RE index & cache
+├── logs/                       # Raw headless decompiler logs & analyze_resources.jsonl
 └── state.json                  # Machine-managed SHA-256 & completion manifest
 ```
 
@@ -102,8 +105,8 @@ SHA-256 hashes serve two roles:
    - `source_path`: original game/depot path,
    - `binary_sha256`: hash of the isolated copy inside `.twdll/binaries/`,
    - `analyzed_sha256`: per-decompiler hash of the binary from which the completed database in `.twdll/db/<decompiler>/` was built.
-   This detects game updates in Steam folders, interrupted analyses, or decompiler switches automatically.
-2. **Known Official Hashes (versioned in `cli/`):** A table of known official Steam SHA-256 digests warns the user during `init` / `status` if a game binary is modified, outdated, or updated by a new patch.
+   This detects local binary changes, interrupted analyses, or decompiler switches automatically.
+2. **Known Reference Digest (`cli/internal/binaries/verify.go`):** Keeps `KnownOfficialHashes` only for the pinned `attila_64` depot binary (`3804137149572368482`) for the informational `[official]` badge in `twdll status`. 32-bit `empire.retail.dll` binaries update via Steam at any time and are validated by PE32 x86 header (`IMAGE_FILE_MACHINE_I386`) + local `state.json` hashes only.
 
 ---
 
@@ -130,37 +133,37 @@ SHA-256 hashes serve two roles:
 Reports complete workspace readiness:
 - Installed portable tools in `.twdll/tools/` (`cmake`, `ninja`, `llvm`, `xwin`, `rpfm_cli`, `ghidra`/`jdk` or `ida`).
 - Configured games from `twdll.toml`.
-- Binary presence and SHA-256 status in `.twdll/binaries/` (including Steam folder drift and known-hash match).
+- Binary presence and SHA-256 status in `.twdll/binaries/` (plus `[official]` match for pinned `attila_64`).
 - Per-binary decompiler database status in `.twdll/db/<decompiler>/` (`ANALYZED` vs `NEEDS_ANALYSIS`).
 
 #### 2. `twdll init [flags]`
-Idempotent 5-step linear setup process (loads existing `twdll.toml` as defaults on re-runs):
-- **Step 1 — Portable Build & Pack Toolchain:** Download and verify pinned portable `cmake`, `ninja`, `llvm` (`clang-cl`, `lld-link`, `llvm-rc`), `xwin` (32-bit `x86` MSVC CRT + Windows SDK), and `rpfm_cli` inside `.twdll/tools/`.
-- **Step 2 — 32-bit Target Games (`attila`, `rome2`, `tob`):** Confirm/accept paths for owned games (minimum 1 required). Verify `<game>.exe` and `empire.retail.dll`, compute SHA-256, and copy `empire.retail.dll` into `.twdll/binaries/<game>_32/`.
-- **Step 3 — Mandatory Reference Binary (`attila_64`):** Check `.twdll/binaries/attila_64/Attila` for valid 64-bit ELF header + `.debug_info` DWARF section. If missing, check default Steam depot path (`steamapps/content/app_325610/depot_325624/Attila`). If absent, copy `download_depot 325610 325624 <manifest>` to clipboard, open `steam://nav/console`, and either wait for user confirmation/custom path (interactive TTY) or exit cleanly with actionable instructions (`!TTY`). Copy verified ELF into `.twdll/binaries/attila_64/Attila`.
-- **Step 4 — Decompiler Toolchain (`ghidra` | `ida`):**
+Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults on re-runs; `--clear` resets local workspace data):
+- **Step 1/4 — Portable Build & Pack Toolchain:** Download and verify pinned portable `cmake`, `ninja`, `llvm` (`clang-cl`, `lld-link`, `llvm-rc`), `xwin` (32-bit `x86` MSVC CRT + Windows SDK), and `rpfm_cli` inside `.twdll/tools/`.
+- **Step 2/4 — 32-bit Target Games (`attila`, `rome2`, `tob`):** Confirm/accept paths for owned games (minimum 1 required). Verify 32-bit x86 PE `empire.retail.dll`, compute SHA-256, and copy `empire.retail.dll` into `.twdll/binaries/<game>_32/`.
+- **Step 3/4 — Mandatory Reference Binary (`attila_64`):** Check `.twdll/binaries/attila_64/Attila` for valid 64-bit ELF header + `.debug_info` DWARF section. If missing, check default Steam depot path (`steamapps/content/app_325610/depot_325624/Attila`). If absent, copy `download_depot 325610 325624 <manifest>` to clipboard, open `steam://nav/console`, and either wait for user confirmation/custom path (interactive TTY) or exit cleanly with actionable instructions (`!TTY`). Copy verified ELF into `.twdll/binaries/attila_64/Attila`.
+- **Step 4/4 — Decompiler Toolchain (`ghidra` | `ida`):**
   - `ghidra`: Download and verify pinned portable Ghidra + matching Adoptium OpenJDK into `.twdll/tools/` and verify `analyzeHeadless`.
   - `ida`: Validate `ida_dir` contains headless `idat` / `idat64`.
-- **Step 5 — Save & Report:** Write `twdll.toml` and `.twdll/state.json`, then display per-binary database status (`ANALYZED` vs `NEEDS_ANALYSIS -> run twdll analyze`).
+- **Save & Report:** Write `twdll.toml` and `.twdll/state.json`, then display readiness summary (`next: run twdll analyze`).
 
-#### 3. `twdll analyze [--force] [--jobs N]`
-- Inspects `.twdll/state.json` and skips binaries whose `.twdll/db/<decompiler>/` database already matches `binary_sha256` (unless `--force`).
-- Runs headless IDA (`idat`) or Ghidra (`analyzeHeadless`) from scratch in parallel, governed by available system RAM and CPU cores (e.g., up to 4 concurrent processes for lightweight IDA; RAM-budgeted concurrency for JVM-heavy Ghidra).
-- Writes verbose decompiler output to `.twdll/logs/analyze_<target>.log`, emits sparse progress updates, and records `analyzed_sha256` atomically **only** on clean exit code `0` (interrupted runs are wiped and restarted cleanly on next run).
+#### 3. `twdll analyze [-d ghidra|ida] [--clean] [--force] [-j N] [-m SIZE] [--full-analysis] [targets...]`
+- Inspects `.twdll/state.json` + binary traits (`InspectBinary` ELF DWARF / PE PDB inspection) and skips targets whose `.twdll/db/<decompiler>/` database already matches `binary_sha256` (unless `--force` or `--clean`).
+- Schedules 32-bit targets in parallel before running `attila_64` solo, prevents OS sleep during batch runs, and writes raw decompiler logs to `.twdll/logs/analyze_<engine>_<target>.log` plus resource telemetry to `.twdll/logs/analyze_resources.jsonl`.
+- **Ghidra tuning (`!FullAnalysis`):** Keeps `"DWARF.Import Data Types"`, `"DWARF.Import Functions"`, and `"DWARF.Create Function Signatures"` enabled while disabling 19 cascade/bloat analyzers (including `"Create Address Tables"` / `"Create Address Tables - One Time"`), configures `G1GC + UseStringDeduplication`, sizes heap (`8G–16G` for `attila_64`, `5G–6G` for 32-bit), and uses non-blocking swap/pagefile warnings on 8–12 GB hosts (`--full-analysis` restores heavy passes at `22G–36G`).
+- **IDA tuning (`!FullAnalysis`):** Suppresses futile PDB HTTP lookups via `-Opdb:off` when no local `.pdb` exists and passes `-Odwarf:import_lnnums=0` on `attila_64`, while preserving `AF2_DOEH` and eager DWARF types (`0` struct/pseudocode degradation).
+- Records `analyzed_sha256` atomically **only** on clean exit code `0`.
 
 #### 4. `twdll clean [-d ghidra|ida|all] [--all] [targets...]`
-- Removes generated decompiler databases under `.twdll/db/<decompiler>/<target>` and matching `.twdll/logs/analyze_<target>.log` files, and clears `analyzed_sha256` in `.twdll/state.json` without deleting `.twdll/tools/` or `.twdll/binaries/`.
+- Removes generated decompiler databases under `.twdll/db/<decompiler>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files, and clears `analyzed_sha256` in `.twdll/state.json` without deleting `.twdll/tools/` or `.twdll/binaries/`.
 
 ---
 
-## 5. Stage 1 Implementation Plan (Two Focused Milestones)
-
-Execute Stage 1 in two separate, verified milestones before stopping for the Stage 2 design discussion:
+## 5. Stage 1 & Pre-Stage-2 Implementation Tracker
 
 - [x] **Milestone 1.1 — Bootstrap, Core Config, `status` & `init`:**
   - Create `twdll.cmd` + `./twdll` wrappers and Go module under `cli/`.
   - Implement `twdll.toml` + `.twdll/state.json` + SHA-256 verification + `gh`-style `Options`/`Prompter`/TTY output layer.
-  - Implement `twdll status [--json]` and all 5 steps of `twdll init` (portable `cmake`, `ninja`, `llvm`, `xwin`, `rpfm_cli`, `ghidra`/`jdk` downloads, 32-bit game binary copy, Steam Console `attila_64` ELF+DWARF acquisition).
+  - Implement `twdll status [--json]` and all 4 setup steps of `twdll init` (portable `cmake`, `ninja`, `llvm`, `xwin`, `rpfm_cli`, `ghidra`/`jdk` downloads, 32-bit game binary copy, Steam Console `attila_64` ELF+DWARF acquisition).
   - *Exit Gate:* `.\twdll init` populates `.twdll/tools/` and `.twdll/binaries/` cleanly and `.\twdll status --json` reports all tools and binaries ready.
 
 - [x] **Milestone 1.2 — Headless Decompiler Database Builder (`twdll analyze`):**
@@ -168,18 +171,31 @@ Execute Stage 1 in two separate, verified milestones before stopping for the Sta
   - Implement RAM/CPU-aware parallel runner, `.twdll/logs/` routing, clean progress reporting, and atomic `analyzed_sha256` checkpointing in `.twdll/state.json`.
   - *Exit Gate:* `.\twdll analyze` builds verified databases in `.twdll/db/` from scratch and skips up-to-date targets on re-run.
 
-> **STAGE 1 COMPLETE:** `twdll init` and `twdll analyze` are verified across all targets (`attila_64`, `attila_32`, `rome2_32`, `tob_32`). Stage 2 extraction design is now open.
+- [x] **Milestone 1.3 — `twdll analyze` Memory, DWARF & IDA Tuning:**
+  - Verified single-pass `attila_64` Ghidra at `-Xmx10G` (`10.64 GiB` peak, 0 pseudocode diff), `attila_32` at `-Xmx5G` (`5.57 GiB`), warn-only 8–12+ GB RAM policy, ELF/PE inspection (`inspect.go`), and IDA `-Opdb:off` / `-Odwarf:import_lnnums=0`.
+
+- [x] **Milestone 1.4 — Pre-Testing CLI Simplification & 2-Tier Real-Decompiler E2E Suite:**
+  - Restricted `KnownOfficialHashes` to pinned `attila_64`, and added `TWDLL_TOOLS_DIR` override with `init --clear` guard.
+  - Implemented Tier 1 quick real-decompiler E2E (`go test -tags=e2e ./internal/e2e` with LLVM-compiled `mini_warscape` PE32/ELF64 fixtures) and Tier 2 background soak runner (`cli/scripts/run-e2e-bg.ps1`, defaulting to `attila_32` with `-Full` for `+ attila_64`).
+
+> **STAGE 1 COMPLETE:** `twdll init`, `twdll analyze`, `twdll clean`, and the 2-tier E2E suite are verified (`attila_64`, `attila_32`, `rome2_32`, `tob_32`). Stage 2 extraction design is now open.
 
 ---
 
 ## 6. Preserved Design Context for Future Stages (Reference Only — Do Not Implement Now)
 
-The notes below preserve agreed decisions from initial architecture discussions so context is not lost in future conversations:
+The notes below preserve agreed decisions from architecture & research discussions so context is not lost in future conversations:
 
 ### Stage 2 Context (RE Extraction, Search & LLM Agent Skills)
 - `.twdll/extracted/` will act as a decompiler-agnostic barrier above `.twdll/db/(ghidra|ida)`.
 - Downstream commands (`extract`, `search`, `show`) and LLM agent skills will operate exclusively on `.twdll/extracted/` without requiring live IDA/Ghidra MCP servers.
-- Exact storage format (files vs SQLite/index) and extraction scripts will be designed interactively with the user at the start of Stage 2.
+- **DWARF + Decompiler Strategy:**
+  - Keep DWARF types/signatures enabled during decompilation (never strip pre-analysis).
+  - Build a fast streaming Go `debug/elf` + `debug/dwarf` extractor for `attila_64` (exact C++ class layouts, EBO offsets, `vtable` slots, enums, signatures) alongside lightweight symbol/string/XREF tables exported from `.twdll/db/`.
+  - Avoid pre-decompiling all ~168k `attila_64` functions upfront; decompile selectively / on-demand with persistent `.twdll/extracted/` caching and optional lightweight EA-based annotation (`DW_TAG_inlined_subroutine`, `.debug_line`, `DW_AT_const_value`).
+- **Stage 2 RE Targets for Stage 3 Zero-Pack-Edit Loader:**
+  - Audit `LoadLibrary*` xrefs across `rome2_32`, `attila_32`, `tob_32` for phantom side-load candidates, inspect `AUTORUN_SCRIPTING_ENV` / `VFS_IMPL::disk_files()`, and extract 32-bit signatures for `UTILITYDLL::LUA::ScriptManager::{CreateParentState,CreateThread,ReleaseThread}` and `EPISODIC_SCRIPTING_ENV::CreateAdditionalEnvironment`.
+- Exact `.twdll/extracted/` storage format and `extract` / `search` / `show` command contracts will be agreed interactively with the user before implementation.
 
 ### Stage 3 Context (Multi-Game C++ Rewrite & Build/Test CLI Commands)
 - **C++ Multi-Game Architecture (`rome2`, `attila`, `tob`):**
