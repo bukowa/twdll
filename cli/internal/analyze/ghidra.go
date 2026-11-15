@@ -33,6 +33,12 @@ const tuneReferenceAnalysisJava = `import ghidra.app.script.GhidraScript;
 import java.util.Map;
 
 public class TuneReferenceAnalysis extends GhidraScript {
+    private static final String[] REQUIRED_ANALYZERS = new String[] {
+        "DWARF.Import Data Types",
+        "DWARF.Import Functions",
+        "DWARF.Create Function Signatures"
+    };
+
     private static final String[] HEAVY_ANALYZERS = new String[] {
         "Decompiler Switch Analysis",
         "Decompiler Parameter ID",
@@ -40,7 +46,19 @@ public class TuneReferenceAnalysis extends GhidraScript {
         "Non-Returning Functions - Discovered",
         "Stack",
         "Shared Return Calls",
-        "Aggressive Instruction Finder"
+        "Aggressive Instruction Finder",
+        "Create Address Tables",
+        "Create Address Tables - One Time",
+        "GCC Exception Handlers",
+        "Variadic Function Signature Override",
+        "x86 Constant Reference Analyzer",
+        "DWARF.Import Local Variable Info",
+        "DWARF.Import Source Line Info",
+        "DWARF.Output Source Info",
+        "DWARF.Output DWARF DIE Info",
+        "DWARF.Output Storage Info",
+        "DWARF.Add Inlined Functions Comments",
+        "DWARF.Add Lexical Block Comments"
     };
 
     @Override
@@ -49,6 +67,11 @@ public class TuneReferenceAnalysis extends GhidraScript {
             return;
         }
         Map<String, String> options = getCurrentAnalysisOptionsAndValues(currentProgram);
+        for (String name : REQUIRED_ANALYZERS) {
+            if (options.containsKey(name)) {
+                setAnalysisOption(currentProgram, name, "true");
+            }
+        }
         for (String name : HEAVY_ANALYZERS) {
             if (options.containsKey(name)) {
                 setAnalysisOption(currentProgram, name, "false");
@@ -96,6 +119,17 @@ func buildGhidraArgs(stageDir string, target workspace.TargetID, binaryPath, scr
 	return append(args, "-overwrite")
 }
 
+func buildGhidraJavaOptions(stageDir string, numCPU int) string {
+	gcThreads := clampInt(numCPU/2, 2, 4)
+	opts := fmt.Sprintf("-XX:+UseG1GC -XX:+UseStringDeduplication -XX:ParallelGCThreads=%d", gcThreads)
+	if !strings.ContainsAny(stageDir, " \t\"") {
+		tmpDir := filepath.Join(stageDir, "env", "tmp")
+		homeDir := filepath.Join(stageDir, "env", "home")
+		opts += fmt.Sprintf(" -Djava.io.tmpdir=%s -Duser.home=%s", tmpDir, homeDir)
+	}
+	return opts
+}
+
 func runGhidraTarget(ctx context.Context, spec ghidraJobSpec) (targetRunResult, error) {
 	target := spec.item.Target
 	stageDir, err := os.MkdirTemp("", "twdll_ghidra_"+string(target)+"_*")
@@ -103,6 +137,10 @@ func runGhidraTarget(ctx context.Context, spec ghidraJobSpec) (targetRunResult, 
 		return targetRunResult{}, fmt.Errorf("create Ghidra staging dir for %s: %w", target, err)
 	}
 	defer func() { _ = os.RemoveAll(stageDir) }()
+
+	if err := os.MkdirAll(filepath.Join(stageDir, "env", "home"), 0o755); err != nil {
+		return targetRunResult{}, fmt.Errorf("create Ghidra home dir for %s: %w", target, err)
+	}
 
 	stripHeavy := target == workspace.TargetAttila64 && !spec.opts.FullAnalysis
 	scriptDir := ""
@@ -119,7 +157,7 @@ func runGhidraTarget(ctx context.Context, spec ghidraJobSpec) (targetRunResult, 
 
 	maxMem := strings.TrimSpace(spec.opts.MaxMem)
 	if maxMem == "" {
-		maxMem = ComputeGhidraMaxMem(spec.mem, target, spec.concurrentJobs)
+		maxMem = ComputeGhidraMaxMem(spec.mem, target, spec.opts.FullAnalysis, spec.concurrentJobs)
 	}
 
 	jdkBin := filepath.Join(spec.toolchain.jdkDir, "bin")
@@ -129,9 +167,10 @@ func runGhidraTarget(ctx context.Context, spec ghidraJobSpec) (targetRunResult, 
 	}
 
 	env, err := prepareStageEnv(stageDir, true, map[string]string{
-		"JAVA_HOME":              spec.toolchain.jdkDir,
-		"GHIDRA_HEADLESS_MAXMEM": maxMem,
-		"PATH":                   pathVal,
+		"JAVA_HOME":                    spec.toolchain.jdkDir,
+		"GHIDRA_HEADLESS_MAXMEM":       maxMem,
+		"GHIDRA_HEADLESS_JAVA_OPTIONS": buildGhidraJavaOptions(stageDir, runtime.NumCPU()),
+		"PATH":                         pathVal,
 	})
 	if err != nil {
 		return targetRunResult{}, err

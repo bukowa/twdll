@@ -187,3 +187,54 @@ func TestRun_Executes32BitBefore64BitSolo_ForGhidraAndIDA(t *testing.T) {
 		})
 	}
 }
+
+func TestRun_GhidraLowRAMHostProceedsWithWarningAndCompletes(t *testing.T) {
+	// Given an initialized workspace with a heavy-DWARF ELF64 attila_64 binary on an 8 GiB RAM host
+	root := t.TempDir()
+	layout := newTestLayout(t, root, workspace.DecompilerGhidra)
+	installFakeGhidraAndJDK(t, layout.Paths)
+
+	heavyELF := buildSyntheticELF64(26*1024*1024, 220*1024*1024)
+	sha64 := stageFakeBinary(t, layout.Paths, workspace.TargetAttila64, heavyELF)
+
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{Out: &stdout, Err: &stderr, ColorMode: term.ColorNever})
+
+	// When Run executes on an 8 GiB host (5 GiB available)
+	err := Run(context.Background(), Request{
+		Layout:  layout,
+		Options: Options{Targets: []string{"attila_64"}},
+		UI:      ui,
+		ProbeMemory: func() SystemMemory {
+			return SystemMemory{
+				TotalPhysBytes: 8 * giB,
+				AvailPhysBytes: 5 * giB,
+			}
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected low-RAM Ghidra Run to proceed and succeed, got: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	// Then stdout stays empty, stderr contains the warn-only swap advisory, -Xmx8G was passed, and DB + state are saved
+	if stdout.Len() != 0 {
+		t.Fatalf("expected 0 bytes on stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "8.0 GiB") || !strings.Contains(stderr.String(), "-Xmx8G") || !strings.Contains(stderr.String(), "swap/pagefile") {
+		t.Fatalf("expected low-RAM swap warning on stderr, got:\n%s", stderr.String())
+	}
+	if !layout.Paths.HasValidDatabase(workspace.DecompilerGhidra, workspace.TargetAttila64) {
+		t.Fatalf("expected valid Ghidra database for attila_64")
+	}
+	logBytes, err := os.ReadFile(layout.Paths.AnalyzeLogPath(workspace.DecompilerGhidra, workspace.TargetAttila64))
+	if err != nil || !strings.Contains(string(logBytes), "maxmem=8G") {
+		t.Fatalf("expected Ghidra log to record maxmem=8G, got %q (err=%v)", string(logBytes), err)
+	}
+	after, _, err := workspace.LoadState(layout.Paths.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Binaries[workspace.TargetAttila64].Analyzed.Ghidra != sha64 {
+		t.Fatalf("expected attila_64 state checkpointed with %s, got %+v", sha64, after.Binaries[workspace.TargetAttila64])
+	}
+}

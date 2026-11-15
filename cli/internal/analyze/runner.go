@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,7 +67,16 @@ func Run(ctx context.Context, req Request) error {
 	releasePower := acquirePowerAssertion()
 	defer releasePower()
 
-	mem := ProbeSystemMemory()
+	probe := req.ProbeMemory
+	if probe == nil {
+		probe = ProbeSystemMemory
+	}
+	mem := probe()
+	if engine == workspace.DecompilerGhidra && req.UI != nil {
+		for _, msg := range CollectGhidraMemoryWarnings(mem, toRun, req.Options) {
+			req.UI.Warn("%s", msg)
+		}
+	}
 	runner := &batchRunner{req: req, engine: engine, state: state, mem: mem, ghTools: ghTools, idaExes: idaExes}
 
 	var batch32, batch64 []PlanItem
@@ -102,7 +112,12 @@ func Run(ctx context.Context, req Request) error {
 	}
 	if len(batch64) > 0 {
 		batchIdx++
-		runner.mem = ProbeSystemMemory()
+		runner.mem = probe()
+		if engine == workspace.DecompilerGhidra && req.UI != nil && strings.TrimSpace(req.Options.MaxMem) == "" && batch64[0].Traits.IsHeavyDWARF {
+			if runner.mem.TotalPhysBytes >= warnGhidraAttila64PhysGiB*giB && runner.mem.AvailPhysBytes > 0 && runner.mem.AvailPhysBytes < 10*giB {
+				req.UI.Warn("Available physical RAM is %.1f GiB (< 10 GiB free recommended for attila_64 Ghidra analysis); close memory-heavy apps to reduce OS pagefile slowdown.", float64(runner.mem.AvailPhysBytes)/float64(giB))
+			}
+		}
 		header := fmt.Sprintf("[%d/%d] %s 64-bit (solo)", batchIdx, totalBatches, engine)
 		if err := runner.runBatch(ctx, header, batch64, 1); err != nil {
 			return err
