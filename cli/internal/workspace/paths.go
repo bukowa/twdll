@@ -174,18 +174,29 @@ func (p Paths) HasExternalToolsDir() bool {
 	return actual != defaultTools
 }
 
-func (p Paths) EnsureDirs() error {
-	for _, dir := range []string{p.ToolsDir, p.BinsDir, p.DBDir, p.LogsDir} {
-		if dir == p.ToolsDir && p.HasExternalToolsDir() {
-			if info, err := os.Stat(p.ToolsDir); err == nil && info.IsDir() {
-				continue
-			}
+func (p Paths) EnsureInitDirs() error {
+	if !p.HasExternalToolsDir() {
+		if err := os.MkdirAll(p.ToolsDir, 0o755); err != nil {
+			return err
 		}
+	}
+	return os.MkdirAll(p.BinsDir, 0o755)
+}
+
+func (p Paths) EnsureAnalyzeDirs() error {
+	for _, dir := range []string{p.DBDir, p.LogsDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (p Paths) EnsureDirs() error {
+	if err := p.EnsureInitDirs(); err != nil {
+		return err
+	}
+	return p.EnsureAnalyzeDirs()
 }
 
 func (p Paths) ToolDir(id ToolID) string    { return filepath.Join(p.ToolsDir, string(id)) }

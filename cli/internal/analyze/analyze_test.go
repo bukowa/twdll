@@ -57,8 +57,8 @@ func TestBuildPlan_SkipsUpToDateAndDetectsDriftFlagsAndMissingInputs(t *testing.
 		}
 	}
 
-	// When --force or --clean is passed, Then NeedsRun becomes true
-	for _, opts := range []Options{{Force: true}, {Clean: true}} {
+	// When --force or --clear is passed, Then NeedsRun becomes true
+	for _, opts := range []Options{{Force: true}, {Clear: true}} {
 		_, items, err := BuildPlan(PlanInput{Layout: layout, State: state, Options: opts})
 		if err != nil {
 			t.Fatalf("BuildPlan(%+v): %v", opts, err)
@@ -392,6 +392,93 @@ func TestFormatResourceSummaryAndJSONLAppend(t *testing.T) {
 	}
 	if got1.Target != "attila_32" || got1.ConcurrentJobs != 2 || got2.Target != "attila_64" || got2.ConcurrentJobs != 1 {
 		t.Fatalf("unexpected JSONL records: %+v, %+v", got1, got2)
+	}
+}
+
+func TestClearPlannedTargets_RemovesTargetDBAndLogWhilePreservingSiblingsAndResourceLog(t *testing.T) {
+	root := t.TempDir()
+	layout := newTestLayout(t, root, workspace.DecompilerGhidra)
+	paths := layout.Paths
+
+	for _, tid := range []workspace.TargetID{workspace.TargetAttila32, workspace.TargetAttila64} {
+		for _, eng := range []workspace.DecompilerID{workspace.DecompilerGhidra, workspace.DecompilerIDA} {
+			dbDir := paths.DatabaseDir(eng, tid)
+			if err := os.MkdirAll(dbDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dbDir, "marker"), []byte("db"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			logPath := paths.AnalyzeLogPath(eng, tid)
+			if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(logPath, []byte("log"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	resLog := paths.AnalyzeResourceLogPath()
+	if err := os.WriteFile(resLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	state := workspace.NewState()
+	state.UpsertBinary(workspace.TargetAttila32, "/src/attila32", "sha32")
+	state.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerGhidra, "sha32")
+	state.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerIDA, "sha32")
+	state.UpsertBinary(workspace.TargetAttila64, "/src/attila64", "sha64")
+	state.SetAnalyzed(workspace.TargetAttila64, workspace.DecompilerGhidra, "sha64")
+	state.SetAnalyzed(workspace.TargetAttila64, workspace.DecompilerIDA, "sha64")
+	if err := workspace.SaveState(paths.StateFile, state); err != nil {
+		t.Fatal(err)
+	}
+
+	ui := term.NewUI(term.Streams{ColorMode: term.ColorNever})
+	err := clearPlannedTargets(paths, &state, workspace.DecompilerGhidra, []PlanItem{
+		{
+			Target:      workspace.TargetAttila32,
+			DatabaseDir: paths.DatabaseDir(workspace.DecompilerGhidra, workspace.TargetAttila32),
+			LogPath:     paths.AnalyzeLogPath(workspace.DecompilerGhidra, workspace.TargetAttila32),
+		},
+	}, ui)
+	if err != nil {
+		t.Fatalf("clearPlannedTargets: %v", err)
+	}
+
+	if _, err := os.Stat(paths.DatabaseDir(workspace.DecompilerGhidra, workspace.TargetAttila32)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected ghidra/attila_32 DB dir removed, stat err = %v", err)
+	}
+	if _, err := os.Stat(paths.AnalyzeLogPath(workspace.DecompilerGhidra, workspace.TargetAttila32)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected ghidra/attila_32 log removed, stat err = %v", err)
+	}
+
+	// Sibling engine (ida/attila_32), sibling target (ghidra/attila_64), and analyze_resources.jsonl must remain intact
+	for _, preserved := range []string{
+		paths.DatabaseDir(workspace.DecompilerIDA, workspace.TargetAttila32),
+		paths.AnalyzeLogPath(workspace.DecompilerIDA, workspace.TargetAttila32),
+		paths.DatabaseDir(workspace.DecompilerGhidra, workspace.TargetAttila64),
+		paths.AnalyzeLogPath(workspace.DecompilerGhidra, workspace.TargetAttila64),
+		resLog,
+	} {
+		if _, err := os.Stat(preserved); err != nil {
+			t.Fatalf("expected %s to remain intact, stat err = %v", preserved, err)
+		}
+	}
+
+	reloaded, _, err := workspace.LoadState(paths.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Binaries[workspace.TargetAttila32].Analyzed.Ghidra != "" {
+		t.Fatalf("expected ghidra/attila_32 Analyzed cleared, got %q", reloaded.Binaries[workspace.TargetAttila32].Analyzed.Ghidra)
+	}
+	if reloaded.Binaries[workspace.TargetAttila32].Analyzed.IDA != "sha32" {
+		t.Fatalf("expected ida/attila_32 Analyzed preserved, got %q", reloaded.Binaries[workspace.TargetAttila32].Analyzed.IDA)
+	}
+	if reloaded.Binaries[workspace.TargetAttila64].Analyzed.Ghidra != "sha64" {
+		t.Fatalf("expected ghidra/attila_64 Analyzed preserved, got %q", reloaded.Binaries[workspace.TargetAttila64].Analyzed.Ghidra)
 	}
 }
 

@@ -110,6 +110,22 @@ func TestState_UpsertBinary_PreservesAnalyzedWhenHashMatches_AndClearsOnDrift(t 
 	if driftedHash.IsAnalyzed(DecompilerGhidra) || driftedHash.Analyzed.Ghidra != "" {
 		t.Fatalf("UpsertBinary retained stale Analyzed state after SHA change: %+v", driftedHash)
 	}
+
+	// And when BinarySHA256 was reset by init --clear, UpsertBinary preserves each engine's Analyzed digest independently
+	st.Binaries[TargetAttila32] = BinaryState{
+		Analyzed: AnalyzedState{
+			Ghidra: "aaa111",
+			IDA:    "ccc333",
+		},
+	}
+	st.UpsertBinary(TargetAttila32, `G:/Steam/Attila/empire.retail.dll`, "AAA111")
+	afterClearUpsert := st.Binaries[TargetAttila32]
+	if !afterClearUpsert.IsAnalyzed(DecompilerGhidra) || afterClearUpsert.Analyzed.Ghidra != "aaa111" {
+		t.Fatalf("expected Ghidra Analyzed hash preserved when BinarySHA256 was empty, got %+v", afterClearUpsert)
+	}
+	if afterClearUpsert.IsAnalyzed(DecompilerIDA) || afterClearUpsert.Analyzed.IDA != "" {
+		t.Fatalf("expected mismatched IDA Analyzed hash cleared, got %+v", afterClearUpsert)
+	}
 }
 
 func TestPaths_HasValidDatabase_AcceptsZeroByteGhidraGPRWithRepAndRequiresNonEmptyIDA(t *testing.T) {
@@ -230,7 +246,19 @@ func TestResolve_ToolsDirOverrideAndEnv_PrecedenceAndExternalGuards(t *testing.T
 		t.Fatalf("expected HasExternalToolsDir() = true for ToolsDirOverride")
 	}
 
-	// 4. EnsureDirs() succeeds with existing external tools directory and creates sandbox dirs without creating <DataDir>/tools
+	// 4. EnsureInitDirs() only creates BinsDir (without DBDir, LogsDir, or <DataDir>/tools when external ToolsDir is configured),
+	//    and EnsureDirs() creates BinsDir, DBDir, and LogsDir without creating <DataDir>/tools.
+	if err := overrideLayout.Paths.EnsureInitDirs(); err != nil {
+		t.Fatalf("EnsureInitDirs with existing external tools dir: %v", err)
+	}
+	if info, statErr := os.Stat(overrideLayout.Paths.BinsDir); statErr != nil || !info.IsDir() {
+		t.Fatalf("expected EnsureInitDirs to create %s, err=%v", overrideLayout.Paths.BinsDir, statErr)
+	}
+	for _, untouched := range []string{overrideLayout.Paths.DBDir, overrideLayout.Paths.LogsDir} {
+		if _, statErr := os.Stat(untouched); !os.IsNotExist(statErr) {
+			t.Fatalf("EnsureInitDirs must not create %s", untouched)
+		}
+	}
 	if err := overrideLayout.Paths.EnsureDirs(); err != nil {
 		t.Fatalf("EnsureDirs with existing external tools dir: %v", err)
 	}

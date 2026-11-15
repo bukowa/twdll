@@ -50,7 +50,7 @@ How the wrappers work:
 
 - **`twdll init [flags]`**  
   Idempotent 4-step setup: (1) portable `cmake`, `ninja`, `llvm`, `xwin`, `rpfm_cli`; (2) 32-bit `empire.retail.dll` staging; (3) mandatory 64-bit Linux `attila_64` ELF+DWARF acquisition/verification; (4) `ghidra` (+ OpenJDK) or `ida` validation.
-  - `--clear` — Wipe local workspace data (`state.json`, `db/`, `binaries/`, `logs/`, non-Go `.twdll/tools/`) and re-initialize. Never deletes an external `TWDLL_TOOLS_DIR`.
+  - `--clear` — Clear `init` artifacts (`twdll.toml`, `binaries/`, non-Go `.twdll/tools/`, and `init` entries in `state.json`) before re-initializing, preserving `analyze` databases/logs (`db/`, `logs/`, `analyzed_sha256`). Never deletes an external `TWDLL_TOOLS_DIR`.
   - `--no-input` — Disable interactive prompts and fail fast with actionable `stderr` diagnostics on missing inputs.
   - `--default-game <attila|rome2|tob>`
   - `--decompiler <ghidra|ida>`
@@ -59,7 +59,7 @@ How the wrappers work:
 - **`twdll analyze [flags] [targets...]`**  
   Runs headless Ghidra or IDA analysis from scratch into `.twdll/db/<engine>/<target>/`, running 32-bit targets in parallel before `attila_64` solo, and checkpoints `analyzed_sha256` atomically in `.twdll/state.json` only on exit code `0`.
   - `-d`, `--decompiler <ghidra|ida>` — Override `twdll.toml` decompiler.
-  - `--clean` — Remove existing target database before analyzing.
+  - `--clear` — Clear existing target database and log before analyzing.
   - `--force` — Re-analyze even when `analyzed_sha256` already matches.
   - `-j`, `--jobs <N>` — Max concurrent 32-bit workers (`0` = RAM/CPU auto).
   - `-m`, `--max-mem <SIZE>` — Override Ghidra JVM `-Xmx` (e.g. `16G`, `32G`).
@@ -67,7 +67,7 @@ How the wrappers work:
   - `[targets...]` — Positional target list (`attila_64`, `attila_32`, `rome2_32`, `tob_32`).
 
 - **`twdll clean [-d ghidra|ida|all] [--all] [targets...]`**  
-  Deletes `.twdll/db/<engine>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files and clears `analyzed_sha256` in `.twdll/state.json` without touching `.twdll/tools/` or `.twdll/binaries/`.
+  Deletes `.twdll/db/<engine>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without touching `.twdll/tools/` or `.twdll/binaries/`. Pass `--all` alone to wipe all `init` and `analyze` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
 
 ### Additional Environment Variables
 
@@ -108,7 +108,7 @@ All tests are strictly isolated from live `twdll.toml` and `.twdll/` data via `t
 | Tier | Command (from `cli/`) | Runtime / RAM | What It Covers | When to Run |
 | :--- | :--- | :--- | :--- | :--- |
 | **Tier 0: Unit** | `go vet ./...`<br>`go test ./...` | `<5s` / `<200 MB` | Flag parsing, `Out`/`Err` separation, `state.json` & `twdll.toml` round-trips, memory/CLI-arg builders, ELF/PE inspection, fake-decompiler runner tests. | **Mandatory** on every `cli/` edit. |
-| **Tier 1: Quick Real E2E** | `go test -v -tags=e2e -timeout 5m ./internal/e2e` | `~30–45s` / `~2.5 GB` | Compiles `internal/e2e/testdata/mini_warscape.cpp` (~20 KB PE32 DLL + ELF64-DWARF) via portable LLVM and runs real `twdll.exe`, IDA, and Ghidra (`init -> analyze -> skip check -> status --json -> clean -> init --clear`). Asserts live `twdll.toml` & `.twdll/state.json` SHA-256 + mtime remain unchanged. | Required before finishing changes to `init`, `analyze`, `clean`, `status`, `workspace`, decompiler scripts, or PE/ELF inspection. |
+| **Tier 1: Quick Real E2E** | `go test -v -tags=e2e -timeout 5m ./internal/e2e` | `~30–45s` / `~2.5 GB` | Compiles `internal/e2e/testdata/mini_warscape.cpp` (~20 KB PE32 DLL + ELF64-DWARF) via portable LLVM and runs real `twdll.exe`, IDA, and Ghidra (`init -> analyze -> skip check -> status --json -> clean -> init --clear -> clean --all`). Asserts live `twdll.toml` & `.twdll/state.json` SHA-256 + mtime remain unchanged. | Required before finishing changes to `init`, `analyze`, `clean`, `status`, `workspace`, decompiler scripts, or PE/ELF inspection. |
 | **Tier 2: Background Soak** | `pwsh -NoProfile -File scripts/run-e2e-bg.ps1` *(from `cli/`, or `cli/scripts/run-e2e-bg.ps1` from root)* | `~20–22m` (`attila_32`)<br>`~75m` (`-Full`)<br>`6–17 GB` RAM | Detached single-instance soak test (`TWDLL_E2E_SOAK=1`) against real game binaries copied from `.twdll/binaries/` into an isolated sandbox. Archives `analyze_resources.jsonl`, prunes sandbox on pass, retains on fail. | Only when explicitly validating real-binary scale, DWARF import, or JVM/IDA memory changes. |
 
 ### Tier 1 & Tier 2 Overrides

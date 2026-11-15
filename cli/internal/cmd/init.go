@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"twdll/cli/internal/binaries"
@@ -48,13 +47,23 @@ func RunInit(ctx context.Context, req InitRequest) error {
 	}
 
 	preservedDataDir := req.Layout.Config.DataDir
+	var (
+		state workspace.State
+		err   error
+	)
 	if opts.Clear {
-		if err := clearWorkspaceData(paths, ui); err != nil {
+		state, err = clearInitArtifacts(paths, ui)
+		if err != nil {
 			return err
+		}
+	} else {
+		state, _, err = workspace.LoadState(paths.StateFile)
+		if err != nil {
+			state = workspace.NewState()
 		}
 	}
 
-	if err := paths.EnsureDirs(); err != nil {
+	if err := paths.EnsureInitDirs(); err != nil {
 		return fmt.Errorf("create workspace dirs: %w", err)
 	}
 
@@ -67,11 +76,6 @@ func RunInit(ctx context.Context, req InitRequest) error {
 				return fmt.Errorf("preserve sandbox data_dir config: %w", err)
 			}
 		}
-	}
-
-	state, _, err := workspace.LoadState(paths.StateFile)
-	if err != nil || opts.Clear {
-		state = workspace.NewState()
 	}
 
 	steam, _ := binaries.LocateSteam()
@@ -135,31 +139,6 @@ func RunInit(ctx context.Context, req InitRequest) error {
 	if ui != nil {
 		ui.Success("Workspace initialized at %s (next: run `twdll analyze`)", filepath.ToSlash(paths.DataDir))
 	}
-	return nil
-}
-
-func clearWorkspaceData(paths workspace.Paths, ui *term.UI) error {
-	if ui != nil {
-		ui.Info("Clearing workspace data in %s...", filepath.ToSlash(paths.DataDir))
-	}
-	sp := ui.StartSpinner("Clearing workspace data")
-	defer sp.Stop()
-
-	_ = os.Remove(paths.Config)
-	_ = os.Remove(paths.StateFile)
-
-	if !paths.HasExternalToolsDir() {
-		if entries, err := os.ReadDir(paths.ToolsDir); err == nil {
-			for _, e := range entries {
-				if e.Name() != string(workspace.ToolGo) {
-					_ = os.RemoveAll(filepath.Join(paths.ToolsDir, e.Name()))
-				}
-			}
-		}
-	}
-	_ = os.RemoveAll(paths.BinsDir)
-	_ = os.RemoveAll(paths.DBDir)
-	_ = os.RemoveAll(paths.LogsDir)
 	return nil
 }
 

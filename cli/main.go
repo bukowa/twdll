@@ -27,7 +27,7 @@ type CLI struct {
 	Status  StatusCmd  `cmd:"" help:"Show workspace, toolchain, binary, and database status."`
 	Init    InitCmd    `cmd:"" help:"Initialize workspace toolchains, game binaries, and decompiler setup."`
 	Analyze AnalyzeCmd `cmd:"" help:"Run headless decompiler analysis on staged binaries."`
-	Clean   CleanCmd   `cmd:"" help:"Remove decompiler databases and analysis logs."`
+	Clean   CleanCmd   `cmd:"" help:"Remove decompiler databases and logs, or wipe the workspace (--all)."`
 }
 
 type runContext struct {
@@ -50,8 +50,7 @@ func (c *StatusCmd) Run(rctx *runContext) error {
 }
 
 type InitCmd struct {
-	Clear       bool   `name:"clear" help:"Wipe workspace data directory and re-initialize from scratch."`
-	Clean       bool   `name:"clean" hidden:"" help:"Alias for --clear."`
+	Clear       bool   `name:"clear" help:"Clear initialized configuration, staged binaries, and local tools before re-initializing."`
 	NoInput     bool   `name:"no-input" help:"Disable interactive prompts and fail fast on missing inputs."`
 	DefaultGame string `name:"default-game" placeholder:"GAME" help:"Default game (attila, rome2, tob)."`
 	Decompiler  string `name:"decompiler" placeholder:"ENGINE" help:"Decompiler backend (ghidra, ida)."`
@@ -70,7 +69,7 @@ func (c *InitCmd) Run(rctx *runContext) error {
 	return cmd.RunInit(rctx.ctx, cmd.InitRequest{
 		Layout: rctx.layout,
 		Options: cmd.InitOptions{
-			Clear:       c.Clear || c.Clean,
+			Clear:       c.Clear,
 			NoInput:     c.NoInput,
 			DefaultGame: c.DefaultGame,
 			Decompiler:  c.Decompiler,
@@ -87,7 +86,7 @@ func (c *InitCmd) Run(rctx *runContext) error {
 
 type AnalyzeCmd struct {
 	Decompiler   string   `short:"d" name:"decompiler" help:"Decompiler backend override (ghidra, ida)."`
-	Clean        bool     `name:"clean" help:"Remove existing target database before analyzing."`
+	Clear        bool     `name:"clear" help:"Clear existing target databases and logs before analyzing."`
 	Force        bool     `name:"force" help:"Re-analyze even when database SHA-256 is up to date."`
 	Jobs         int      `short:"j" name:"jobs" help:"Maximum concurrent analysis jobs (0 = auto)."`
 	MaxMem       string   `short:"m" name:"max-mem" help:"Override Ghidra JVM max heap (e.g. 16G, 32G)."`
@@ -100,7 +99,7 @@ func (c *AnalyzeCmd) Run(rctx *runContext) error {
 		Layout: rctx.layout,
 		Options: cmd.AnalyzeOptions{
 			Decompiler:   c.Decompiler,
-			Clean:        c.Clean,
+			Clear:        c.Clear,
 			Force:        c.Force,
 			Jobs:         c.Jobs,
 			MaxMem:       c.MaxMem,
@@ -113,7 +112,7 @@ func (c *AnalyzeCmd) Run(rctx *runContext) error {
 
 type CleanCmd struct {
 	Decompiler string   `short:"d" name:"decompiler" help:"Decompiler databases to remove (ghidra, ida, all). Default: all."`
-	All        bool     `name:"all" help:"Clean databases across all targets."`
+	All        bool     `name:"all" help:"Wipe all initialized configuration, staged binaries, local tools, databases, and logs."`
 	Targets    []string `arg:"" optional:"" help:"Specific targets to clean."`
 }
 

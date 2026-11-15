@@ -121,6 +121,34 @@ func TestExecute_HelpAndVersion_ReturnZeroWithoutOsExit(t *testing.T) {
 		}
 	})
 
+	t.Run("subcommand help flags", func(t *testing.T) {
+		for _, tc := range []struct {
+			args      []string
+			mustHave  string
+			forbidden string
+		}{
+			{args: []string{"init", "--help"}, mustHave: "--clear", forbidden: "--clean"},
+			{args: []string{"analyze", "--help"}, mustHave: "--clear", forbidden: "--clean"},
+			{args: []string{"clean", "--help"}, mustHave: "--all"},
+		} {
+			var stdout, stderr bytes.Buffer
+			code := Execute(context.Background(), tc.args, term.Streams{
+				Out:       &stdout,
+				Err:       &stderr,
+				ColorMode: term.ColorNever,
+			})
+			if code != 0 {
+				t.Fatalf("%v exit code = %d, want 0 (stderr: %s)", tc.args, code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), tc.mustHave) {
+				t.Fatalf("expected %v output to list %q:\n%s", tc.args, tc.mustHave, stdout.String())
+			}
+			if tc.forbidden != "" && strings.Contains(stdout.String(), tc.forbidden) {
+				t.Fatalf("unexpected %q in %v output:\n%s", tc.forbidden, tc.args, stdout.String())
+			}
+		}
+	})
+
 	t.Run("version", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
 		code := Execute(context.Background(), []string{"--version"}, term.Streams{
@@ -148,6 +176,8 @@ func TestExecute_UnknownCommandAndInvalidFlag_WriteErrorsStrictlyToStderr(t *tes
 		{name: "unregistered command extract", args: []string{"extract"}},
 		{name: "unregistered command wt", args: []string{"wt"}},
 		{name: "invalid flag on status", args: []string{"status", "--bogus-flag"}},
+		{name: "removed --clean flag on init", args: []string{"init", "--clean"}},
+		{name: "removed --clean flag on analyze", args: []string{"analyze", "--clean"}},
 	}
 
 	for _, tc := range cases {

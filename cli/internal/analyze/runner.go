@@ -58,8 +58,11 @@ func Run(ctx context.Context, req Request) error {
 	if err != nil {
 		return err
 	}
-	if req.Options.Clean {
-		if err := clearPlannedDatabases(paths, &state, engine, toRun, req.UI); err != nil {
+	if err := paths.EnsureAnalyzeDirs(); err != nil {
+		return fmt.Errorf("create analyze dirs: %w", err)
+	}
+	if req.Options.Clear {
+		if err := clearPlannedTargets(paths, &state, engine, toRun, req.UI); err != nil {
 			return err
 		}
 	}
@@ -145,11 +148,14 @@ func resolveBackendTools(layout workspace.Layout, engine workspace.DecompilerID,
 	return ghidraToolchain{}, exes, nil
 }
 
-func clearPlannedDatabases(paths workspace.Paths, state *workspace.State, engine workspace.DecompilerID, items []PlanItem, ui *term.UI) error {
+func clearPlannedTargets(paths workspace.Paths, state *workspace.State, engine workspace.DecompilerID, items []PlanItem, ui *term.UI) error {
 	dirty := false
 	for _, item := range items {
 		if err := os.RemoveAll(item.DatabaseDir); err != nil {
-			return fmt.Errorf("clean database dir %s: %w", item.DatabaseDir, err)
+			return fmt.Errorf("clear database dir %s: %w", item.DatabaseDir, err)
+		}
+		if err := os.Remove(item.LogPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("clear log file %s: %w", item.LogPath, err)
 		}
 		if b, ok := state.Binaries[item.Target]; ok && b.Analyzed.Get(engine) != "" {
 			b.Analyzed.Set(engine, "")
@@ -157,12 +163,12 @@ func clearPlannedDatabases(paths workspace.Paths, state *workspace.State, engine
 			dirty = true
 		}
 		if ui != nil {
-			ui.Info("Cleared existing %s database for %s", engine, item.Target)
+			ui.Info("Cleared existing %s database and log for %s", engine, item.Target)
 		}
 	}
 	if dirty {
 		if err := workspace.SaveState(paths.StateFile, *state); err != nil {
-			return fmt.Errorf("save state after clean: %w", err)
+			return fmt.Errorf("save state after clear: %w", err)
 		}
 	}
 	return nil

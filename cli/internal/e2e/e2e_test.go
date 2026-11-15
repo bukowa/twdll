@@ -519,7 +519,7 @@ func TestE2E_MiniWarscape_RealDecompilers(t *testing.T) {
 		}
 	}
 
-	// 7. Full workspace reset: init --clear must preserve external TWDLL_TOOLS_DIR.
+	// 7. Re-initialize with init --clear: must preserve external TWDLL_TOOLS_DIR, analyze logs, and analyzed databases.
 	runCLI(t, sb,
 		"init", "--clear", "--no-input",
 		"--default-game", "attila",
@@ -538,19 +538,54 @@ func TestE2E_MiniWarscape_RealDecompilers(t *testing.T) {
 			t.Fatalf("external tool %s was missing after init --clear: %v", preservedTool, err)
 		}
 	}
+	if info, err := os.Stat(sb.paths.AnalyzeResourceLogPath()); err != nil || info.Size() == 0 {
+		t.Fatalf("expected %s to remain intact after init --clear (err=%v)", sb.paths.AnalyzeResourceLogPath(), err)
+	}
 	repAfterClear := parseStatusReport(t, sb)
 	if !repAfterClear.Initialized {
 		t.Fatalf("expected Initialized == true after init --clear")
 	}
 	for _, db := range repAfterClear.Databases {
+		wantAnalyzed := false
+		if db.Target == workspace.TargetAttila64 && (db.Engine == "ida" || db.Engine == "ghidra") {
+			wantAnalyzed = true
+		}
+		if db.Target == workspace.TargetAttila32 && db.Engine == "ghidra" {
+			wantAnalyzed = true
+		}
+		if db.Analyzed != wantAnalyzed {
+			t.Fatalf("after init --clear, database %s/%s Analyzed = %v, want %v", db.Engine, db.Target, db.Analyzed, wantAnalyzed)
+		}
+	}
+
+	// 8. Full workspace wipe: clean --all removes config, binaries, state, databases, and logs while preserving external TWDLL_TOOLS_DIR.
+	runCLI(t, sb, "clean", "--all")
+	for _, preservedTool := range []string{
+		filepath.Join(env.toolsDir, "ghidra", "support", "analyzeHeadless.bat"),
+		filepath.Join(env.toolsDir, "llvm", "bin", "clang++.exe"),
+	} {
+		if info, err := os.Stat(preservedTool); err != nil || info.IsDir() {
+			t.Fatalf("external tool %s was missing after clean --all: %v", preservedTool, err)
+		}
+	}
+	repAfterCleanAll := parseStatusReport(t, sb)
+	if repAfterCleanAll.Initialized {
+		t.Fatalf("expected Initialized == false after clean --all")
+	}
+	for _, bin := range repAfterCleanAll.Binaries {
+		if bin.Present {
+			t.Fatalf("expected binary %s Present == false after clean --all", bin.Target)
+		}
+	}
+	for _, db := range repAfterCleanAll.Databases {
 		if db.Analyzed {
-			t.Fatalf("expected database %s/%s Analyzed == false after init --clear", db.Engine, db.Target)
+			t.Fatalf("expected database %s/%s Analyzed == false after clean --all", db.Engine, db.Target)
 		}
 	}
 
 	// Restore archived telemetry log so run-e2e-bg.ps1 -Mode mini can collect analyze_resources.jsonl.
 	if err := workspace.WriteFileAtomic(sb.paths.AnalyzeResourceLogPath(), rawResourceBytes, 0o644); err != nil {
-		t.Fatalf("restore resource log after init --clear: %v", err)
+		t.Fatalf("restore resource log after clean --all: %v", err)
 	}
 }
 

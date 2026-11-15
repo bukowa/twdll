@@ -124,8 +124,10 @@ func (s *State) UpsertBinary(t TargetID, sourcePath, sha256 string) {
 		SourcePath:   sourcePath,
 		BinarySHA256: sha256,
 	}
-	if prev.BinarySHA256 != "" && strings.EqualFold(prev.BinarySHA256, sha256) {
-		next.Analyzed = prev.Analyzed
+	for _, eng := range AllDecompilers() {
+		if prevSHA := prev.Analyzed.Get(eng); prevSHA != "" && strings.EqualFold(prevSHA, sha256) {
+			next.Analyzed.Set(eng, prevSHA)
+		}
 	}
 	s.Binaries[t] = next
 }

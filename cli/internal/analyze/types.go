@@ -12,7 +12,7 @@ import (
 
 type Options struct {
 	Decompiler   string
-	Clean        bool
+	Clear        bool
 	Force        bool
 	Jobs         int
 	MaxMem       string
@@ -85,7 +85,7 @@ func BuildPlan(in PlanInput) (workspace.DecompilerID, []PlanItem, error) {
 		saved := in.State.Binaries[tid]
 		shaMatches := currentSHA != "" && strings.EqualFold(saved.Analyzed.Get(engine), currentSHA)
 		validDB := paths.HasValidDatabase(engine, tid)
-		upToDate := !in.Options.Force && !in.Options.Clean && shaMatches && validDB
+		upToDate := !in.Options.Force && !in.Options.Clear && shaMatches && validDB
 
 		items = append(items, PlanItem{
 			Target:       tid,
@@ -155,8 +155,8 @@ func resolveTargets(layout workspace.Layout, rawTargets []string) ([]workspace.T
 
 func describePlanReason(opts Options, shaMatches, validDB bool) string {
 	switch {
-	case opts.Clean:
-		return "clean requested"
+	case opts.Clear:
+		return "clear requested"
 	case opts.Force:
 		return "force requested"
 	case !validDB:

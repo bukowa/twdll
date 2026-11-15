@@ -186,7 +186,7 @@ func TestRunInit_MissingAttila64InAgentMode_FailsFastWithoutSteamSideEffects(t *
 }
 
 func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
-	// Given a sandbox with an IDA database marker and analyzed state
+	// Given a sandbox with IDA and Ghidra databases, logs, analyze_resources.jsonl, and analyzed state
 	root := t.TempDir()
 	layout := newPreseededToolchainSandbox(t, root, ".twdll-clean")
 
@@ -198,22 +198,42 @@ func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sandboxMarker := layout.Paths.DatabaseMarkerPath(workspace.DecompilerIDA, workspace.TargetAttila32)
-	if err := os.MkdirAll(filepath.Dir(sandboxMarker), 0o755); err != nil {
+	idaMarker := layout.Paths.DatabaseMarkerPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(idaMarker), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(sandboxMarker, []byte("sandbox-db"), 0o644); err != nil {
+	if err := os.WriteFile(idaMarker, []byte("sandbox-ida-db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	idaLog := layout.Paths.AnalyzeLogPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(idaLog), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(idaLog, []byte("ida-log"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ghidraMarker := layout.Paths.DatabaseMarkerPath(workspace.DecompilerGhidra, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(ghidraMarker), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ghidraMarker, []byte("sandbox-ghidra-db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resLog := layout.Paths.AnalyzeResourceLogPath()
+	if err := os.WriteFile(resLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	st := workspace.NewState()
 	st.UpsertBinary(workspace.TargetAttila32, "src.dll", "hash123")
 	st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerIDA, "hash123")
+	st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerGhidra, "hash123")
 	if err := workspace.SaveState(layout.Paths.StateFile, st); err != nil {
 		t.Fatal(err)
 	}
 
-	// When RunClean runs against the sandbox layout
+	// When scoped RunClean (-d ida attila_32) runs against the sandbox layout
 	err := RunClean(context.Background(), CleanRequest{
 		Layout:  layout,
 		Options: CleanOptions{Decompiler: "ida", Targets: []string{"attila_32"}},
@@ -223,9 +243,18 @@ func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
 		t.Fatalf("RunClean: %v", err)
 	}
 
-	// Then the sandbox DB is removed, state is cleared, and production .twdll/db is untouched
-	if _, err := os.Stat(sandboxMarker); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected sandbox DB to be deleted")
+	// Then only the ida/attila_32 DB, log, and Analyzed.IDA are removed; production DB, ghidra DB, and analyze_resources.jsonl remain intact
+	if _, err := os.Stat(idaMarker); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected sandbox IDA DB to be deleted")
+	}
+	if _, err := os.Stat(idaLog); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected sandbox IDA log to be deleted")
+	}
+	if _, err := os.Stat(ghidraMarker); err != nil {
+		t.Fatalf("expected sibling Ghidra DB to remain untouched: %v", err)
+	}
+	if _, err := os.Stat(resLog); err != nil {
+		t.Fatalf("expected analyze_resources.jsonl to remain untouched on scoped clean: %v", err)
 	}
 	if _, err := os.Stat(prodDB); err != nil {
 		t.Fatalf("production .twdll DB must remain untouched: %v", err)
@@ -234,6 +263,225 @@ func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
 	if after.Binaries[workspace.TargetAttila32].Analyzed.IDA != "" {
 		t.Fatalf("expected IDA analyzed hash cleared, got %q", after.Binaries[workspace.TargetAttila32].Analyzed.IDA)
 	}
+	if after.Binaries[workspace.TargetAttila32].Analyzed.Ghidra != "hash123" {
+		t.Fatalf("expected Ghidra analyzed hash preserved, got %q", after.Binaries[workspace.TargetAttila32].Analyzed.Ghidra)
+	}
+}
+
+func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
+	t.Run("contradictory flags fail fast without deleting anything", func(t *testing.T) {
+		root := t.TempDir()
+		layout := newPreseededToolchainSandbox(t, root, ".twdll-contradict")
+		dbMarker := layout.Paths.DatabaseMarkerPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(dbMarker), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dbMarker, []byte("keep-me"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		for _, opts := range []CleanOptions{
+			{All: true, Decompiler: "ida"},
+			{All: true, Targets: []string{"attila_32"}},
+		} {
+			err := RunClean(context.Background(), CleanRequest{
+				Layout:  layout,
+				Options: opts,
+				UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+			})
+			var diag *term.DiagnosticError
+			if !errors.As(err, &diag) {
+				t.Fatalf("expected *term.DiagnosticError for %+v, got %T (%v)", opts, err, err)
+			}
+			if _, sErr := os.Stat(dbMarker); sErr != nil {
+				t.Fatalf("contradictory clean must not delete %s: %v", dbMarker, sErr)
+			}
+			if _, sErr := os.Stat(layout.Paths.Config); sErr != nil {
+				t.Fatalf("contradictory clean must not delete %s: %v", layout.Paths.Config, sErr)
+			}
+		}
+	})
+
+	t.Run("unscoped clean removes all DBs logs and resource log while preserving init artifacts", func(t *testing.T) {
+		root := t.TempDir()
+		layout := newPreseededToolchainSandbox(t, root, ".twdll-unscoped")
+		paths := layout.Paths
+
+		binFile := paths.BinaryPath(workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(binFile), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(binFile, []byte("staged-pe32"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		for _, eng := range workspace.AllDecompilers() {
+			marker := paths.DatabaseMarkerPath(eng, workspace.TargetAttila32)
+			if err := os.MkdirAll(filepath.Dir(marker), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(marker, []byte("db"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			logPath := paths.AnalyzeLogPath(eng, workspace.TargetAttila32)
+			if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(logPath, []byte("log"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		resLog := paths.AnalyzeResourceLogPath()
+		if err := os.WriteFile(resLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		st := workspace.NewState()
+		st.SetTool(workspace.ToolGhidra, workspace.ToolState{Version: "12.0.4", SHA256: "toolhash"})
+		st.UpsertBinary(workspace.TargetAttila32, "C:/Games/Attila/empire.retail.dll", "binhash")
+		st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerGhidra, "binhash")
+		st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerIDA, "binhash")
+		if err := workspace.SaveState(paths.StateFile, st); err != nil {
+			t.Fatal(err)
+		}
+
+		err := RunClean(context.Background(), CleanRequest{
+			Layout:  layout,
+			Options: CleanOptions{},
+			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+		})
+		if err != nil {
+			t.Fatalf("unscoped RunClean: %v", err)
+		}
+
+		for _, removed := range []string{
+			paths.DatabaseDir(workspace.DecompilerGhidra, workspace.TargetAttila32),
+			paths.DatabaseDir(workspace.DecompilerIDA, workspace.TargetAttila32),
+			paths.AnalyzeLogPath(workspace.DecompilerGhidra, workspace.TargetAttila32),
+			paths.AnalyzeLogPath(workspace.DecompilerIDA, workspace.TargetAttila32),
+			resLog,
+		} {
+			if _, sErr := os.Stat(removed); !errors.Is(sErr, os.ErrNotExist) {
+				t.Fatalf("expected %s to be deleted by unscoped clean, stat err = %v", removed, sErr)
+			}
+		}
+
+		// Config, staged binaries, and init state entries must remain intact
+		for _, kept := range []string{paths.Config, binFile, paths.StateFile} {
+			if _, sErr := os.Stat(kept); sErr != nil {
+				t.Fatalf("expected %s to be preserved by unscoped clean: %v", kept, sErr)
+			}
+		}
+		after, _, err := workspace.LoadState(paths.StateFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.Tools[workspace.ToolGhidra].Version != "12.0.4" {
+			t.Fatalf("expected state.Tools preserved, got %+v", after.Tools)
+		}
+		b := after.Binaries[workspace.TargetAttila32]
+		if b.SourcePath != "C:/Games/Attila/empire.retail.dll" || b.BinarySHA256 != "binhash" {
+			t.Fatalf("expected binary staging metadata preserved, got %+v", b)
+		}
+		if b.Analyzed.Ghidra != "" || b.Analyzed.IDA != "" {
+			t.Fatalf("expected Analyzed hashes cleared, got %+v", b.Analyzed)
+		}
+	})
+
+	t.Run("clean --all wipes workspace while preserving .twdll/bin go toolchain and external TWDLL_TOOLS_DIR", func(t *testing.T) {
+		// Case A: internal ToolsDir with go toolchain and .twdll/bin
+		root := t.TempDir()
+		layout := newPreseededToolchainSandbox(t, root, ".twdll")
+		paths := layout.Paths
+
+		cliExe := filepath.Join(paths.BinDir, "twdll.exe")
+		if err := os.MkdirAll(filepath.Dir(cliExe), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(cliExe, []byte("cli-bin"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		goExe := filepath.Join(paths.ToolDir(workspace.ToolGo), "bin", "go.exe")
+		if err := os.MkdirAll(filepath.Dir(goExe), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(goExe, []byte("go-bin"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		binFile := paths.BinaryPath(workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(binFile), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(binFile, []byte("bin"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		dbFile := paths.DatabaseMarkerPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(dbFile), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dbFile, []byte("db"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		logFile := paths.AnalyzeResourceLogPath()
+		if err := os.MkdirAll(filepath.Dir(logFile), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(logFile, []byte("log"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := workspace.SaveState(paths.StateFile, workspace.NewState()); err != nil {
+			t.Fatal(err)
+		}
+
+		err := RunClean(context.Background(), CleanRequest{
+			Layout:  layout,
+			Options: CleanOptions{All: true},
+			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+		})
+		if err != nil {
+			t.Fatalf("RunClean(--all): %v", err)
+		}
+
+		for _, removed := range []string{
+			paths.Config,
+			paths.StateFile,
+			paths.BinsDir,
+			paths.DBDir,
+			paths.LogsDir,
+			paths.ToolDir(workspace.ToolGhidra),
+			paths.ToolDir(workspace.ToolLLVM),
+		} {
+			if _, sErr := os.Stat(removed); !errors.Is(sErr, os.ErrNotExist) {
+				t.Fatalf("expected %s to be deleted by clean --all, stat err = %v", removed, sErr)
+			}
+		}
+		for _, preserved := range []string{cliExe, goExe} {
+			if _, sErr := os.Stat(preserved); sErr != nil {
+				t.Fatalf("expected %s to be preserved by clean --all: %v", preserved, sErr)
+			}
+		}
+
+		// Case B: external TWDLL_TOOLS_DIR must remain completely untouched
+		extRoot := t.TempDir()
+		extTools := filepath.Join(t.TempDir(), "ext-tools")
+		t.Setenv("TWDLL_TOOLS_DIR", extTools)
+		extLayout := newPreseededToolchainSandbox(t, extRoot, ".twdll-ext")
+		extSentinel := filepath.Join(extTools, "ghidra", "sentinel.txt")
+		if err := os.WriteFile(extSentinel, []byte("keep"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := RunClean(context.Background(), CleanRequest{
+			Layout:  extLayout,
+			Options: CleanOptions{All: true},
+			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+		}); err != nil {
+			t.Fatalf("RunClean(--all) with external tools: %v", err)
+		}
+		if _, sErr := os.Stat(extSentinel); sErr != nil {
+			t.Fatalf("external tools sentinel deleted by clean --all: %v", sErr)
+		}
+	})
 }
 
 func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
@@ -251,11 +499,30 @@ func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	staleDB := filepath.Join(layout.Paths.DBDir, "ida", "attila_32", "attila_32.i64")
-	if err := os.MkdirAll(filepath.Dir(staleDB), 0o755); err != nil {
+	staleBin := filepath.Join(layout.Paths.BinsDir, "rome2_32", "stale.dll")
+	if err := os.MkdirAll(filepath.Dir(staleBin), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(staleDB, []byte("stale-db"), 0o644); err != nil {
+	if err := os.WriteFile(staleBin, []byte("stale-bin"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	preservedDB := filepath.Join(layout.Paths.DBDir, "ida", "attila_32", "attila_32.i64")
+	if err := os.MkdirAll(filepath.Dir(preservedDB), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(preservedDB, []byte("analyzed-db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	preservedLog := layout.Paths.AnalyzeLogPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(preservedLog), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(preservedLog, []byte("analyzed-log"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	preservedResLog := layout.Paths.AnalyzeResourceLogPath()
+	if err := os.WriteFile(preservedResLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -263,12 +530,31 @@ func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
 	if err := os.MkdirAll(gameDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeMinimalPE32(t, filepath.Join(gameDir, "empire.retail.dll"))
+	dllPath := filepath.Join(gameDir, "empire.retail.dll")
+	writeMinimalPE32(t, dllPath)
+	dllSHA, err := workspace.ComputeFileSHA256(dllPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	elfPath := filepath.Join(root, "Attila64")
 	writeMinimalELF64DWARF(t, elfPath)
+	elfSHA, err := workspace.ComputeFileSHA256(elfPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	err := RunInit(context.Background(), InitRequest{
+	seedState := workspace.NewState()
+	seedState.UpsertBinary(workspace.TargetAttila32, dllPath, dllSHA)
+	seedState.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerIDA, dllSHA)
+	seedState.UpsertBinary(workspace.TargetAttila64, elfPath, elfSHA)
+	seedState.SetAnalyzed(workspace.TargetAttila64, workspace.DecompilerGhidra, elfSHA)
+	seedState.UpsertBinary(workspace.TargetRome2_32, "stale/rome2.dll", "stalehash")
+	if err := workspace.SaveState(layout.Paths.StateFile, seedState); err != nil {
+		t.Fatal(err)
+	}
+
+	err = RunInit(context.Background(), InitRequest{
 		Layout: layout,
 		Options: InitOptions{
 			Clear:       true,
@@ -286,13 +572,41 @@ func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
 	if rErr != nil || string(data) != "shared-tools-sentinel" {
 		t.Fatalf("external tools sentinel was modified or deleted: err=%v data=%q", rErr, string(data))
 	}
-	if _, sErr := os.Stat(staleDB); !errors.Is(sErr, os.ErrNotExist) {
-		t.Fatalf("expected stale DB in sandbox DataDir to be removed by init --clear, stat err = %v", sErr)
+	if _, sErr := os.Stat(staleBin); !errors.Is(sErr, os.ErrNotExist) {
+		t.Fatalf("expected stale BinsDir artifact to be removed by init --clear, stat err = %v", sErr)
+	}
+	for _, preserved := range []string{preservedDB, preservedLog, preservedResLog} {
+		if _, sErr := os.Stat(preserved); sErr != nil {
+			t.Fatalf("expected analyze artifact %s to be preserved by init --clear: %v", preserved, sErr)
+		}
+	}
+
+	afterState, _, err := workspace.LoadState(layout.Paths.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !afterState.Binaries[workspace.TargetAttila32].IsAnalyzed(workspace.DecompilerIDA) {
+		t.Fatalf("expected attila_32 IDA Analyzed state preserved after init --clear re-staging same binary: %+v", afterState.Binaries[workspace.TargetAttila32])
+	}
+	if !afterState.Binaries[workspace.TargetAttila64].IsAnalyzed(workspace.DecompilerGhidra) {
+		t.Fatalf("expected attila_64 Ghidra Analyzed state preserved after init --clear re-staging same binary: %+v", afterState.Binaries[workspace.TargetAttila64])
+	}
+	if _, ok := afterState.Binaries[workspace.TargetRome2_32]; ok {
+		t.Fatalf("expected unanalyzed stale rome2_32 binary entry to be cleared: %+v", afterState.Binaries[workspace.TargetRome2_32])
 	}
 }
 
 func newPreseededToolchainSandbox(t *testing.T, root, dataDir string) workspace.Layout {
 	t.Helper()
+	emptySteam := filepath.Join(root, "EmptySteam")
+	if err := os.MkdirAll(filepath.Join(emptySteam, "steamapps"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(emptySteam, "steamapps", "libraryfolders.vdf"), []byte(`"libraryfolders" {}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STEAM_DIR", emptySteam)
+
 	cfgPath := filepath.Join(root, "twdll.test.toml")
 	cfg := workspace.Config{
 		DataDir:     dataDir,

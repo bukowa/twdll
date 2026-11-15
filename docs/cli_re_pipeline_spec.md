@@ -137,7 +137,7 @@ Reports complete workspace readiness:
 - Per-binary decompiler database status in `.twdll/db/<decompiler>/` (`ANALYZED` vs `NEEDS_ANALYSIS`).
 
 #### 2. `twdll init [flags]`
-Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults on re-runs; `--clear` resets local workspace data):
+Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults on re-runs; `--clear` clears `init`-owned `twdll.toml`, `binaries/`, non-Go local `tools/`, and `init` state while preserving `db/`, `logs/`, and `analyzed_sha256`):
 - **Step 1/4 — Portable Build & Pack Toolchain:** Download and verify pinned portable `cmake`, `ninja`, `llvm` (`clang-cl`, `lld-link`, `llvm-rc`), `xwin` (32-bit `x86` MSVC CRT + Windows SDK), and `rpfm_cli` inside `.twdll/tools/`.
 - **Step 2/4 — 32-bit Target Games (`attila`, `rome2`, `tob`):** Confirm/accept paths for owned games (minimum 1 required). Verify 32-bit x86 PE `empire.retail.dll`, compute SHA-256, and copy `empire.retail.dll` into `.twdll/binaries/<game>_32/`.
 - **Step 3/4 — Mandatory Reference Binary (`attila_64`):** Check `.twdll/binaries/attila_64/Attila` for valid 64-bit ELF header + `.debug_info` DWARF section. If missing, check default Steam depot path (`steamapps/content/app_325610/depot_325624/Attila`). If absent, copy `download_depot 325610 325624 <manifest>` to clipboard, open `steam://nav/console`, and either wait for user confirmation/custom path (interactive TTY) or exit cleanly with actionable instructions (`!TTY`). Copy verified ELF into `.twdll/binaries/attila_64/Attila`.
@@ -146,15 +146,15 @@ Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults 
   - `ida`: Validate `ida_dir` contains headless `idat` / `idat64`.
 - **Save & Report:** Write `twdll.toml` and `.twdll/state.json`, then display readiness summary (`next: run twdll analyze`).
 
-#### 3. `twdll analyze [-d ghidra|ida] [--clean] [--force] [-j N] [-m SIZE] [--full-analysis] [targets...]`
-- Inspects `.twdll/state.json` + binary traits (`InspectBinary` ELF DWARF / PE PDB inspection) and skips targets whose `.twdll/db/<decompiler>/` database already matches `binary_sha256` (unless `--force` or `--clean`).
+#### 3. `twdll analyze [-d ghidra|ida] [--clear] [--force] [-j N] [-m SIZE] [--full-analysis] [targets...]`
+- Inspects `.twdll/state.json` + binary traits (`InspectBinary` ELF DWARF / PE PDB inspection) and skips targets whose `.twdll/db/<decompiler>/` database already matches `binary_sha256` (unless `--force` or `--clear`; `--clear` removes the target's existing database, analyze log, and `analyzed_sha256` before analyzing).
 - Schedules 32-bit targets in parallel before running `attila_64` solo, prevents OS sleep during batch runs, and writes raw decompiler logs to `.twdll/logs/analyze_<engine>_<target>.log` plus resource telemetry to `.twdll/logs/analyze_resources.jsonl`.
 - **Ghidra tuning (`!FullAnalysis`):** Keeps `"DWARF.Import Data Types"`, `"DWARF.Import Functions"`, and `"DWARF.Create Function Signatures"` enabled while disabling 19 cascade/bloat analyzers (including `"Create Address Tables"` / `"Create Address Tables - One Time"`), configures `G1GC + UseStringDeduplication`, sizes heap (`8G–16G` for `attila_64`, `5G–6G` for 32-bit), and uses non-blocking swap/pagefile warnings on 8–12 GB hosts (`--full-analysis` restores heavy passes at `22G–36G`).
 - **IDA tuning (`!FullAnalysis`):** Suppresses futile PDB HTTP lookups via `-Opdb:off` when no local `.pdb` exists and passes `-Odwarf:import_lnnums=0` on `attila_64`, while preserving `AF2_DOEH` and eager DWARF types (`0` struct/pseudocode degradation).
 - Records `analyzed_sha256` atomically **only** on clean exit code `0`.
 
 #### 4. `twdll clean [-d ghidra|ida|all] [--all] [targets...]`
-- Removes generated decompiler databases under `.twdll/db/<decompiler>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files, and clears `analyzed_sha256` in `.twdll/state.json` without deleting `.twdll/tools/` or `.twdll/binaries/`.
+- Removes generated decompiler databases under `.twdll/db/<decompiler>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files, and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without deleting `.twdll/tools/` or `.twdll/binaries/`. Passing `--all` alone wipes all `init` and `analyze` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
 
 ---
 
