@@ -1,6 +1,6 @@
 # Go CLI Rules (`cli/`, `twdll`, `twdll.cmd`)
 
-Status: **Stage 1 (including 3-tier E2E verification) Complete; Stage 2 (`extract`, `search`, `show`) Active.**
+Status: **Stage 1 (including 3-tier E2E verification) Complete; Stage 2 (`extract`, `derive`, `search`, `show`, `verify`) Active.**
 See `./README.md` for commands, env vars, and test workflows, and `../docs/cli_re_pipeline_spec.md` §5 for stage tracking.
 
 ## Stage 1 Architecture Invariants (Do Not Regress)

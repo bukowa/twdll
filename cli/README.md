@@ -2,7 +2,7 @@
 
 Native Go CLI driving the self-contained `twdll` reverse-engineering pipeline for Total War: Rome II (`rome2`), Attila (`attila`), and Thrones of Britannia (`tob`).
 
-**Stage Status:** Stage 1 (`status`, `init`, `analyze`, `clean` + 3-tier E2E verification) is **complete**. Stage 2 (`extract`, `search`, `show`) is **active design**. Stage 3 (`src/` C++ rewrite + build/test CLI commands) is **deferred** until Stage 2 completes.  
+**Stage Status:** Stage 1 (`status`, `init`, `analyze`, `clean` + 3-tier E2E verification) is **complete**. Stage 2 (`extract`, `derive`, `search`, `show`, `verify` over `.twdll/extracted/`) is **active** (Steps 1–3 complete: selective `init`, `internal/extractdb`, and `internal/bronze`; Silver/Decomp/Gold/query commands are next). Stage 3 (`src/` C++ rewrite + `build`/`pack`/`install`/`run`/`test`/`docs`) is **planned / frozen** until Stage 2 completes.  
 See [`../docs/cli_re_pipeline_spec.md`](../docs/cli_re_pipeline_spec.md) for the full architecture spec and [`AGENTS.md`](AGENTS.md) for code invariants.
 
 ---
@@ -50,8 +50,10 @@ How the wrappers work:
 
 - **`twdll init [flags]`**  
   Idempotent 4-step setup: (1) portable `cmake`, `ninja`, `llvm`, `xwin`, `rpfm_cli`; (2) 32-bit `empire.retail.dll` staging; (3) mandatory 64-bit Linux `attila_64` ELF+DWARF acquisition/verification; (4) `ghidra` (+ OpenJDK) or `ida` validation.
-  - `--clear` — Clear `init` artifacts (`twdll.toml`, `binaries/`, non-Go `.twdll/tools/`, and `init` entries in `state.json`) before re-initializing, preserving `analyze` databases/logs (`db/`, `logs/`, `analyzed_sha256`). Never deletes an external `TWDLL_TOOLS_DIR`.
+  - `--clear` — Clear `init` artifacts (`twdll.toml`, `binaries/`, non-Go `.twdll/tools/`, and `init` entries in `state.json`) before re-initializing, preserving `analyze` and `extract` artifacts (`db/`, `extracted/`, `logs/`, `analyzed_sha256`). Never deletes an external `TWDLL_TOOLS_DIR`.
   - `--no-input` — Disable interactive prompts and fail fast with actionable `stderr` diagnostics on missing inputs.
+  - `--json` — Emit machine-readable JSON summary to `stdout`.
+  - `--games <GAMES>` — 32-bit target games to enable (comma-separated: `attila,rome2,tob`); interactive TTY prompts via multi-select checkboxes (`attila_64` remains mandatory; unchecked 32-bit games have their `.twdll/binaries/<game>_32/` copy pruned without deleting `.twdll/db/` or `.twdll/extracted/`).
   - `--default-game <attila|rome2|tob>`
   - `--decompiler <ghidra|ida>`
   - `--ida-dir <path>`, `--attila-dir <path>`, `--rome2-dir <path>`, `--tob-dir <path>`, `--attila-64 <path>`
@@ -67,7 +69,7 @@ How the wrappers work:
   - `[targets...]` — Positional target list (`attila_64`, `attila_32`, `rome2_32`, `tob_32`).
 
 - **`twdll clean [-d ghidra|ida|all] [--all] [targets...]`**  
-  Deletes `.twdll/db/<engine>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without touching `.twdll/tools/` or `.twdll/binaries/`. Pass `--all` alone to wipe all `init` and `analyze` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
+  Deletes `.twdll/db/<engine>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without touching `.twdll/tools/`, `.twdll/binaries/`, or `.twdll/extracted/`. Pass `--all` alone to wipe all `init`, `analyze`, and `extract` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `extracted/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
 
 ### Additional Environment Variables
 
@@ -90,8 +92,10 @@ cli/
 │   ├── analyze/                # ELF/PE inspection, memory sizing, Ghidra/IDA runners, telemetry
 │   ├── binaries/               # Steam discovery, PE32/ELF64+DWARF verification, pinned attila_64 hash
 │   ├── bootstrap/              # Staleness-checked CLI auto-rebuild
+│   ├── bronze/                 # Pure-Go PE32/ELF64/DWARF/string/vtable/lua_reg extractors feeding facts.sqlite
 │   ├── cmd/                    # status, init, analyze, clean orchestration
 │   ├── e2e/                    # //go:build e2e real-decompiler harness & mini_warscape.cpp fixture
+│   ├── extractdb/              # Pure-Go SQLite (modernc.org/sqlite + FTS5) storage (AtomicBuilder, DecompStore, manifest.json)
 │   ├── term/                   # TTY detection, Out/Err stream separation, prompts, diagnostics
 │   ├── toolchain/              # Portable tool manifest, archive downloads, IDA validation
 │   └── workspace/              # twdll.toml, .twdll/state.json, path resolution
