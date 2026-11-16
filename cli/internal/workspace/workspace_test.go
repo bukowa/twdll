@@ -67,11 +67,29 @@ func TestResolve_UsesCustomConfigAndDataDirPrecedence(t *testing.T) {
 	if layout.Paths.DBDir != filepath.Join(wantDataDir, "db") {
 		t.Fatalf("DBDir = %q, want inside sandbox", layout.Paths.DBDir)
 	}
+	if layout.Paths.ExtractedDir != filepath.Join(wantDataDir, "extracted") {
+		t.Fatalf("ExtractedDir = %q, want inside sandbox", layout.Paths.ExtractedDir)
+	}
+	if layout.Paths.FactsDBPath(TargetAttila32) != filepath.Join(wantDataDir, "extracted", "attila_32", "facts.sqlite") {
+		t.Fatalf("FactsDBPath = %q, want inside sandbox", layout.Paths.FactsDBPath(TargetAttila32))
+	}
+	if layout.Paths.DecompCacheDBPath(TargetAttila32) != filepath.Join(wantDataDir, "extracted", "attila_32", "decomp_cache.sqlite") {
+		t.Fatalf("DecompCacheDBPath = %q, want inside sandbox", layout.Paths.DecompCacheDBPath(TargetAttila32))
+	}
+	if layout.Paths.TargetManifestPath(TargetAttila32) != filepath.Join(wantDataDir, "extracted", "attila_32", "manifest.json") {
+		t.Fatalf("TargetManifestPath = %q, want inside sandbox", layout.Paths.TargetManifestPath(TargetAttila32))
+	}
+	if layout.Paths.GoldDBPath() != filepath.Join(wantDataDir, "extracted", "gold.sqlite") {
+		t.Fatalf("GoldDBPath = %q, want inside sandbox", layout.Paths.GoldDBPath())
+	}
 	if layout.Paths.BinDir != filepath.Join(repoRoot, ".twdll", "bin") {
 		t.Fatalf("BinDir = %q, want shared .twdll/bin", layout.Paths.BinDir)
 	}
 	if flagLayout.Paths.DataDir != filepath.Join(repoRoot, ".twdll-flag") {
 		t.Fatalf("DataDirOverride ignored: got %q", flagLayout.Paths.DataDir)
+	}
+	if flagLayout.Paths.ExtractedDir != filepath.Join(repoRoot, ".twdll-flag", "extracted") {
+		t.Fatalf("flagLayout.Paths.ExtractedDir = %q, want inside flag sandbox", flagLayout.Paths.ExtractedDir)
 	}
 }
 

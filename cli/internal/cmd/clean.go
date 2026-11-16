@@ -142,7 +142,7 @@ func RunClean(_ context.Context, req CleanRequest) error {
 
 func runCleanAll(paths workspace.Paths, ui *term.UI) error {
 	hadArtifacts := false
-	for _, p := range []string{paths.Config, paths.StateFile, paths.BinsDir, paths.DBDir, paths.LogsDir} {
+	for _, p := range []string{paths.Config, paths.StateFile, paths.BinsDir, paths.DBDir, paths.ExtractedDir, paths.LogsDir} {
 		if _, err := os.Stat(p); err == nil {
 			hadArtifacts = true
 			break
@@ -171,7 +171,7 @@ func runCleanAll(paths workspace.Paths, ui *term.UI) error {
 	if !paths.HasExternalToolsDir() {
 		_ = os.Remove(paths.ToolsDir)
 	}
-	for _, dir := range []string{paths.BinsDir, paths.DBDir, paths.LogsDir} {
+	for _, dir := range []string{paths.BinsDir, paths.DBDir, paths.ExtractedDir, paths.LogsDir} {
 		if err := os.RemoveAll(dir); err != nil {
 			return fmt.Errorf("remove %s: %w", dir, err)
 		}

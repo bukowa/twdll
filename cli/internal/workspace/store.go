@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -234,15 +235,58 @@ func CopyFileAtomic(src, dst string) error {
 	return nil
 }
 
+var renameBackoff = []time.Duration{
+	10 * time.Millisecond,
+	25 * time.Millisecond,
+	50 * time.Millisecond,
+	100 * time.Millisecond,
+	200 * time.Millisecond,
+}
+
+func RenameWithRetry(src, dst string) error {
+	var lastErr error
+	for attempt := 0; ; attempt++ {
+		lastErr = os.Rename(src, dst)
+		if lastErr == nil {
+			return nil
+		}
+		if errors.Is(lastErr, os.ErrPermission) {
+			_ = os.Chmod(dst, 0o600)
+		}
+		if attempt >= len(renameBackoff) {
+			return fmt.Errorf("rename %s to %s: %w", src, dst, lastErr)
+		}
+		time.Sleep(renameBackoff[attempt])
+	}
+}
+
+func SyncFileWithRetry(path string) error {
+	var f *os.File
+	var lastErr error
+	for attempt := 0; ; attempt++ {
+		f, lastErr = os.OpenFile(path, os.O_RDWR, 0)
+		if lastErr == nil {
+			break
+		}
+		if errors.Is(lastErr, os.ErrPermission) {
+			_ = os.Chmod(path, 0o600)
+		}
+		if attempt >= len(renameBackoff) {
+			return fmt.Errorf("open %s for sync: %w", path, lastErr)
+		}
+		time.Sleep(renameBackoff[attempt])
+	}
+	syncErr := f.Sync()
+	closeErr := f.Close()
+	if syncErr != nil {
+		return syncErr
+	}
+	return closeErr
+}
+
 func commitTempFile(tmpName, dst string, perm os.FileMode) error {
 	if err := os.Chmod(tmpName, perm); err != nil {
 		return fmt.Errorf("chmod temp file %s: %w", tmpName, err)
 	}
-	if err := os.Rename(tmpName, dst); err != nil {
-		_ = os.Remove(dst)
-		if rErr := os.Rename(tmpName, dst); rErr != nil {
-			return fmt.Errorf("rename %s to %s: %w", tmpName, dst, rErr)
-		}
-	}
-	return nil
+	return RenameWithRetry(tmpName, dst)
 }

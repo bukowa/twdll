@@ -3,7 +3,6 @@
 package analyze
 
 import (
-	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -226,8 +225,7 @@ func (c *jobController) queryAndClose() (userTime, kernelTime time.Duration, pea
 	return userTime, kernelTime, peakJob, peakProc, totalProcs, assigned
 }
 
-func runObservedCommand(ctx context.Context, cmd *exec.Cmd, onSample func(LiveProcessStats)) (ProcessMetrics, error) {
-	_ = ctx
+func runObservedCommand(cmd *exec.Cmd, onSample func(LiveProcessStats)) (ProcessMetrics, error) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	} else {

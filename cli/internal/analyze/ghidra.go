@@ -197,7 +197,7 @@ func runGhidraTarget(ctx context.Context, spec ghidraJobSpec) (targetRunResult, 
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
 
-	metrics, runErr := runObservedCommand(ctx, cmd, spec.onSample)
+	metrics, runErr := runObservedCommand(cmd, spec.onSample)
 	res := targetRunResult{
 		Metrics:      metrics,
 		GhidraMaxMem: maxMem,

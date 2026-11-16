@@ -335,6 +335,13 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		if err := os.WriteFile(resLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		extractedFacts := paths.FactsDBPath(workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(extractedFacts), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(extractedFacts, []byte("facts-sqlite"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 
 		st := workspace.NewState()
 		st.SetTool(workspace.ToolGhidra, workspace.ToolState{Version: "12.0.4", SHA256: "toolhash"})
@@ -366,8 +373,8 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 			}
 		}
 
-		// Config, staged binaries, and init state entries must remain intact
-		for _, kept := range []string{paths.Config, binFile, paths.StateFile} {
+		// Config, staged binaries, extracted DBs, and init state entries must remain intact
+		for _, kept := range []string{paths.Config, binFile, extractedFacts, paths.StateFile} {
 			if _, sErr := os.Stat(kept); sErr != nil {
 				t.Fatalf("expected %s to be preserved by unscoped clean: %v", kept, sErr)
 			}
@@ -430,6 +437,13 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		if err := os.WriteFile(logFile, []byte("log"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		extractedFile := paths.FactsDBPath(workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(extractedFile), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(extractedFile, []byte("facts"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		if err := workspace.SaveState(paths.StateFile, workspace.NewState()); err != nil {
 			t.Fatal(err)
 		}
@@ -448,6 +462,7 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 			paths.StateFile,
 			paths.BinsDir,
 			paths.DBDir,
+			paths.ExtractedDir,
 			paths.LogsDir,
 			paths.ToolDir(workspace.ToolGhidra),
 			paths.ToolDir(workspace.ToolLLVM),
@@ -525,6 +540,13 @@ func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
 	if err := os.WriteFile(preservedResLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	preservedExtracted := layout.Paths.FactsDBPath(workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(preservedExtracted), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(preservedExtracted, []byte("extracted-facts"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	gameDir := filepath.Join(root, "FakeAttila")
 	if err := os.MkdirAll(gameDir, 0o755); err != nil {
@@ -575,9 +597,9 @@ func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
 	if _, sErr := os.Stat(staleBin); !errors.Is(sErr, os.ErrNotExist) {
 		t.Fatalf("expected stale BinsDir artifact to be removed by init --clear, stat err = %v", sErr)
 	}
-	for _, preserved := range []string{preservedDB, preservedLog, preservedResLog} {
+	for _, preserved := range []string{preservedDB, preservedLog, preservedResLog, preservedExtracted} {
 		if _, sErr := os.Stat(preserved); sErr != nil {
-			t.Fatalf("expected analyze artifact %s to be preserved by init --clear: %v", preserved, sErr)
+			t.Fatalf("expected analyze/extract artifact %s to be preserved by init --clear: %v", preserved, sErr)
 		}
 	}
 

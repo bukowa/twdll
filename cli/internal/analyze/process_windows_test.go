@@ -32,7 +32,7 @@ func TestRunObservedCommand_WindowsJobObjectKillsBatchTreeCleanly(t *testing.T) 
 
 	// When runObservedCommand cancels via Windows Job Object
 	start := time.Now()
-	metrics, err := runObservedCommand(ctx, cmd, nil)
+	metrics, err := runObservedCommand(cmd, nil)
 	elapsed := time.Since(start)
 
 	// Then it returns quickly without "Terminate batch job" prompts and records JobAssigned
@@ -54,7 +54,7 @@ func TestRunObservedCommand_CollectsMetricsOnQuickCommand(t *testing.T) {
 	ctx := context.Background()
 	cmd := exec.CommandContext(ctx, compiledFakeHelper, "-c")
 	cmd.Dir = t.TempDir()
-	metrics, _ := runObservedCommand(ctx, cmd, nil)
+	metrics, _ := runObservedCommand(cmd, nil)
 
 	if metrics.WallDuration <= 0 {
 		t.Fatalf("expected WallDuration > 0, got %s", metrics.WallDuration)
@@ -77,7 +77,7 @@ func TestRunObservedCommand_StreamsLiveProcessSamples(t *testing.T) {
 
 	cmd := exec.CommandContext(ctx, batPath)
 	var samples []LiveProcessStats
-	metrics, err := runObservedCommand(ctx, cmd, func(s LiveProcessStats) {
+	metrics, err := runObservedCommand(cmd, func(s LiveProcessStats) {
 		samples = append(samples, s)
 	})
 	if err != nil {

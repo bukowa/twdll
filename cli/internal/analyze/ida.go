@@ -106,7 +106,7 @@ func runIDATarget(ctx context.Context, spec idaJobSpec) (targetRunResult, error)
 	if spec.onLogLine != nil {
 		flushTail = tailLogFile(ctx.Done(), spec.item.LogPath, spec.onLogLine)
 	}
-	metrics, runErr := runObservedCommand(ctx, cmd, spec.onSample)
+	metrics, runErr := runObservedCommand(cmd, spec.onSample)
 	res := targetRunResult{
 		Metrics: metrics,
 		Started: true,

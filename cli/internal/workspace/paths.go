@@ -23,15 +23,16 @@ type Layout struct {
 }
 
 type Paths struct {
-	Root      string
-	Config    string
-	DataDir   string
-	BinDir    string
-	ToolsDir  string
-	BinsDir   string
-	DBDir     string
-	LogsDir   string
-	StateFile string
+	Root         string
+	Config       string
+	DataDir      string
+	BinDir       string
+	ToolsDir     string
+	BinsDir      string
+	DBDir        string
+	ExtractedDir string
+	LogsDir      string
+	StateFile    string
 }
 
 // Resolve applies DataDir precedence: --data-dir > TWDLL_DATA_DIR > config.data_dir > <root>/.twdll.
@@ -144,15 +145,16 @@ func NewPaths(repoRoot, configPath, dataDir string) Paths {
 	}
 	cleanData := filepath.Clean(dataDir)
 	return Paths{
-		Root:      cleanRoot,
-		Config:    filepath.Clean(configPath),
-		DataDir:   cleanData,
-		BinDir:    filepath.Join(cleanRoot, ".twdll", "bin"),
-		ToolsDir:  filepath.Join(cleanData, "tools"),
-		BinsDir:   filepath.Join(cleanData, "binaries"),
-		DBDir:     filepath.Join(cleanData, "db"),
-		LogsDir:   filepath.Join(cleanData, "logs"),
-		StateFile: filepath.Join(cleanData, "state.json"),
+		Root:         cleanRoot,
+		Config:       filepath.Clean(configPath),
+		DataDir:      cleanData,
+		BinDir:       filepath.Join(cleanRoot, ".twdll", "bin"),
+		ToolsDir:     filepath.Join(cleanData, "tools"),
+		BinsDir:      filepath.Join(cleanData, "binaries"),
+		DBDir:        filepath.Join(cleanData, "db"),
+		ExtractedDir: filepath.Join(cleanData, "extracted"),
+		LogsDir:      filepath.Join(cleanData, "logs"),
+		StateFile:    filepath.Join(cleanData, "state.json"),
 	}
 }
 
@@ -206,6 +208,21 @@ func (p Paths) BinaryPath(t TargetID) string {
 }
 func (p Paths) DatabaseDir(d DecompilerID, t TargetID) string {
 	return filepath.Join(p.DBDir, string(d), string(t))
+}
+func (p Paths) ExtractedTargetDir(t TargetID) string {
+	return filepath.Join(p.ExtractedDir, string(t))
+}
+func (p Paths) FactsDBPath(t TargetID) string {
+	return filepath.Join(p.ExtractedTargetDir(t), "facts.sqlite")
+}
+func (p Paths) DecompCacheDBPath(t TargetID) string {
+	return filepath.Join(p.ExtractedTargetDir(t), "decomp_cache.sqlite")
+}
+func (p Paths) TargetManifestPath(t TargetID) string {
+	return filepath.Join(p.ExtractedTargetDir(t), "manifest.json")
+}
+func (p Paths) GoldDBPath() string {
+	return filepath.Join(p.ExtractedDir, "gold.sqlite")
 }
 
 func (p Paths) DatabaseMarkerPath(d DecompilerID, t TargetID) string {
