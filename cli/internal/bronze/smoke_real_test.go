@@ -230,8 +230,14 @@ func TestSmokeRealBinaries(t *testing.T) {
 				`).Scan(&luaTables, &luaMethods); err != nil {
 					t.Fatal(err)
 				}
-				t.Logf("[%s] lua_regs: tables=%d methods=%d | vtables_rows=%d | functions=%d",
-					target, luaTables, luaMethods, res.Counts["vtables"], res.Counts["functions"])
+				noSeedOverrideCount := 0
+				for _, s := range res.Seeds {
+					if s.Flags&extractdb.FuncFlagNoSeedOverride != 0 {
+						noSeedOverrideCount++
+					}
+				}
+				t.Logf("[%s] lua_regs: tables=%d methods=%d | vtables_rows=%d | functions=%d | no_seed_override=%d",
+					target, luaTables, luaMethods, res.Counts["vtables"], res.Counts["functions"], noSeedOverrideCount)
 				if luaTables < 39 {
 					t.Errorf("[%s] lua_regs distinct tables = %d, want >= 39", target, luaTables)
 				}

@@ -310,6 +310,54 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 	if rdataWrites != 0 {
 		t.Errorf("rdata write data_xrefs = %d, want 0", rdataWrites)
 	}
+
+	// 11. Verify __chkstk caller (`MOV EAX, 0x1044; CALL __chkstk; MOV EDI, ECX; ...; RET`) classifies as __thiscall,
+	// and __chkstk itself gets FuncFlagNoSeedOverride.
+	fnChkstkCaller, ok := seedByEA[uint64(fix.fnChkstkCallerVA)]
+	if !ok {
+		t.Fatalf("missing __chkstk caller seed at 0x%x", fix.fnChkstkCallerVA)
+	}
+	if fnChkstkCaller.CallingConv != "__thiscall" {
+		t.Errorf("__chkstk caller CallingConv = %q, want __thiscall (seed=%+v)", fnChkstkCaller.CallingConv, fnChkstkCaller)
+	}
+	fnChkstk, ok := seedByEA[uint64(fix.fnChkstkVA)]
+	if !ok {
+		t.Fatalf("missing __chkstk seed at 0x%x", fix.fnChkstkVA)
+	}
+	if fnChkstk.Flags&extractdb.FuncFlagNoSeedOverride == 0 {
+		t.Errorf("__chkstk Flags = 0x%x, want FuncFlagNoSeedOverride (0x%x)", fnChkstk.Flags, extractdb.FuncFlagNoSeedOverride)
+	}
+
+	// 12. Verify .CRT$XCU initializer (`PUSH reloc(str); MOV ECX, reloc(obj); CALL ctor; ...; RET`)
+	// is discovered from .rdata pointer array as DiscoveryDataPtr.
+	fnCRTInit, ok := seedByEA[uint64(fix.fnCRTInitStubVA)]
+	if !ok {
+		t.Fatalf("missing .CRT$XCU initializer seed at 0x%x", fix.fnCRTInitStubVA)
+	}
+	if fnCRTInit.DiscoveryMask&extractdb.DiscoveryDataPtr == 0 {
+		t.Errorf(".CRT$XCU initializer DiscoveryMask = 0x%x, want DiscoveryDataPtr", fnCRTInit.DiscoveryMask)
+	}
+
+	// 13. Verify _atexit destructor thunk (`MOV ECX, reloc(obj); JMP dtor`) is discovered from .text PUSH imm32 reloc.
+	fnAtexitDtor, ok := seedByEA[uint64(fix.fnAtexitDtorVA)]
+	if !ok {
+		t.Fatalf("missing _atexit destructor thunk seed at 0x%x", fix.fnAtexitDtorVA)
+	}
+	if fnAtexitDtor.DiscoveryMask&extractdb.DiscoveryDataPtr == 0 {
+		t.Errorf("_atexit destructor thunk DiscoveryMask = 0x%x, want DiscoveryDataPtr", fnAtexitDtor.DiscoveryMask)
+	}
+
+	// 14. Verify normal `6A FF 68 <reloc> 64 A1 00 00 00 00` SEH game function is discovered and does NOT get FuncFlagNoSeedOverride.
+	fnNormalSEH, ok := seedByEA[uint64(fix.fnNormalSEHVA)]
+	if !ok {
+		t.Fatalf("missing normal SEH game function seed at 0x%x", fix.fnNormalSEHVA)
+	}
+	if fnNormalSEH.Flags&extractdb.FuncFlagNoSeedOverride != 0 {
+		t.Errorf("normal SEH game function Flags = 0x%x, must NOT have FuncFlagNoSeedOverride", fnNormalSEH.Flags)
+	}
+	if fnNormalSEH.CallingConv != "__thiscall" {
+		t.Errorf("normal SEH game function CallingConv = %q, want __thiscall", fnNormalSEH.CallingConv)
+	}
 }
 
 type syntheticPE32Layout struct {
@@ -329,6 +377,11 @@ type syntheticPE32Layout struct {
 	fnSeteCdeclVA    uint32
 	fnLargeFuncVA    uint32
 	fnLargeFuncSize  uint32
+	fnChkstkVA       uint32
+	fnChkstkCallerVA uint32
+	fnCRTInitStubVA  uint32
+	fnAtexitDtorVA   uint32
+	fnNormalSEHVA    uint32
 	swCaseVAs        []uint32
 	vt1VA            uint32
 	vt2VA            uint32
@@ -420,6 +473,11 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 		offSwCase2      = 0x160
 		offSwCase3      = 0x170
 		offLargeFunc    = 0x200
+		offChkstk       = 0x340
+		offChkstkCaller = 0x360
+		offCRTInitStub  = 0x390
+		offAtexitDtor   = 0x3C0
+		offNormalSEH    = 0x3E0
 	)
 	for rdPos%4 != 0 {
 		rdPos++
@@ -444,6 +502,11 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 		fnPushECXLocalVA: imageBase + textRVA + offPushECXLocal,
 		fnSeteCdeclVA:    imageBase + textRVA + offSeteCdecl,
 		fnLargeFuncVA:    imageBase + textRVA + offLargeFunc,
+		fnChkstkVA:       imageBase + textRVA + offChkstk,
+		fnChkstkCallerVA: imageBase + textRVA + offChkstkCaller,
+		fnCRTInitStubVA:  imageBase + textRVA + offCRTInitStub,
+		fnAtexitDtorVA:   imageBase + textRVA + offAtexitDtor,
+		fnNormalSEHVA:    imageBase + textRVA + offNormalSEH,
 		swCaseVAs: []uint32{
 			imageBase + textRVA + offSwCase1,
 			imageBase + textRVA + offSwCase2,
@@ -505,6 +568,13 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 		binary.LittleEndian.PutUint32(rdata[p+8:p+12], 0) // adj == 0, non-relocated
 	}
 	rdPos = lunarTableOff + 4*12
+
+	// Place .CRT$XCU initializer pointer array in .rdata (null-padded around fnCRTInitStubVA):
+	rdPos += 4
+	crtInitSlotOff := rdPos
+	binary.LittleEndian.PutUint32(rdata[crtInitSlotOff:crtInitSlotOff+4], lay.fnCRTInitStubVA)
+	addReloc(uint32(rdataRVA + crtInitSlotOff))
+	rdPos = crtInitSlotOff + 8
 
 	// Populate .text functions:
 	// 1. fnExportCtor:
@@ -620,6 +690,82 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	copy(text[lp:], []byte{0x5D, 0xC2, 0x04, 0x00})
 	lp += 4
 	lay.fnLargeFuncSize = uint32(lp - offLargeFunc)
+
+	// 12. fnChkstk: push ecx; lea ecx, [esp+4]; sub ecx, eax; xchg esp, eax; jmp dword ptr [eax]
+	copy(text[offChkstk:], []byte{
+		0x51,                   // push ecx
+		0x8D, 0x4C, 0x24, 0x04, // lea ecx, [esp+4]
+		0x2B, 0xC8, // sub ecx, eax
+		0x94,       // xchg esp, eax
+		0xFF, 0x20, // jmp dword ptr [eax]
+	})
+
+	// 13. fnChkstkCaller: push ebp; mov ebp, esp; mov eax, 0x1044; call __chkstk; mov edi, ecx; mov esp, ebp; pop ebp; ret
+	cp := offChkstkCaller
+	copy(text[cp:], []byte{0x55, 0x8B, 0xEC, 0xB8, 0x44, 0x10, 0x00, 0x00})
+	cp += 8
+	text[cp] = 0xE8
+	binary.LittleEndian.PutUint32(text[cp+1:cp+5], uint32(int32(offChkstk-(cp+5))))
+	cp += 5
+	copy(text[cp:], []byte{0x8B, 0xF9, 0x8B, 0xE5, 0x5D, 0xC3}) // mov edi, ecx; mov esp, ebp; pop ebp; ret
+
+	// 14. fnCRTInitStub (preceded by 0xCC, discovered from .rdata pointer array):
+	//   68 <strLun1>          push reloc(str)
+	//   B9 <dataObjVA>        mov ecx, reloc(obj)
+	//   E8 <offChkstkCaller>  call ctor
+	//   68 <fnAtexitDtorVA>   push reloc(atexit_dtor)
+	//   E8 <offLuaCdecl>      call _atexit
+	//   59                    pop ecx
+	//   C3                    ret
+	dataObjVA := uint32(imageBase + dataRVA + 0x20)
+	ip := offCRTInitStub
+	text[ip] = 0x68
+	binary.LittleEndian.PutUint32(text[ip+1:ip+5], strLun1)
+	addReloc(uint32(textRVA + ip + 1))
+	ip += 5
+	text[ip] = 0xB9
+	binary.LittleEndian.PutUint32(text[ip+1:ip+5], dataObjVA)
+	addReloc(uint32(textRVA + ip + 1))
+	ip += 5
+	text[ip] = 0xE8
+	binary.LittleEndian.PutUint32(text[ip+1:ip+5], uint32(int32(offChkstkCaller-(ip+5))))
+	ip += 5
+	text[ip] = 0x68
+	binary.LittleEndian.PutUint32(text[ip+1:ip+5], lay.fnAtexitDtorVA)
+	addReloc(uint32(textRVA + ip + 1))
+	ip += 5
+	text[ip] = 0xE8
+	binary.LittleEndian.PutUint32(text[ip+1:ip+5], uint32(int32(offLuaCdecl-(ip+5))))
+	ip += 5
+	copy(text[ip:], []byte{0x59, 0xC3})
+
+	// 15. fnAtexitDtor (preceded by 0xCC, discovered from .text PUSH imm32 reloc):
+	//   B9 <dataObjVA>        mov ecx, reloc(obj)
+	//   E9 <offNormalSEH>     jmp dtor
+	dp := offAtexitDtor
+	text[dp] = 0xB9
+	binary.LittleEndian.PutUint32(text[dp+1:dp+5], dataObjVA)
+	addReloc(uint32(textRVA + dp + 1))
+	dp += 5
+	text[dp] = 0xE9
+	binary.LittleEndian.PutUint32(text[dp+1:dp+5], uint32(int32(offNormalSEH-(dp+5))))
+
+	// 16. fnNormalSEH: normal game function with inlined SEH frame `6A FF 68 <reloc> 64 A1 00 00 00 00 ...`:
+	spSEH := offNormalSEH
+	text[spSEH] = 0x6A
+	text[spSEH+1] = 0xFF
+	text[spSEH+2] = 0x68
+	binary.LittleEndian.PutUint32(text[spSEH+3:spSEH+7], lay.fnLuaCdeclVA)
+	addReloc(uint32(textRVA + spSEH + 3))
+	spSEH += 7
+	copy(text[spSEH:], []byte{
+		0x64, 0xA1, 0x00, 0x00, 0x00, 0x00, // mov eax, fs:[0]
+		0x50,             // push eax
+		0x83, 0xEC, 0x08, // sub esp, 8
+		0x8B, 0x41, 0x04, // mov eax, [ecx+4]
+		0x83, 0xC4, 0x14, // add esp, 0x14
+		0xC3, // ret
+	})
 
 	// Build Import Directory at rdata+0x000:
 	// Descriptor 0 (20B) at +0x000, Descriptor 1 (null, 20B) at +0x014

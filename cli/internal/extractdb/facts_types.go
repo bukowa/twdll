@@ -40,11 +40,12 @@ const (
 
 // functions.flags bitmask constants.
 const (
-	FuncFlagThunk        uint32 = 1 << 0
-	FuncFlagVirtual      uint32 = 1 << 1
-	FuncFlagNoReturn     uint32 = 1 << 2
-	FuncFlagExternal     uint32 = 1 << 3
-	FuncFlagICFCandidate uint32 = 1 << 4
+	FuncFlagThunk          uint32 = 1 << 0
+	FuncFlagVirtual        uint32 = 1 << 1
+	FuncFlagNoReturn       uint32 = 1 << 2
+	FuncFlagExternal       uint32 = 1 << 3
+	FuncFlagICFCandidate   uint32 = 1 << 4
+	FuncFlagNoSeedOverride uint32 = 1 << 5
 )
 
 // functions.cc_source string enum constants.

@@ -142,6 +142,23 @@ func analyzePE32FunctionsAndXrefs(
 		}
 	}
 
+	// Scan .text PUSH imm32 (0x68 <reloc>) operands (e.g. _atexit destructor thunks) pointing into .text.
+	textRVA := img.textSec.rva
+	for off := 1; off+4 <= len(tb); off++ {
+		if tb[off-1] != 0x68 || !img.hasRelocAtRVA(textRVA+uint32(off)) {
+			continue
+		}
+		targetVA := binary.LittleEndian.Uint32(tb[off : off+4])
+		if codeRefs.isJumpTableSlot[targetVA] || codeRefs.isIndexedJumpTable[targetVA] || !img.inText(targetVA) {
+			continue
+		}
+		tOff := int(targetVA - textVA)
+		if isPrecededByFunctionBoundary(tb, tOff, textVA, img) && isValidPE32FunctionStart(tb, tOff, img) {
+			s := getOrCreateSeed(targetVA)
+			s.discoveryMask |= extractdb.DiscoveryDataPtr
+		}
+	}
+
 	// 2. Iterative instruction-synchronized decode from known seeds to discover E8 call targets.
 	decodedInstStart := make([]bool, len(tb))
 	queue := make([]uint32, 0, len(seedMap))
@@ -212,7 +229,15 @@ func analyzePE32FunctionsAndXrefs(
 					!img.hasRelocByteAtRVA(img.textSec.rva+uint32(off+4)) {
 					rel := int32(binary.LittleEndian.Uint32(tb[off+1 : off+5]))
 					target := uint32(int64(instVA) + 5 + int64(rel))
-					if tOff := int(target - textVA); tOff > furthestBranchOff && tOff < maxOff {
+					if off == startOff+5 && tb[startOff] == 0xB9 && img.hasRelocAtRVA(textRVA+uint32(startOff+1)) {
+						if target >= textVA && target < textEnd {
+							s := getOrCreateSeed(target)
+							s.discoveryMask |= extractdb.DiscoveryCallTarget
+							if !visitedSeed[target] {
+								queue = append(queue, target)
+							}
+						}
+					} else if tOff := int(target - textVA); tOff > furthestBranchOff && tOff < maxOff {
 						furthestBranchOff = tOff
 					}
 				} else if tb[off] == 0xEB && inst.Len == 2 {
@@ -240,7 +265,6 @@ func analyzePE32FunctionsAndXrefs(
 	}
 
 	// 3. Residual .text sweep for E8 rel32 call targets with prologue + boundary validation.
-	textRVA := img.textSec.rva
 	for off := 0; off+5 <= len(tb); off++ {
 		if tb[off] != 0xE8 {
 			continue
@@ -285,6 +309,7 @@ func analyzePE32FunctionsAndXrefs(
 	funcRows := make([]functionRow, 0, len(sortedVAs))
 	rangeRows := make([]funcRangeRow, 0, len(sortedVAs))
 	seeds := make([]FunctionSeed, 0, len(sortedVAs))
+	helperCache := make(map[uint32]bool, 64)
 	var (
 		callSites   []callSiteRow
 		dataXrefs   []dataXrefRow
@@ -323,7 +348,7 @@ func analyzePE32FunctionsAndXrefs(
 			cc = "__cdecl"
 			ccSrc = extractdb.CCSourceX86Asm
 		} else {
-			res := analyzePE32Body(tb, startOff, maxEndOff, va, img, strIdx)
+			res := analyzePE32Body(tb, startOff, maxEndOff, va, img, strIdx, helperCache)
 			fnSize = res.size
 			stackPurge = res.stackPurge
 			callSites = append(callSites, res.callSites...)
@@ -356,6 +381,9 @@ func analyzePE32FunctionsAndXrefs(
 
 		if fnSize == 0 {
 			fnSize = uint32(maxEndOff - startOff)
+		}
+		if !isThunk && isPE32CRTStackOrEHHelper(tb, startOff, fnSize, textVA, va, helperCache) {
+			s.flags |= extractdb.FuncFlagNoSeedOverride
 		}
 		if s.refCount >= 2 || (!isThunk && fnSize <= 16 && (s.discoveryMask&(extractdb.DiscoveryVtable|extractdb.DiscoveryLuaReg)) != 0) {
 			s.flags |= extractdb.FuncFlagICFCandidate
@@ -468,6 +496,7 @@ func isValidPE32FunctionStart(tb []byte, off int, img *peImageInfo) bool {
 		return false
 	}
 	textVA := img.textSec.va
+	textRVA := img.textSec.rva
 	if isStrongPE32FunctionPrologue(tb, off, textVA, img) {
 		return true
 	}
@@ -489,7 +518,229 @@ func isValidPE32FunctionStart(tb []byte, off int, img *peImageInfo) bool {
 	if b0 == 0x33 && b1 == 0xC0 {
 		return true
 	}
+	if isPrecededByFunctionBoundary(tb, off, textVA, img) {
+		// 0x68 <imm32> (PUSH imm32) where imm32 is relocated and followed within 20 bytes by a valid CALL rel32 (0xE8)
+		if b0 == 0x68 && off+10 <= len(tb) && img.hasRelocAtRVA(textRVA+uint32(off+1)) {
+			p := off + 5
+			for p+5 <= len(tb) && p-off <= 20 {
+				if tb[p] == 0xE8 &&
+					!img.hasRelocByteAtRVA(textRVA+uint32(p+1)) &&
+					!img.hasRelocByteAtRVA(textRVA+uint32(p+4)) {
+					rel := int32(binary.LittleEndian.Uint32(tb[p+1 : p+5]))
+					callee := uint32(int64(textVA) + int64(p+5) + int64(rel))
+					if img.inText(callee) {
+						return true
+					}
+				}
+				inst, err := x86asm.Decode(tb[p:], 32)
+				if err != nil || inst.Len <= 0 || isPrivilegedOrInvalidOp(inst.Op) || inst.Op == x86asm.RET || inst.Op == x86asm.JMP {
+					break
+				}
+				p += inst.Len
+			}
+		}
+		// 0xB9 <imm32> (MOV ECX, imm32) where imm32 is relocated and the next instruction is 0xE9 (JMP rel32) or 0xE8 (CALL rel32)
+		if b0 == 0xB9 && off+10 <= len(tb) && img.hasRelocAtRVA(textRVA+uint32(off+1)) {
+			nextOp := tb[off+5]
+			if (nextOp == 0xE9 || nextOp == 0xE8) &&
+				!img.hasRelocByteAtRVA(textRVA+uint32(off+6)) &&
+				!img.hasRelocByteAtRVA(textRVA+uint32(off+9)) {
+				rel := int32(binary.LittleEndian.Uint32(tb[off+6 : off+10]))
+				target := uint32(int64(textVA) + int64(off+10) + int64(rel))
+				if img.inText(target) {
+					return true
+				}
+			}
+		}
+	}
 	return false
+}
+
+func isPE32ChkstkPrefix(tb []byte, off int) bool {
+	if off < 0 || off+4 > len(tb) {
+		return false
+	}
+	// 51 8D 4C 24: push ecx; lea ecx, [esp+...]
+	if tb[off] == 0x51 && tb[off+1] == 0x8D && tb[off+2] == 0x4C && tb[off+3] == 0x24 {
+		return true
+	}
+	// 51 3D 00 10 00 00: push ecx; cmp eax, 0x1000
+	if off+6 <= len(tb) && tb[off] == 0x51 && tb[off+1] == 0x3D &&
+		tb[off+2] == 0x00 && tb[off+3] == 0x10 && tb[off+4] == 0x00 && tb[off+5] == 0x00 {
+		return true
+	}
+	// 3D 00 10 00 00: cmp eax, 0x1000
+	if off+5 <= len(tb) && tb[off] == 0x3D &&
+		tb[off+1] == 0x00 && tb[off+2] == 0x10 && tb[off+3] == 0x00 && tb[off+4] == 0x00 {
+		return true
+	}
+	return false
+}
+
+func instHasFSSegment(inst x86asm.Inst, raw []byte) bool {
+	if len(raw) > 0 && raw[0] == 0x64 {
+		return true
+	}
+	for _, p := range inst.Prefix {
+		if p == 0 {
+			break
+		}
+		if (p&0xFF) == 0x64 || p == x86asm.PrefixFS {
+			return true
+		}
+	}
+	for _, arg := range inst.Args {
+		if mem, ok := arg.(x86asm.Mem); ok && mem.Segment == x86asm.FS {
+			return true
+		}
+	}
+	return false
+}
+
+func isPE32PrologueHelperCall(tb []byte, textVA uint32, calleeVA uint32, helperCache map[uint32]bool) bool {
+	if helperCache != nil {
+		if v, ok := helperCache[calleeVA]; ok {
+			return v
+		}
+	}
+	res := computePE32PrologueHelper(tb, textVA, calleeVA)
+	if helperCache != nil {
+		helperCache[calleeVA] = res
+	}
+	return res
+}
+
+func computePE32PrologueHelper(tb []byte, textVA uint32, calleeVA uint32) bool {
+	if calleeVA < textVA {
+		return false
+	}
+	startOff := int(calleeVA - textVA)
+	if startOff < 0 || startOff >= len(tb) {
+		return false
+	}
+	if isPE32ChkstkPrefix(tb, startOff) {
+		return true
+	}
+	if startOff+3 <= len(tb) {
+		b0, b1, b2 := tb[startOff], tb[startOff+1], tb[startOff+2]
+		// Exclude standard frame pointer prologue (55 8B EC / 55 89 E5 / 8B FF 55)
+		// and standard inlined SEH frame setup (6A FF 68 <handler>).
+		if b0 == 0x55 && ((b1 == 0x8B && b2 == 0xEC) || (b1 == 0x89 && b2 == 0xE5)) {
+			return false
+		}
+		if b0 == 0x8B && b1 == 0xFF && b2 == 0x55 {
+			return false
+		}
+		if b0 == 0x6A && b1 == 0xFF && b2 == 0x68 {
+			return false
+		}
+	}
+
+	off := startOff
+	maxOff := startOff + 96
+	if maxOff > len(tb) {
+		maxOff = len(tb)
+	}
+	touchesFS := false
+	for step := 0; step < 22 && off < maxOff; step++ {
+		if off+3 <= len(tb) && tb[off] == 0x6A && tb[off+1] == 0xFF && tb[off+2] == 0x68 {
+			return false
+		}
+		inst, err := x86asm.Decode(tb[off:], 32)
+		if err != nil || inst.Len <= 0 || off+inst.Len > maxOff {
+			break
+		}
+		if instHasFSSegment(inst, tb[off:off+inst.Len]) {
+			touchesFS = true
+		}
+		if inst.Op == x86asm.CALL {
+			return false
+		}
+		if inst.Op == x86asm.RET || inst.Op == x86asm.JMP {
+			return touchesFS
+		}
+		if _, writesECX := classifyECXAccess(inst); writesECX {
+			return false
+		}
+		off += inst.Len
+	}
+	return false
+}
+
+func isPE32CRTStackOrEHHelper(tb []byte, startOff int, fnSize uint32, textVA uint32, va uint32, helperCache map[uint32]bool) bool {
+	if fnSize > 160 || startOff < 0 || startOff >= len(tb) {
+		return false
+	}
+	if isPE32ChkstkPrefix(tb, startOff) {
+		return true
+	}
+	if isPE32PrologueHelperCall(tb, textVA, va, helperCache) {
+		return true
+	}
+	// Check MSVC __EH_epilog* / __SEH_epilog* (e.g. mov ecx, [ebp-0xc]; mov fs:[0], ecx; pop ecx; ...; ret):
+	if startOff+3 <= len(tb) {
+		b0, b1, b2 := tb[startOff], tb[startOff+1], tb[startOff+2]
+		if b0 == 0x55 && ((b1 == 0x8B && b2 == 0xEC) || (b1 == 0x89 && b2 == 0xE5)) {
+			return false
+		}
+		if b0 == 0x6A && b1 == 0xFF && b2 == 0x68 {
+			return false
+		}
+	}
+	off := startOff
+	limit := startOff + int(fnSize)
+	if limit > len(tb) {
+		limit = len(tb)
+	}
+	for step := 0; step < 4 && off+7 <= limit; step++ {
+		if tb[off] == 0x64 && tb[off+1] == 0x89 && tb[off+2] == 0x0D &&
+			tb[off+3] == 0x00 && tb[off+4] == 0x00 && tb[off+5] == 0x00 && tb[off+6] == 0x00 {
+			return true
+		}
+		inst, err := x86asm.Decode(tb[off:], 32)
+		if err != nil || inst.Len <= 0 {
+			break
+		}
+		off += inst.Len
+	}
+	return false
+}
+
+// ClassifyPE32FunctionAt classifies a single PE32 .text function at va (useful for Silver Ghidra-only seeds).
+func ClassifyPE32FunctionAt(tb []byte, textVA, textRVA uint32, img *peImageInfo, va uint32) FunctionSeed {
+	seed := FunctionSeed{
+		EA:          uint64(va),
+		Name:        formatSubName(uint64(va)),
+		CallingConv: "__cdecl",
+		CCSource:    extractdb.CCSourceX86Asm,
+		VtableSlot:  -1,
+	}
+	if va < textVA || int(va-textVA) >= len(tb) {
+		return seed
+	}
+	startOff := int(va - textVA)
+	maxEndOff := startOff + 32768
+	if maxEndOff > len(tb) {
+		maxEndOff = len(tb)
+	}
+	if img != nil {
+		if isThunk, thunkTarget, _ := detectPE32Thunk(tb, startOff, textVA, img); isThunk {
+			seed.Flags |= extractdb.FuncFlagThunk
+			seed.ThunkTargetEA = thunkTarget
+			return seed
+		}
+		res := analyzePE32Body(tb, startOff, maxEndOff, va, img, nil, nil)
+		seed.StackPurge = res.stackPurge
+		if res.readsECX {
+			seed.CallingConv = "__thiscall"
+		} else if res.stackPurge > 0 {
+			seed.CallingConv = "__stdcall"
+		}
+		if isPE32CRTStackOrEHHelper(tb, startOff, res.size, textVA, va, nil) {
+			seed.Flags |= extractdb.FuncFlagNoSeedOverride
+		}
+	}
+	return seed
 }
 
 func isPrivilegedOrInvalidOp(op x86asm.Op) bool {
@@ -539,6 +790,7 @@ func analyzePE32Body(
 	fnVA uint32,
 	img *peImageInfo,
 	strIdx *stringIndex,
+	helperCache map[uint32]bool,
 ) peBodyAnalysis {
 	textVA := img.textSec.va
 	textRVA := img.textSec.rva
@@ -600,14 +852,25 @@ func analyzePE32Body(
 		// Record call sites & tail jumps.
 		switch inst.Op {
 		case x86asm.CALL:
-			ecxOverw = true
+			isPrologueHelper := false
+			if instCount <= 10 && tb[off] == 0xE8 && inst.Len == 5 &&
+				!img.hasRelocByteAtRVA(textRVA+uint32(off+1)) &&
+				!img.hasRelocByteAtRVA(textRVA+uint32(off+4)) {
+				rel := int32(binary.LittleEndian.Uint32(tb[off+1 : off+5]))
+				calleeVA := uint32(int64(instVA) + 5 + int64(rel))
+				isPrologueHelper = isPE32PrologueHelperCall(tb, textVA, calleeVA, helperCache)
+			}
+			if !isPrologueHelper {
+				ecxOverw = true
+			}
 			cs := extractPE32CallSite(inst, instVA, fnVA, tb, off, img)
 			res.callSites = append(res.callSites, cs)
 		case x86asm.JMP:
 			if tb[off] == 0xE9 && inst.Len == 5 && !img.hasRelocByteAtRVA(textRVA+uint32(off+1)) && !img.hasRelocByteAtRVA(textRVA+uint32(off+4)) {
 				rel := int32(binary.LittleEndian.Uint32(tb[off+1 : off+5]))
 				target := uint32(int64(instVA) + 5 + int64(rel))
-				if target < fnVA || target >= textVA+uint32(maxEndOff) {
+				isMovECXTailJmp := off == startOff+5 && tb[startOff] == 0xB9 && img.hasRelocAtRVA(textRVA+uint32(startOff+1))
+				if isMovECXTailJmp || target < fnVA || target >= textVA+uint32(maxEndOff) {
 					res.callSites = append(res.callSites, callSiteRow{
 						CallEA:   uint64(instVA),
 						CallerEA: uint64(fnVA),
