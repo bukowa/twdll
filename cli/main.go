@@ -50,15 +50,17 @@ func (c *StatusCmd) Run(rctx *runContext) error {
 }
 
 type InitCmd struct {
-	Clear       bool   `name:"clear" help:"Clear initialized configuration, staged binaries, and local tools before re-initializing."`
-	NoInput     bool   `name:"no-input" help:"Disable interactive prompts and fail fast on missing inputs."`
-	DefaultGame string `name:"default-game" placeholder:"GAME" help:"Default game (attila, rome2, tob)."`
-	Decompiler  string `name:"decompiler" placeholder:"ENGINE" help:"Decompiler backend (ghidra, ida)."`
-	IDADir      string `name:"ida-dir" help:"Path to IDA Pro installation directory."`
-	AttilaDir   string `name:"attila-dir" help:"Path to Total War: Attila installation directory."`
-	Rome2Dir    string `name:"rome2-dir" help:"Path to Total War: Rome II installation directory."`
-	ToBDir      string `name:"tob-dir" help:"Path to Total War Saga: Thrones of Britannia installation directory."`
-	Attila64    string `name:"attila-64" help:"Path to 64-bit Linux Attila ELF binary with DWARF symbols."`
+	Clear       bool     `name:"clear" help:"Clear initialized configuration, staged binaries, and local tools before re-initializing."`
+	NoInput     bool     `name:"no-input" help:"Disable interactive prompts and fail fast on missing inputs."`
+	JSON        bool     `name:"json" help:"Emit machine-readable JSON summary to stdout."`
+	Games       []string `name:"games" placeholder:"GAMES" help:"32-bit target games to enable (comma-separated: attila,rome2,tob)."`
+	DefaultGame string   `name:"default-game" placeholder:"GAME" help:"Default game (attila, rome2, tob)."`
+	Decompiler  string   `name:"decompiler" placeholder:"ENGINE" help:"Decompiler backend (ghidra, ida)."`
+	IDADir      string   `name:"ida-dir" help:"Path to IDA Pro installation directory."`
+	AttilaDir   string   `name:"attila-dir" help:"Path to Total War: Attila installation directory."`
+	Rome2Dir    string   `name:"rome2-dir" help:"Path to Total War: Rome II installation directory."`
+	ToBDir      string   `name:"tob-dir" help:"Path to Total War Saga: Thrones of Britannia installation directory."`
+	Attila64    string   `name:"attila-64" help:"Path to 64-bit Linux Attila ELF binary with DWARF symbols."`
 }
 
 func (c *InitCmd) Run(rctx *runContext) error {
@@ -71,6 +73,8 @@ func (c *InitCmd) Run(rctx *runContext) error {
 		Options: cmd.InitOptions{
 			Clear:       c.Clear,
 			NoInput:     c.NoInput,
+			JSON:        c.JSON,
+			Games:       c.Games,
 			DefaultGame: c.DefaultGame,
 			Decompiler:  c.Decompiler,
 			IDADir:      c.IDADir,

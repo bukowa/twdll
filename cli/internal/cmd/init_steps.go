@@ -42,6 +42,7 @@ func stepStageGameBinaries(
 	cfg *workspace.Config,
 	state *workspace.State,
 	opts InitOptions,
+	enabledGames []workspace.GameID,
 	prompter term.Prompter,
 	ui *term.UI,
 ) error {
@@ -55,86 +56,86 @@ func stepStageGameBinaries(
 		workspace.GameToB:    opts.ToBDir,
 	}
 
-	stagedCount := 0
-	for _, g := range workspace.AllGames() {
+	for _, g := range enabledGames {
 		dir := cfg.Games.Get(g)
-		if dir == "" {
-			continue
-		}
 		target := g.Target32()
-		dllPath := filepath.Join(filepath.FromSlash(dir), "empire.retail.dll")
-		sp := ui.StartSpinner(fmt.Sprintf("Verifying %s", target))
-		peInfo, err := binaries.VerifyPE32(dllPath, target)
-		if err != nil {
-			sp.Stop()
-			if explicitFlags[g] != "" {
-				return &term.DiagnosticError{
-					Message:  fmt.Sprintf("invalid %s installation directory %q: %v", g, dir, err),
-					Expected: "directory containing 32-bit x86 empire.retail.dll",
-					Help:     []string{fmt.Sprintf("pass a valid path via --%s-dir <path>", g)},
+		staged := false
+
+		if dir != "" {
+			dllPath := filepath.Join(filepath.FromSlash(dir), "empire.retail.dll")
+			sp := ui.StartSpinner(fmt.Sprintf("Verifying %s", target))
+			peInfo, err := binaries.VerifyPE32(dllPath, target)
+			if err != nil {
+				sp.Stop()
+				if explicitFlags[g] != "" || prompter == nil {
+					return &term.DiagnosticError{
+						Message:  fmt.Sprintf("invalid %s installation directory %q: %v", g, dir, err),
+						Expected: "directory containing 32-bit x86 empire.retail.dll",
+						Help:     []string{fmt.Sprintf("pass a valid path via --%s-dir <path>", g)},
+					}
+				}
+				if ui != nil {
+					ui.Warn("Could not verify empire.retail.dll for %s in %q: %v", g, dir, err)
+				}
+			} else {
+				sp.SetText(fmt.Sprintf("Staging %s", target))
+				stageErr := stageVerifiedFile(dllPath, paths.BinaryPath(target), peInfo.SHA256)
+				sp.Stop()
+				if stageErr != nil {
+					return fmt.Errorf("stage %s binary: %w", g, stageErr)
+				}
+				state.UpsertBinary(target, dllPath, peInfo.SHA256)
+				staged = true
+				if ui != nil {
+					ui.Success("Staged %s (%s...)", target, peInfo.SHA256[:12])
 				}
 			}
-			continue
 		}
-		sp.SetText(fmt.Sprintf("Staging %s", target))
-		stageErr := stageVerifiedFile(dllPath, paths.BinaryPath(target), peInfo.SHA256)
-		sp.Stop()
-		if stageErr != nil {
-			return fmt.Errorf("stage %s binary: %w", g, stageErr)
-		}
-		state.UpsertBinary(target, dllPath, peInfo.SHA256)
-		stagedCount++
-		if ui != nil {
-			ui.Success("Staged %s (%s...)", target, peInfo.SHA256[:12])
-		}
-	}
 
-	if stagedCount == 0 && prompter != nil {
-		targetGame := cfg.DefaultGame
-		if !targetGame.IsValid() {
-			targetGame = workspace.GameAttila
-		}
-		for {
-			dir, err := prompter.Input(fmt.Sprintf("Path to %s installation folder", targetGame.DisplayName()), "")
-			if err != nil {
+		if !staged && prompter != nil {
+			for {
+				entered, err := prompter.Input(fmt.Sprintf("Path to %s installation folder", g.DisplayName()), "")
+				if err != nil {
+					return err
+				}
+				dllPath := filepath.Join(filepath.FromSlash(entered), "empire.retail.dll")
+				sp := ui.StartSpinner(fmt.Sprintf("Verifying %s", target))
+				peInfo, vErr := binaries.VerifyPE32(dllPath, target)
+				if vErr != nil {
+					sp.Stop()
+					if ui != nil {
+						ui.Warn("Could not verify empire.retail.dll in %q: %v", entered, vErr)
+					}
+					continue
+				}
+				sp.SetText(fmt.Sprintf("Staging %s", target))
+				cErr := stageVerifiedFile(dllPath, paths.BinaryPath(target), peInfo.SHA256)
+				sp.Stop()
+				if cErr != nil {
+					return cErr
+				}
+				cfg.Games.Set(g, entered)
+				state.UpsertBinary(target, dllPath, peInfo.SHA256)
+				staged = true
+				if ui != nil {
+					ui.Success("Staged %s (%s...)", target, peInfo.SHA256[:12])
+				}
 				break
 			}
-			dllPath := filepath.Join(filepath.FromSlash(dir), "empire.retail.dll")
-			sp := ui.StartSpinner(fmt.Sprintf("Verifying %s", targetGame.Target32()))
-			peInfo, vErr := binaries.VerifyPE32(dllPath, targetGame.Target32())
-			if vErr != nil {
-				sp.Stop()
-				if ui != nil {
-					ui.Warn("Could not verify empire.retail.dll in %q: %v", dir, vErr)
-				}
-				continue
+		}
+
+		if !staged {
+			return &term.DiagnosticError{
+				Message:  fmt.Sprintf("missing installation directory for enabled game %q", g),
+				Expected: fmt.Sprintf("directory for %s containing 32-bit x86 empire.retail.dll", g.DisplayName()),
+				Help: []string{
+					fmt.Sprintf("pass game path explicitly: twdll init --games %s --%s-dir \"<path>\"", g, g),
+					"or set [games] paths in twdll.toml",
+				},
 			}
-			sp.SetText(fmt.Sprintf("Staging %s", targetGame.Target32()))
-			cErr := stageVerifiedFile(dllPath, paths.BinaryPath(targetGame.Target32()), peInfo.SHA256)
-			sp.Stop()
-			if cErr != nil {
-				return cErr
-			}
-			cfg.Games.Set(targetGame, dir)
-			state.UpsertBinary(targetGame.Target32(), dllPath, peInfo.SHA256)
-			stagedCount++
-			if ui != nil {
-				ui.Success("Staged %s (%s...)", targetGame.Target32(), peInfo.SHA256[:12])
-			}
-			break
 		}
 	}
 
-	if stagedCount == 0 {
-		return &term.DiagnosticError{
-			Message:  "no Total War game installations found",
-			Expected: "at least one valid installation directory for Attila, Rome II, or Thrones of Britannia containing empire.retail.dll",
-			Help: []string{
-				"pass game path explicitly: twdll init --attila-dir \"<path-to-attila>\"",
-				"or set [games] paths in twdll.toml",
-			},
-		}
-	}
 	return nil
 }
 

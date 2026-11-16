@@ -116,6 +116,8 @@ func TestNextSelectEvent(t *testing.T) {
 		{"end_tilde", []byte("\x1b[4~"), selectEventEnd, 0, 4},
 		{"digit_1", []byte("1"), selectEventDigit, 0, 1},
 		{"digit_9", []byte("9"), selectEventDigit, 8, 1},
+		{"space_toggle", []byte(" "), selectEventSpace, 0, 1},
+		{"all_toggle", []byte("a"), selectEventAll, 0, 1},
 		{"csi_delete_no_leak", []byte("\x1b[3~"), selectEventNone, 0, 4},
 		{"csi_ctrl_up_no_leak", []byte("\x1b[1;5A"), selectEventNone, 0, 6},
 		{"bare_esc", []byte("\x1b"), selectEventNone, 0, 1},
@@ -188,6 +190,68 @@ func TestSelectInteractiveLoop(t *testing.T) {
 		}
 		if !strings.HasSuffix(stderr.String(), "\033[4A\r\033[J") {
 			t.Fatalf("expected menu erase suffix \\033[4A\\r\\033[J on abort, got %q", stderr.String())
+		}
+	})
+}
+
+func TestMultiSelect_InteractiveAndRedirected(t *testing.T) {
+	opts := []MultiSelectOption{
+		{Label: "attila", Selected: true},
+		{Label: "rome2", Selected: false},
+		{Label: "tob", Selected: false},
+	}
+
+	t.Run("interactive_toggle_and_min_selected", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		ui := &UI{
+			in:        strings.NewReader(""),
+			out:       &stdout,
+			err:       &stderr,
+			isTTYIn:   true,
+			isTTYErr:  true,
+			colorMode: ColorAlways,
+		}
+		p := NewLinePrompter(ui)
+
+		// Uncheck attila (Space), try Enter (rejected by minSelected=1), move Down to rome2, Space, digit 3 toggles tob, Enter confirms [1, 2]
+		input := bytes.NewReader([]byte(" \r\n\x1b[B 3\r\n"))
+		got, err := p.multiSelectInteractiveLoop(input.Read, "Select games", opts, 1, 96)
+		if err != nil {
+			t.Fatalf("multiSelectInteractiveLoop failed: %v", err)
+		}
+		if len(got) != 2 || got[0] != 1 || got[1] != 2 {
+			t.Fatalf("got indices %v, want [1 2]", got)
+		}
+		if !strings.Contains(stderr.String(), "select at least 1 item(s)") {
+			t.Fatalf("expected minSelected notice in stderr, got %q", stderr.String())
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("expected 0 stdout bytes, got %q", stdout.String())
+		}
+		if !strings.HasSuffix(stderr.String(), "\033[4A\r\033[J") {
+			t.Fatalf("expected menu erase suffix \\033[4A\\r\\033[J, got %q", stderr.String())
+		}
+	})
+
+	t.Run("redirected_line_mode", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		ui := NewUI(Streams{
+			In:        strings.NewReader("bad\n1, 3\n"),
+			Out:       &stdout,
+			Err:       &stderr,
+			ColorMode: ColorNever,
+		})
+		p := NewLinePrompter(ui)
+
+		got, err := p.MultiSelect("Select games", opts, 1)
+		if err != nil {
+			t.Fatalf("MultiSelect line mode failed: %v", err)
+		}
+		if len(got) != 2 || got[0] != 0 || got[1] != 2 {
+			t.Fatalf("got indices %v, want [0 2]", got)
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("expected 0 stdout bytes, got %q", stdout.String())
 		}
 	})
 }

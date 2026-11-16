@@ -16,9 +16,15 @@ import (
 
 var ErrInputAborted = errors.New("interactive input aborted")
 
+type MultiSelectOption struct {
+	Label    string
+	Selected bool
+}
+
 type Prompter interface {
 	Confirm(prompt string, defaultVal bool) (bool, error)
 	Select(prompt string, options []string, defaultIdx int) (int, error)
+	MultiSelect(prompt string, options []MultiSelectOption, minSelected int) ([]int, error)
 	Input(prompt string, defaultVal string) (string, error)
 }
 
@@ -117,6 +123,136 @@ func (p *LinePrompter) Select(prompt string, options []string, defaultIdx int) (
 	return p.selectLine(prompt, options, defaultIdx)
 }
 
+func (p *LinePrompter) MultiSelect(prompt string, options []MultiSelectOption, minSelected int) ([]int, error) {
+	if len(options) == 0 {
+		return nil, errors.New("multi-select requires at least one option")
+	}
+	if minSelected < 0 {
+		minSelected = 0
+	}
+	if minSelected > len(options) {
+		minSelected = len(options)
+	}
+
+	if p.ui != nil && p.ui.IsInteractive() && p.ui.CanAnimate() {
+		inFile, okIn := p.ui.In().(*os.File)
+		errFile, okErr := p.ui.Err().(*os.File)
+		if okIn && okErr {
+			width, height, sizeErr := xterm.GetSize(int(errFile.Fd()))
+			maxWidth := maxProgressVisibleRunes
+			if sizeErr == nil && width > 10 {
+				maxWidth = width - 2
+			}
+			if sizeErr == nil && height > 0 && len(options)+1 >= height {
+				return p.multiSelectLine(prompt, options, minSelected)
+			}
+			oldState, err := xterm.MakeRaw(int(inFile.Fd()))
+			if err != nil {
+				return p.multiSelectLine(prompt, options, minSelected)
+			}
+			_, _ = io.WriteString(p.errOut, "\033[?25l")
+			var restoreOnce sync.Once
+			restore := func() {
+				restoreOnce.Do(func() {
+					_, _ = io.WriteString(p.errOut, "\033[?25h")
+					_ = xterm.Restore(int(inFile.Fd()), oldState)
+				})
+			}
+			defer restore()
+
+			readChunk := func(buf []byte) (int, error) {
+				if n := p.reader.Buffered(); n > 0 {
+					return p.reader.Read(buf[:min(len(buf), n)])
+				}
+				return inFile.Read(buf)
+			}
+			indices, loopErr := p.multiSelectInteractiveLoop(readChunk, prompt, options, minSelected, maxWidth)
+			restore()
+			if loopErr != nil {
+				_, _ = fmt.Fprintf(p.errOut, "%s: %s\n", p.style.Bold(prompt), p.style.Yellow("aborted"))
+				return nil, loopErr
+			}
+			chosen := make([]string, 0, len(indices))
+			for _, i := range indices {
+				chosen = append(chosen, options[i].Label)
+			}
+			summary := "(none)"
+			if len(chosen) > 0 {
+				summary = strings.Join(chosen, ", ")
+			}
+			_, _ = fmt.Fprintf(p.errOut, "%s: %s\n", p.style.Bold(prompt), p.style.Cyan(summary))
+			return indices, nil
+		}
+	}
+
+	return p.multiSelectLine(prompt, options, minSelected)
+}
+
+func (p *LinePrompter) multiSelectLine(prompt string, options []MultiSelectOption, minSelected int) ([]int, error) {
+	_, _ = fmt.Fprintf(p.errOut, "%s:\n", p.style.Bold(prompt))
+	var defaultNums []string
+	for i, opt := range options {
+		mark := "[ ]"
+		if opt.Selected {
+			mark = "[x]"
+			defaultNums = append(defaultNums, strconv.Itoa(i+1))
+		}
+		_, _ = fmt.Fprintf(p.errOut, "  %s [%d] %s\n", p.style.Cyan(mark), i+1, opt.Label)
+	}
+	defHint := "none"
+	if len(defaultNums) > 0 {
+		defHint = strings.Join(defaultNums, ",")
+	}
+
+	for {
+		_, _ = fmt.Fprintf(p.errOut, "Choose comma-separated [1-%d] (Enter = %s): ", len(options), defHint)
+		line, err := p.readLine()
+		if err != nil {
+			return nil, err
+		}
+		if line == "" {
+			var out []int
+			for i, opt := range options {
+				if opt.Selected {
+					out = append(out, i)
+				}
+			}
+			if len(out) >= minSelected {
+				return out, nil
+			}
+			_, _ = fmt.Fprintf(p.errOut, "  select at least %d option(s)\n", minSelected)
+			continue
+		}
+		tokens := strings.FieldsFunc(line, func(r rune) bool {
+			return r == ',' || r == ' ' || r == '\t'
+		})
+		seen := make(map[int]bool, len(tokens))
+		var out []int
+		valid := true
+		for _, tok := range tokens {
+			n, convErr := strconv.Atoi(tok)
+			if convErr != nil || n < 1 || n > len(options) {
+				_, _ = fmt.Fprintf(p.errOut, "  invalid choice %q; enter numbers between 1 and %d\n", tok, len(options))
+				valid = false
+				break
+			}
+			idx := n - 1
+			if !seen[idx] {
+				seen[idx] = true
+				out = append(out, idx)
+			}
+		}
+		if !valid {
+			continue
+		}
+		if len(out) < minSelected {
+			_, _ = fmt.Fprintf(p.errOut, "  select at least %d option(s)\n", minSelected)
+			continue
+		}
+		return out, nil
+	}
+}
+
 func (p *LinePrompter) selectLine(prompt string, options []string, defaultIdx int) (int, error) {
 	_, _ = fmt.Fprintf(p.errOut, "%s:\n", p.style.Bold(prompt))
 	for i, opt := range options {
@@ -160,6 +296,8 @@ const (
 	selectEventHome
 	selectEventEnd
 	selectEventDigit
+	selectEventSpace
+	selectEventAll
 	selectEventEnter
 	selectEventAbort
 )
@@ -182,6 +320,10 @@ func nextSelectEvent(b []byte) (kind selectEventKind, digit int, consumed int) {
 		return selectEventUp, 0, 1
 	case 'j', 'J':
 		return selectEventDown, 0, 1
+	case ' ':
+		return selectEventSpace, 0, 1
+	case 'a', 'A':
+		return selectEventAll, 0, 1
 	case 0x1b:
 		if len(b) == 1 {
 			return selectEventNone, 0, 1
@@ -317,6 +459,130 @@ func (p *LinePrompter) selectInteractiveLoop(readChunk func([]byte) (int, error)
 				return 0, ErrInputAborted
 			}
 			return 0, err
+		}
+	}
+}
+
+func (p *LinePrompter) multiSelectInteractiveLoop(readChunk func([]byte) (int, error), prompt string, options []MultiSelectOption, minSelected int, maxWidth int) ([]int, error) {
+	idx := 0
+	selected := make([]bool, len(options))
+	for i, opt := range options {
+		selected[i] = opt.Selected
+	}
+	totalLines := len(options) + 1
+	notice := ""
+	var frame bytes.Buffer
+
+	render := func(first bool) {
+		frame.Reset()
+		if !first {
+			_, _ = fmt.Fprintf(&frame, "\033[%dA\r", totalLines)
+		}
+		hint := "(↑/↓, Space toggle, a all, Enter confirm)"
+		if notice != "" {
+			hint = notice
+		}
+		header := sanitizeProgressLine(fmt.Sprintf("%s %s", p.style.Bold(prompt), p.style.Dim(hint)), maxWidth)
+		_, _ = fmt.Fprintf(&frame, "\r\033[2K%s\r\n", header)
+		for i, opt := range options {
+			box := "[ ]"
+			if selected[i] {
+				box = p.style.Green("[x]")
+			}
+			var row string
+			if i == idx {
+				row = fmt.Sprintf("  %s %s [%d] %s", p.style.Cyan(">"), box, i+1, p.style.Bold(opt.Label))
+			} else {
+				row = fmt.Sprintf("    %s [%d] %s", box, i+1, opt.Label)
+			}
+			_, _ = fmt.Fprintf(&frame, "\r\033[2K%s\r\n", sanitizeProgressLine(row, maxWidth))
+		}
+		_, _ = p.errOut.Write(frame.Bytes())
+	}
+
+	clearMenu := func() {
+		_, _ = fmt.Fprintf(p.errOut, "\033[%dA\r\033[J", totalLines)
+	}
+
+	render(true)
+
+	var buf [64]byte
+	for {
+		n, err := readChunk(buf[:])
+		chunk := buf[:n]
+		for len(chunk) > 0 {
+			ev, digit, consumed := nextSelectEvent(chunk)
+			if consumed <= 0 {
+				consumed = 1
+			}
+			chunk = chunk[consumed:]
+			switch ev {
+			case selectEventUp:
+				idx = (idx - 1 + len(options)) % len(options)
+				notice = ""
+				render(false)
+			case selectEventDown:
+				idx = (idx + 1) % len(options)
+				notice = ""
+				render(false)
+			case selectEventHome:
+				idx = 0
+				notice = ""
+				render(false)
+			case selectEventEnd:
+				idx = len(options) - 1
+				notice = ""
+				render(false)
+			case selectEventSpace:
+				selected[idx] = !selected[idx]
+				notice = ""
+				render(false)
+			case selectEventDigit:
+				if digit >= 0 && digit < len(options) {
+					idx = digit
+					selected[digit] = !selected[digit]
+					notice = ""
+					render(false)
+				}
+			case selectEventAll:
+				allSelected := true
+				for _, s := range selected {
+					if !s {
+						allSelected = false
+						break
+					}
+				}
+				target := !allSelected
+				for i := range selected {
+					selected[i] = target
+				}
+				notice = ""
+				render(false)
+			case selectEventEnter:
+				var out []int
+				for i, s := range selected {
+					if s {
+						out = append(out, i)
+					}
+				}
+				if len(out) < minSelected {
+					notice = fmt.Sprintf("select at least %d item(s)", minSelected)
+					render(false)
+					continue
+				}
+				clearMenu()
+				return out, nil
+			case selectEventAbort:
+				clearMenu()
+				return nil, ErrInputAborted
+			}
+		}
+		if err != nil {
+			clearMenu()
+			if errors.Is(err, io.EOF) {
+				return nil, ErrInputAborted
+			}
+			return nil, err
 		}
 	}
 }

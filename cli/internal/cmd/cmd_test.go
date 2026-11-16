@@ -596,6 +596,159 @@ func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
 	}
 }
 
+func TestRunInit_SelectiveGamesAndJSON_PrunesUnselectedGames(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-selective")
+
+	attilaDir := filepath.Join(root, "Games", "Attila")
+	rome2Dir := filepath.Join(root, "Games", "Rome2")
+	for _, d := range []string{attilaDir, rome2Dir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeMinimalPE32(t, filepath.Join(d, "empire.retail.dll"))
+	}
+	elfPath := filepath.Join(root, "Attila64")
+	writeMinimalELF64DWARF(t, elfPath)
+
+	// First initialize with both attila and rome2
+	err := RunInit(context.Background(), InitRequest{
+		Layout: layout,
+		Options: InitOptions{
+			NoInput:     true,
+			Games:       []string{"attila,rome2"},
+			AttilaDir:   attilaDir,
+			Rome2Dir:    rome2Dir,
+			Attila64Src: elfPath,
+		},
+		UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+	})
+	if err != nil {
+		t.Fatalf("first RunInit failed: %v", err)
+	}
+	if _, err := os.Stat(layout.Paths.BinaryPath(workspace.TargetAttila32)); err != nil {
+		t.Fatalf("expected attila_32 staged initially: %v", err)
+	}
+
+	// Re-run selecting only rome2 with --json
+	reloadedCfg, _, err := workspace.LoadConfig(layout.Paths.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	layout.Config = reloadedCfg
+
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{Out: &stdout, Err: &stderr, ColorMode: term.ColorNever})
+	err = RunInit(context.Background(), InitRequest{
+		Layout: layout,
+		Options: InitOptions{
+			NoInput:     true,
+			JSON:        true,
+			Games:       []string{"rome2"},
+			Attila64Src: elfPath,
+		},
+		UI: ui,
+	})
+	if err != nil {
+		t.Fatalf("selective RunInit failed: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	var report InitReport
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil {
+		t.Fatalf("invalid JSON on stdout: %v\nraw: %s", err, stdout.String())
+	}
+	if report.DefaultGame != "rome2" {
+		t.Fatalf("DefaultGame = %q, want rome2", report.DefaultGame)
+	}
+	if len(report.EnabledGames) != 1 || report.EnabledGames[0] != workspace.GameRome2 {
+		t.Fatalf("EnabledGames = %v, want [rome2]", report.EnabledGames)
+	}
+	if len(report.EnabledTargets) != 2 || report.EnabledTargets[0] != workspace.TargetAttila64 || report.EnabledTargets[1] != workspace.TargetRome2_32 {
+		t.Fatalf("EnabledTargets = %v, want [attila_64 rome2_32]", report.EnabledTargets)
+	}
+
+	finalCfg, _, err := workspace.LoadConfig(layout.Paths.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if finalCfg.Games.Attila != "" || finalCfg.Games.Rome2 != filepath.ToSlash(rome2Dir) {
+		t.Fatalf("unexpected cfg.Games after pruning: %+v", finalCfg.Games)
+	}
+	if _, err := os.Stat(layout.Paths.BinaryPath(workspace.TargetAttila32)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected pruned attila_32 binary to be removed, stat err = %v", err)
+	}
+	if _, err := os.Stat(layout.Paths.BinaryPath(workspace.TargetRome2_32)); err != nil {
+		t.Fatalf("expected rome2_32 binary to remain staged: %v", err)
+	}
+}
+
+func TestRunInit_ConflictingGamesAndDirFlag_ReturnsDiagnosticError(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-conflict")
+
+	err := RunInit(context.Background(), InitRequest{
+		Layout: layout,
+		Options: InitOptions{
+			NoInput:  true,
+			Games:    []string{"attila"},
+			Rome2Dir: filepath.Join(root, "Rome2"),
+		},
+		UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+	})
+	var diag *term.DiagnosticError
+	if !errors.As(err, &diag) {
+		t.Fatalf("expected *term.DiagnosticError, got %T (%v)", err, err)
+	}
+}
+
+func TestRunInit_InteractiveMultiSelect_StagesOnlySelectedGames(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-multi")
+
+	rome2Dir := filepath.Join(root, "Games", "Rome2")
+	if err := os.MkdirAll(rome2Dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeMinimalPE32(t, filepath.Join(rome2Dir, "empire.retail.dll"))
+	elfPath := filepath.Join(root, "Attila64")
+	writeMinimalELF64DWARF(t, elfPath)
+
+	// Input sequence:
+	// 1. MultiSelect games -> "2" (rome2 only)
+	// 2. Select decompiler -> "1" (ghidra)
+	// 3. Input Rome2 path -> rome2Dir
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{
+		In:        strings.NewReader("2\n1\n" + rome2Dir + "\n"),
+		Out:       &stdout,
+		Err:       &stderr,
+		ColorMode: term.ColorNever,
+	})
+	prompter := term.NewLinePrompter(ui)
+
+	err := RunInit(context.Background(), InitRequest{
+		Layout: layout,
+		Options: InitOptions{
+			Attila64Src: elfPath,
+		},
+		Prompter: prompter,
+		UI:       ui,
+	})
+	if err != nil {
+		t.Fatalf("interactive RunInit failed: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected empty stdout without --json, got %q", stdout.String())
+	}
+	cfg, _, err := workspace.LoadConfig(layout.Paths.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.DefaultGame != workspace.GameRome2 || cfg.Games.Rome2 != filepath.ToSlash(rome2Dir) || cfg.Games.Attila != "" || cfg.Games.ToB != "" {
+		t.Fatalf("unexpected interactive config: %+v", cfg)
+	}
+}
+
 func newPreseededToolchainSandbox(t *testing.T, root, dataDir string) workspace.Layout {
 	t.Helper()
 	emptySteam := filepath.Join(root, "EmptySteam")
