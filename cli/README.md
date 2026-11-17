@@ -2,7 +2,7 @@
 
 Native Go CLI driving the self-contained `twdll` reverse-engineering pipeline for Total War: Rome II (`rome2`), Attila (`attila`), and Thrones of Britannia (`tob`).
 
-**Stage Status:** Stage 1 (`status`, `init`, `analyze`, `clean` + 3-tier E2E verification) is **complete**. Stage 2 (`extract`, `derive`, `search`, `show`, `verify` over `.twdll/extracted/`) is **active** (Steps 1–3 complete: selective `init`, `internal/extractdb`, and `internal/bronze`; Silver/Decomp/Gold/query commands are next). Stage 3 (`src/` C++ rewrite + `build`/`pack`/`install`/`run`/`test`/`docs`) is **planned / frozen** until Stage 2 completes.  
+**Stage Status:** Stage 1 (`status`, `init`, `analyze`, `clean` + 3-tier E2E verification) is **complete**. Stage 2 (`extract`, `derive`, `search`, `show`, `verify` over `.twdll/extracted/` + mandatory post-implementation extraction audit) is **active** (Steps 1–4 complete: selective `init`, `internal/extractdb`, `internal/bronze`, and `internal/silver`; CLI commands `extract`, `search`, `show`, `derive`, `verify` and the Extraction Audit phase are next). Stage 3 (`src/` C++ rewrite + `build`/`pack`/`install`/`run`/`test`/`docs`) is **planned / frozen** until Stage 2 implementation and audit complete.  
 See [`../docs/cli_re_pipeline_spec.md`](../docs/cli_re_pipeline_spec.md) for the full architecture spec and [`AGENTS.md`](AGENTS.md) for code invariants.
 
 ---
@@ -92,10 +92,11 @@ cli/
 │   ├── analyze/                # ELF/PE inspection, memory sizing, Ghidra/IDA runners, telemetry
 │   ├── binaries/               # Steam discovery, PE32/ELF64+DWARF verification, pinned attila_64 hash
 │   ├── bootstrap/              # Staleness-checked CLI auto-rebuild
-│   ├── bronze/                 # Pure-Go PE32/ELF64/DWARF/string/vtable/lua_reg extractors feeding facts.sqlite
+│   ├── bronze/                 # Pure-Go PE32/ELF64/DWARF/string/vtable/lua_reg extractors feeding binary.sqlite
 │   ├── cmd/                    # status, init, analyze, clean orchestration
 │   ├── e2e/                    # //go:build e2e real-decompiler harness & mini_warscape.cpp fixture
 │   ├── extractdb/              # Pure-Go SQLite (modernc.org/sqlite + FTS5) storage (AtomicBuilder, DecompStore, manifest.json)
+│   ├── silver/                 # Headless IDA & Ghidra topology + resumable decomp_<engine>.sqlite extractors
 │   ├── term/                   # TTY detection, Out/Err stream separation, prompts, diagnostics
 │   ├── toolchain/              # Portable tool manifest, archive downloads, IDA validation
 │   └── workspace/              # twdll.toml, .twdll/state.json, path resolution

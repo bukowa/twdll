@@ -81,6 +81,15 @@ public class TuneReferenceAnalysis extends GhidraScript {
 }
 `
 
+// ResolveGhidraToolchain locates the headless Ghidra launcher and bundled OpenJDK runtime.
+func ResolveGhidraToolchain(paths workspace.Paths) (headlessPath string, jdkDir string, err error) {
+	tc, err := resolveGhidraToolchain(paths)
+	if err != nil {
+		return "", "", err
+	}
+	return tc.headlessPath, tc.jdkDir, nil
+}
+
 func resolveGhidraToolchain(paths workspace.Paths) (ghidraToolchain, error) {
 	launcherName := "analyzeHeadless"
 	if runtime.GOOS == "windows" {
@@ -117,6 +126,11 @@ func buildGhidraArgs(stageDir string, target workspace.TargetID, binaryPath, scr
 		args = append(args, "-scriptPath", scriptDir, "-preScript", "TuneReferenceAnalysis.java")
 	}
 	return append(args, "-overwrite")
+}
+
+// BuildGhidraJavaOptions builds JVM tuning flags and isolated tmp/home properties for Ghidra headless runs.
+func BuildGhidraJavaOptions(stageDir string, numCPU int) string {
+	return buildGhidraJavaOptions(stageDir, numCPU)
 }
 
 func buildGhidraJavaOptions(stageDir string, numCPU int) string {

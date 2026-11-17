@@ -141,16 +141,16 @@ func isValidLuaIdentifier(s string) bool {
 	return true
 }
 
-func extractPE32(ctx context.Context, db *sql.DB, binaryPath string) (*targetExtractResult, error) {
+func loadPE32Image(ctx context.Context, db *sql.DB, binaryPath string) (*peImageInfo, []sectionRow, []importRow, map[uint32]importRow, []exportRow, error) {
 	pf, err := pe.Open(binaryPath)
 	if err != nil {
-		return nil, fmt.Errorf("open pe32 %s: %w", binaryPath, err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("open pe32 %s: %w", binaryPath, err)
 	}
 	defer pf.Close()
 
 	oh, ok := pf.OptionalHeader.(*pe.OptionalHeader32)
 	if !ok {
-		return nil, fmt.Errorf("%s is not a 32-bit PE binary", binaryPath)
+		return nil, nil, nil, nil, nil, fmt.Errorf("%s is not a 32-bit PE binary", binaryPath)
 	}
 
 	img := &peImageInfo{
@@ -234,32 +234,39 @@ func extractPE32(ctx context.Context, db *sql.DB, binaryPath string) (*targetExt
 	img.relocWordBitmap = make([]uint64, bitmapWords)
 	img.relocByteBitmap = make([]uint64, bitmapWords)
 
-	if err := insertSections(ctx, db, secRows); err != nil {
-		return nil, err
+	if db != nil {
+		if err := insertSections(ctx, db, secRows); err != nil {
+			return nil, nil, nil, nil, nil, err
+		}
 	}
 
 	if err := parseAndInsertPERelocs(ctx, db, oh, img); err != nil {
-		return nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	imports, iatMap, err := parsePEImports(oh, img)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	if err := insertImports(ctx, db, imports); err != nil {
+	exports, err := parsePEExports(oh, img)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	return img, secRows, imports, iatMap, exports, nil
+}
+
+func extractPE32(ctx context.Context, db *sql.DB, binaryPath string) (*targetExtractResult, error) {
+	img, _, imports, iatMap, exports, err := loadPE32Image(ctx, db, binaryPath)
+	if err != nil {
 		return nil, err
 	}
 
-	exports, err := parsePEExports(oh, img)
-	if err != nil {
+	if err := insertImports(ctx, db, imports); err != nil {
 		return nil, err
 	}
 	if err := insertExports(ctx, db, exports); err != nil {
 		return nil, err
 	}
-
-	// Close underlying OS file handle now that all section slices are in memory.
-	_ = pf.Close()
 
 	// Scan strings in .rdata and .data using .reloc byte-overlap filter for UTF-16LE.
 	var strSecSlices []dataSectionSlice
@@ -304,7 +311,7 @@ func extractPE32(ctx context.Context, db *sql.DB, binaryPath string) (*targetExt
 	}
 
 	return &targetExtractResult{
-		imageBase: uint64(oh.ImageBase),
+		imageBase: uint64(img.imageBase),
 		arch:      extractdb.ArchX86,
 		format:    extractdb.FormatPE32,
 		sources:   []string{"pe32", "x86asm"},
@@ -326,8 +333,11 @@ func parseAndInsertPERelocs(ctx context.Context, db *sql.DB, oh *pe.OptionalHead
 		return nil
 	}
 
-	b := newTxStmtBatcher(ctx, db, `INSERT OR IGNORE INTO relocs(va) VALUES (?)`)
-	defer func() { _ = b.Close() }()
+	var b *txStmtBatcher
+	if db != nil {
+		b = newTxStmtBatcher(ctx, db, `INSERT OR IGNORE INTO relocs(va) VALUES (?)`)
+		defer func() { _ = b.Close() }()
+	}
 
 	pos := 0
 	for pos+8 <= len(relocData) {
@@ -344,15 +354,20 @@ func parseAndInsertPERelocs(ctx context.Context, db *sql.DB, oh *pe.OptionalHead
 			if typ == 3 { // IMAGE_REL_BASED_HIGHLOW
 				rva := pageRVA + off
 				img.setRelocRVA(rva)
-				va := int64(uint64(img.imageBase) + uint64(rva))
-				if err := b.Exec(va); err != nil {
-					return fmt.Errorf("insert reloc 0x%x: %w", va, err)
+				if b != nil {
+					va := int64(uint64(img.imageBase) + uint64(rva))
+					if err := b.Exec(va); err != nil {
+						return fmt.Errorf("insert reloc 0x%x: %w", va, err)
+					}
 				}
 			}
 		}
 		pos += int(blockSize)
 	}
-	return b.Flush()
+	if b != nil {
+		return b.Flush()
+	}
+	return nil
 }
 
 func parsePEImports(oh *pe.OptionalHeader32, img *peImageInfo) ([]importRow, map[uint32]importRow, error) {

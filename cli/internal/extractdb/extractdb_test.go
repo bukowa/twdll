@@ -16,7 +16,7 @@ import (
 func TestAtomicBuilder_CommitPurgesStaleSidecarsAndRebuildsFactsFTS(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "attila_32", "facts.sqlite")
+	dbPath := filepath.Join(dir, "attila_32", "binary.sqlite")
 
 	// Missing DB must fail OpenReadOnly without creating a 0-byte file
 	if _, err := OpenReadOnly(dbPath); err == nil {
@@ -131,7 +131,7 @@ func TestAtomicBuilder_CommitPurgesStaleSidecarsAndRebuildsFactsFTS(t *testing.T
 func TestAtomicBuilder_AbortPreservesPriorDatabaseAndLeavesZeroTempFiles(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "facts.sqlite")
+	dbPath := filepath.Join(dir, "binary.sqlite")
 
 	// 1. Commit an initial healthy database
 	b1, err := NewAtomicBuilder(dbPath)
@@ -171,8 +171,8 @@ func TestAtomicBuilder_AbortPreservesPriorDatabaseAndLeavesZeroTempFiles(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "facts.sqlite" {
-		t.Fatalf("expected only facts.sqlite in %s after Abort, got %v", dir, entries)
+	if len(entries) != 1 || entries[0].Name() != "binary.sqlite" {
+		t.Fatalf("expected only binary.sqlite in %s after Abort, got %v", dir, entries)
 	}
 
 	roDB, err := OpenReadOnly(dbPath)
@@ -193,7 +193,7 @@ func TestAtomicBuilder_AbortPreservesPriorDatabaseAndLeavesZeroTempFiles(t *test
 func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "decomp_cache.sqlite")
+	dbPath := filepath.Join(dir, "decomp_ghidra.sqlite")
 
 	store, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_v1")
 	if err != nil {
@@ -376,7 +376,7 @@ func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 func TestDecompStore_ConcurrentReadOnlyFTSWhileWritingBatches(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "decomp_cache.sqlite")
+	dbPath := filepath.Join(dir, "decomp_ghidra.sqlite")
 
 	store, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_concurrent")
 	if err != nil {
@@ -497,7 +497,7 @@ func TestTargetManifest_WriteAndReadRoundTrip(t *testing.T) {
 
 func TestOpenDecompStore_PreservesExistingCacheOnCancelledCtxOrEmptySHA(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "decomp_cache.sqlite")
+	dbPath := filepath.Join(t.TempDir(), "decomp_ghidra.sqlite")
 
 	store, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_keep_me")
 	if err != nil {
@@ -547,7 +547,7 @@ func TestOpenDecompStore_PreservesExistingCacheOnCancelledCtxOrEmptySHA(t *testi
 
 func TestRunBatchWriter_DrainsRecordSentAfterCtxCancelBeforeChannelClose(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "decomp_cache.sqlite")
+	dbPath := filepath.Join(t.TempDir(), "decomp_ida.sqlite")
 
 	store, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_drain")
 	if err != nil {
@@ -599,10 +599,10 @@ func TestRunBatchWriter_DrainsRecordSentAfterCtxCancelBeforeChannelClose(t *test
 func TestSQLiteDSN_HandlesSpecialPathCharactersHashAndPercent(t *testing.T) {
 	ctx := context.Background()
 	specialDir := filepath.Join(t.TempDir(), "c# dir %20")
-	factsPath := filepath.Join(specialDir, "facts.sqlite")
-	decompPath := filepath.Join(specialDir, "decomp_cache.sqlite")
+	binaryDBPath := filepath.Join(specialDir, "binary.sqlite")
+	decompPath := filepath.Join(specialDir, "decomp_ghidra.sqlite")
 
-	builder, err := NewAtomicBuilder(factsPath)
+	builder, err := NewAtomicBuilder(binaryDBPath)
 	if err != nil {
 		t.Fatalf("NewAtomicBuilder in %q: %v", specialDir, err)
 	}
@@ -614,11 +614,11 @@ func TestSQLiteDSN_HandlesSpecialPathCharactersHashAndPercent(t *testing.T) {
 	if err := builder.Commit(ctx); err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
-	if _, err := os.Stat(factsPath); err != nil {
-		t.Fatalf("expected literal path %s to exist on disk: %v", factsPath, err)
+	if _, err := os.Stat(binaryDBPath); err != nil {
+		t.Fatalf("expected literal path %s to exist on disk: %v", binaryDBPath, err)
 	}
 
-	roDB, err := OpenReadOnly(factsPath)
+	roDB, err := OpenReadOnly(binaryDBPath)
 	if err != nil {
 		t.Fatalf("OpenReadOnly in %q: %v", specialDir, err)
 	}
@@ -675,5 +675,128 @@ func TestRenameWithRetry_OverwritesReadOnlyDestinationFile(t *testing.T) {
 	}
 	if string(got) != "new-committed-data" {
 		t.Fatalf("dst content = %q, want new-committed-data", string(got))
+	}
+}
+
+func TestDecompStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "decomp_ida.sqlite")
+
+	store, err := OpenDecompStore(ctx, dbPath, "attila_64", "sha_timeout_test")
+	if err != nil {
+		t.Fatalf("OpenDecompStore: %v", err)
+	}
+	defer store.Close()
+
+	specs := []FuncSpec{
+		{EA: 0x1000, Size: 64, Name: "FastFn"},
+		{EA: 0x2000, Size: 25329, Name: "SlowCtor"},
+		{EA: 0x3000, Size: 128, Name: "BrokenFn"},
+	}
+	if err := store.WriteBatch(ctx, []DecompRecord{
+		{FuncEA: 0x1000, Engine: "ida", FuncSize: 64, FuncName: "FastFn", RawC: "void FastFn() {}", Status: DecompStatusOK},
+		{FuncEA: 0x2000, Engine: "ida", FuncSize: 25329, FuncName: "SlowCtor", Status: DecompStatusTimeout, ErrorText: "timeout"},
+		{FuncEA: 0x3000, Engine: "ida", FuncSize: 128, FuncName: "BrokenFn", Status: DecompStatusFailed, ErrorText: "err"},
+	}); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+
+	// Default resume skips ok, timeout, and failed.
+	pending, stats, err := store.PlanWork(ctx, "ida", specs, PlanOptions{})
+	if err != nil {
+		t.Fatalf("PlanWork default: %v", err)
+	}
+	if len(pending) != 0 || stats.Pending != 0 || stats.SkippedOK != 1 || stats.SkippedTimeout != 1 || stats.SkippedFailed != 1 {
+		t.Fatalf("unexpected default PlanWork stats=%+v pending=%+v", stats, pending)
+	}
+
+	// RetryTimeouts=true queues only the timeout row.
+	pendingTO, statsTO, err := store.PlanWork(ctx, "ida", specs, PlanOptions{RetryTimeouts: true})
+	if err != nil {
+		t.Fatalf("PlanWork RetryTimeouts: %v", err)
+	}
+	if len(pendingTO) != 1 || pendingTO[0].EA != 0x2000 || statsTO.Pending != 1 || statsTO.SkippedTimeout != 0 || statsTO.SkippedOK != 1 || statsTO.SkippedFailed != 1 {
+		t.Fatalf("unexpected RetryTimeouts PlanWork stats=%+v pending=%+v", statsTO, pendingTO)
+	}
+
+	// Force=true queues all rows.
+	pendingForce, statsForce, err := store.PlanWork(ctx, "ida", specs, PlanOptions{Force: true})
+	if err != nil {
+		t.Fatalf("PlanWork Force: %v", err)
+	}
+	if len(pendingForce) != 3 || statsForce.Pending != 3 {
+		t.Fatalf("unexpected Force PlanWork stats=%+v pending=%+v", statsForce, pendingForce)
+	}
+
+	// Changing FuncSize on a timeout row re-queues it even when RetryTimeouts=false.
+	driftedSpecs := []FuncSpec{
+		{EA: 0x1000, Size: 64, Name: "FastFn"},
+		{EA: 0x2000, Size: 25400, Name: "SlowCtor"},
+		{EA: 0x3000, Size: 128, Name: "BrokenFn"},
+	}
+	pendingDrift, statsDrift, err := store.PlanWork(ctx, "ida", driftedSpecs, PlanOptions{})
+	if err != nil {
+		t.Fatalf("PlanWork SizeChanged: %v", err)
+	}
+	if len(pendingDrift) != 1 || pendingDrift[0].EA != 0x2000 || statsDrift.SizeChanged != 1 {
+		t.Fatalf("unexpected SizeChanged PlanWork stats=%+v pending=%+v", statsDrift, pendingDrift)
+	}
+}
+
+func TestNewAtomicBuilderFromExisting_CommitAndAbort(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "binary.sqlite")
+
+	b1, err := NewAtomicBuilder(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := InitFactsSchema(ctx, b1.DB()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b1.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (1, 'bronze_row');`); err != nil {
+		t.Fatal(err)
+	}
+	if err := b1.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Abort must leave original intact.
+	bAbort, err := NewAtomicBuilderFromExisting(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bAbort.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (2, 'aborted_silver');`); err != nil {
+		t.Fatal(err)
+	}
+	if err := bAbort.Abort(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Commit must retain bronze_row and add committed_silver.
+	bCommit, err := NewAtomicBuilderFromExisting(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = bCommit.Abort() }()
+	if _, err := bCommit.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (2, 'committed_silver');`); err != nil {
+		t.Fatal(err)
+	}
+	if err := bCommit.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	roDB, err := OpenReadOnly(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer roDB.Close()
+
+	var cnt int
+	if err := roDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM names`).Scan(&cnt); err != nil {
+		t.Fatal(err)
+	}
+	if cnt != 2 {
+		t.Fatalf("names count = %d, want 2", cnt)
 	}
 }

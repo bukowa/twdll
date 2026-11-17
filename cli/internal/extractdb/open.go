@@ -84,6 +84,48 @@ func NewAtomicBuilder(destPath string) (*AtomicBuilder, error) {
 	}, nil
 }
 
+// NewAtomicBuilderFromExisting copies an existing SQLite database at destPath into
+// <destPath>.tmp and opens it for atomic updates; Commit replaces destPath cleanly
+// and Abort leaves the original database untouched.
+func NewAtomicBuilderFromExisting(destPath string) (*AtomicBuilder, error) {
+	cleanDest := filepath.Clean(destPath)
+	info, err := os.Stat(cleanDest)
+	if err != nil {
+		return nil, fmt.Errorf("stat existing sqlite db %s: %w", cleanDest, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("existing sqlite db %s is not a regular file", cleanDest)
+	}
+
+	tmpPath := cleanDest + ".tmp"
+	if err := removeSQLiteFileAndSidecars(tmpPath); err != nil {
+		return nil, fmt.Errorf("clean stale temp db %s: %w", tmpPath, err)
+	}
+	if err := workspace.CopyFileAtomic(cleanDest, tmpPath); err != nil {
+		return nil, fmt.Errorf("stage existing sqlite db %s: %w", cleanDest, err)
+	}
+
+	dsn := sqliteDSN(tmpPath, buildPragmasQuery)
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		_ = removeSQLiteFileAndSidecars(tmpPath)
+		return nil, fmt.Errorf("open temp sqlite %s: %w", tmpPath, err)
+	}
+	db.SetMaxOpenConns(1)
+
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		_ = removeSQLiteFileAndSidecars(tmpPath)
+		return nil, fmt.Errorf("initialize temp sqlite %s: %w", tmpPath, err)
+	}
+
+	return &AtomicBuilder{
+		destPath: cleanDest,
+		tmpPath:  tmpPath,
+		db:       db,
+	}, nil
+}
+
 func (b *AtomicBuilder) DB() *sql.DB {
 	return b.db
 }

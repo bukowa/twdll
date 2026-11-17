@@ -17,9 +17,15 @@ See `./README.md` for commands, env vars, and test workflows, and `../docs/cli_r
 - **Tier 1 — Quick Real-Decompiler E2E (`~30–45s`, required for lifecycle/decompiler changes):** Run `go test -v -tags=e2e -timeout 5m ./internal/e2e` inside `cli/` whenever modifying `init`, `analyze`, `clean`, `status`, `workspace`, decompiler drivers/scripts, or PE/ELF/DWARF inspection. Compiles `testdata/mini_warscape.cpp` and verifies live `twdll.toml` and `.twdll/state.json` remain untouched.
 - **Tier 2 — Real-Binary Background Soak (`20–75m`, `6–17 GB` RAM):** Never run `TWDLL_E2E_SOAK=1` synchronously inside an interactive agent turn. Launch detached via `pwsh -NoProfile -File cli/scripts/run-e2e-bg.ps1` only when explicitly validating real game binaries, DWARF import, or memory budgets.
 
-## Stage 2 Extraction & Search Guardrails
+## Stage 2 Extraction, Search & Audit Guardrails
 
-- **Schema & Command Agreement First:** Confirm `.twdll/extracted/` storage layout and CLI flags with the user before implementing `extract`, `search`, or `show`.
+- **Database Naming & Roles (`.twdll/extracted/`):**
+  - `.twdll/extracted/<target>/binary.sqlite` — Static binary structure, DWARF4 symbols/types (`attila_64`), and x86 instruction graph (`functions`, `strings`, `xrefs`, `call_edges`, `vtables`, `rtti_*`, `lua_regs`).
+  - `.twdll/extracted/<target>/decomp_ida.sqlite` & `decomp_ghidra.sqlite` — Per-engine decompiler outputs (`decomp_functions` + `FTS5`, `line_ea_json`, `decomp_vars`).
+  - `.twdll/extracted/derived.sqlite` — Algorithmic cross-binary mappings (`attila_64` -> `attila_32` / `rome2_32` / `tob_32`), struct layouts, and candidate field offsets with explicit confidence and evidence chains.
+- **Zero Optimism & Continuous Improvement:** Extracted databases are parser, heuristic, and decompiler outputs — never infallible truth. Compiler optimizations (inlining, tail calls, ABI packing), decompiler errors (`in_ECX`, wrong boundaries, variable coalescing), and bugs in our own Go extractors will occur. Always cross-check `binary.sqlite`, `decomp_ida.sqlite`, `decomp_ghidra.sqlite`, and raw `x86asm` disassembly. When a bug or blind spot is found during audit or RE, fix the extractor in `cli/`, add a unit test, and re-extract.
+- **Mandatory Post-Implementation Audit Before Stage 3:** After wiring `extract`, `derive`, `search`, `show`, and `verify`, execute a dedicated **Extraction Audit & Hardening Phase** with the user to inspect real Warscape subsystems, compare IDA vs Ghidra vs DWARF vs raw x86 assembly, and fix extractor defects before unlocking Stage 3 (`src/`).
+- **Schema & Command Agreement First:** Confirm `.twdll/extracted/` storage layout and CLI flags with the user before implementing `extract`, `derive`, `search`, `show`, or `verify`.
 - **Native APIs Only:** Read DWARF (Go `debug/dwarf` / `debug/elf`), Ghidra, and IDA APIs directly — never write ad-hoc C++ string lexers or regex syntax parsers.
 - **Incremental Vertical Slices:** Build one small extraction/query slice at a time, inspect real extracted records from `.twdll/db/` with the user, then prune or extend.
 - **Zero Speculative Bloat:** Do not add cross-binary fuzzy matching hashes, speculative heuristics, or extra tables/indexes before concrete data proves they are needed.

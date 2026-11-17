@@ -17,6 +17,7 @@ const DecompSchemaVersion = 1
 const (
 	defaultDecompBatchSize     = 250
 	defaultDecompFlushInterval = 5 * time.Second
+	defaultDecompWriteTimeout  = 60 * time.Second
 	decompDrainTimeout         = 5 * time.Second
 	decompCheckpointTimeout    = 12 * time.Second
 )
@@ -88,17 +89,19 @@ type DecompRecord struct {
 }
 
 type PlanOptions struct {
-	Force       bool
-	RetryFailed bool
+	Force         bool
+	RetryFailed   bool
+	RetryTimeouts bool
 }
 
 type ResumeStats struct {
-	Total         int
-	SkippedOK     int
-	SkippedFailed int
-	SizeChanged   int
-	OrphanDeleted int
-	Pending       int
+	Total          int
+	SkippedOK      int
+	SkippedFailed  int
+	SkippedTimeout int
+	SizeChanged    int
+	OrphanDeleted  int
+	Pending        int
 }
 
 type DecompStore struct {
@@ -237,10 +240,15 @@ func (s *DecompStore) PlanWork(ctx context.Context, engine string, funcs []FuncS
 			}
 			if !opts.Force {
 				switch row.status {
-				case "ok":
+				case DecompStatusOK:
 					stats.SkippedOK++
 					continue
-				case "failed":
+				case DecompStatusTimeout:
+					if !opts.RetryTimeouts {
+						stats.SkippedTimeout++
+						continue
+					}
+				case DecompStatusFailed:
 					if !opts.RetryFailed {
 						stats.SkippedFailed++
 						continue
@@ -347,7 +355,7 @@ func (s *DecompStore) RunBatchWriter(ctx context.Context, in <-chan DecompRecord
 		if len(batch) == 0 {
 			return nil
 		}
-		writeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		writeCtx, cancel := context.WithTimeout(context.Background(), defaultDecompWriteTimeout)
 		err := s.WriteBatch(writeCtx, batch)
 		cancel()
 		if err != nil {

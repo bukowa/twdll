@@ -335,11 +335,11 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		if err := os.WriteFile(resLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		extractedFacts := paths.FactsDBPath(workspace.TargetAttila32)
-		if err := os.MkdirAll(filepath.Dir(extractedFacts), 0o755); err != nil {
+		extractedBinary := paths.BinaryDBPath(workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(extractedBinary), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(extractedFacts, []byte("facts-sqlite"), 0o644); err != nil {
+		if err := os.WriteFile(extractedBinary, []byte("binary-sqlite"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -374,7 +374,7 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		}
 
 		// Config, staged binaries, extracted DBs, and init state entries must remain intact
-		for _, kept := range []string{paths.Config, binFile, extractedFacts, paths.StateFile} {
+		for _, kept := range []string{paths.Config, binFile, extractedBinary, paths.StateFile} {
 			if _, sErr := os.Stat(kept); sErr != nil {
 				t.Fatalf("expected %s to be preserved by unscoped clean: %v", kept, sErr)
 			}
@@ -437,7 +437,7 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		if err := os.WriteFile(logFile, []byte("log"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		extractedFile := paths.FactsDBPath(workspace.TargetAttila32)
+		extractedFile := paths.BinaryDBPath(workspace.TargetAttila32)
 		if err := os.MkdirAll(filepath.Dir(extractedFile), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -540,11 +540,11 @@ func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
 	if err := os.WriteFile(preservedResLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	preservedExtracted := layout.Paths.FactsDBPath(workspace.TargetAttila32)
+	preservedExtracted := layout.Paths.BinaryDBPath(workspace.TargetAttila32)
 	if err := os.MkdirAll(filepath.Dir(preservedExtracted), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(preservedExtracted, []byte("extracted-facts"), 0o644); err != nil {
+	if err := os.WriteFile(preservedExtracted, []byte("extracted-binary"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

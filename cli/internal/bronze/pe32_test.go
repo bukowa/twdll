@@ -18,7 +18,7 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 	ctx := context.Context(t.Context())
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "empire.retail.dll")
-	factsPath := filepath.Join(tmpDir, "facts.sqlite")
+	binaryDBPath := filepath.Join(tmpDir, "binary.sqlite")
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
 
 	fix := buildSyntheticPE32DLL(t, binPath)
@@ -26,7 +26,7 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 	res, err := ExtractTarget(ctx, Options{
 		Target:       workspace.TargetAttila32,
 		BinaryPath:   binPath,
-		FactsDBPath:  factsPath,
+		BinaryDBPath: binaryDBPath,
 		ManifestPath: manifestPath,
 	})
 	if err != nil {
@@ -36,7 +36,7 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 		t.Fatalf("ImageBase = 0x%x, want 0x%x", res.ImageBase, fix.imageBase)
 	}
 
-	db, err := extractdb.OpenReadOnly(factsPath)
+	db, err := extractdb.OpenReadOnly(binaryDBPath)
 	if err != nil {
 		t.Fatalf("OpenReadOnly: %v", err)
 	}

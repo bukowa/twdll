@@ -9,6 +9,8 @@ const (
 	MetaArch              = "arch"
 	MetaFormat            = "format"
 	MetaBronzeExtractedAt = "bronze_extracted_at"
+	MetaSilverEngine      = "silver_engine"
+	MetaSilverExtractedAt = "silver_extracted_at"
 
 	ArchX86_64 = "x86_64"
 	ArchX86    = "x86"
@@ -36,6 +38,7 @@ const (
 	DiscoveryDataPtr    uint32 = 1 << 6
 	DiscoveryPrologue   uint32 = 1 << 7
 	DiscoveryGhidra     uint32 = 1 << 8
+	DiscoveryIDA        uint32 = 1 << 9
 )
 
 // functions.flags bitmask constants.
@@ -55,6 +58,7 @@ const (
 	CCSourceLuaReg = "bronze_lua_reg"
 	CCSourceX86Asm = "bronze_x86asm"
 	CCSourceGhidra = "silver_ghidra"
+	CCSourceIDA    = "silver_ida"
 )
 
 // types.kind string enum constants.
@@ -109,3 +113,19 @@ const (
 	AccessKindRead  = "read"
 	AccessKindWrite = "write"
 )
+
+// decomp_funcs.status string enum constants.
+const (
+	DecompStatusOK      = "ok"
+	DecompStatusFailed  = "failed"
+	DecompStatusTimeout = "timeout"
+)
+
+// DecompVar represents one normalized variable entry in decompiler_vars_json.
+type DecompVar struct {
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	IsArg   bool   `json:"is_arg"`
+	Size    int    `json:"size"`
+	Storage string `json:"storage"`
+}

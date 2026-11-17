@@ -21,6 +21,11 @@ type idaJobSpec struct {
 	onSample  func(LiveProcessStats)
 }
 
+// ResolveIDAExecutable locates the appropriate 32-bit or 64-bit IDA headless binary.
+func ResolveIDAExecutable(idaDir string, target workspace.TargetID) (string, error) {
+	return resolveIDAExecutable(idaDir, target)
+}
+
 func resolveIDAExecutable(idaDir string, target workspace.TargetID) (string, error) {
 	found, err := toolchain.FindIDAExecutable(idaDir, target.Is64Bit())
 	if err != nil {

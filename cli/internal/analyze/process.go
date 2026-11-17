@@ -1,9 +1,16 @@
 package analyze
 
 import (
+	"os/exec"
 	"sync"
 	"time"
 )
+
+// RunObservedCommand executes cmd inside a process-tree isolator (JobObject on Windows,
+// Setpgid on Unix) and samples live process/memory telemetry until exit.
+func RunObservedCommand(cmd *exec.Cmd, onSample func(LiveProcessStats)) (ProcessMetrics, error) {
+	return runObservedCommand(cmd, onSample)
+}
 
 type ProcessMetrics struct {
 	WallDuration         time.Duration

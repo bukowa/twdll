@@ -12,6 +12,13 @@ import (
 	"twdll/cli/internal/workspace"
 )
 
+// PrepareStageEnv isolates temporary directories inside stageDir.
+// isolateProfile redirects APPDATA/LOCALAPPDATA/XDG_* for JVM/Ghidra caches,
+// while leaving isolateProfile=false for IDA Pro preserves %APPDATA%\Hex-Rays license access.
+func PrepareStageEnv(stageDir string, isolateProfile bool, extra map[string]string) ([]string, error) {
+	return prepareStageEnv(stageDir, isolateProfile, extra)
+}
+
 // prepareStageEnv isolates temporary directories inside stageDir.
 // isolateProfile redirects APPDATA/LOCALAPPDATA/XDG_* for JVM/Ghidra caches,
 // while leaving isolateProfile=false for IDA Pro preserves %APPDATA%\Hex-Rays license access.

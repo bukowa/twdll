@@ -14,7 +14,7 @@ import (
 type Options struct {
 	Target       workspace.TargetID
 	BinaryPath   string
-	FactsDBPath  string
+	BinaryDBPath string
 	ManifestPath string
 }
 
@@ -58,8 +58,8 @@ func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
 	if opts.BinaryPath == "" {
 		return nil, fmt.Errorf("binary path is required for %s", opts.Target)
 	}
-	if opts.FactsDBPath == "" {
-		return nil, fmt.Errorf("facts db path is required for %s", opts.Target)
+	if opts.BinaryDBPath == "" {
+		return nil, fmt.Errorf("binary db path is required for %s", opts.Target)
 	}
 
 	binSHA, err := workspace.ComputeFileSHA256(opts.BinaryPath)
@@ -67,7 +67,7 @@ func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("hash binary %s: %w", opts.BinaryPath, err)
 	}
 
-	builder, err := extractdb.NewAtomicBuilder(opts.FactsDBPath)
+	builder, err := extractdb.NewAtomicBuilder(opts.BinaryDBPath)
 	if err != nil {
 		return nil, err
 	}

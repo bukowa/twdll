@@ -212,17 +212,17 @@ func (p Paths) DatabaseDir(d DecompilerID, t TargetID) string {
 func (p Paths) ExtractedTargetDir(t TargetID) string {
 	return filepath.Join(p.ExtractedDir, string(t))
 }
-func (p Paths) FactsDBPath(t TargetID) string {
-	return filepath.Join(p.ExtractedTargetDir(t), "facts.sqlite")
+func (p Paths) BinaryDBPath(t TargetID) string {
+	return filepath.Join(p.ExtractedTargetDir(t), "binary.sqlite")
 }
-func (p Paths) DecompCacheDBPath(t TargetID) string {
-	return filepath.Join(p.ExtractedTargetDir(t), "decomp_cache.sqlite")
+func (p Paths) DecompDBPath(t TargetID, d DecompilerID) string {
+	return filepath.Join(p.ExtractedTargetDir(t), "decomp_"+string(d)+".sqlite")
 }
 func (p Paths) TargetManifestPath(t TargetID) string {
 	return filepath.Join(p.ExtractedTargetDir(t), "manifest.json")
 }
-func (p Paths) GoldDBPath() string {
-	return filepath.Join(p.ExtractedDir, "gold.sqlite")
+func (p Paths) DerivedDBPath() string {
+	return filepath.Join(p.ExtractedDir, "derived.sqlite")
 }
 
 func (p Paths) DatabaseMarkerPath(d DecompilerID, t TargetID) string {

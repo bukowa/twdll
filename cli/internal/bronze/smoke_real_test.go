@@ -28,13 +28,13 @@ func TestSmokeRealBinaries(t *testing.T) {
 				t.Skipf("binary %s not present: %v", binPath, err)
 			}
 
-			factsPath := filepath.Join(outDir, string(target), "facts.sqlite")
+			binaryDBPath := filepath.Join(outDir, string(target), "binary.sqlite")
 			manifestPath := filepath.Join(outDir, string(target), "manifest.json")
 
 			res, err := ExtractTarget(ctx, Options{
 				Target:       target,
 				BinaryPath:   binPath,
-				FactsDBPath:  factsPath,
+				BinaryDBPath: binaryDBPath,
 				ManifestPath: manifestPath,
 			})
 			if err != nil {
@@ -47,7 +47,7 @@ func TestSmokeRealBinaries(t *testing.T) {
 				target, res.Elapsed, res.BinarySHA256[:12], res.ImageBase, len(res.Seeds),
 				ms.HeapInuse/(1024*1024), ms.HeapAlloc/(1024*1024), res.Counts)
 
-			db, err := extractdb.OpenReadOnly(factsPath)
+			db, err := extractdb.OpenReadOnly(binaryDBPath)
 			if err != nil {
 				t.Fatalf("OpenReadOnly(%s): %v", target, err)
 			}

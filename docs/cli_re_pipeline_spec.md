@@ -186,14 +186,14 @@ Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults 
 
 The notes below preserve agreed decisions from architecture & research discussions so context is not lost in future conversations:
 
-### Stage 2 Context (RE Extraction, Search & Portable Anchors — Active)
+### Stage 2 Context (RE Extraction, Search, Portable Anchors & Audit Gate — Active)
 - `.twdll/extracted/` acts as the decompiler-agnostic barrier above `.twdll/db/(ghidra|ida)` using pure-Go SQLite (`modernc.org/sqlite` + `FTS5`, zero CGO):
-  - `.twdll/extracted/<target>/facts.sqlite`: Immutable per `binary_sha256` Bronze (pure-Go PE/ELF/DWARF) + Silver (Ghidra `-readOnly -noanalysis` / IDA topology) fact store.
-  - `.twdll/extracted/<target>/decomp_cache.sqlite`: Resumable SQLite WAL store for full-binary pseudo-C, `line_ea_json`, `decompiler_vars_json`, and `decomp_fts` full-text search.
+  - `.twdll/extracted/<target>/binary.sqlite`: Static binary structure, DWARF4 debug info (`attila_64`), and x86 instruction graph (`functions`, `strings`, `xrefs`, `call_edges`, `vtables`, `rtti_*`, `lua_regs`), plus optional decompiler topology enrichment.
+  - `.twdll/extracted/<target>/decomp_ida.sqlite` & `decomp_ghidra.sqlite`: Resumable per-engine SQLite WAL stores for decompiled pseudo-C (`decomp_functions` + `decomp_fts`), `line_ea_json` (`Line <-> EA` mapping), and local/stack variables (`decomp_vars`).
   - `.twdll/extracted/<target>/manifest.json`: Fast readiness/count summary for `status`.
-  - `.twdll/extracted/gold.sqlite`: Disposable Go-derived Gold intelligence (`flattened_layouts`, L-shaped `bridge_links`, `verified_offsets_32`) rebuilt by `twdll derive` over read-only `facts.sqlite` + `decomp_cache.sqlite`.
+  - `.twdll/extracted/derived.sqlite`: Disposable Go-derived cross-binary mappings (`symbol_matches`, `struct_recoveries`, `vtable_alignments`) rebuilt by `twdll derive` over read-only `binary.sqlite` + `decomp_<engine>.sqlite`.
 - `re/anchors/<target>.toml` (Git-tracked) holds `.reloc`-safe byte signatures and `x86asm`-verified 32-bit field offsets validated by `twdll verify`.
-- Stage 2 commands (`extract`, `derive`, `search`, `show`, `verify`) are built incrementally in vertical slices; `twdll clean --all` wipes `.twdll/extracted/`, whereas scoped `twdll clean` and `twdll init --clear` preserve it.
+- **Zero Optimism & Pre-Stage-3 Audit Gate:** Extracted rows in `binary.sqlite`, `decomp_<engine>.sqlite`, and `derived.sqlite` are never treated as infallible facts. Compiler optimizations, decompiler hallucinations, and bugs in our own Go extractors/heuristics are expected. Stage 2 commands (`extract`, `derive`, `search`, `show`, `verify`) are built incrementally and followed by a mandatory **Extraction Audit & Hardening Phase** (cross-checking IDA, Ghidra, DWARF, and on-demand `x86asm` disassembly, and fixing extractor bugs) before unlocking Stage 3 (`src/` C++ rewrite). `twdll clean --all` wipes `.twdll/extracted/`, whereas scoped `twdll clean` and `twdll init --clear` preserve it.
 
 ### Stage 3 Context (Multi-Game C++ Rewrite & Build/Test CLI Commands)
 - **C++ Multi-Game Architecture (`rome2`, `attila`, `tob`):**

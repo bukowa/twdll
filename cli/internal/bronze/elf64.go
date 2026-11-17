@@ -99,17 +99,7 @@ func (img *elfImageInfo) readIdentStringAtVA(va uint64) (string, bool) {
 	return "", false
 }
 
-func extractELF64(ctx context.Context, db *sql.DB, binaryPath string) (*targetExtractResult, error) {
-	ef, err := elf.Open(binaryPath)
-	if err != nil {
-		return nil, fmt.Errorf("open elf64 %s: %w", binaryPath, err)
-	}
-	defer ef.Close()
-
-	if ef.Class != elf.ELFCLASS64 || ef.Machine != elf.EM_X86_64 {
-		return nil, fmt.Errorf("%s is not an x86_64 ELF64 binary", binaryPath)
-	}
-
+func loadELF64Image(ef *elf.File) (*elfImageInfo, []sectionRow) {
 	imageBase := uint64(0x400000)
 	foundLoad := false
 	for _, p := range ef.Progs {
@@ -185,6 +175,22 @@ func extractELF64(ctx context.Context, db *sql.DB, binaryPath string) (*targetEx
 			img.dataSecs = append(img.dataSecs, s)
 		}
 	}
+	return img, secRows
+}
+
+func extractELF64(ctx context.Context, db *sql.DB, binaryPath string) (*targetExtractResult, error) {
+	ef, err := elf.Open(binaryPath)
+	if err != nil {
+		return nil, fmt.Errorf("open elf64 %s: %w", binaryPath, err)
+	}
+	defer ef.Close()
+
+	if ef.Class != elf.ELFCLASS64 || ef.Machine != elf.EM_X86_64 {
+		return nil, fmt.Errorf("%s is not an x86_64 ELF64 binary", binaryPath)
+	}
+
+	img, secRows := loadELF64Image(ef)
+	imageBase := img.imageBase
 
 	if err := insertSections(ctx, db, secRows); err != nil {
 		return nil, err
@@ -282,8 +288,11 @@ func parseAndInsertELFRelocsImportsExports(
 ) ([]importRow, []exportRow, map[uint64]string, error) {
 	dynSyms, _ := ef.DynamicSymbols()
 
-	relocBatch := newTxStmtBatcher(ctx, db, `INSERT OR IGNORE INTO relocs(va) VALUES (?)`)
-	defer func() { _ = relocBatch.Close() }()
+	var relocBatch *txStmtBatcher
+	if db != nil {
+		relocBatch = newTxStmtBatcher(ctx, db, `INSERT OR IGNORE INTO relocs(va) VALUES (?)`)
+		defer func() { _ = relocBatch.Close() }()
+	}
 
 	var imports []importRow
 	iatSymByVA := make(map[uint64]string)
@@ -303,8 +312,10 @@ func parseAndInsertELFRelocsImportsExports(
 			if rOffset == 0 {
 				continue
 			}
-			if err := relocBatch.Exec(int64(rOffset)); err != nil {
-				return nil, nil, nil, fmt.Errorf("insert elf reloc 0x%x: %w", rOffset, err)
+			if relocBatch != nil {
+				if err := relocBatch.Exec(int64(rOffset)); err != nil {
+					return nil, nil, nil, fmt.Errorf("insert elf reloc 0x%x: %w", rOffset, err)
+				}
 			}
 
 			symIdx := uint32(rInfo >> 32)
@@ -326,8 +337,10 @@ func parseAndInsertELFRelocsImportsExports(
 			}
 		}
 	}
-	if err := relocBatch.Flush(); err != nil {
-		return nil, nil, nil, err
+	if relocBatch != nil {
+		if err := relocBatch.Flush(); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	sort.Slice(imports, func(i, j int) bool { return imports[i].IATVA < imports[j].IATVA })
