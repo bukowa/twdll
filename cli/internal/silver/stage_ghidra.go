@@ -264,7 +264,7 @@ func runGhidraDecompExport(
 	outPath := filepath.Join(stageDir, "decomp.jsonl")
 	logPath := filepath.Join(stageDir, "ghidra_decomp.log")
 
-	// Write Size DESC, EA ASC order so heavy functions are scheduled first across threads.
+	// Write Size ASC, EA ASC order so fast functions stream continuously before giant outliers.
 	ordered := make([]extractdb.FuncSpec, len(pending))
 	copy(ordered, pending)
 	shards := BuildWorkerShards(ordered, 1)

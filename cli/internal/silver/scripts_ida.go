@@ -256,6 +256,11 @@ with open(out_path, "w", encoding="utf-8") as out_f:
             "vars": vars_list,
         }) + "\n")
         out_f.flush()
+        if ok_count % 250 == 0:
+            try:
+                ida_hexrays.clear_cached_cfuncs()
+            except Exception:
+                pass
 
 print(f"export_ida_decomp: ok={ok_count} fail={fail_count} total={len(targets)} in {time.time() - t0:.2f}s", flush=True)
 idc.qexit(0)

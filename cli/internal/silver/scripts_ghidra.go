@@ -252,8 +252,10 @@ public class TwdllDecompExport extends GhidraScript {
             job.fn = fn;
         }
 
+        final int totalJobs = jobs.size();
         ConcurrentLinkedQueue<DecompJob> queue = new ConcurrentLinkedQueue<>(jobs);
-        int actualWorkers = Math.min(workers, Math.max(1, jobs.size()));
+        jobs.clear();
+        int actualWorkers = Math.min(workers, Math.max(1, totalJobs));
         AtomicInteger completed = new AtomicInteger(0);
         AtomicInteger okCount = new AtomicInteger(0);
         AtomicInteger timeoutCount = new AtomicInteger(0);
@@ -264,7 +266,6 @@ public class TwdllDecompExport extends GhidraScript {
         try (BufferedWriter bw = new BufferedWriter(
                 new OutputStreamWriter(new FileOutputStream(outPath), StandardCharsets.UTF_8), 65536)) {
             ExecutorService pool = Executors.newFixedThreadPool(actualWorkers);
-            final int totalJobs = jobs.size();
             final int tSecs = timeoutSecs;
 
             for (int w = 0; w < actualWorkers; w++) {
@@ -281,6 +282,7 @@ public class TwdllDecompExport extends GhidraScript {
                         }
 
                         StringBuilder rec = new StringBuilder(8192);
+                        int localDone = 0;
                         while (!monitor.isCancelled()) {
                             DecompJob job = queue.poll();
                             if (job == null) {
@@ -299,6 +301,10 @@ public class TwdllDecompExport extends GhidraScript {
                                     bw.newLine();
                                     bw.flush();
                                 }
+                                job.fn = null;
+                                if (++localDone % 250 == 0) {
+                                    ifc.flushCache();
+                                }
                                 completed.incrementAndGet();
                                 continue;
                             }
@@ -306,6 +312,7 @@ public class TwdllDecompExport extends GhidraScript {
                             long tf0 = System.currentTimeMillis();
                             DecompileResults res = ifc.decompileFunction(job.fn, tSecs, TaskMonitor.DUMMY);
                             long elMs = System.currentTimeMillis() - tf0;
+                            job.fn = null;
 
                             if (res == null || !res.decompileCompleted() || res.getDecompiledFunction() == null) {
                                 String errMsg = (res == null) ? "null results" : res.getErrorMessage();
@@ -331,6 +338,9 @@ public class TwdllDecompExport extends GhidraScript {
                                     bw.write(rec.toString());
                                     bw.newLine();
                                     bw.flush();
+                                }
+                                if (++localDone % 250 == 0) {
+                                    ifc.flushCache();
                                 }
                                 completed.incrementAndGet();
                                 continue;
@@ -409,6 +419,9 @@ public class TwdllDecompExport extends GhidraScript {
                                 bw.newLine();
                                 bw.flush();
                             }
+                            if (++localDone % 250 == 0) {
+                                ifc.flushCache();
+                            }
                             int done = completed.incrementAndGet();
                             if (done % 250 == 0 || done == totalJobs) {
                                 println(String.format("TwdllDecompExport: %d/%d (ok=%d timeout=%d fail=%d)",
@@ -432,7 +445,7 @@ public class TwdllDecompExport extends GhidraScript {
             throw new RuntimeException("Ghidra decomp worker failed", fatalErr.get());
         }
         println(String.format("TwdllDecompExport: finished %d/%d (created=%d ok=%d timeout=%d fail=%d) in %.2fs",
-                completed.get(), jobs.size(), createdMissing, okCount.get(), timeoutCount.get(), failCount.get(),
+                completed.get(), totalJobs, createdMissing, okCount.get(), timeoutCount.get(), failCount.get(),
                 (System.currentTimeMillis() - t0) / 1000.0));
     }
 }

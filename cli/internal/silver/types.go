@@ -236,7 +236,7 @@ func BuildWorkerShards(pending []extractdb.FuncSpec, workers int) [][]extractdb.
 	copy(ordered, pending)
 	sort.Slice(ordered, func(i, j int) bool {
 		if ordered[i].Size != ordered[j].Size {
-			return ordered[i].Size > ordered[j].Size
+			return ordered[i].Size < ordered[j].Size
 		}
 		return ordered[i].EA < ordered[j].EA
 	})

@@ -12,7 +12,7 @@ import (
 	"twdll/cli/internal/workspace"
 )
 
-func TestBuildWorkerShards_BalancedBySizeDesc(t *testing.T) {
+func TestBuildWorkerShards_BalancedBySizeAsc(t *testing.T) {
 	specs := []extractdb.FuncSpec{
 		{EA: 0x100, Size: 10, Name: "tiny_a"},
 		{EA: 0x200, Size: 50000, Name: "giant_a"},
@@ -26,8 +26,11 @@ func TestBuildWorkerShards_BalancedBySizeDesc(t *testing.T) {
 	if len(shards) != 2 {
 		t.Fatalf("len(shards) = %d, want 2", len(shards))
 	}
-	if shards[0][0].EA != 0x200 || shards[1][0].EA != 0x400 {
-		t.Fatalf("expected largest functions distributed across shards[0] and shards[1], got %+v / %+v", shards[0][0], shards[1][0])
+	if shards[0][0].EA != 0x100 || shards[1][0].EA != 0x300 {
+		t.Fatalf("expected smallest functions distributed across shards[0] and shards[1], got %+v / %+v", shards[0][0], shards[1][0])
+	}
+	if shards[0][2].EA != 0x400 || shards[1][2].EA != 0x200 {
+		t.Fatalf("expected largest functions placed at end of shards[0] and shards[1], got %+v / %+v", shards[0][2], shards[1][2])
 	}
 	if len(shards[0]) != 3 || len(shards[1]) != 3 {
 		t.Fatalf("expected balanced 3/3 shards, got %d/%d", len(shards[0]), len(shards[1]))

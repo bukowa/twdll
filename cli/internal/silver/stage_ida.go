@@ -123,9 +123,9 @@ func resolveIDADecompWorkers(target workspace.TargetID, requested int) int {
 	}
 	numCPU := runtime.NumCPU()
 	if target.Is64Bit() {
-		return max(1, min(2, numCPU/4))
+		return max(1, min(4, numCPU/3))
 	}
-	return max(1, min(4, numCPU/2))
+	return max(1, min(6, numCPU/2))
 }
 
 type idaWorkerConfig struct {
@@ -406,7 +406,11 @@ func executeIDAAttempt(
 				<-procDone
 				return idaAttemptOutcome{completed: completedUntil, peakMem: peakMem.Load(), err: dErr}
 			}
-			if cfg.timeoutSecs > 0 && inFlight != nil && time.Since(inFlightStarted) > perFuncDeadline {
+			deadline := perFuncDeadline
+			if completedUntil == 0 {
+				deadline += 15 * time.Second
+			}
+			if cfg.timeoutSecs > 0 && inFlight != nil && time.Since(inFlightStarted) > deadline {
 				timedOut = true
 				runCancel()
 				pRes = <-procDone

@@ -10,12 +10,16 @@ import (
 	"strings"
 	"time"
 
+	"twdll/cli/internal/analyze"
 	"twdll/cli/internal/bronze"
 	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/workspace"
 )
 
 func ExtractSilverTopology(ctx context.Context, opts SilverOptions) (*bronze.SilverMergeResult, error) {
+	releasePower := analyze.AcquirePowerAssertion()
+	defer releasePower()
+
 	if !opts.Target.IsValid() {
 		return nil, fmt.Errorf("invalid target id %q", opts.Target)
 	}
@@ -53,6 +57,9 @@ func ExtractSilverTopology(ctx context.Context, opts SilverOptions) (*bronze.Sil
 }
 
 func RunDecompPass(ctx context.Context, opts DecompOptions) (*DecompPassResult, error) {
+	releasePower := analyze.AcquirePowerAssertion()
+	defer releasePower()
+
 	t0 := time.Now()
 	if !opts.Target.IsValid() {
 		return nil, fmt.Errorf("invalid target id %q", opts.Target)
