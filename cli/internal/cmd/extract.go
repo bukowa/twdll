@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -450,33 +449,22 @@ func resolveExtractTargets(layout workspace.Layout, rawTargets []string) ([]work
 }
 
 func inspectBronzeState(ctx context.Context, dbPath, wantSHA string) bronzeDBState {
-	state := bronzeDBState{}
-	db, err := extractdb.OpenReadOnly(dbPath)
-	if err != nil {
-		return state
+	summary := extractdb.InspectBronzeStatus(ctx, dbPath)
+	if !summary.Present || summary.Locked || summary.Error != "" {
+		return bronzeDBState{}
 	}
-	defer func() { _ = db.Close() }()
-
-	var gotSHA string
-	if err := db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, extractdb.MetaBinarySHA256).Scan(&gotSHA); err != nil {
-		return state
+	upToDate := wantSHA != "" && strings.EqualFold(strings.TrimSpace(summary.BinarySHA256), strings.TrimSpace(wantSHA))
+	if !upToDate {
+		return bronzeDBState{}
 	}
-	state.upToDate = wantSHA != "" && strings.EqualFold(strings.TrimSpace(gotSHA), strings.TrimSpace(wantSHA))
-	if !state.upToDate {
-		return state
+	return bronzeDBState{
+		upToDate: true,
+		counts: map[string]int64{
+			"sections":    int64(summary.Sections),
+			"strings":     int64(summary.Strings),
+			"dwarf_funcs": int64(summary.DwarfFuncs),
+		},
 	}
-
-	counts := make(map[string]int64, 4)
-	for _, key := range []string{"sections", "strings", "dwarf_funcs"} {
-		var rawVal string
-		if err := db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, "count_"+key).Scan(&rawVal); err == nil {
-			if n, err := strconv.ParseInt(rawVal, 10, 64); err == nil {
-				counts[key] = n
-			}
-		}
-	}
-	state.counts = counts
-	return state
 }
 
 func buildBronzeSummary(counts map[string]int64, cached bool) string {

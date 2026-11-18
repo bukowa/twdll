@@ -1183,6 +1183,168 @@ func TestRunStatus_BronzeBinarySHAMismatchMarksNotUpToDate(t *testing.T) {
 	}
 }
 
+func TestFormatStatusCells_RendersLockedTimeoutAndError(t *testing.T) {
+	st := term.NewStyle(false)
+
+	for _, tc := range []struct {
+		name string
+		got  string
+		want string
+	}{
+		{
+			name: "silver locked",
+			got:  formatSilverCell(st, ExtractedSilverStatus{Present: true, Locked: true}, 24),
+			want: "[!] Locked",
+		},
+		{
+			name: "silver timeout",
+			got:  formatSilverCell(st, ExtractedSilverStatus{Present: true, Error: "timeout"}, 24),
+			want: "[!] Timeout",
+		},
+		{
+			name: "silver error",
+			got:  formatSilverCell(st, ExtractedSilverStatus{Present: true, Error: "disk i/o"}, 24),
+			want: "[!] Error",
+		},
+		{
+			name: "bronze locked",
+			got:  formatBronzeCell(st, ExtractedStatus{BronzePresent: true, BronzeLocked: true}, 24),
+			want: "[!] Locked",
+		},
+		{
+			name: "bronze timeout",
+			got:  formatBronzeCell(st, ExtractedStatus{BronzePresent: true, BronzeError: "timeout"}, 24),
+			want: "[!] Timeout",
+		},
+		{
+			name: "bronze error",
+			got:  formatBronzeCell(st, ExtractedStatus{BronzePresent: true, BronzeError: "disk i/o"}, 24),
+			want: "[!] Error",
+		},
+	} {
+		if !strings.Contains(tc.got, tc.want) {
+			t.Fatalf("%s: expected %q to contain %q", tc.name, tc.got, tc.want)
+		}
+	}
+}
+
+func TestRenderExtractedTable_PadsColumnsDynamicallyAndFormatsNumbers(t *testing.T) {
+	rows := []ExtractedStatus{
+		{
+			Target:          workspace.TargetAttila64,
+			BronzePresent:   true,
+			BronzeUpToDate:  true,
+			BronzeSections:  32,
+			BronzeStrings:   55901,
+			BronzeDwarfFunc: 166593,
+			Silver: map[string]ExtractedSilverStatus{
+				string(workspace.DecompilerGhidra): {
+					Present:  true,
+					UpToDate: true,
+					Funcs:    168407,
+					OK:       168250,
+				},
+				string(workspace.DecompilerIDA): {
+					Present:  true,
+					UpToDate: true,
+					Funcs:    168382,
+					OK:       167891,
+				},
+			},
+		},
+		{
+			Target:         workspace.TargetAttila32,
+			BronzePresent:  true,
+			BronzeUpToDate: true,
+			BronzeSections: 9,
+			BronzeStrings:  45564,
+			Silver: map[string]ExtractedSilverStatus{
+				string(workspace.DecompilerGhidra): {
+					Present:  true,
+					UpToDate: true,
+					Funcs:    86295,
+				},
+				string(workspace.DecompilerIDA): {
+					Present:  true,
+					UpToDate: false,
+					Funcs:    111777,
+					OK:       111730,
+				},
+			},
+		},
+	}
+
+	var plain strings.Builder
+	renderExtractedTable(&plain, term.NewStyle(false), rows)
+	out := plain.String()
+
+	for _, want := range []string{
+		"Target          Bronze",
+		"55,901 str, 166,593 dwarf",
+		"45,564 str, 9 sections",
+		"[x] 168,250/168,407 fn",
+		"[x] 167,891/168,382 fn",
+		"[x] 86,295 fn (no decomp)",
+		"[!] 111,730/111,777 fn (stale)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
+	}
+
+	// Columns must remain separated by at least 3 spaces and stay aligned on headers and rows.
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 4 {
+		t.Fatalf("expected 4 lines, got %d:\n%s", len(lines), out)
+	}
+	headerCol2 := strings.Index(lines[1], "Ghidra Silver")
+	headerCol3 := strings.Index(lines[1], "IDA Silver")
+	for _, line := range lines[2:] {
+		firstSilver := strings.Index(line, "[x] 168")
+		if firstSilver == -1 {
+			firstSilver = strings.Index(line, "[x] 86")
+		}
+		if firstSilver != headerCol2 {
+			t.Fatalf("Ghidra Silver column misaligned (header=%d, row=%d) in:\n%s", headerCol2, firstSilver, out)
+		}
+		secondSilver := strings.Index(line, "[x] 167")
+		if secondSilver == -1 {
+			secondSilver = strings.Index(line, "[!] 111")
+		}
+		if secondSilver != headerCol3 {
+			t.Fatalf("IDA Silver column misaligned (header=%d, row=%d) in:\n%s", headerCol3, secondSilver, out)
+		}
+		if strings.Contains(line, "dwarf[") || strings.Contains(line, "fn[") {
+			t.Fatalf("columns collided in line %q", line)
+		}
+	}
+
+	// Verify ANSI-styled output keeps identical visible column alignment when ANSI escapes are stripped.
+	var colored strings.Builder
+	renderExtractedTable(&colored, term.NewStyle(true), rows)
+	if stripANSIForTest(colored.String()) != out {
+		t.Fatalf("colored output stripped of ANSI differs from plain output:\ncolored-stripped:\n%s\nplain:\n%s", stripANSIForTest(colored.String()), out)
+	}
+}
+
+func stripANSIForTest(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\033' && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && s[j] != 'm' {
+				j++
+			}
+			if j < len(s) {
+				i = j
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
 func TestRunExtract_AnimatedDashboard_RendersAllTargetsAndFinalOKRows(t *testing.T) {
 	root := t.TempDir()
 	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
