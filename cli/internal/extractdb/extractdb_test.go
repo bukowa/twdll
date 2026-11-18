@@ -2,10 +2,13 @@ package extractdb
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,10 +16,10 @@ import (
 	"twdll/cli/internal/workspace"
 )
 
-func TestAtomicBuilder_CommitPurgesStaleSidecarsAndRebuildsFactsFTS(t *testing.T) {
+func TestAtomicBuilder_CommitPurgesStaleSidecarsAndRebuildsBronzeFTS(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "attila_32", "binary.sqlite")
+	dbPath := filepath.Join(dir, "attila_32", "bronze.sqlite")
 
 	// Missing DB must fail OpenReadOnly without creating a 0-byte file
 	if _, err := OpenReadOnly(dbPath); err == nil {
@@ -48,23 +51,31 @@ func TestAtomicBuilder_CommitPurgesStaleSidecarsAndRebuildsFactsFTS(t *testing.T
 	}
 	defer func() { _ = builder.Abort() }()
 
-	if err := InitFactsSchema(ctx, builder.DB()); err != nil {
-		t.Fatalf("InitFactsSchema: %v", err)
+	if err := InitBronzeSchema(ctx, builder.DB()); err != nil {
+		t.Fatalf("InitBronzeSchema: %v", err)
 	}
 
 	if _, err := builder.DB().ExecContext(ctx, `
-		INSERT INTO functions(ea, size, name, mangled_name, class_name)
-		VALUES (0x10001000, 64, 'CA::Campaign::Tick', '?Tick@Campaign@CA@@QAEXXZ', 'CA::Campaign');
+		INSERT INTO dwarf_funcs(ea, size, name, linkage_name, class_name)
+		VALUES (0x10001000, 64, 'CA::Campaign::Tick', '_ZN2CA8Campaign4TickEv', 'CA::Campaign');
 		INSERT INTO types(type_id, kind, name, byte_size)
 		VALUES (1, 'class', 'CA::Campaign', 256);
 		INSERT INTO strings(str_id, ea, encoding, value)
 		VALUES (1, 0x10500000, 'ascii', 'lua_campaign_tick');
 	`); err != nil {
-		t.Fatalf("insert sample facts: %v", err)
+		t.Fatalf("insert sample bronze facts: %v", err)
 	}
 
-	if err := RebuildFactsFTS(ctx, builder.DB()); err != nil {
-		t.Fatalf("RebuildFactsFTS: %v", err)
+	if err := RebuildBronzeFTS(ctx, builder.DB()); err != nil {
+		t.Fatalf("RebuildBronzeFTS: %v", err)
+	}
+
+	counts, err := RefreshBronzeCounts(ctx, builder.DB())
+	if err != nil {
+		t.Fatalf("RefreshBronzeCounts: %v", err)
+	}
+	if counts["dwarf_funcs"] != 1 || counts["types"] != 1 || counts["strings"] != 1 {
+		t.Fatalf("unexpected counts: %+v", counts)
 	}
 
 	if err := builder.Commit(ctx); err != nil {
@@ -99,11 +110,11 @@ func TestAtomicBuilder_CommitPurgesStaleSidecarsAndRebuildsFactsFTS(t *testing.T
 	}
 
 	var matchedEA int64
-	if err := roDB.QueryRowContext(ctx, `SELECT rowid FROM functions_fts WHERE functions_fts MATCH 'Campaign'`).Scan(&matchedEA); err != nil {
-		t.Fatalf("functions_fts MATCH: %v", err)
+	if err := roDB.QueryRowContext(ctx, `SELECT rowid FROM dwarf_funcs_fts WHERE dwarf_funcs_fts MATCH 'Campaign'`).Scan(&matchedEA); err != nil {
+		t.Fatalf("dwarf_funcs_fts MATCH: %v", err)
 	}
 	if matchedEA != 0x10001000 {
-		t.Fatalf("functions_fts rowid = 0x%x, want 0x10001000", matchedEA)
+		t.Fatalf("dwarf_funcs_fts rowid = 0x%x, want 0x10001000", matchedEA)
 	}
 
 	var matchedType int64
@@ -123,7 +134,7 @@ func TestAtomicBuilder_CommitPurgesStaleSidecarsAndRebuildsFactsFTS(t *testing.T
 	}
 
 	// Query-only enforcement
-	if _, err := roDB.ExecContext(ctx, `DELETE FROM functions;`); err == nil {
+	if _, err := roDB.ExecContext(ctx, `DELETE FROM dwarf_funcs;`); err == nil {
 		t.Fatalf("expected write on OpenReadOnly connection to fail")
 	}
 }
@@ -131,14 +142,13 @@ func TestAtomicBuilder_CommitPurgesStaleSidecarsAndRebuildsFactsFTS(t *testing.T
 func TestAtomicBuilder_AbortPreservesPriorDatabaseAndLeavesZeroTempFiles(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "binary.sqlite")
+	dbPath := filepath.Join(dir, "bronze.sqlite")
 
-	// 1. Commit an initial healthy database
 	b1, err := NewAtomicBuilder(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := InitFactsSchema(ctx, b1.DB()); err != nil {
+	if err := InitBronzeSchema(ctx, b1.DB()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b1.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (1, 'healthy_symbol');`); err != nil {
@@ -148,12 +158,11 @@ func TestAtomicBuilder_AbortPreservesPriorDatabaseAndLeavesZeroTempFiles(t *test
 		t.Fatal(err)
 	}
 
-	// 2. Start a second build, write partial data, then Abort
 	b2, err := NewAtomicBuilder(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := InitFactsSchema(ctx, b2.DB()); err != nil {
+	if err := InitBronzeSchema(ctx, b2.DB()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b2.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (1, 'corrupted_partial');`); err != nil {
@@ -162,7 +171,6 @@ func TestAtomicBuilder_AbortPreservesPriorDatabaseAndLeavesZeroTempFiles(t *test
 	if err := b2.Abort(); err != nil {
 		t.Fatalf("Abort: %v", err)
 	}
-	// Idempotent second Abort call
 	if err := b2.Abort(); err != nil {
 		t.Fatalf("second Abort: %v", err)
 	}
@@ -171,8 +179,8 @@ func TestAtomicBuilder_AbortPreservesPriorDatabaseAndLeavesZeroTempFiles(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "binary.sqlite" {
-		t.Fatalf("expected only binary.sqlite in %s after Abort, got %v", dir, entries)
+	if len(entries) != 1 || entries[0].Name() != "bronze.sqlite" {
+		t.Fatalf("expected only bronze.sqlite in %s after Abort, got %v", dir, entries)
 	}
 
 	roDB, err := OpenReadOnly(dbPath)
@@ -190,23 +198,99 @@ func TestAtomicBuilder_AbortPreservesPriorDatabaseAndLeavesZeroTempFiles(t *test
 	}
 }
 
-func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
+func TestSilverStore_FuncsDecompResumeUpsertFTSAndWALTruncate(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "decomp_ghidra.sqlite")
+	dbPath := filepath.Join(dir, "silver_ghidra.sqlite")
 
-	store, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_v1")
+	store, err := OpenSilverStore(ctx, dbPath, "attila_32", "ghidra", "sha_v1", "")
 	if err != nil {
-		t.Fatalf("OpenDecompStore: %v", err)
+		t.Fatalf("OpenSilverStore: %v", err)
 	}
 
-	initialSpecs := []FuncSpec{
-		{EA: 0x1000, Size: 32, Name: "FuncAlpha"},
-		{EA: 0x2000, Size: 48, Name: "FuncBeta"},
-		{EA: 0x3000, Size: 64, Name: "FuncOrphan"},
+	hasFuncs, err := store.HasFuncs(ctx)
+	if err != nil || hasFuncs {
+		t.Fatalf("initial HasFuncs = (%v, %v), want (false, nil)", hasFuncs, err)
 	}
 
-	pending, stats, err := store.PlanWork(ctx, "ghidra", initialSpecs, PlanOptions{})
+	silverFuncs := []SilverFuncRow{
+		{EA: 0x1000, Size: 32, Name: "FuncAlpha", CallingConv: "__thiscall", StackPurge: 4},
+		{EA: 0x2000, Size: 48, Name: "FuncBeta", CallingConv: "__cdecl"},
+		{EA: 0x3000, Size: 64, Name: "FuncOrphan", CallingConv: "__stdcall"},
+	}
+	silverRanges := []SilverFuncRangeRow{
+		{StartEA: 0x1000, EndEA: 0x1020, FuncEA: 0x1000},
+		{StartEA: 0x2000, EndEA: 0x2030, FuncEA: 0x2000},
+		{StartEA: 0x3000, EndEA: 0x3040, FuncEA: 0x3000},
+		{StartEA: 0x5000, EndEA: 0x5010, FuncEA: 0x1000},
+		{StartEA: 0x5000, EndEA: 0x5010, FuncEA: 0x2000},
+	}
+	if err := store.ReplaceFuncs(ctx, silverFuncs, silverRanges, "funcs,decomp"); err != nil {
+		t.Fatalf("ReplaceFuncs: %v", err)
+	}
+	var rangeCount int
+	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM silver_func_ranges`).Scan(&rangeCount); err != nil {
+		t.Fatalf("count silver_func_ranges: %v", err)
+	}
+	if rangeCount != 5 {
+		t.Fatalf("silver_func_ranges count = %d, want 5", rangeCount)
+	}
+	var sharedRangeCount int
+	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM silver_func_ranges WHERE start_ea = 0x5000`).Scan(&sharedRangeCount); err != nil {
+		t.Fatalf("count shared silver_func_ranges: %v", err)
+	}
+	if sharedRangeCount != 2 {
+		t.Fatalf("silver_func_ranges count for start_ea 0x5000 = %d, want 2", sharedRangeCount)
+	}
+	hasFuncs, err = store.HasFuncs(ctx)
+	if err != nil || !hasFuncs {
+		t.Fatalf("HasFuncs after ReplaceFuncs = (%v, %v), want (true, nil)", hasFuncs, err)
+	}
+
+	hasAsm, err := store.HasAsm(ctx)
+	if err != nil || hasAsm {
+		t.Fatalf("initial HasAsm = (%v, %v), want (false, nil)", hasAsm, err)
+	}
+	if err := store.ReplaceAsm(ctx, []SilverAsmRow{
+		{FuncEA: 0x1000, InsnCount: 2, RawAsm: "1000: push ebp\n1001: ret"},
+		{FuncEA: 0x2000, InsnCount: 1, RawAsm: "2000: ret"},
+	}, ""); err != nil {
+		t.Fatalf("ReplaceAsm: %v", err)
+	}
+	hasAsm, err = store.HasAsm(ctx)
+	if err != nil || !hasAsm {
+		t.Fatalf("HasAsm after ReplaceAsm = (%v, %v), want (true, nil)", hasAsm, err)
+	}
+	asmCount, err := store.AsmCount(ctx)
+	if err != nil || asmCount != 2 {
+		t.Fatalf("AsmCount = (%d, %v), want (2, nil)", asmCount, err)
+	}
+	var gotInsnCount int
+	var gotRawAsm string
+	if err := store.DB().QueryRowContext(ctx, `SELECT insn_count, raw_asm FROM silver_asm WHERE func_ea = 0x1000`).Scan(&gotInsnCount, &gotRawAsm); err != nil {
+		t.Fatalf("query silver_asm: %v", err)
+	}
+	if gotInsnCount != 2 || !strings.Contains(gotRawAsm, "push ebp") {
+		t.Fatalf("unexpected silver_asm row: insn_count=%d raw_asm=%q", gotInsnCount, gotRawAsm)
+	}
+
+	specsFromDB, err := store.ListFuncSpecs(ctx)
+	if err != nil {
+		t.Fatalf("ListFuncSpecs: %v", err)
+	}
+	if len(specsFromDB) != 3 || specsFromDB[0].EA != 0x1000 || specsFromDB[2].EA != 0x3000 {
+		t.Fatalf("unexpected specsFromDB: %+v", specsFromDB)
+	}
+
+	var matchedFnEA int64
+	if err := store.DB().QueryRowContext(ctx, `SELECT rowid FROM silver_funcs_fts WHERE silver_funcs_fts MATCH 'FuncAlpha'`).Scan(&matchedFnEA); err != nil {
+		t.Fatalf("silver_funcs_fts MATCH: %v", err)
+	}
+	if matchedFnEA != 0x1000 {
+		t.Fatalf("silver_funcs_fts rowid = 0x%x, want 0x1000", matchedFnEA)
+	}
+
+	pending, stats, err := store.PlanWork(ctx, specsFromDB, PlanOptions{})
 	if err != nil {
 		t.Fatalf("initial PlanWork: %v", err)
 	}
@@ -214,32 +298,27 @@ func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 		t.Fatalf("unexpected initial plan: pending=%d stats=%+v", len(pending), stats)
 	}
 
-	// Stream 3 records through RunBatchWriter: 2 via batchSize=2, 1 via timer flush
 	ch := make(chan DecompRecord, 3)
 	ch <- DecompRecord{
 		FuncEA:   0x1000,
-		Engine:   "ghidra",
 		FuncSize: 32,
 		FuncName: "FuncAlpha",
 		RawC:     "void FuncAlpha(void) { int alpha_magic = 1; }",
-		Status:   "ok",
+		Status:   DecompStatusOK,
 	}
 	ch <- DecompRecord{
 		FuncEA:    0x2000,
-		Engine:    "ghidra",
 		FuncSize:  48,
 		FuncName:  "FuncBeta",
-		RawC:      "",
-		Status:    "failed",
+		Status:    DecompStatusFailed,
 		ErrorText: "decompile timeout",
 	}
 	ch <- DecompRecord{
 		FuncEA:   0x3000,
-		Engine:   "ghidra",
 		FuncSize: 64,
 		FuncName: "FuncOrphan",
 		RawC:     "void FuncOrphan(void) { int orphan_token = 99; }",
-		Status:   "ok",
+		Status:   DecompStatusOK,
 	}
 	close(ch)
 
@@ -251,27 +330,21 @@ func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 		t.Fatalf("written = %d, want 3", written)
 	}
 
-	// Next pass:
-	// - 0x1000 has drifted size (32 -> 40) -> SizeChanged
-	// - 0x2000 is failed -> skipped when RetryFailed=false, queued when RetryFailed=true
-	// - 0x3000 is removed -> OrphanDeleted
-	// - 0x4000 is brand new -> Pending
 	nextSpecs := []FuncSpec{
 		{EA: 0x1000, Size: 40, Name: "FuncAlpha"},
 		{EA: 0x2000, Size: 48, Name: "FuncBeta"},
 		{EA: 0x4000, Size: 16, Name: "FuncGamma"},
 	}
 
-	pendingNoRetry, statsNoRetry, err := store.PlanWork(ctx, "ghidra", nextSpecs, PlanOptions{RetryFailed: false})
+	pendingNoRetry, statsNoRetry, err := store.PlanWork(ctx, nextSpecs, PlanOptions{RetryFailed: false})
 	if err != nil {
 		t.Fatalf("PlanWork(RetryFailed=false): %v", err)
 	}
-	if statsNoRetry.OrphanDeleted != 1 || statsNoRetry.SizeChanged != 1 || statsNoRetry.SkippedFailed != 1 || len(pendingNoRetry) != 2 {
+	if statsNoRetry.OrphanDeleted != 0 || statsNoRetry.SizeChanged != 1 || statsNoRetry.SkippedFailed != 1 || len(pendingNoRetry) != 2 {
 		t.Fatalf("unexpected statsNoRetry=%+v pending=%v", statsNoRetry, pendingNoRetry)
 	}
 
-	// Verify RetryFailed=true queues 0x2000 while keeping 0x1000 (size changed) and 0x4000 (missing)
-	pendingRetry, statsRetry, err := store.PlanWork(ctx, "ghidra", nextSpecs, PlanOptions{RetryFailed: true})
+	pendingRetry, statsRetry, err := store.PlanWork(ctx, nextSpecs, PlanOptions{RetryFailed: true})
 	if err != nil {
 		t.Fatalf("PlanWork(RetryFailed=true): %v", err)
 	}
@@ -279,34 +352,20 @@ func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 		t.Fatalf("unexpected statsRetry=%+v pending=%v", statsRetry, pendingRetry)
 	}
 
-	// Upsert 0x2000 from failed -> ok, update 0x1000 size=40, insert 0x4000 under a cancelled parent ctx to verify drain safety
+	pendingPrune, statsPrune, err := store.PlanWork(ctx, nextSpecs, PlanOptions{PruneOrphans: true})
+	if err != nil {
+		t.Fatalf("PlanWork(PruneOrphans=true): %v", err)
+	}
+	if statsPrune.OrphanDeleted != 1 || len(pendingPrune) != 2 {
+		t.Fatalf("unexpected statsPrune=%+v pending=%v", statsPrune, pendingPrune)
+	}
+
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel()
 	ch2 := make(chan DecompRecord, 3)
-	ch2 <- DecompRecord{
-		FuncEA:   0x1000,
-		Engine:   "ghidra",
-		FuncSize: 40,
-		FuncName: "FuncAlpha",
-		RawC:     "void FuncAlpha(void) { int alpha_v2 = 2; }",
-		Status:   "ok",
-	}
-	ch2 <- DecompRecord{
-		FuncEA:   0x2000,
-		Engine:   "ghidra",
-		FuncSize: 48,
-		FuncName: "FuncBeta",
-		RawC:     "void FuncBeta(void) { int beta_recovered = 42; }",
-		Status:   "ok",
-	}
-	ch2 <- DecompRecord{
-		FuncEA:   0x4000,
-		Engine:   "ghidra",
-		FuncSize: 16,
-		FuncName: "FuncGamma",
-		RawC:     "void FuncGamma(void) {}",
-		Status:   "ok",
-	}
+	ch2 <- DecompRecord{FuncEA: 0x1000, FuncSize: 40, FuncName: "FuncAlpha", RawC: "void FuncAlpha(void) { int alpha_v2 = 2; }", Status: DecompStatusOK}
+	ch2 <- DecompRecord{FuncEA: 0x2000, FuncSize: 48, FuncName: "FuncBeta", RawC: "void FuncBeta(void) { int beta_recovered = 42; }", Status: DecompStatusOK}
+	ch2 <- DecompRecord{FuncEA: 0x4000, FuncSize: 16, FuncName: "FuncGamma", RawC: "void FuncGamma(void) {}", Status: DecompStatusOK}
 	close(ch2)
 
 	written2, err := store.RunBatchWriter(cancelCtx, ch2, 250, time.Second)
@@ -317,8 +376,7 @@ func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 		t.Fatalf("expected all 3 queued records drained on cancelled ctx, got %d", written2)
 	}
 
-	// Verify all 3 are now SkippedOK
-	pendingFinal, statsFinal, err := store.PlanWork(ctx, "ghidra", nextSpecs, PlanOptions{})
+	pendingFinal, statsFinal, err := store.PlanWork(ctx, nextSpecs, PlanOptions{})
 	if err != nil {
 		t.Fatalf("final PlanWork: %v", err)
 	}
@@ -326,7 +384,6 @@ func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 		t.Fatalf("expected all 3 specs SkippedOK, got pending=%v stats=%+v", pendingFinal, statsFinal)
 	}
 
-	// Verify FTS5 reflects failed->ok upsert, updated 0x1000, and deleted orphan 0x3000
 	var count int
 	if err := store.DB().QueryRowContext(ctx, `SELECT count(*) FROM decomp_fts WHERE decomp_fts MATCH 'beta_recovered'`).Scan(&count); err != nil {
 		t.Fatal(err)
@@ -341,7 +398,6 @@ func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 		t.Fatalf("decomp_fts MATCH 'orphan_token' = %d, want 0 after orphan delete", count)
 	}
 
-	// Verify FTS5 and DB integrity
 	if _, err := store.DB().ExecContext(ctx, `INSERT INTO decomp_fts(decomp_fts) VALUES('integrity-check');`); err != nil {
 		t.Fatalf("decomp_fts integrity-check failed: %v", err)
 	}
@@ -354,44 +410,75 @@ func TestDecompStore_CheckpointResumeUpsertFTSAndWALTruncate(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	if walInfo, err := os.Stat(dbPath + "-wal"); err == nil && walInfo.Size() > 0 {
-		t.Fatalf("expected Close() to truncate WAL to 0 bytes (or remove it), got %d bytes", walInfo.Size())
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, statErr := os.Stat(dbPath + suffix); !os.IsNotExist(statErr) {
+			t.Fatalf("expected Close() to normalize out of WAL mode and remove %s%s (statErr=%v)", dbPath, suffix, statErr)
+		}
 	}
 
-	// Opening with a different binary SHA-256 resets the store cleanly
-	storeV2, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_v2")
+	roClosed, err := OpenReadOnly(dbPath)
 	if err != nil {
-		t.Fatalf("OpenDecompStore(sha_v2): %v", err)
+		t.Fatalf("OpenReadOnly after Close(): %v", err)
 	}
-	defer storeV2.Close()
+	var roCount int
+	if err := roClosed.QueryRowContext(ctx, `SELECT COUNT(*) FROM decomp_funcs`).Scan(&roCount); err != nil {
+		_ = roClosed.Close()
+		t.Fatalf("query closed decomp_funcs via OpenReadOnly: %v", err)
+	}
+	_ = roClosed.Close()
+	if roCount != 3 {
+		t.Fatalf("OpenReadOnly decomp_funcs count = %d, want 3", roCount)
+	}
 
+	// Opening with a different binary SHA-256 or enricher key resets the store cleanly
+	storeV2, err := OpenSilverStore(ctx, dbPath, "attila_32", "ghidra", "sha_v2", "")
+	if err != nil {
+		t.Fatalf("OpenSilverStore(sha_v2): %v", err)
+	}
 	if err := storeV2.DB().QueryRowContext(ctx, `SELECT count(*) FROM decomp_funcs`).Scan(&count); err != nil {
+		_ = storeV2.Close()
 		t.Fatal(err)
 	}
 	if count != 0 {
+		_ = storeV2.Close()
 		t.Fatalf("expected binary SHA drift to reset decomp_funcs, got %d rows", count)
+	}
+	if err := storeV2.WriteBatch(ctx, []DecompRecord{{FuncEA: 0x1, FuncSize: 4, Status: DecompStatusOK}}); err != nil {
+		_ = storeV2.Close()
+		t.Fatal(err)
+	}
+	_ = storeV2.Close()
+
+	storeEnriched, err := OpenSilverStore(ctx, dbPath, "attila_32", "ghidra", "sha_v2", "custom_enricher")
+	if err != nil {
+		t.Fatalf("OpenSilverStore(enricher drift): %v", err)
+	}
+	defer storeEnriched.Close()
+	if err := storeEnriched.DB().QueryRowContext(ctx, `SELECT count(*) FROM decomp_funcs`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("expected enricher drift to reset decomp_funcs, got %d rows", count)
 	}
 }
 
-func TestDecompStore_ConcurrentReadOnlyFTSWhileWritingBatches(t *testing.T) {
+func TestSilverStore_ConcurrentReadOnlyFTSWhileWritingBatches(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "decomp_ghidra.sqlite")
+	dbPath := filepath.Join(dir, "silver_ghidra.sqlite")
 
-	store, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_concurrent")
+	store, err := OpenSilverStore(ctx, dbPath, "attila_32", "ghidra", "sha_concurrent", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
 
-	// Seed one record so readers have data from the start
 	if err := store.WriteBatch(ctx, []DecompRecord{{
 		FuncEA:   0x100,
-		Engine:   "ghidra",
 		FuncSize: 16,
 		FuncName: "SeedFunc",
 		RawC:     "void SeedFunc(void) { int warscape_token = 1; }",
-		Status:   "ok",
+		Status:   DecompStatusOK,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -411,8 +498,6 @@ func TestDecompStore_ConcurrentReadOnlyFTSWhileWritingBatches(t *testing.T) {
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, 8)
-
-	// Launch concurrent readers querying FTS while writer commits batches
 	stopReaders := make(chan struct{})
 	for r := 0; r < 4; r++ {
 		wg.Add(1)
@@ -440,11 +525,10 @@ func TestDecompStore_ConcurrentReadOnlyFTSWhileWritingBatches(t *testing.T) {
 	for i := 1; i <= 100; i++ {
 		in <- DecompRecord{
 			FuncEA:   uint64(0x1000 + i*0x10),
-			Engine:   "ghidra",
 			FuncSize: 32,
 			FuncName: fmt.Sprintf("Sub_%d", i),
 			RawC:     fmt.Sprintf("void Sub_%d(void) { int warscape_token = %d; }", i, i),
-			Status:   "ok",
+			Status:   DecompStatusOK,
 		}
 	}
 	close(in)
@@ -477,8 +561,8 @@ func TestTargetManifest_WriteAndReadRoundTrip(t *testing.T) {
 		Target:       "attila_32",
 		BinarySHA256: "abc123def456",
 		ExtractedAt:  "2026-11-16T00:00:00Z",
-		Sources:      []string{"pe", "ghidra"},
-		Counts:       map[string]int{"functions": 1200, "strings": 450},
+		Extractors:   []string{"pe32.format", "data.strings"},
+		Counts:       map[string]int{"sections": 6, "strings": 450},
 	}
 	if err := WriteManifestAtomic(path, want); err != nil {
 		t.Fatalf("WriteManifestAtomic: %v", err)
@@ -487,29 +571,25 @@ func TestTargetManifest_WriteAndReadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadManifest: %v", err)
 	}
-	if got.SchemaVersion != ManifestSchemaVersion || got.FactsSchemaVersion != FactsSchemaVersion {
-		t.Fatalf("unexpected default schema versions: %+v", got)
-	}
-	if got.Target != want.Target || got.BinarySHA256 != want.BinarySHA256 || got.Counts["functions"] != 1200 {
+	if got.Target != want.Target || got.BinarySHA256 != want.BinarySHA256 || got.Counts["sections"] != 6 {
 		t.Fatalf("manifest mismatch: got %+v, want %+v", got, want)
 	}
 }
 
-func TestOpenDecompStore_PreservesExistingCacheOnCancelledCtxOrEmptySHA(t *testing.T) {
+func TestOpenSilverStore_PreservesExistingCacheOnCancelledCtxOrEmptySHA(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "decomp_ghidra.sqlite")
+	dbPath := filepath.Join(t.TempDir(), "silver_ghidra.sqlite")
 
-	store, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_keep_me")
+	store, err := OpenSilverStore(ctx, dbPath, "attila_32", "ghidra", "sha_keep_me", "")
 	if err != nil {
-		t.Fatalf("OpenDecompStore: %v", err)
+		t.Fatalf("OpenSilverStore: %v", err)
 	}
 	if err := store.WriteBatch(ctx, []DecompRecord{{
 		FuncEA:   0x5000,
-		Engine:   "ghidra",
 		FuncSize: 24,
 		FuncName: "PreciousFunc",
 		RawC:     "void PreciousFunc(void) {}",
-		Status:   "ok",
+		Status:   DecompStatusOK,
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -517,20 +597,17 @@ func TestOpenDecompStore_PreservesExistingCacheOnCancelledCtxOrEmptySHA(t *testi
 		t.Fatal(err)
 	}
 
-	// 1. Empty binarySHA256 must fail fast without resetting existing cache
-	if _, err := OpenDecompStore(ctx, dbPath, "attila_32", "   "); err == nil {
-		t.Fatalf("expected OpenDecompStore with empty binarySHA256 to fail")
+	if _, err := OpenSilverStore(ctx, dbPath, "attila_32", "ghidra", "   ", ""); err == nil {
+		t.Fatalf("expected OpenSilverStore with empty binarySHA256 to fail")
 	}
 
-	// 2. Cancelled ctx must return error without resetting existing cache
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, err := OpenDecompStore(cancelCtx, dbPath, "attila_32", "sha_keep_me"); err == nil {
-		t.Fatalf("expected OpenDecompStore with cancelled ctx to fail")
+	if _, err := OpenSilverStore(cancelCtx, dbPath, "attila_32", "ghidra", "sha_keep_me", ""); err == nil {
+		t.Fatalf("expected OpenSilverStore with cancelled ctx to fail")
 	}
 
-	// Verify PreciousFunc is still intact
-	reopened, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_keep_me")
+	reopened, err := OpenSilverStore(ctx, dbPath, "attila_32", "ghidra", "sha_keep_me", "")
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -547,9 +624,9 @@ func TestOpenDecompStore_PreservesExistingCacheOnCancelledCtxOrEmptySHA(t *testi
 
 func TestRunBatchWriter_DrainsRecordSentAfterCtxCancelBeforeChannelClose(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "decomp_ida.sqlite")
+	dbPath := filepath.Join(t.TempDir(), "silver_ida.sqlite")
 
-	store, err := OpenDecompStore(ctx, dbPath, "attila_32", "sha_drain")
+	store, err := OpenSilverStore(ctx, dbPath, "attila_32", "ida", "sha_drain", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,16 +643,14 @@ func TestRunBatchWriter_DrainsRecordSentAfterCtxCancelBeforeChannelClose(t *test
 		errCh <- wErr
 	}()
 
-	// Cancel context first, then simulate an in-flight worker finishing and sending its record before closing `in`
 	cancel()
 	time.Sleep(20 * time.Millisecond)
 	in <- DecompRecord{
 		FuncEA:   0x7777,
-		Engine:   "ida",
 		FuncSize: 32,
 		FuncName: "LateInFlightWorker",
 		RawC:     "void LateInFlightWorker(void) {}",
-		Status:   "ok",
+		Status:   DecompStatusOK,
 	}
 	close(in)
 
@@ -599,55 +674,54 @@ func TestRunBatchWriter_DrainsRecordSentAfterCtxCancelBeforeChannelClose(t *test
 func TestSQLiteDSN_HandlesSpecialPathCharactersHashAndPercent(t *testing.T) {
 	ctx := context.Background()
 	specialDir := filepath.Join(t.TempDir(), "c# dir %20")
-	binaryDBPath := filepath.Join(specialDir, "binary.sqlite")
-	decompPath := filepath.Join(specialDir, "decomp_ghidra.sqlite")
+	bronzeDBPath := filepath.Join(specialDir, "bronze.sqlite")
+	silverPath := filepath.Join(specialDir, "silver_ghidra.sqlite")
 
-	builder, err := NewAtomicBuilder(binaryDBPath)
+	builder, err := NewAtomicBuilder(bronzeDBPath)
 	if err != nil {
 		t.Fatalf("NewAtomicBuilder in %q: %v", specialDir, err)
 	}
 	defer func() { _ = builder.Abort() }()
 
-	if err := InitFactsSchema(ctx, builder.DB()); err != nil {
-		t.Fatalf("InitFactsSchema: %v", err)
+	if err := InitBronzeSchema(ctx, builder.DB()); err != nil {
+		t.Fatalf("InitBronzeSchema: %v", err)
 	}
 	if err := builder.Commit(ctx); err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
-	if _, err := os.Stat(binaryDBPath); err != nil {
-		t.Fatalf("expected literal path %s to exist on disk: %v", binaryDBPath, err)
+	if _, err := os.Stat(bronzeDBPath); err != nil {
+		t.Fatalf("expected literal path %s to exist on disk: %v", bronzeDBPath, err)
 	}
 
-	roDB, err := OpenReadOnly(binaryDBPath)
+	roDB, err := OpenReadOnly(bronzeDBPath)
 	if err != nil {
 		t.Fatalf("OpenReadOnly in %q: %v", specialDir, err)
 	}
 	defer roDB.Close()
 
-	var ver string
-	if err := roDB.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&ver); err != nil {
-		t.Fatalf("query facts meta in special dir: %v", err)
+	var tblCnt int
+	if err := roDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'meta'`).Scan(&tblCnt); err != nil || tblCnt != 1 {
+		t.Fatalf("query bronze sqlite_master in special dir: cnt=%d err=%v", tblCnt, err)
 	}
 
-	store, err := OpenDecompStore(ctx, decompPath, "attila_32", "sha_special")
+	store, err := OpenSilverStore(ctx, silverPath, "attila_32", "ghidra", "sha_special", "")
 	if err != nil {
-		t.Fatalf("OpenDecompStore in %q: %v", specialDir, err)
+		t.Fatalf("OpenSilverStore in %q: %v", specialDir, err)
 	}
 	if err := store.WriteBatch(ctx, []DecompRecord{{
 		FuncEA:   0x9000,
-		Engine:   "ghidra",
 		FuncSize: 16,
 		FuncName: "SpecialPathFunc",
 		RawC:     "void SpecialPathFunc(void) {}",
-		Status:   "ok",
+		Status:   DecompStatusOK,
 	}}); err != nil {
 		t.Fatalf("WriteBatch in special dir: %v", err)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("Close in special dir: %v", err)
 	}
-	if _, err := os.Stat(decompPath); err != nil {
-		t.Fatalf("expected literal decomp path %s on disk: %v", decompPath, err)
+	if _, err := os.Stat(silverPath); err != nil {
+		t.Fatalf("expected literal silver path %s on disk: %v", silverPath, err)
 	}
 }
 
@@ -678,13 +752,13 @@ func TestRenameWithRetry_OverwritesReadOnlyDestinationFile(t *testing.T) {
 	}
 }
 
-func TestDecompStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
+func TestSilverStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "decomp_ida.sqlite")
+	dbPath := filepath.Join(t.TempDir(), "silver_ida.sqlite")
 
-	store, err := OpenDecompStore(ctx, dbPath, "attila_64", "sha_timeout_test")
+	store, err := OpenSilverStore(ctx, dbPath, "attila_64", "ida", "sha_timeout_test", "")
 	if err != nil {
-		t.Fatalf("OpenDecompStore: %v", err)
+		t.Fatalf("OpenSilverStore: %v", err)
 	}
 	defer store.Close()
 
@@ -694,15 +768,14 @@ func TestDecompStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
 		{EA: 0x3000, Size: 128, Name: "BrokenFn"},
 	}
 	if err := store.WriteBatch(ctx, []DecompRecord{
-		{FuncEA: 0x1000, Engine: "ida", FuncSize: 64, FuncName: "FastFn", RawC: "void FastFn() {}", Status: DecompStatusOK},
-		{FuncEA: 0x2000, Engine: "ida", FuncSize: 25329, FuncName: "SlowCtor", Status: DecompStatusTimeout, ErrorText: "timeout"},
-		{FuncEA: 0x3000, Engine: "ida", FuncSize: 128, FuncName: "BrokenFn", Status: DecompStatusFailed, ErrorText: "err"},
+		{FuncEA: 0x1000, FuncSize: 64, FuncName: "FastFn", RawC: "void FastFn() {}", Status: DecompStatusOK},
+		{FuncEA: 0x2000, FuncSize: 25329, FuncName: "SlowCtor", Status: DecompStatusTimeout, ErrorText: "timeout"},
+		{FuncEA: 0x3000, FuncSize: 128, FuncName: "BrokenFn", Status: DecompStatusFailed, ErrorText: "err"},
 	}); err != nil {
 		t.Fatalf("WriteBatch: %v", err)
 	}
 
-	// Default resume skips ok, timeout, and failed.
-	pending, stats, err := store.PlanWork(ctx, "ida", specs, PlanOptions{})
+	pending, stats, err := store.PlanWork(ctx, specs, PlanOptions{})
 	if err != nil {
 		t.Fatalf("PlanWork default: %v", err)
 	}
@@ -710,8 +783,7 @@ func TestDecompStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
 		t.Fatalf("unexpected default PlanWork stats=%+v pending=%+v", stats, pending)
 	}
 
-	// RetryTimeouts=true queues only the timeout row.
-	pendingTO, statsTO, err := store.PlanWork(ctx, "ida", specs, PlanOptions{RetryTimeouts: true})
+	pendingTO, statsTO, err := store.PlanWork(ctx, specs, PlanOptions{RetryTimeouts: true})
 	if err != nil {
 		t.Fatalf("PlanWork RetryTimeouts: %v", err)
 	}
@@ -719,8 +791,7 @@ func TestDecompStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
 		t.Fatalf("unexpected RetryTimeouts PlanWork stats=%+v pending=%+v", statsTO, pendingTO)
 	}
 
-	// Force=true queues all rows.
-	pendingForce, statsForce, err := store.PlanWork(ctx, "ida", specs, PlanOptions{Force: true})
+	pendingForce, statsForce, err := store.PlanWork(ctx, specs, PlanOptions{Force: true})
 	if err != nil {
 		t.Fatalf("PlanWork Force: %v", err)
 	}
@@ -728,13 +799,12 @@ func TestDecompStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
 		t.Fatalf("unexpected Force PlanWork stats=%+v pending=%+v", statsForce, pendingForce)
 	}
 
-	// Changing FuncSize on a timeout row re-queues it even when RetryTimeouts=false.
 	driftedSpecs := []FuncSpec{
 		{EA: 0x1000, Size: 64, Name: "FastFn"},
 		{EA: 0x2000, Size: 25400, Name: "SlowCtor"},
 		{EA: 0x3000, Size: 128, Name: "BrokenFn"},
 	}
-	pendingDrift, statsDrift, err := store.PlanWork(ctx, "ida", driftedSpecs, PlanOptions{})
+	pendingDrift, statsDrift, err := store.PlanWork(ctx, driftedSpecs, PlanOptions{})
 	if err != nil {
 		t.Fatalf("PlanWork SizeChanged: %v", err)
 	}
@@ -745,13 +815,13 @@ func TestDecompStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
 
 func TestNewAtomicBuilderFromExisting_CommitAndAbort(t *testing.T) {
 	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "binary.sqlite")
+	dbPath := filepath.Join(t.TempDir(), "bronze.sqlite")
 
 	b1, err := NewAtomicBuilder(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := InitFactsSchema(ctx, b1.DB()); err != nil {
+	if err := InitBronzeSchema(ctx, b1.DB()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b1.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (1, 'bronze_row');`); err != nil {
@@ -761,25 +831,23 @@ func TestNewAtomicBuilderFromExisting_CommitAndAbort(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Abort must leave original intact.
 	bAbort, err := NewAtomicBuilderFromExisting(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := bAbort.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (2, 'aborted_silver');`); err != nil {
+	if _, err := bAbort.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (2, 'aborted_row');`); err != nil {
 		t.Fatal(err)
 	}
 	if err := bAbort.Abort(); err != nil {
 		t.Fatal(err)
 	}
 
-	// Commit must retain bronze_row and add committed_silver.
 	bCommit, err := NewAtomicBuilderFromExisting(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = bCommit.Abort() }()
-	if _, err := bCommit.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (2, 'committed_silver');`); err != nil {
+	if _, err := bCommit.DB().ExecContext(ctx, `INSERT INTO names(name_id, value) VALUES (2, 'committed_row');`); err != nil {
 		t.Fatal(err)
 	}
 	if err := bCommit.Commit(ctx); err != nil {
@@ -798,5 +866,172 @@ func TestNewAtomicBuilderFromExisting_CommitAndAbort(t *testing.T) {
 	}
 	if cnt != 2 {
 		t.Fatalf("names count = %d, want 2", cnt)
+	}
+}
+
+type failingCloseStmtConnector struct {
+	closeErr   error
+	committed  *bool
+	rolledBack *bool
+}
+
+func (c *failingCloseStmtConnector) Connect(context.Context) (driver.Conn, error) {
+	return &failingCloseStmtConn{
+		closeErr:   c.closeErr,
+		committed:  c.committed,
+		rolledBack: c.rolledBack,
+	}, nil
+}
+
+func (c *failingCloseStmtConnector) Driver() driver.Driver { return nil }
+
+type failingCloseStmtConn struct {
+	closeErr   error
+	committed  *bool
+	rolledBack *bool
+}
+
+func (c *failingCloseStmtConn) Prepare(string) (driver.Stmt, error) {
+	return &failingCloseStmt{closeErr: c.closeErr}, nil
+}
+func (c *failingCloseStmtConn) Close() error { return nil }
+func (c *failingCloseStmtConn) Begin() (driver.Tx, error) {
+	return &failingCloseStmtTx{committed: c.committed, rolledBack: c.rolledBack}, nil
+}
+
+type failingCloseStmt struct{ closeErr error }
+
+func (s *failingCloseStmt) Close() error  { return s.closeErr }
+func (s *failingCloseStmt) NumInput() int { return 0 }
+func (s *failingCloseStmt) Exec([]driver.Value) (driver.Result, error) {
+	return driver.RowsAffected(1), nil
+}
+func (s *failingCloseStmt) Query([]driver.Value) (driver.Rows, error) {
+	return nil, errors.New("unsupported")
+}
+
+type failingCloseStmtTx struct {
+	committed  *bool
+	rolledBack *bool
+}
+
+func (t *failingCloseStmtTx) Commit() error {
+	*t.committed = true
+	return nil
+}
+func (t *failingCloseStmtTx) Rollback() error {
+	*t.rolledBack = true
+	return nil
+}
+
+func TestTxStmtBatcher_FlushRollbackOnStmtCloseError(t *testing.T) {
+	wantErr := errors.New("stmt close failed")
+	committed := false
+	rolledBack := false
+	db := sql.OpenDB(&failingCloseStmtConnector{
+		closeErr:   wantErr,
+		committed:  &committed,
+		rolledBack: &rolledBack,
+	})
+	defer db.Close()
+
+	b := NewTxStmtBatcher(context.Background(), db, "INSERT INTO t VALUES (1)")
+	defer func() { _ = b.Close() }()
+	if err := b.Exec(); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	err := b.Flush()
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Flush error = %v, want %v", err, wantErr)
+	}
+	if committed {
+		t.Fatalf("Flush committed transaction despite stmt.Close error")
+	}
+	if !rolledBack {
+		t.Fatalf("Flush did not rollback transaction on stmt.Close error")
+	}
+}
+
+func TestOpenSilverStore_TuningPragmas(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "silver_ghidra.sqlite")
+
+	store, err := OpenSilverStore(ctx, dbPath, "attila_64", "ghidra", "sha_pragmas", "")
+	if err != nil {
+		t.Fatalf("OpenSilverStore: %v", err)
+	}
+	defer store.Close()
+
+	var tempStore, cacheSize, walAutockpt int
+	if err := store.DB().QueryRowContext(ctx, `PRAGMA temp_store;`).Scan(&tempStore); err != nil {
+		t.Fatal(err)
+	}
+	if tempStore != 2 {
+		t.Fatalf("PRAGMA temp_store = %d, want 2 (MEMORY)", tempStore)
+	}
+	if err := store.DB().QueryRowContext(ctx, `PRAGMA cache_size;`).Scan(&cacheSize); err != nil {
+		t.Fatal(err)
+	}
+	if cacheSize != -131072 {
+		t.Fatalf("PRAGMA cache_size = %d, want -131072", cacheSize)
+	}
+	if err := store.DB().QueryRowContext(ctx, `PRAGMA wal_autocheckpoint;`).Scan(&walAutockpt); err != nil {
+		t.Fatal(err)
+	}
+	if walAutockpt != 10000 {
+		t.Fatalf("PRAGMA wal_autocheckpoint = %d, want 10000", walAutockpt)
+	}
+}
+
+func TestRunBatchWriter_FlushesByPayloadBytes(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "silver_ghidra.sqlite")
+
+	store, err := OpenSilverStore(ctx, dbPath, "attila_64", "ghidra", "sha_byte_flush", "")
+	if err != nil {
+		t.Fatalf("OpenSilverStore: %v", err)
+	}
+	defer store.Close()
+
+	in := make(chan DecompRecord, 4)
+	doneCh := make(chan int, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		// Large batchSize and flushInterval ensure only the byte threshold can flush early.
+		n, wErr := store.RunBatchWriter(ctx, in, 500, time.Hour)
+		doneCh <- n
+		errCh <- wErr
+	}()
+
+	chunk := strings.Repeat("a", (defaultSilverBatchBytes/2)+1024)
+	in <- DecompRecord{FuncEA: 0x1000, FuncSize: 100, FuncName: "BigA", RawC: chunk, Status: DecompStatusOK}
+	in <- DecompRecord{FuncEA: 0x2000, FuncSize: 100, FuncName: "BigB", RawC: chunk, Status: DecompStatusOK}
+
+	ro, err := OpenReadOnly(dbPath)
+	if err != nil {
+		t.Fatalf("OpenReadOnly: %v", err)
+	}
+	defer ro.Close()
+
+	deadline := time.Now().Add(5 * time.Second)
+	flushed := false
+	for time.Now().Before(deadline) {
+		var cnt int
+		if qErr := ro.QueryRowContext(ctx, `SELECT COUNT(*) FROM decomp_funcs`).Scan(&cnt); qErr == nil && cnt == 2 {
+			flushed = true
+			break
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+	close(in)
+
+	if wErr := <-errCh; wErr != nil {
+		t.Fatalf("RunBatchWriter: %v", wErr)
+	}
+	if n := <-doneCh; n != 2 {
+		t.Fatalf("written = %d, want 2", n)
+	}
+	if !flushed {
+		t.Fatalf("expected RunBatchWriter to flush before channel close once payload exceeded %d bytes", defaultSilverBatchBytes)
 	}
 }

@@ -91,6 +91,22 @@ func TestBuildPlan_SkipsUpToDateAndDetectsDriftFlagsAndMissingInputs(t *testing.
 	if _, _, err := BuildPlan(PlanInput{Layout: layout, State: state, Options: Options{Targets: []string{"bogus"}}}); err == nil {
 		t.Fatalf("expected error on unknown target")
 	}
+
+	// Glob patterns resolve against configured targets (skipping unconfigured 32-bit targets like tob_32).
+	_, globItems, err := BuildPlan(PlanInput{Layout: layout, State: state, Options: Options{Targets: []string{"*_32"}}})
+	if err != nil {
+		t.Fatalf("BuildPlan(*_32): %v", err)
+	}
+	if len(globItems) != 1 || globItems[0].Target != workspace.TargetAttila32 {
+		t.Fatalf("BuildPlan(*_32) = %+v, want only attila_32", globItems)
+	}
+	_, attilaItems, err := BuildPlan(PlanInput{Layout: layout, State: state, Options: Options{Targets: []string{"attila_*"}}})
+	if err != nil {
+		t.Fatalf("BuildPlan(attila_*): %v", err)
+	}
+	if len(attilaItems) != 2 || attilaItems[0].Target != workspace.TargetAttila64 || attilaItems[1].Target != workspace.TargetAttila32 {
+		t.Fatalf("BuildPlan(attila_*) = %+v, want [attila_64, attila_32]", attilaItems)
+	}
 }
 
 func TestComputeGhidraMaxMem_ScalesAcrossRAMAndPagefileTiers(t *testing.T) {

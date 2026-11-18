@@ -6,7 +6,13 @@ export TWDLL_WRAPPER_ROOT="$SCRIPT_DIR"
 BIN="$SCRIPT_DIR/.twdll/bin/twdll"
 
 if [ -x "$BIN" ]; then
-    exec "$BIN" "$@"
+    if [ "${TWDLL_NO_REBUILD:-}" = "1" ]; then
+        exec "$BIN" "$@"
+    fi
+    NEWER_SRC="$(find "$SCRIPT_DIR/cli" \( -name .git -o -name testdata \) -prune -o -type f \( \( -name '*.go' ! -name '*_test.go' \) -o -name '*.java' -o -name '*.idc' -o -name '*.py' -o -name 'go.mod' -o -name 'go.sum' \) -newer "$BIN" -print 2>/dev/null | head -n 1 || true)"
+    if [ -z "$NEWER_SRC" ]; then
+        exec "$BIN" "$@"
+    fi
 fi
 
 PORTABLE_GO="$SCRIPT_DIR/.twdll/tools/go/bin/go"
@@ -32,5 +38,5 @@ fi
 
 echo "[twdll] Compiling CLI executable..." >&2
 mkdir -p "$SCRIPT_DIR/.twdll/bin"
-(cd "$SCRIPT_DIR/cli" && TWDLL_NO_REBUILD=1 "$PORTABLE_GO" build -buildvcs=false -o "$BIN" .)
+(cd "$SCRIPT_DIR/cli" && "$PORTABLE_GO" build -buildvcs=false -o "$BIN" .)
 exec "$BIN" "$@"

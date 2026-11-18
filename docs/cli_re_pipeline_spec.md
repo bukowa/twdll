@@ -26,8 +26,8 @@ To prevent agents from implementing everything at once or making premature assum
   Stage 1 downloads all pinned portable tools, stages and verifies all binaries, and builds tuned IDA/Ghidra databases in `.twdll/db/`.
 - **Stage 1.5 — Pre-Testing Hardening & 2-Tier E2E (COMPLETE):**
   Restricted `KnownOfficialHashes` to pinned `attila_64`, added `TWDLL_TOOLS_DIR` for zero-junction isolation (with `init --clear` guard), and implemented Tier 1 (`go test -tags=e2e`) + Tier 2 (`cli/scripts/run-e2e-bg.ps1`) real-decompiler E2E tests before starting Stage 2 extraction.
-- **Stage 2 — RE Extraction & Search (`extract`, `search`, `show`) (ACTIVE DESIGN SCOPE):**
-  Stage 1 databases are ready in `.twdll/db/` and DWARF feasibility analysis is complete. Designing and agreeing on extraction format, `.twdll/extracted/` storage schema, and `extract` / `search` / `show` commands before implementation.
+- **Stage 2 — RE Extraction, Search & Audit (`extract` active; `search`, `show`, `derive` deferred) (ACTIVE):**
+  Layer 1 (`bronze.sqlite`) and Layer 2 (`silver_<engine>.sqlite`) extraction are implemented with `twdll extract` and `twdll status` readiness; `search`, `show`, and Layer 3 (`derive` / `derived.sqlite`) are deferred until `bronze` and `silver` are validated and query contracts are agreed. Concludes with a mandatory **Extraction Audit & Hardening Phase** before Stage 3 unlocks.
 - **Stage 3 — Multi-Game C++ Rewrite & Build/Test Commands (FUTURE SCOPE — DO NOT IMPLEMENT YET):**
   Rewriting `src/` for 3-game (`rome2`, `attila`, `tob`) interoperability and implementing `build`, `pack`, `install`, `run`, `test`, and `docs` commands happen **only after** Stages 1 and 2 are complete.
 
@@ -94,7 +94,7 @@ All downloaded tools, copied binaries, decompiler databases, extracted RE artifa
 ├── db/                         # Clean databases built from scratch by `twdll analyze`:
 │   ├── ghidra/                 # Headless Ghidra projects
 │   └── ida/                    # Headless IDA .i64 / .idb databases
-├── extracted/                  # Stage 2 decompiler-agnostic RE index & cache
+├── extracted/                  # Stage 2 isolated per-step stores (bronze.sqlite, silver_<engine>.sqlite)
 ├── logs/                       # Raw headless decompiler logs & analyze_resources.jsonl
 └── state.json                  # Machine-managed SHA-256 & completion manifest
 ```
@@ -135,6 +135,7 @@ Reports complete workspace readiness:
 - Configured games from `twdll.toml`.
 - Binary presence and SHA-256 status in `.twdll/binaries/` (plus `[official]` match for pinned `attila_64`).
 - Per-binary decompiler database status in `.twdll/db/<decompiler>/` (`ANALYZED` vs `NEEDS_ANALYSIS`).
+- Per-target extracted database readiness in `.twdll/extracted/<target>/` (`bronze.sqlite` and `silver_<engine>.sqlite`).
 
 #### 2. `twdll init [--games <list>] [--json] [flags]`
 Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults on re-runs; `--clear` clears `init`-owned `twdll.toml`, `binaries/`, non-Go local `tools/`, and `init` state while preserving `db/`, `extracted/`, `logs/`, and `analyzed_sha256`):
@@ -154,7 +155,7 @@ Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults 
 - Records `analyzed_sha256` atomically **only** on clean exit code `0`.
 
 #### 4. `twdll clean [-d ghidra|ida|all] [--all] [targets...]`
-- Removes generated decompiler databases under `.twdll/db/<decompiler>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files, and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without deleting `.twdll/tools/` or `.twdll/binaries/`. Passing `--all` alone wipes all `init` and `analyze` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
+- Removes generated decompiler databases under `.twdll/db/<decompiler>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files, and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without deleting `.twdll/tools/`, `.twdll/binaries/`, or `.twdll/extracted/`. Passing `--all` alone wipes all `init`, `analyze`, and `extract` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `extracted/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
 
 ---
 
@@ -186,14 +187,32 @@ Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults 
 
 The notes below preserve agreed decisions from architecture & research discussions so context is not lost in future conversations:
 
-### Stage 2 Context (RE Extraction, Search, Portable Anchors & Audit Gate — Active)
-- `.twdll/extracted/` acts as the decompiler-agnostic barrier above `.twdll/db/(ghidra|ida)` using pure-Go SQLite (`modernc.org/sqlite` + `FTS5`, zero CGO):
-  - `.twdll/extracted/<target>/binary.sqlite`: Static binary structure, DWARF4 debug info (`attila_64`), and x86 instruction graph (`functions`, `strings`, `xrefs`, `call_edges`, `vtables`, `rtti_*`, `lua_regs`), plus optional decompiler topology enrichment.
-  - `.twdll/extracted/<target>/decomp_ida.sqlite` & `decomp_ghidra.sqlite`: Resumable per-engine SQLite WAL stores for decompiled pseudo-C (`decomp_functions` + `decomp_fts`), `line_ea_json` (`Line <-> EA` mapping), and local/stack variables (`decomp_vars`).
-  - `.twdll/extracted/<target>/manifest.json`: Fast readiness/count summary for `status`.
-  - `.twdll/extracted/derived.sqlite`: Disposable Go-derived cross-binary mappings (`symbol_matches`, `struct_recoveries`, `vtable_alignments`) rebuilt by `twdll derive` over read-only `binary.sqlite` + `decomp_<engine>.sqlite`.
-- `re/anchors/<target>.toml` (Git-tracked) holds `.reloc`-safe byte signatures and `x86asm`-verified 32-bit field offsets validated by `twdll verify`.
-- **Zero Optimism & Pre-Stage-3 Audit Gate:** Extracted rows in `binary.sqlite`, `decomp_<engine>.sqlite`, and `derived.sqlite` are never treated as infallible facts. Compiler optimizations, decompiler hallucinations, and bugs in our own Go extractors/heuristics are expected. Stage 2 commands (`extract`, `derive`, `search`, `show`, `verify`) are built incrementally and followed by a mandatory **Extraction Audit & Hardening Phase** (cross-checking IDA, Ghidra, DWARF, and on-demand `x86asm` disassembly, and fixing extractor bugs) before unlocking Stage 3 (`src/` C++ rewrite). `twdll clean --all` wipes `.twdll/extracted/`, whereas scoped `twdll clean` and `twdll init --clear` preserve it.
+### Stage 2 Specification — Clean Layer-Isolated Architecture (Active)
+
+Stage 2 enforces strict separation of truth from heuristics via **1 step = 1 SQLite database** under `.twdll/extracted/<target>/`:
+
+1. **Layer 1: `bronze` (`cli/internal/bronze`) → `.twdll/extracted/<target>/bronze.sqlite`:**
+   - **Strict Mandate:** Deterministic binary format and DWARF parser **only** — zero machine-code disassembly, zero heuristic guessing, zero modification by downstream layers.
+   - **Scope In:** Headers, `sections`, `relocs`, `imports` (IAT/PLT/GOT), `exports`, raw data-section `strings` (`+ strings_fts`), raw ELF `.symtab`/`.dynsym` (`elf_symbols`), and streaming DWARF4 (`attila_64`: `types`, `type_members`, `enum_values`, `dwarf_funcs`, `dwarf_func_ranges`, `func_vars`, `source_files`, `names`, `inlines`).
+   - **Hard Exclusions (Never in `bronze`):** No `.text` instruction/reloc classification (switch tables, thunk detection), no `.rdata`/`.data` RTTI/vtable/`lua_regs` scanners, no synthetic PE32 `functions` rows (`size = 0`), and no guessed `calling_conv` or `ICF` flags.
+   - **Extensibility:** Built around small Go `Extractor` plugins (`ID()`, `AppliesTo()`, `Extract()`; built-ins: `pe32.format`, `elf64.format`, `data.strings`, `elf64.dwarf4`) over a shared read-only binary `Source` so extending format or DWARF parsing never leaks into `silver`.
+
+2. **Layer 2: `silver` (`cli/internal/silver`) → `.twdll/extracted/<target>/silver_<engine>.sqlite` (`silver_ida.sqlite`, `silver_ghidra.sqlite`):**
+   - **Strict Mandate:** Pure, independent per-decompiler exporter — **zero imports from `bronze`**, zero reads from `bronze.sqlite`, zero raw-binary PE/ELF parsing, and zero cross-engine merge arbitration.
+   - **Single Engine Store:** Each `silver_<engine>.sqlite` owns everything exported from that single decompiler: `silver_funcs` (`+ silver_funcs_fts`), `silver_func_ranges`, `silver_asm`, `silver_strings` (`+ silver_strings_fts`), `decomp_funcs` (`+ decomp_fts`, `raw_c`, `line_ea_json`, `vars_json`), and any future engine-native tables. By default, target functions come solely from the decompiler project itself (`idautils.Functions()` / Ghidra `FunctionManager`), with resumable incremental caching (`PlanWork`).
+   - **Extensibility (3 Small Go Interfaces):**
+     - `Enricher` *(optional pre-export step on an isolated temporary staged copy of `.i64`/Ghidra project — never mutates `.twdll/db/`)*,
+     - `Selector` *(optional filter controlling which EAs/functions to export or decompile)*,
+     - `Aspect` *(pluggable exporters emitting function metadata, pseudo-C, or future decompiler-native artifacts into `silver_<engine>.sqlite`)*.
+
+3. **Layer 3: `derive` (DEFERRED — Out of Scope Until `bronze` and `silver` Are Verified):**
+   - Heuristic `x86asm` instruction xrefs (`call_sites`, `data_xrefs`, `string_xrefs`), RTTI/vtable/`lua_regs` scanners, calling-convention arbitration (`in_ECX`/`thiscall`), and cross-binary symbol matching (`attila_64` <-> `*_32`) are deferred out of `bronze` and `silver`.
+   - When implemented after Layers 1–2 are verified, Layer 3 will read `bronze.sqlite` and `silver_<engine>.sqlite` strictly read-only and emit its own disposable database, never mutating Layer 1 or Layer 2 data.
+
+### Preserved Stage 2 Audit & Cleanup Notes
+- `.twdll/extracted/<target>/manifest.json` tracks fast readiness and table counts for `status`.
+- **Current Stage 2 CLI Surface (`cli/main.go`):** `twdll extract` (`-d/--decompiler`, `--force`, `-j/--jobs`, `-m/--max-mem`, `--no-decomp`, `--timeout`, `--no-timeout`, `--retry`, `--retry-timeouts`, `--retry-failed`, `--json`) and `twdll status` extracted readiness are active; `twdll search` and `twdll show` are deferred until `bronze.sqlite` and `silver_<engine>.sqlite` are validated and query contracts are agreed.
+- **Zero Optimism & Pre-Stage-3 Audit Gate:** Extracted rows in `bronze.sqlite`, `silver_<engine>.sqlite`, and future derived artifacts are never treated as infallible facts. Compiler optimizations, decompiler hallucinations, and extractor bugs are caught and fixed directly in their owning layer (with unit tests + re-extraction), followed by a mandatory **Extraction Audit & Hardening Phase** before unlocking Stage 3 (`src/`). `twdll clean --all` wipes `.twdll/extracted/`, whereas scoped `twdll clean` and `twdll init --clear` preserve it.
 
 ### Stage 3 Context (Multi-Game C++ Rewrite & Build/Test CLI Commands)
 - **C++ Multi-Game Architecture (`rome2`, `attila`, `tob`):**

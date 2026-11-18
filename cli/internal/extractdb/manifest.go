@@ -8,26 +8,16 @@ import (
 	"twdll/cli/internal/workspace"
 )
 
-const ManifestSchemaVersion = 1
-
 type TargetManifest struct {
-	SchemaVersion      int               `json:"schema_version"`
-	Target             string            `json:"target"`
-	BinarySHA256       string            `json:"binary_sha256"`
-	ExtractedAt        string            `json:"extracted_at"`
-	FactsSchemaVersion int               `json:"facts_schema_version"`
-	Sources            []string          `json:"sources,omitempty"`
-	Counts             map[string]int    `json:"counts,omitempty"`
-	Decomp             map[string]string `json:"decomp,omitempty"`
+	Target       string            `json:"target"`
+	BinarySHA256 string            `json:"binary_sha256"`
+	ExtractedAt  string            `json:"extracted_at"`
+	Extractors   []string          `json:"extractors,omitempty"`
+	Counts       map[string]int    `json:"counts,omitempty"`
+	Decomp       map[string]string `json:"decomp,omitempty"`
 }
 
 func WriteManifestAtomic(path string, m TargetManifest) error {
-	if m.SchemaVersion == 0 {
-		m.SchemaVersion = ManifestSchemaVersion
-	}
-	if m.FactsSchemaVersion == 0 {
-		m.FactsSchemaVersion = FactsSchemaVersion
-	}
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode target manifest: %w", err)

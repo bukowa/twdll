@@ -1,62 +1,53 @@
 package silver
 
 import (
+	"bufio"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"twdll/cli/internal/analyze"
-	"twdll/cli/internal/bronze"
 	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/workspace"
 )
 
-func ExtractSilverTopology(ctx context.Context, opts SilverOptions) (*bronze.SilverMergeResult, error) {
-	releasePower := analyze.AcquirePowerAssertion()
-	defer releasePower()
-
-	if !opts.Target.IsValid() {
-		return nil, fmt.Errorf("invalid target id %q", opts.Target)
-	}
-	if !opts.Engine.IsValid() {
-		return nil, fmt.Errorf("invalid silver engine %q", opts.Engine)
-	}
-	if opts.BinaryPath == "" || opts.BinaryDBPath == "" {
-		return nil, errors.New("BinaryPath and BinaryDBPath are required")
-	}
-
-	var (
-		silverFuncs []bronze.SilverFunc
-		err         error
-	)
-	switch opts.Engine {
-	case workspace.DecompilerGhidra:
-		silverFuncs, err = runGhidraSilverExport(ctx, opts)
-	case workspace.DecompilerIDA:
-		silverFuncs, err = runIDASilverExport(ctx, opts)
-	default:
-		return nil, fmt.Errorf("unsupported engine %q", opts.Engine)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return bronze.ApplySilverTopology(ctx, bronze.SilverMergeOptions{
-		Target:       opts.Target,
-		BinaryPath:   opts.BinaryPath,
-		BinaryDBPath: opts.BinaryDBPath,
-		ManifestPath: opts.ManifestPath,
-		Engine:       opts.Engine,
-		Funcs:        silverFuncs,
-	})
+// Session carries per-run state, active enrichers, and backend export hooks for Aspects.
+type Session struct {
+	Opts         Options
+	Enrichers    []EnrichScript
+	Result       *Result
+	Funcs        []SilverFunc
+	exportFuncs  func(ctx context.Context, opts Options, enrichers []EnrichScript, asmOutPath, stringsOutPath string) ([]SilverFunc, error)
+	exportDecomp func(ctx context.Context, opts Options, enrichers []EnrichScript, pending []extractdb.FuncSpec, outCh chan<- extractdb.DecompRecord) (uint64, error)
 }
 
-func RunDecompPass(ctx context.Context, opts DecompOptions) (*DecompPassResult, error) {
+// DefaultAspects returns the built-in silver aspects ("funcs" and optionally "decomp").
+func DefaultAspects(noDecomp bool) []Aspect {
+	aspects := []Aspect{funcsAspect{}}
+	if !noDecomp {
+		aspects = append(aspects, decompAspect{})
+	}
+	return aspects
+}
+
+type (
+	funcsExporter  func(ctx context.Context, opts Options, enrichers []EnrichScript, asmOutPath, stringsOutPath string) ([]SilverFunc, error)
+	decompExporter func(ctx context.Context, opts Options, enrichers []EnrichScript, pending []extractdb.FuncSpec, outCh chan<- extractdb.DecompRecord) (uint64, error)
+)
+
+// ExtractTarget extracts functions and decompiler artifacts from IDA or Ghidra
+// directly into the engine's isolated silver_<engine>.sqlite store.
+func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
+	return extractWithHooks(ctx, opts, defaultExportFuncs, defaultExportDecomp)
+}
+
+func extractWithHooks(ctx context.Context, opts Options, fnExp funcsExporter, decompExp decompExporter) (retRes *Result, retErr error) {
 	releasePower := analyze.AcquirePowerAssertion()
 	defer releasePower()
 
@@ -65,159 +56,639 @@ func RunDecompPass(ctx context.Context, opts DecompOptions) (*DecompPassResult, 
 		return nil, fmt.Errorf("invalid target id %q", opts.Target)
 	}
 	if !opts.Engine.IsValid() {
-		return nil, fmt.Errorf("invalid decomp engine %q", opts.Engine)
+		return nil, fmt.Errorf("invalid silver engine %q", opts.Engine)
 	}
-	if opts.BinaryDBPath == "" || opts.DecompDBPath == "" {
-		return nil, errors.New("BinaryDBPath and DecompDBPath are required")
+	if opts.SilverDBPath == "" {
+		return nil, errors.New("SilverDBPath is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	binSHA, allSpecs, err := loadSpecsFromFacts(ctx, opts.BinaryDBPath)
+	binSHA := strings.TrimSpace(opts.BinarySHA256)
+	if binSHA == "" {
+		if opts.BinaryPath == "" {
+			return nil, errors.New("BinarySHA256 or BinaryPath is required")
+		}
+		var err error
+		binSHA, err = workspace.ComputeFileSHA256(opts.BinaryPath)
+		if err != nil {
+			return nil, fmt.Errorf("hash binary %s: %w", opts.BinaryPath, err)
+		}
+	}
+
+	var enricherIDs []string
+	var enrichScripts []EnrichScript
+	for _, en := range opts.Enrichers {
+		if en == nil || !en.AppliesTo(opts.Target, opts.Engine) {
+			continue
+		}
+		sc, err := en.Script(opts.Target, opts.Engine)
+		if err != nil {
+			return nil, fmt.Errorf("prepare enricher %s: %w", en.ID(), err)
+		}
+		if strings.TrimSpace(sc.Filename) == "" || strings.TrimSpace(sc.Body) == "" {
+			return nil, fmt.Errorf("enricher %s returned empty filename or script body", en.ID())
+		}
+		enricherIDs = append(enricherIDs, en.ID())
+		enrichScripts = append(enrichScripts, sc)
+	}
+	enrichersKey := strings.Join(enricherIDs, ",")
+
+	store, err := extractdb.OpenSilverStore(
+		ctx,
+		opts.SilverDBPath,
+		string(opts.Target),
+		string(opts.Engine),
+		binSHA,
+		enrichersKey,
+	)
 	if err != nil {
 		return nil, err
 	}
-	specs := allSpecs
-	if len(opts.FilterSpecs) > 0 {
-		specs = opts.FilterSpecs
+	defer func() {
+		if cErr := store.Close(); cErr != nil && retErr == nil {
+			retRes = nil
+			retErr = fmt.Errorf("close silver store: %w", cErr)
+		}
+	}()
+
+	aspects := opts.Aspects
+	if len(aspects) == 0 {
+		aspects = DefaultAspects(opts.NoDecomp)
 	}
 
-	store, err := extractdb.OpenDecompStore(ctx, opts.DecompDBPath, string(opts.Target), binSHA)
+	res := &Result{
+		Target:       opts.Target,
+		Engine:       opts.Engine,
+		BinarySHA256: binSHA,
+		Enrichers:    enricherIDs,
+		Aspects:      make([]string, 0, len(aspects)),
+	}
+	sess := &Session{
+		Opts:         opts,
+		Enrichers:    enrichScripts,
+		Result:       res,
+		exportFuncs:  fnExp,
+		exportDecomp: decompExp,
+	}
+
+	for _, asp := range aspects {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if asp == nil {
+			continue
+		}
+		if err := asp.Run(ctx, sess, store); err != nil {
+			return nil, fmt.Errorf("silver aspect %s (%s): %w", asp.ID(), opts.Engine, err)
+		}
+		res.Aspects = append(res.Aspects, asp.ID())
+	}
+	if err := store.SetMeta(ctx, [2]string{extractdb.MetaAspectsApplied, strings.Join(res.Aspects, ",")}); err != nil {
+		return nil, err
+	}
+
+	fnCount, err := store.FuncCount(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = store.Close() }()
+	res.FuncCount = int(fnCount)
+	asmCount, err := store.AsmCount(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res.AsmCount = int(asmCntFallback(asmCount))
+	strCount, err := store.StringCount(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res.StringCount = int(strCount)
+	counts, err := store.StatusCounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res.StatusCounts = counts
+	res.Elapsed = time.Since(t0)
+	return res, nil
+}
 
-	pending, resume, err := store.PlanWork(ctx, string(opts.Engine), specs, extractdb.PlanOptions{
-		Force:         opts.Force,
-		RetryFailed:   opts.RetryFailed,
-		RetryTimeouts: opts.RetryTimeouts,
+type funcsAspect struct{}
+
+func (funcsAspect) ID() string { return "funcs" }
+
+func (funcsAspect) Run(ctx context.Context, sess *Session, store *extractdb.SilverStore) error {
+	hasFuncs, err := store.HasFuncs(ctx)
+	if err != nil {
+		return err
+	}
+	hasAsm, err := store.HasAsm(ctx)
+	if err != nil {
+		return err
+	}
+	hasStrings, err := store.HasStrings(ctx)
+	if err != nil {
+		return err
+	}
+	if hasFuncs && hasAsm && hasStrings && !sess.Opts.Force {
+		return nil
+	}
+
+	tmpBase := resolveTmpBase(sess.Opts.Paths, sess.Opts.TmpBaseDir)
+	asmOutPath, cleanupAsm, err := createTempJSONLOutPath(tmpBase, "twdll_silver_asm_*.jsonl")
+	if err != nil {
+		return err
+	}
+	defer cleanupAsm()
+
+	stringsOutPath, cleanupStrings, err := createTempJSONLOutPath(tmpBase, "twdll_silver_strings_*.jsonl")
+	if err != nil {
+		return err
+	}
+	defer cleanupStrings()
+
+	if sess.Opts.OnPhase != nil {
+		sess.Opts.OnPhase("funcs+asm+str")
+	}
+	rawFuncs, err := sess.exportFuncs(ctx, sess.Opts, sess.Enrichers, asmOutPath, stringsOutPath)
+	if err != nil {
+		return err
+	}
+	sess.Funcs = rawFuncs
+
+	if sess.Opts.OnPhase != nil {
+		sess.Opts.OnPhase("saving db")
+	}
+	funcRows, rangeRows := normalizeSilverFuncs(rawFuncs)
+	if err := store.ReplaceFuncs(ctx, funcRows, rangeRows, "funcs"); err != nil {
+		return err
+	}
+	sess.Result.FuncsRan = true
+
+	if info, statErr := os.Stat(asmOutPath); statErr == nil && !info.IsDir() {
+		if err := importSilverAsmJSONL(ctx, store, asmOutPath, "funcs"); err != nil {
+			return err
+		}
+		asmCnt, err := store.AsmCount(ctx)
+		if err != nil {
+			return err
+		}
+		sess.Result.AsmRan = true
+		sess.Result.AsmCount = int(asmCnt)
+	}
+	if info, statErr := os.Stat(stringsOutPath); statErr == nil && !info.IsDir() {
+		if err := importSilverStringsJSONL(ctx, store, stringsOutPath, "funcs"); err != nil {
+			return err
+		}
+		strCnt, err := store.StringCount(ctx)
+		if err != nil {
+			return err
+		}
+		sess.Result.StringsRan = true
+		sess.Result.StringCount = int(strCnt)
+	}
+	return nil
+}
+
+func createTempJSONLOutPath(tmpBase, pattern string) (string, func(), error) {
+	if tmpBase != "" {
+		if err := os.MkdirAll(tmpBase, 0o755); err != nil {
+			return "", nil, fmt.Errorf("ensure tmp base dir %s: %w", tmpBase, err)
+		}
+	}
+	f, err := os.CreateTemp(tmpBase, pattern)
+	if err != nil {
+		return "", nil, fmt.Errorf("create temp jsonl path: %w", err)
+	}
+	path := f.Name()
+	_ = f.Close()
+	_ = os.Remove(path)
+	return path, func() { _ = os.Remove(path) }, nil
+}
+
+func asmCntFallback(v int64) int64 { return v }
+
+func importSilverAsmJSONL(ctx context.Context, store *extractdb.SilverStore, path, aspectsKey string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open silver asm jsonl %s: %w", path, err)
+	}
+	defer f.Close()
+
+	return store.ReplaceAsmStream(ctx, func(emit func(extractdb.SilverAsmRow) error) error {
+		sc := bufio.NewScanner(f)
+		sc.Buffer(make([]byte, 256*1024), 64*1024*1024)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var rec silverAsmJSONLRecord
+			if err := json.Unmarshal([]byte(line), &rec); err != nil {
+				return fmt.Errorf("decode silver asm jsonl record: %w", err)
+			}
+			if rec.EA == 0 {
+				continue
+			}
+			if err := emit(extractdb.SilverAsmRow{
+				FuncEA:    uint64(rec.EA),
+				InsnCount: rec.InsnCount,
+				RawAsm:    NormalizeLineEndings(rec.RawAsm),
+			}); err != nil {
+				return err
+			}
+		}
+		if err := sc.Err(); err != nil {
+			return fmt.Errorf("scan silver asm jsonl %s: %w", path, err)
+		}
+		return nil
+	}, aspectsKey)
+}
+
+func importSilverStringsJSONL(ctx context.Context, store *extractdb.SilverStore, path, aspectsKey string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open silver strings jsonl %s: %w", path, err)
+	}
+	defer f.Close()
+
+	return store.ReplaceStringsStream(ctx, func(emit func(extractdb.SilverStringRow) error) error {
+		sc := bufio.NewScanner(f)
+		sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var rec silverStringJSONLRecord
+			if err := json.Unmarshal([]byte(line), &rec); err != nil {
+				return fmt.Errorf("decode silver string jsonl record: %w", err)
+			}
+			if rec.EA == 0 || rec.Value == "" {
+				continue
+			}
+			enc := strings.ToLower(strings.TrimSpace(rec.Encoding))
+			if enc == "" {
+				enc = extractdb.StringEncASCII
+			}
+			length := rec.Length
+			if length <= 0 {
+				length = len([]rune(rec.Value))
+			}
+			if err := emit(extractdb.SilverStringRow{
+				EA:       uint64(rec.EA),
+				Encoding: enc,
+				Length:   length,
+				Value:    NormalizeLineEndings(rec.Value),
+				RefCount: rec.RefCount,
+			}); err != nil {
+				return err
+			}
+		}
+		if err := sc.Err(); err != nil {
+			return fmt.Errorf("scan silver strings jsonl %s: %w", path, err)
+		}
+		return nil
+	}, aspectsKey)
+}
+
+type decompAspect struct{}
+
+func (decompAspect) ID() string { return "decomp" }
+
+func (decompAspect) Run(ctx context.Context, sess *Session, store *extractdb.SilverStore) error {
+	var specs []extractdb.FuncSpec
+	if sess.Opts.Selector != nil {
+		// Load existing silver_funcs if funcs aspect didn't run this turn.
+		candidates := sess.Funcs
+		if len(candidates) == 0 {
+			loaded, err := loadSilverFuncsFromStore(ctx, store)
+			if err != nil {
+				return err
+			}
+			candidates = loaded
+		}
+		selected := sess.Opts.Selector.Select(candidates)
+		specs = make([]extractdb.FuncSpec, 0, len(selected))
+		for _, f := range selected {
+			specs = append(specs, extractdb.FuncSpec{EA: f.EA, Size: f.Size, Name: f.Name})
+		}
+	} else {
+		var err error
+		specs, err = store.ListFuncSpecs(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	pending, resume, err := store.PlanWork(ctx, specs, extractdb.PlanOptions{
+		Force:         sess.Opts.Force,
+		RetryFailed:   sess.Opts.RetryFailed,
+		RetryTimeouts: sess.Opts.RetryTimeouts,
+		PruneOrphans:  sess.Opts.PruneOrphans,
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
+	sess.Result.Resume = resume
 
 	if len(pending) == 0 {
-		counts, countErr := queryEngineStatusCounts(ctx, store.DB(), string(opts.Engine))
-		if countErr != nil {
-			return nil, countErr
-		}
-		return &DecompPassResult{
-			Target:       opts.Target,
-			Engine:       opts.Engine,
-			Resume:       resume,
-			Written:      0,
-			StatusCounts: counts,
-			Elapsed:      time.Since(t0),
-		}, nil
+		return nil
 	}
 
-	outCh := make(chan extractdb.DecompRecord, 512)
+	if sess.Opts.OnPhase != nil {
+		sess.Opts.OnPhase("decomp")
+	}
+	cachedCount := max(0, resume.Total-len(pending))
+	if sess.Opts.OnResume != nil && cachedCount > 0 {
+		sess.Opts.OnResume(cachedCount, len(pending))
+	}
+	var totalBytes uint64
+	for _, sp := range pending {
+		totalBytes += sp.Size
+	}
+	if sess.Opts.OnBytes != nil && totalBytes > 0 {
+		sess.Opts.OnBytes(0, totalBytes)
+	}
+	if sess.Opts.OnProgress != nil {
+		sess.Opts.OnProgress(0, len(pending))
+	}
+
+	decompCtx, cancelDecomp := context.WithCancel(ctx)
+	defer cancelDecomp()
+
+	outCh := make(chan extractdb.DecompRecord, 4096)
+	writerIn := (<-chan extractdb.DecompRecord)(outCh)
+	var byteTapDone chan struct{}
+	if sess.Opts.OnBytes != nil && totalBytes > 0 {
+		tappedCh := make(chan extractdb.DecompRecord, 4096)
+		byteTapDone = make(chan struct{})
+		writerIn = tappedCh
+		go func() {
+			defer close(byteTapDone)
+			defer close(tappedCh)
+			var doneBytes uint64
+			for rec := range outCh {
+				doneBytes += rec.FuncSize
+				sess.Opts.OnBytes(doneBytes, totalBytes)
+				tappedCh <- rec
+			}
+		}()
+	}
+
 	type writerOut struct {
 		written int
 		err     error
 	}
 	writerDone := make(chan writerOut, 1)
 	go func() {
-		n, wErr := store.RunBatchWriter(ctx, outCh, opts.BatchSize, 0)
+		n, wErr := store.RunBatchWriter(ctx, writerIn, sess.Opts.BatchSize, 0)
+		if wErr != nil {
+			cancelDecomp()
+		}
 		writerDone <- writerOut{written: n, err: wErr}
 	}()
 
-	var (
-		peakMem uint64
-		runErr  error
-	)
+	peakMem, runErr := sess.exportDecomp(decompCtx, sess.Opts, sess.Enrichers, pending, outCh)
+	close(outCh)
+	if byteTapDone != nil {
+		<-byteTapDone
+	}
+	wRes := <-writerDone
+	if wRes.err != nil {
+		if runErr != nil && !errors.Is(runErr, context.Canceled) {
+			return fmt.Errorf("%w (export: %v)", wRes.err, runErr)
+		}
+		return wRes.err
+	}
+	if runErr != nil {
+		return runErr
+	}
+
+	sess.Result.DecompRan = true
+	sess.Result.DecompWritten = wRes.written
+	sess.Result.PeakJobMemBytes = peakMem
+	return nil
+}
+
+func watchJSONLLineProgress(ctx context.Context, path, totalPath string, stop <-chan struct{}, onCount func(done, total int)) {
+	if onCount == nil || path == "" {
+		return
+	}
+	var offset int64
+	var count int
+	var total int
+	buf := make([]byte, 64*1024)
+	readTotal := func() int {
+		if total > 0 || totalPath == "" {
+			return total
+		}
+		raw, err := os.ReadFile(totalPath)
+		if err != nil {
+			return 0
+		}
+		if v, err := strconv.Atoi(strings.TrimSpace(string(raw))); err == nil && v > 0 {
+			total = v
+		}
+		return total
+	}
+	drain := func() {
+		prevTotal := total
+		curTotal := readTotal()
+		f, err := os.Open(path)
+		if err != nil {
+			if curTotal > 0 && curTotal != prevTotal {
+				onCount(count, curTotal)
+			}
+			return
+		}
+		defer f.Close()
+		if offset > 0 {
+			if _, err := f.Seek(offset, 0); err != nil {
+				return
+			}
+		}
+		prev := count
+		for {
+			n, rErr := f.Read(buf)
+			if n > 0 {
+				offset += int64(n)
+				for _, b := range buf[:n] {
+					if b == '\n' {
+						count++
+					}
+				}
+			}
+			if rErr != nil {
+				break
+			}
+		}
+		if count > prev || curTotal != prevTotal {
+			onCount(count, curTotal)
+		}
+	}
+
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			drain()
+			return
+		case <-ctx.Done():
+			drain()
+			return
+		case <-ticker.C:
+			drain()
+		}
+	}
+}
+
+func defaultExportFuncs(ctx context.Context, opts Options, enrichers []EnrichScript, asmOutPath, stringsOutPath string) ([]SilverFunc, error) {
 	switch opts.Engine {
 	case workspace.DecompilerGhidra:
-		peakMem, runErr = runGhidraDecompExport(ctx, opts, pending, outCh)
+		return runGhidraSilverExport(ctx, opts, enrichers, asmOutPath, stringsOutPath)
 	case workspace.DecompilerIDA:
-		peakMem, runErr = runIDADecompExport(ctx, opts, pending, outCh)
+		return runIDASilverExport(ctx, opts, enrichers, asmOutPath, stringsOutPath)
+	default:
+		return nil, fmt.Errorf("unsupported engine %q", opts.Engine)
 	}
-	close(outCh)
-	wRes := <-writerDone
-	if runErr != nil {
-		return nil, runErr
-	}
-	if wRes.err != nil {
-		return nil, wRes.err
-	}
-
-	counts, err := queryEngineStatusCounts(ctx, store.DB(), string(opts.Engine))
-	if err != nil {
-		return nil, err
-	}
-
-	return &DecompPassResult{
-		Target:          opts.Target,
-		Engine:          opts.Engine,
-		Resume:          resume,
-		Written:         wRes.written,
-		StatusCounts:    counts,
-		Elapsed:         time.Since(t0),
-		PeakJobMemBytes: peakMem,
-	}, nil
 }
 
-func loadSpecsFromFacts(ctx context.Context, factsPath string) (string, []extractdb.FuncSpec, error) {
-	db, err := extractdb.OpenReadOnly(factsPath)
-	if err != nil {
-		return "", nil, err
+func defaultExportDecomp(ctx context.Context, opts Options, enrichers []EnrichScript, pending []extractdb.FuncSpec, outCh chan<- extractdb.DecompRecord) (uint64, error) {
+	switch opts.Engine {
+	case workspace.DecompilerGhidra:
+		return runGhidraDecompExport(ctx, opts, enrichers, pending, outCh)
+	case workspace.DecompilerIDA:
+		return runIDADecompExport(ctx, opts, enrichers, pending, outCh)
+	default:
+		return 0, fmt.Errorf("unsupported engine %q", opts.Engine)
 	}
-	defer db.Close()
+}
 
-	var binSHA string
-	if err := db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, extractdb.MetaBinarySHA256).Scan(&binSHA); err != nil {
-		return "", nil, fmt.Errorf("read binary_sha256 from %s: %w", factsPath, err)
-	}
-
-	rows, err := db.QueryContext(ctx, `SELECT ea, size, name FROM functions ORDER BY ea ASC`)
-	if err != nil {
-		return "", nil, fmt.Errorf("query functions from %s: %w", factsPath, err)
-	}
-	defer rows.Close()
-
-	var specs []extractdb.FuncSpec
-	for rows.Next() {
-		var ea, sz int64
-		var name string
-		if err := rows.Scan(&ea, &sz, &name); err != nil {
-			return "", nil, fmt.Errorf("scan function spec: %w", err)
+func normalizeSilverFuncs(raw []SilverFunc) ([]extractdb.SilverFuncRow, []extractdb.SilverFuncRangeRow) {
+	byEA := make(map[uint64]SilverFunc, len(raw))
+	for _, sf := range raw {
+		if sf.EA == 0 {
+			continue
 		}
-		specs = append(specs, extractdb.FuncSpec{
-			EA:   uint64(ea),
-			Size: uint64(sz),
-			Name: name,
+		if prev, exists := byEA[sf.EA]; exists {
+			if len(sf.Ranges) > len(prev.Ranges) || sf.Size > prev.Size || (prev.Name == "" && sf.Name != "") {
+				byEA[sf.EA] = sf
+			}
+			continue
+		}
+		byEA[sf.EA] = sf
+	}
+
+	eas := make([]uint64, 0, len(byEA))
+	for ea := range byEA {
+		eas = append(eas, ea)
+	}
+	sort.Slice(eas, func(i, j int) bool { return eas[i] < eas[j] })
+
+	funcRows := make([]extractdb.SilverFuncRow, 0, len(eas))
+	rangeRows := make([]extractdb.SilverFuncRangeRow, 0, len(eas))
+	for _, ea := range eas {
+		sf := byEA[ea]
+		fnName := strings.TrimSpace(sf.Name)
+		if fnName == "" {
+			fnName = fmt.Sprintf("sub_%x", ea)
+		}
+
+		var validRanges []SilverRange
+		for _, rg := range sf.Ranges {
+			if rg.EndEA > rg.StartEA {
+				validRanges = append(validRanges, rg)
+			}
+		}
+		if len(validRanges) == 0 && sf.Size > 0 {
+			validRanges = append(validRanges, SilverRange{StartEA: ea, EndEA: ea + sf.Size})
+		}
+
+		size := sf.Size
+		if size == 0 && len(validRanges) > 0 {
+			size = validRanges[0].EndEA - validRanges[0].StartEA
+		}
+
+		funcRows = append(funcRows, extractdb.SilverFuncRow{
+			EA:            ea,
+			Size:          size,
+			Name:          fnName,
+			Signature:     strings.TrimSpace(sf.Signature),
+			CallingConv:   normalizeSilverCallingConv(sf.CallingConv),
+			StackPurge:    sf.StackPurge,
+			IsThunk:       sf.IsThunk,
+			IsNoRet:       sf.IsNoRet,
+			ThunkTargetEA: sf.ThunkTargetEA,
 		})
+		for _, rg := range validRanges {
+			rangeRows = append(rangeRows, extractdb.SilverFuncRangeRow{
+				StartEA: rg.StartEA,
+				EndEA:   rg.EndEA,
+				FuncEA:  ea,
+			})
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return "", nil, err
-	}
-	return binSHA, specs, nil
+	return funcRows, rangeRows
 }
 
-func queryEngineStatusCounts(ctx context.Context, db *sql.DB, engine string) (map[string]int, error) {
-	rows, err := db.QueryContext(ctx, `
-		SELECT status, COUNT(*) FROM decomp_funcs WHERE engine = ? GROUP BY status
-	`, engine)
+func loadSilverFuncsFromStore(ctx context.Context, store *extractdb.SilverStore) ([]SilverFunc, error) {
+	rows, err := store.DB().QueryContext(ctx, `
+		SELECT ea, size, name, signature, calling_conv, stack_purge, is_thunk, is_noret, thunk_target_ea
+		FROM silver_funcs ORDER BY ea ASC
+	`)
 	if err != nil {
-		return nil, fmt.Errorf("query decomp status counts: %w", err)
+		return nil, fmt.Errorf("query silver_funcs: %w", err)
 	}
 	defer rows.Close()
 
-	counts := make(map[string]int)
+	var out []SilverFunc
 	for rows.Next() {
-		var st string
-		var cnt int
-		if err := rows.Scan(&st, &cnt); err != nil {
-			return nil, err
+		var sf SilverFunc
+		var ea, sz int64
+		var isThunk, isNoRet int
+		var thunkTarget any
+		if err := rows.Scan(&ea, &sz, &sf.Name, &sf.Signature, &sf.CallingConv, &sf.StackPurge, &isThunk, &isNoRet, &thunkTarget); err != nil {
+			return nil, fmt.Errorf("scan silver_func: %w", err)
 		}
-		counts[st] = cnt
+		sf.EA = uint64(ea)
+		sf.Size = uint64(sz)
+		sf.IsThunk = isThunk != 0
+		sf.IsNoRet = isNoRet != 0
+		if v, ok := thunkTarget.(int64); ok && v > 0 {
+			sf.ThunkTargetEA = uint64(v)
+		}
+		out = append(out, sf)
 	}
-	return counts, rows.Err()
+	return out, rows.Err()
+}
+
+func normalizeSilverCallingConv(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "__thiscall", "thiscall":
+		return "__thiscall"
+	case "__cdecl", "cdecl", "default":
+		return "__cdecl"
+	case "__stdcall", "stdcall":
+		return "__stdcall"
+	case "__fastcall", "fastcall":
+		return "__fastcall"
+	case "__usercall", "usercall":
+		return "__usercall"
+	case "__userpurge", "userpurge":
+		return "__userpurge"
+	case "sysv_amd64", "__amd64", "__sysv":
+		return "sysv_amd64"
+	default:
+		return strings.TrimSpace(raw)
+	}
 }
 
 type jsonlTailer struct {
 	path    string
 	offset  int64
-	lineBuf string
+	lineBuf strings.Builder
 }
 
 func (t *jsonlTailer) Drain(onFrame func(decompFrameJSON)) error {
@@ -240,14 +711,16 @@ func (t *jsonlTailer) Drain(onFrame func(decompFrameJSON)) error {
 		n, rErr := f.Read(buf)
 		if n > 0 {
 			t.offset += int64(n)
-			t.lineBuf += string(buf[:n])
+			t.lineBuf.Write(buf[:n])
+			s := t.lineBuf.String()
+			start := 0
 			for {
-				nl := strings.IndexByte(t.lineBuf, '\n')
+				nl := strings.IndexByte(s[start:], '\n')
 				if nl < 0 {
 					break
 				}
-				rawLine := strings.TrimSpace(t.lineBuf[:nl])
-				t.lineBuf = t.lineBuf[nl+1:]
+				rawLine := strings.TrimSpace(s[start : start+nl])
+				start += nl + 1
 				if rawLine == "" {
 					continue
 				}
@@ -256,6 +729,16 @@ func (t *jsonlTailer) Drain(onFrame func(decompFrameJSON)) error {
 					return fmt.Errorf("decode decomp jsonl frame: %w", jErr)
 				}
 				onFrame(frame)
+			}
+			if start > 0 {
+				var rem string
+				if start < len(s) {
+					rem = strings.Clone(s[start:])
+				}
+				t.lineBuf.Reset()
+				if rem != "" {
+					t.lineBuf.WriteString(rem)
+				}
 			}
 		}
 		if rErr != nil {

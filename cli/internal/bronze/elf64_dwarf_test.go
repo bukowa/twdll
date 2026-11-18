@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"debug/dwarf"
 	"debug/elf"
 	"encoding/binary"
 	"os"
@@ -18,7 +19,7 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 	ctx := context.Context(t.Context())
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "Attila")
-	binaryDBPath := filepath.Join(tmpDir, "binary.sqlite")
+	bronzeDBPath := filepath.Join(tmpDir, "bronze.sqlite")
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
 
 	fix := buildSyntheticELF64WithTwoCUDWARF4(t, binPath)
@@ -26,7 +27,7 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 	res, err := ExtractTarget(ctx, Options{
 		Target:       workspace.TargetAttila64,
 		BinaryPath:   binPath,
-		BinaryDBPath: binaryDBPath,
+		BronzeDBPath: bronzeDBPath,
 		ManifestPath: manifestPath,
 	})
 	if err != nil {
@@ -36,7 +37,7 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 		t.Fatalf("ImageBase = 0x%x, want 0x%x", res.ImageBase, fix.imageBase)
 	}
 
-	db, err := extractdb.OpenReadOnly(binaryDBPath)
+	db, err := extractdb.OpenReadOnly(bronzeDBPath)
 	if err != nil {
 		t.Fatalf("OpenReadOnly: %v", err)
 	}
@@ -157,26 +158,28 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 		t.Errorf("member[4] (static) = %+v, want kind=static & byte_offset=NULL", mems[4])
 	}
 
-	// 4. Verify func_vars inlineDepth==0 filtering (only root params/locals, no inlined_subroutine locals).
+	// 4. Verify func_vars inlineDepth==0 filtering (only root params/locals, no inlined_subroutine locals)
+	// and true SLEB128 negative location decoding.
 	varRows, err := db.QueryContext(ctx, `
-		SELECT kind, name, display_type FROM func_vars WHERE func_ea = ? ORDER BY ordinal
+		SELECT kind, name, display_type, loc_summary FROM func_vars WHERE func_ea = ? ORDER BY ordinal
 	`, int64(fix.fnAddGoldEA))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var varNames []string
 	for varRows.Next() {
-		var kind, name, disp string
-		if err := varRows.Scan(&kind, &name, &disp); err != nil {
+		var kind, name, disp, locSum string
+		if err := varRows.Scan(&kind, &name, &disp, &locSum); err != nil {
 			t.Fatal(err)
 		}
-		varNames = append(varNames, kind+":"+name+":"+disp)
+		varNames = append(varNames, kind+":"+name+":"+disp+":"+locSum)
 	}
 	varRows.Close()
 	wantVars := []string{
-		"param:this:CA::FACTION* const",
-		"param:amount:int",
-		"local:local_sum:int",
+		"param:this:CA::FACTION* const:reg5",
+		"param:amount:int:reg4",
+		"local:local_sum:int:fbreg-8",
+		"local:neg_breg:int:breg6-16",
 	}
 	if len(varNames) != len(wantVars) {
 		t.Fatalf("func_vars = %v, want %v (inlined local must be excluded)", varNames, wantVars)
@@ -247,7 +250,7 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 	// Verify function low_line and high_line from .debug_line (.h declFile + .cpp .debug_line fallback, excluding inline range).
 	var lowLine, highLine int
 	if err := db.QueryRowContext(ctx, `
-		SELECT low_line, high_line FROM functions WHERE ea = ?
+		SELECT low_line, high_line FROM dwarf_funcs WHERE ea = ?
 	`, int64(fix.fnAddGoldEA)).Scan(&lowLine, &highLine); err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +271,7 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 
 	var helperName, helperClass string
 	if err := db.QueryRowContext(ctx, `
-		SELECT name, class_name FROM functions WHERE ea = ?
+		SELECT name, class_name FROM dwarf_funcs WHERE ea = ?
 	`, int64(fix.fnHelperEA)).Scan(&helperName, &helperClass); err != nil {
 		t.Fatal(err)
 	}
@@ -276,48 +279,40 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 		t.Errorf("2-hop concrete subprogram = (%q, %q), want (CA::FACTION::helper, CA::FACTION)", helperName, helperClass)
 	}
 
-	// 6. Verify Itanium _ZTVN2CA7FACTIONE multi-subvtable splitting:
-	// Sub-vtable 0 at ztvEA+16 (2 slots) and Sub-vtable 1 at ztvEA+48 (1 slot, after [-16, rtti] header).
-	vtRows, err := db.QueryContext(ctx, `
-		SELECT vtable_ea, slot, target_ea, owner_name FROM vtables ORDER BY vtable_ea, slot
-	`)
-	if err != nil {
+	// Verify out-of-line method defined inside `namespace CA { void FACTION::ns_out_of_line() {} }`
+	// preserves `CA::FACTION` instead of truncating to `CA`.
+	var oolName, oolClass string
+	if err := db.QueryRowContext(ctx, `
+		SELECT name, class_name FROM dwarf_funcs WHERE ea = ?
+	`, int64(fix.fnOutOfLineEA)).Scan(&oolName, &oolClass); err != nil {
 		t.Fatal(err)
 	}
-	type vtRec struct {
-		vtEA   uint64
-		slot   int
-		target uint64
-		owner  string
-	}
-	var vts []vtRec
-	for vtRows.Next() {
-		var r vtRec
-		var vtEA, target int64
-		if err := vtRows.Scan(&vtEA, &r.slot, &target, &r.owner); err != nil {
-			t.Fatal(err)
-		}
-		r.vtEA = uint64(vtEA)
-		r.target = uint64(target)
-		vts = append(vts, r)
-	}
-	vtRows.Close()
-	wantVts := []vtRec{
-		{vtEA: fix.ztvEA + 16, slot: 0, target: fix.fnAddGoldEA, owner: "CA::FACTION"},
-		{vtEA: fix.ztvEA + 16, slot: 1, target: fix.fnHelperEA, owner: "CA::FACTION"},
-		{vtEA: fix.ztvEA + 48, slot: 0, target: fix.fnHelperEA, owner: "CA::FACTION"},
-	}
-	if len(vts) != len(wantVts) {
-		t.Fatalf("vtables = %+v, want %+v", vts, wantVts)
-	}
-	for i := range wantVts {
-		if vts[i] != wantVts[i] {
-			t.Errorf("vtable[%d] = %+v, want %+v", i, vts[i], wantVts[i])
-		}
+	if oolName != "CA::FACTION::ns_out_of_line" || oolClass != "CA::FACTION" {
+		t.Errorf("namespace out-of-line subprogram = (%q, %q), want (CA::FACTION::ns_out_of_line, CA::FACTION)", oolName, oolClass)
 	}
 
-	// 7. Verify UTF-32LE string & ASCII string + x86asm64 call_sites and string_xrefs.
-	var utf32Count, asciiDF int
+	// 6. Verify raw .symtab symbols (including _ZTV*) are preserved verbatim in elf_symbols
+	// with zero vtable heuristic decoding or synthetic functions.
+	var ztvEA int64
+	if err := db.QueryRowContext(ctx, `
+		SELECT ea FROM elf_symbols WHERE name = '_ZTVN2CA7FACTIONE' AND table_kind = 'symtab'
+	`).Scan(&ztvEA); err != nil {
+		t.Fatalf("query _ZTVN2CA7FACTIONE in elf_symbols: %v", err)
+	}
+	if uint64(ztvEA) != fix.ztvEA {
+		t.Errorf("_ZTVN2CA7FACTIONE ea = 0x%x, want 0x%x", uint64(ztvEA), fix.ztvEA)
+	}
+
+	var fnFTSCount int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM dwarf_funcs_fts WHERE dwarf_funcs_fts MATCH 'FACTION'`).Scan(&fnFTSCount); err != nil {
+		t.Fatal(err)
+	}
+	if fnFTSCount == 0 {
+		t.Errorf("dwarf_funcs_fts MATCH 'FACTION' returned 0 rows")
+	}
+
+	// 7. Verify UTF-32LE string & ASCII string extracted statically by data.strings.
+	var utf32Count, asciiCount int
 	if err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM strings WHERE encoding = 'utf32le' AND value = 'AttilaWide32'
 	`).Scan(&utf32Count); err != nil {
@@ -327,40 +322,23 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 		t.Errorf("utf32le string count = %d, want 1", utf32Count)
 	}
 	if err := db.QueryRowContext(ctx, `
-		SELECT df_count FROM strings WHERE encoding = 'ascii' AND value = 'FACTION_GOLD_ADDED'
-	`).Scan(&asciiDF); err != nil {
+		SELECT COUNT(*) FROM strings WHERE encoding = 'ascii' AND value = 'FACTION_GOLD_ADDED'
+	`).Scan(&asciiCount); err != nil {
 		t.Fatalf("query FACTION_GOLD_ADDED: %v", err)
 	}
-	if asciiDF != 1 {
-		t.Errorf("FACTION_GOLD_ADDED df_count = %d, want 1", asciiDF)
-	}
-
-	var directCallCount, vcallCount int
-	if err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM call_sites WHERE caller_ea = ? AND callee_ea = ? AND call_kind = 'direct'
-	`, int64(fix.fnAddGoldEA), int64(fix.fnHelperEA)).Scan(&directCallCount); err != nil {
-		t.Fatal(err)
-	}
-	if directCallCount != 1 {
-		t.Errorf("direct call count = %d, want 1", directCallCount)
-	}
-	if err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM call_sites WHERE caller_ea = ? AND call_kind = 'indirect_mem' AND base_reg = 'RAX' AND mem_disp = 8
-	`, int64(fix.fnAddGoldEA)).Scan(&vcallCount); err != nil {
-		t.Fatal(err)
-	}
-	if vcallCount != 1 {
-		t.Errorf("indirect_mem vcall count = %d, want 1", vcallCount)
+	if asciiCount != 1 {
+		t.Errorf("FACTION_GOLD_ADDED count = %d, want 1", asciiCount)
 	}
 }
 
 type syntheticELF64Layout struct {
-	imageBase    uint64
-	fnAddGoldEA  uint64
-	fnHelperEA   uint64
-	fnLambdaEA   uint64
-	ztvEA        uint64
-	gotPthreadVA uint64
+	imageBase     uint64
+	fnAddGoldEA   uint64
+	fnHelperEA    uint64
+	fnLambdaEA    uint64
+	fnOutOfLineEA uint64
+	ztvEA         uint64
+	gotPthreadVA  uint64
 }
 
 func buildSyntheticELF64WithTwoCUDWARF4(t *testing.T, outPath string) syntheticELF64Layout {
@@ -371,12 +349,13 @@ func buildSyntheticELF64WithTwoCUDWARF4(t *testing.T, outPath string) syntheticE
 		rodataVA  = 0x402000
 	)
 	lay := syntheticELF64Layout{
-		imageBase:    imageBase,
-		fnAddGoldEA:  textVA + 0x00,
-		fnHelperEA:   textVA + 0x40,
-		fnLambdaEA:   textVA + 0x60,
-		ztvEA:        rodataVA + 0x100,
-		gotPthreadVA: 0x403000,
+		imageBase:     imageBase,
+		fnAddGoldEA:   textVA + 0x00,
+		fnHelperEA:    textVA + 0x40,
+		fnLambdaEA:    textVA + 0x60,
+		fnOutOfLineEA: textVA + 0x70,
+		ztvEA:         rodataVA + 0x100,
+		gotPthreadVA:  0x403000,
 	}
 
 	// 1. Build .rodata:
@@ -428,7 +407,13 @@ func buildSyntheticELF64WithTwoCUDWARF4(t *testing.T, outPath string) syntheticE
 	binary.LittleEndian.PutUint32(text[0x07:0x0B], uint32(int32(rodataVA-(textVA+0x0B))))
 	text[0x0B] = 0xE8
 	binary.LittleEndian.PutUint32(text[0x0C:0x10], uint32(int32(int64(lay.fnHelperEA)-int64(textVA+0x10))))
-	copy(text[0x10:], []byte{0x48, 0x8B, 0x07, 0xFF, 0x50, 0x08, 0x5D, 0xC3})
+	copy(text[0x10:], []byte{0x48, 0x8B, 0x07, 0xFF, 0x50, 0x08})
+	// +0x16: 48 8D 05 <disp to fnLambdaEA> (lea rax, [rip + fnLambdaEA], nextEA = textVA + 0x1D)
+	text[0x16] = 0x48
+	text[0x17] = 0x8D
+	text[0x18] = 0x05
+	binary.LittleEndian.PutUint32(text[0x19:0x1D], uint32(int32(int64(lay.fnLambdaEA)-int64(textVA+0x1D))))
+	copy(text[0x1D:], []byte{0x5D, 0xC3})
 
 	// fnHelperEA @ 0x401040 (size 0x10):
 	//   +0x40: 31 C0 C3 (xor eax, eax; ret)
@@ -436,6 +421,9 @@ func buildSyntheticELF64WithTwoCUDWARF4(t *testing.T, outPath string) syntheticE
 	// fnLambdaEA @ 0x401060 (size 0x10):
 	//   +0x60: 31 C0 C3 (xor eax, eax; ret)
 	copy(text[0x60:], []byte{0x31, 0xC0, 0xC3})
+	// fnOutOfLineEA @ 0x401070 (size 0x10):
+	//   +0x70: 31 C0 C3 (xor eax, eax; ret)
+	copy(text[0x70:], []byte{0x31, 0xC0, 0xC3})
 
 	// 3. Build DWARF4 sections (.debug_abbrev, .debug_info with 2 CUs, .debug_line).
 	debugAbbrev, debugInfo, debugLine := buildTwoCUDWARF4Sections(lay)
@@ -730,7 +718,25 @@ func buildTwoCUDWARF4Sections(lay syntheticELF64Layout) (abbrev, info, line []by
 	cu2.WriteByte(1)
 	cu2.WriteByte(60)
 
+	// Child 8: Subprogram declaration "ns_out_of_line" inside CA::FACTION (abbrev 12)
+	nsOutOfLineSpecOff := uint32(cu2.Len())
+	cu2.WriteByte(12)
+	cu2.WriteString("ns_out_of_line\x00")
+	cu2.WriteString("_ZN2CA7FACTION14ns_out_of_lineEv\x00")
+	cu2.WriteByte(1)
+	cu2.WriteByte(70)
+
 	cu2.WriteByte(0) // end class FACTION
+	cu2.WriteByte(0) // end namespace CA
+
+	// Out-of-line definition inside `namespace CA { void FACTION::ns_out_of_line() {} }`
+	cu2.WriteByte(2)
+	cu2.WriteString("CA\x00")
+	cu2.WriteByte(13)
+	binary.Write(&cu2, binary.LittleEndian, nsOutOfLineSpecOff)
+	binary.Write(&cu2, binary.LittleEndian, lay.fnOutOfLineEA)
+	binary.Write(&cu2, binary.LittleEndian, uint64(0x10))
+	cu2.WriteByte(0) // end ns_out_of_line
 	cu2.WriteByte(0) // end namespace CA
 
 	// DIE: PointerType to CA::FACTION in CU 2 (abbrev 4)
@@ -806,6 +812,12 @@ func buildTwoCUDWARF4Sections(lay syntheticELF64Layout) (abbrev, info, line []by
 	cu2.WriteString("local_sum\x00")
 	binary.Write(&cu2, binary.LittleEndian, intOff)
 	cu2.Write([]byte{2, 0x91, 0x78})
+
+	// Local 1: "neg_breg" (int, DW_OP_breg6 -16) (abbrev 15)
+	cu2.WriteByte(15)
+	cu2.WriteString("neg_breg\x00")
+	binary.Write(&cu2, binary.LittleEndian, intOff)
+	cu2.Write([]byte{2, 0x76, 0x70})
 
 	// InlinedSubroutine (AFTER nested lambda closes!) referencing clampGoldAbsOff (2-hop -> clampGoldSpecOff) (abbrev 16)
 	cu2.WriteByte(16)
@@ -1106,5 +1118,98 @@ func writeSyntheticELF64File(
 
 	if err := os.WriteFile(outPath, f.Bytes(), 0o644); err != nil {
 		t.Fatalf("write synthetic ELF64: %v", err)
+	}
+}
+
+func TestDWARFSLEB128AndLocSummary(t *testing.T) {
+	slebCases := []struct {
+		name  string
+		bytes []byte
+		want  int64
+		wantN int
+	}{
+		{name: "zero", bytes: []byte{0x00}, want: 0, wantN: 1},
+		{name: "minus_8", bytes: []byte{0x78}, want: -8, wantN: 1},
+		{name: "minus_16", bytes: []byte{0x70}, want: -16, wantN: 1},
+		{name: "plus_63", bytes: []byte{0x3F}, want: 63, wantN: 1},
+		{name: "minus_64", bytes: []byte{0x40}, want: -64, wantN: 1},
+		{name: "minus_128", bytes: []byte{0x80, 0x7F}, want: -128, wantN: 2},
+		{name: "minus_256", bytes: []byte{0x80, 0x7E}, want: -256, wantN: 2},
+		{name: "plus_128", bytes: []byte{0x80, 0x01}, want: 128, wantN: 2},
+		{name: "truncated", bytes: []byte{0x80}, want: 0, wantN: 0},
+	}
+	for _, tc := range slebCases {
+		got, n := decodeSLEB128(tc.bytes)
+		if got != tc.want || n != tc.wantN {
+			t.Errorf("decodeSLEB128(%s) = (%d, %d), want (%d, %d)", tc.name, got, n, tc.want, tc.wantN)
+		}
+	}
+
+	locCases := []struct {
+		name string
+		expr []byte
+		want string
+	}{
+		{name: "fbreg_neg16", expr: []byte{0x91, 0x70}, want: "fbreg-16"},
+		{name: "fbreg_neg256", expr: []byte{0x91, 0x80, 0x7E}, want: "fbreg-256"},
+		{name: "breg6_neg128", expr: []byte{0x76, 0x80, 0x7F}, want: "breg6-128"},
+		{name: "breg7_pos16", expr: []byte{0x77, 0x10}, want: "breg7+16"},
+		{name: "fbreg_trailing_deref", expr: []byte{0x91, 0x70, 0x06}, want: "expr:917006"},
+		{name: "fbreg_truncated", expr: []byte{0x91}, want: "expr:91"},
+	}
+	for _, tc := range locCases {
+		f := &dwarf.Field{Val: tc.expr}
+		if got := summarizeDWARFLocField(f); got != tc.want {
+			t.Errorf("summarizeDWARFLocField(%s) = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestExtractELF64_DisabledFormatExtractorStillPopulatesStringsAndMeta(t *testing.T) {
+	ctx := context.Context(t.Context())
+	tmpDir := t.TempDir()
+	binPath := filepath.Join(tmpDir, "Attila")
+	bronzeDBPath := filepath.Join(tmpDir, "bronze_no_elf_format.sqlite")
+
+	fix := buildSyntheticELF64WithTwoCUDWARF4(t, binPath)
+
+	res, err := ExtractTarget(ctx, Options{
+		Target:             workspace.TargetAttila64,
+		BinaryPath:         binPath,
+		BronzeDBPath:       bronzeDBPath,
+		DisabledExtractors: []string{"elf64.format", "elf64.dwarf4"},
+	})
+	if err != nil {
+		t.Fatalf("ExtractTarget failed: %v", err)
+	}
+	if res.ImageBase != fix.imageBase {
+		t.Fatalf("ImageBase = 0x%x, want 0x%x", res.ImageBase, fix.imageBase)
+	}
+	if res.Counts["strings"] == 0 {
+		t.Fatalf("expected data.strings to still extract strings when elf64.format is disabled")
+	}
+
+	db, err := extractdb.OpenReadOnly(bronzeDBPath)
+	if err != nil {
+		t.Fatalf("OpenReadOnly: %v", err)
+	}
+	defer db.Close()
+
+	meta := make(map[string]string)
+	rows, err := db.QueryContext(ctx, `SELECT key, value FROM meta`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			t.Fatal(err)
+		}
+		meta[k] = v
+	}
+	rows.Close()
+
+	if meta[extractdb.MetaFormat] != extractdb.FormatELF64 || meta[extractdb.MetaArch] != extractdb.ArchX86_64 || meta[extractdb.MetaImageBase] != "0x400000" {
+		t.Fatalf("unexpected meta when elf64.format disabled: %+v", meta)
 	}
 }

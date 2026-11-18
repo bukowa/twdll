@@ -28,13 +28,13 @@ func TestSmokeRealBinaries(t *testing.T) {
 				t.Skipf("binary %s not present: %v", binPath, err)
 			}
 
-			binaryDBPath := filepath.Join(outDir, string(target), "binary.sqlite")
+			bronzeDBPath := filepath.Join(outDir, string(target), "bronze.sqlite")
 			manifestPath := filepath.Join(outDir, string(target), "manifest.json")
 
 			res, err := ExtractTarget(ctx, Options{
 				Target:       target,
 				BinaryPath:   binPath,
-				BinaryDBPath: binaryDBPath,
+				BronzeDBPath: bronzeDBPath,
 				ManifestPath: manifestPath,
 			})
 			if err != nil {
@@ -43,45 +43,28 @@ func TestSmokeRealBinaries(t *testing.T) {
 
 			var ms runtime.MemStats
 			runtime.ReadMemStats(&ms)
-			t.Logf("[%s] elapsed=%v sha256=%s image_base=0x%x seeds=%d HeapInuse=%d MiB HeapAlloc=%d MiB counts=%v",
-				target, res.Elapsed, res.BinarySHA256[:12], res.ImageBase, len(res.Seeds),
+			t.Logf("[%s] elapsed=%v sha256=%s image_base=0x%x HeapInuse=%d MiB HeapAlloc=%d MiB counts=%v",
+				target, res.Elapsed, res.BinarySHA256[:12], res.ImageBase,
 				ms.HeapInuse/(1024*1024), ms.HeapAlloc/(1024*1024), res.Counts)
 
-			db, err := extractdb.OpenReadOnly(binaryDBPath)
+			db, err := extractdb.OpenReadOnly(bronzeDBPath)
 			if err != nil {
 				t.Fatalf("OpenReadOnly(%s): %v", target, err)
 			}
 			defer db.Close()
 
-			// Verify LoadSeedsFromFacts round-trip matches Result.Seeds.
-			loadedSeeds, err := LoadSeedsFromFacts(ctx, db)
-			if err != nil {
-				t.Fatalf("LoadSeedsFromFacts(%s): %v", target, err)
-			}
-			if len(loadedSeeds) != len(res.Seeds) {
-				t.Errorf("len(loadedSeeds)=%d != len(res.Seeds)=%d", len(loadedSeeds), len(res.Seeds))
+			if res.Counts["sections"] <= 0 {
+				t.Errorf("[%s] sections count = %d, want > 0", target, res.Counts["sections"])
 			}
 
-			// Universal data-integrity checks across all targets:
-			var roWrites, badLineSpan, orphanInlines int
+			var badLineSpan, orphanInlines int
 			if err := db.QueryRowContext(ctx, `
-				SELECT COUNT(*) FROM data_xrefs dx
-				JOIN sections s ON dx.to_ea >= s.va AND dx.to_ea < s.va + s.virtual_size
-				WHERE s.name IN ('.rdata', '.rodata') AND dx.access_kind = 'write'
-			`).Scan(&roWrites); err != nil {
-				t.Fatal(err)
-			}
-			if roWrites != 0 {
-				t.Errorf("[%s] write data_xrefs targeting .rdata/.rodata = %d, want 0", target, roWrites)
-			}
-
-			if err := db.QueryRowContext(ctx, `
-				SELECT COUNT(*) FROM functions WHERE low_line > 0 AND high_line < low_line
+				SELECT COUNT(*) FROM dwarf_funcs WHERE low_line > 0 AND high_line < low_line
 			`).Scan(&badLineSpan); err != nil {
 				t.Fatal(err)
 			}
 			if badLineSpan != 0 {
-				t.Errorf("[%s] functions with high_line < low_line = %d, want 0", target, badLineSpan)
+				t.Errorf("[%s] dwarf_funcs with high_line < low_line = %d, want 0", target, badLineSpan)
 			}
 
 			if err := db.QueryRowContext(ctx, `
@@ -99,7 +82,6 @@ func TestSmokeRealBinaries(t *testing.T) {
 			}
 
 			if target.Is64Bit() {
-				// 1. Assert 0 dangling type references across types, type_members, and func_vars.
 				var danglingTarget, danglingMember, danglingVar int
 				if err := db.QueryRowContext(ctx, `
 					SELECT COUNT(*) FROM types t
@@ -134,7 +116,6 @@ func TestSmokeRealBinaries(t *testing.T) {
 					t.Errorf("dangling func_vars.type_id = %d, want 0", danglingVar)
 				}
 
-				// 2. Assert 0 non-NULL byte_offset on static members or virtual bases.
 				var badStaticOrVbase int
 				if err := db.QueryRowContext(ctx, `
 					SELECT COUNT(*) FROM type_members
@@ -147,9 +128,8 @@ func TestSmokeRealBinaries(t *testing.T) {
 					t.Errorf("non-NULL byte_offset on static/virtual-base rows = %d, want 0", badStaticOrVbase)
 				}
 
-				// 3. Assert FTS5 matches on functions_fts, types_fts, and strings_fts for FACTION.
 				for _, q := range []string{
-					`SELECT COUNT(*) FROM functions_fts WHERE functions_fts MATCH 'FACTION'`,
+					`SELECT COUNT(*) FROM dwarf_funcs_fts WHERE dwarf_funcs_fts MATCH 'FACTION'`,
 					`SELECT COUNT(*) FROM types_fts WHERE types_fts MATCH 'FACTION'`,
 					`SELECT COUNT(*) FROM strings_fts WHERE strings_fts MATCH 'FACTION'`,
 				} {
@@ -162,45 +142,10 @@ func TestSmokeRealBinaries(t *testing.T) {
 					}
 				}
 
-				// 4. Assert concrete composite type_members and function DWARF fidelity on attila_64.
-				var factionMembers, techMgrMembers, ptrVecMembers int
-				if err := db.QueryRowContext(ctx, `
-					SELECT COUNT(*) FROM type_members tm
-					JOIN types t ON t.type_id = tm.type_id
-					WHERE t.name = 'EMPIRECAMPAIGN::FACTION' AND t.is_declaration = 0
-				`).Scan(&factionMembers); err != nil {
-					t.Fatal(err)
-				}
-				if factionMembers <= 20 {
-					t.Errorf("EMPIRECAMPAIGN::FACTION concrete member count = %d, want > 20", factionMembers)
-				}
-
-				if err := db.QueryRowContext(ctx, `
-					SELECT COUNT(*) FROM type_members tm
-					JOIN types t ON t.type_id = tm.type_id
-					WHERE t.name = 'EMPIRECAMPAIGN::FACTION_TECHNOLOGY_MANAGER' AND t.is_declaration = 0
-				`).Scan(&techMgrMembers); err != nil {
-					t.Fatal(err)
-				}
-				if techMgrMembers <= 0 {
-					t.Errorf("EMPIRECAMPAIGN::FACTION_TECHNOLOGY_MANAGER member count = %d, want > 0", techMgrMembers)
-				}
-
-				if err := db.QueryRowContext(ctx, `
-					SELECT COUNT(*) FROM type_members tm
-					JOIN types t ON t.type_id = tm.type_id
-					WHERE t.name LIKE '%CONST_SAFE_PTR_VECTOR%' AND t.is_declaration = 0
-				`).Scan(&ptrVecMembers); err != nil {
-					t.Fatal(err)
-				}
-				if ptrVecMembers <= 0 {
-					t.Errorf("CONST_SAFE_PTR_VECTOR member count = %d, want > 0", ptrVecMembers)
-				}
-
 				var eorEA int64
 				var eorLowLine, eorHighLine, eorVars, eorInlines int
 				if err := db.QueryRowContext(ctx, `
-					SELECT ea, low_line, high_line FROM functions
+					SELECT ea, low_line, high_line FROM dwarf_funcs
 					WHERE name = 'EMPIRECAMPAIGN::FACTION::end_of_round'
 				`).Scan(&eorEA, &eorLowLine, &eorHighLine); err != nil {
 					t.Fatalf("query EMPIRECAMPAIGN::FACTION::end_of_round: %v", err)
@@ -220,35 +165,9 @@ func TestSmokeRealBinaries(t *testing.T) {
 				if eorInlines <= 0 {
 					t.Errorf("EMPIRECAMPAIGN::FACTION::end_of_round inlines = %d, want > 0", eorInlines)
 				}
-				t.Logf("[%s] FACTION_members=%d TECH_MGR_members=%d PTR_VEC_members=%d end_of_round(ea=0x%x lines=[%d,%d] vars=%d inlines=%d)",
-					target, factionMembers, techMgrMembers, ptrVecMembers, uint64(eorEA), eorLowLine, eorHighLine, eorVars, eorInlines)
 			} else {
-				// 32-bit PE DLL checks: lua_regs (>= 39 tables, >= 600 methods), vtables, functions, strings_fts.
-				var luaTables, luaMethods int
-				if err := db.QueryRowContext(ctx, `
-					SELECT COUNT(DISTINCT table_ea), COUNT(*) FROM lua_regs
-				`).Scan(&luaTables, &luaMethods); err != nil {
-					t.Fatal(err)
-				}
-				noSeedOverrideCount := 0
-				for _, s := range res.Seeds {
-					if s.Flags&extractdb.FuncFlagNoSeedOverride != 0 {
-						noSeedOverrideCount++
-					}
-				}
-				t.Logf("[%s] lua_regs: tables=%d methods=%d | vtables_rows=%d | functions=%d | no_seed_override=%d",
-					target, luaTables, luaMethods, res.Counts["vtables"], res.Counts["functions"], noSeedOverrideCount)
-				if luaTables < 39 {
-					t.Errorf("[%s] lua_regs distinct tables = %d, want >= 39", target, luaTables)
-				}
-				if luaMethods < 600 {
-					t.Errorf("[%s] lua_regs total methods = %d, want >= 600", target, luaMethods)
-				}
-				if res.Counts["vtables"] < 1000 {
-					t.Errorf("[%s] vtables count = %d, want >= 1000", target, res.Counts["vtables"])
-				}
-				if len(res.Seeds) < 10000 {
-					t.Errorf("[%s] seeds count = %d, want >= 10000", target, len(res.Seeds))
+				if res.Counts["dwarf_funcs"] != 0 || res.Counts["elf_symbols"] != 0 {
+					t.Errorf("[%s] expected 0 DWARF/ELF rows on PE32, got counts=%v", target, res.Counts)
 				}
 				var ftsStrings int
 				if err := db.QueryRowContext(ctx, `

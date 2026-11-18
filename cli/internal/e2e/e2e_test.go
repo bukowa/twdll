@@ -15,6 +15,7 @@ import (
 	"twdll/cli/internal/analyze"
 	"twdll/cli/internal/binaries"
 	"twdll/cli/internal/cmd"
+	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/toolchain"
 	"twdll/cli/internal/workspace"
 )
@@ -503,6 +504,25 @@ func TestE2E_MiniWarscape_RealDecompilers(t *testing.T) {
 		}
 	}
 
+	// 5.5 Extract bronze + silver (both ghidra and ida) for attila_32 and attila_64, then verify SQLite invariants.
+	runCLI(t, sb, "extract", "-d", "all", "attila_32", "attila_64")
+	repAfterExtract := parseStatusReport(t, sb)
+	for _, ext := range repAfterExtract.Extracted {
+		if ext.Target != workspace.TargetAttila32 && ext.Target != workspace.TargetAttila64 {
+			continue
+		}
+		if !ext.BronzePresent || !ext.BronzeUpToDate {
+			t.Fatalf("expected bronze extracted & up-to-date for %s, got %+v", ext.Target, ext)
+		}
+		for _, eng := range []workspace.DecompilerID{workspace.DecompilerGhidra, workspace.DecompilerIDA} {
+			ss := ext.Silver[string(eng)]
+			if !ss.Present || !ss.UpToDate || ss.Funcs == 0 || ss.Asm != ss.Funcs || ss.OK == 0 {
+				t.Fatalf("unexpected silver status for %s/%s: %+v", ext.Target, eng, ss)
+			}
+			verifyMiniSilverDB(t, sb.paths.SilverDBPath(ext.Target, eng), ext.Target == workspace.TargetAttila64)
+		}
+	}
+
 	// 6. Selective clean: clean -d ida attila_32.
 	runCLI(t, sb, "clean", "-d", "ida", "attila_32")
 	repAfterClean := parseStatusReport(t, sb)
@@ -586,6 +606,84 @@ func TestE2E_MiniWarscape_RealDecompilers(t *testing.T) {
 	// Restore archived telemetry log so run-e2e-bg.ps1 -Mode mini can collect analyze_resources.jsonl.
 	if err := workspace.WriteFileAtomic(sb.paths.AnalyzeResourceLogPath(), rawResourceBytes, 0o644); err != nil {
 		t.Fatalf("restore resource log after clean --all: %v", err)
+	}
+}
+
+func verifyMiniSilverDB(t *testing.T, dbPath string, expectSigs bool) {
+	t.Helper()
+	db, err := extractdb.OpenReadOnly(dbPath)
+	if err != nil {
+		t.Fatalf("OpenReadOnly(%s): %v", dbPath, err)
+	}
+	defer db.Close()
+
+	var funcCnt, rangeOwnerCnt, asmCnt, nonEmptyAsm, sigCnt, decompOK int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM silver_funcs`).Scan(&funcCnt); err != nil {
+		t.Fatalf("count silver_funcs (%s): %v", dbPath, err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(DISTINCT func_ea) FROM silver_func_ranges`).Scan(&rangeOwnerCnt); err != nil {
+		t.Fatalf("count silver_func_ranges owners (%s): %v", dbPath, err)
+	}
+	if rangeOwnerCnt != funcCnt {
+		t.Fatalf("%s: silver_func_ranges covers %d funcs, want %d", dbPath, rangeOwnerCnt, funcCnt)
+	}
+	var sizeMismatches int
+	if err := db.QueryRow(`
+		SELECT COUNT(*) FROM silver_funcs f
+		WHERE f.size != COALESCE((SELECT SUM(r.end_ea - r.start_ea) FROM silver_func_ranges r WHERE r.func_ea = f.ea), 0)
+	`).Scan(&sizeMismatches); err != nil {
+		t.Fatalf("check chunk sum vs size (%s): %v", dbPath, err)
+	}
+	if sizeMismatches != 0 {
+		t.Fatalf("%s: found %d functions where size != sum(ranges)", dbPath, sizeMismatches)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*), SUM(CASE WHEN insn_count > 0 AND raw_asm != '' THEN 1 ELSE 0 END) FROM silver_asm`).Scan(&asmCnt, &nonEmptyAsm); err != nil {
+		t.Fatalf("query silver_asm (%s): %v", dbPath, err)
+	}
+	if asmCnt != funcCnt || nonEmptyAsm == 0 {
+		t.Fatalf("%s: silver_asm count=%d nonEmpty=%d, want count=%d nonEmpty>0", dbPath, asmCnt, nonEmptyAsm, funcCnt)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM silver_funcs WHERE signature != ''`).Scan(&sigCnt); err != nil {
+		t.Fatalf("count signatures (%s): %v", dbPath, err)
+	}
+	if expectSigs && sigCnt == 0 {
+		t.Fatalf("%s: expected non-empty signature rows on DWARF fixture", dbPath)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM decomp_funcs WHERE status = 'ok' AND raw_c != ''`).Scan(&decompOK); err != nil {
+		t.Fatalf("count decomp_funcs ok (%s): %v", dbPath, err)
+	}
+	if decompOK == 0 {
+		t.Fatalf("%s: expected decomp_funcs ok > 0", dbPath)
+	}
+	var badLineEA int
+	rows, err := db.Query(`SELECT raw_c, line_ea_json FROM decomp_funcs WHERE status = 'ok'`)
+	if err != nil {
+		t.Fatalf("query line_ea (%s): %v", dbPath, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var rawC, lineEAJSON string
+		if err := rows.Scan(&rawC, &lineEAJSON); err != nil {
+			t.Fatal(err)
+		}
+		var entries [][]any
+		if err := json.Unmarshal([]byte(lineEAJSON), &entries); err != nil {
+			t.Fatalf("%s: invalid line_ea_json %q: %v", dbPath, lineEAJSON, err)
+		}
+		lineCount := len(strings.Split(rawC, "\n"))
+		for _, e := range entries {
+			if len(e) != 3 {
+				badLineEA++
+				continue
+			}
+			ln, ok := e[0].(float64)
+			if !ok || int(ln) < 1 || int(ln) > lineCount {
+				badLineEA++
+			}
+		}
+	}
+	if badLineEA != 0 {
+		t.Fatalf("%s: found %d out-of-range line_ea entries", dbPath, badLineEA)
 	}
 }
 

@@ -6,8 +6,9 @@ set "TWDLL_WRAPPER_ROOT=%ROOT:~0,-1%"
 set "BIN=%ROOT%.twdll\bin\twdll.exe"
 
 if exist "%BIN%" (
-    "%BIN%" %*
-    exit /b !errorlevel!
+    if "%TWDLL_NO_REBUILD%"=="1" goto :run
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$bt=[System.IO.File]::GetLastWriteTimeUtc($env:BIN);$cd=[System.IO.Path]::Combine($env:TWDLL_WRAPPER_ROOT,'cli');$s=New-Object System.Collections.Generic.Stack[string];$s.Push($cd);while($s.Count -gt 0){$d=$s.Pop();foreach($sub in [System.IO.Directory]::EnumerateDirectories($d)){$n=[System.IO.Path]::GetFileName($sub);if($n -ne '.git' -and $n -ne 'testdata'){$s.Push($sub)}};foreach($f in [System.IO.Directory]::EnumerateFiles($d)){$n=[System.IO.Path]::GetFileName($f);if($n.EndsWith('_test.go')){continue};if($n -eq 'go.mod' -or $n -eq 'go.sum' -or $n -match '\.(go|java|idc|py)$'){if([System.IO.File]::GetLastWriteTimeUtc($f) -gt $bt){exit 1}}}};exit 0" >nul 2>nul
+    if !errorlevel! equ 0 goto :run
 )
 
 if defined TWDLL_TOOLS_DIR (
@@ -51,7 +52,6 @@ if not exist "%PORTABLE_GO%" (
 echo [twdll] Compiling CLI executable... >&2
 mkdir "%ROOT%.twdll\bin" >nul 2>nul
 pushd "%ROOT%cli"
-set "TWDLL_NO_REBUILD=1"
 "%PORTABLE_GO%" build -buildvcs=false -o "%BIN%" .
 set "BUILD_ERR=!errorlevel!"
 popd
@@ -60,6 +60,6 @@ if !BUILD_ERR! neq 0 (
     exit /b !BUILD_ERR!
 )
 
-set "TWDLL_NO_REBUILD=1"
+:run
 "%BIN%" %*
 exit /b !errorlevel!

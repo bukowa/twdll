@@ -70,14 +70,14 @@ func TestResolve_UsesCustomConfigAndDataDirPrecedence(t *testing.T) {
 	if layout.Paths.ExtractedDir != filepath.Join(wantDataDir, "extracted") {
 		t.Fatalf("ExtractedDir = %q, want inside sandbox", layout.Paths.ExtractedDir)
 	}
-	if layout.Paths.BinaryDBPath(TargetAttila32) != filepath.Join(wantDataDir, "extracted", "attila_32", "binary.sqlite") {
-		t.Fatalf("BinaryDBPath = %q, want inside sandbox", layout.Paths.BinaryDBPath(TargetAttila32))
+	if layout.Paths.BronzeDBPath(TargetAttila32) != filepath.Join(wantDataDir, "extracted", "attila_32", "bronze.sqlite") {
+		t.Fatalf("BronzeDBPath = %q, want inside sandbox", layout.Paths.BronzeDBPath(TargetAttila32))
 	}
-	if layout.Paths.DecompDBPath(TargetAttila32, DecompilerIDA) != filepath.Join(wantDataDir, "extracted", "attila_32", "decomp_ida.sqlite") {
-		t.Fatalf("DecompDBPath(ida) = %q, want inside sandbox", layout.Paths.DecompDBPath(TargetAttila32, DecompilerIDA))
+	if layout.Paths.SilverDBPath(TargetAttila32, DecompilerIDA) != filepath.Join(wantDataDir, "extracted", "attila_32", "silver_ida.sqlite") {
+		t.Fatalf("SilverDBPath(ida) = %q, want inside sandbox", layout.Paths.SilverDBPath(TargetAttila32, DecompilerIDA))
 	}
-	if layout.Paths.DecompDBPath(TargetAttila32, DecompilerGhidra) != filepath.Join(wantDataDir, "extracted", "attila_32", "decomp_ghidra.sqlite") {
-		t.Fatalf("DecompDBPath(ghidra) = %q, want inside sandbox", layout.Paths.DecompDBPath(TargetAttila32, DecompilerGhidra))
+	if layout.Paths.SilverDBPath(TargetAttila32, DecompilerGhidra) != filepath.Join(wantDataDir, "extracted", "attila_32", "silver_ghidra.sqlite") {
+		t.Fatalf("SilverDBPath(ghidra) = %q, want inside sandbox", layout.Paths.SilverDBPath(TargetAttila32, DecompilerGhidra))
 	}
 	if layout.Paths.TargetManifestPath(TargetAttila32) != filepath.Join(wantDataDir, "extracted", "attila_32", "manifest.json") {
 		t.Fatalf("TargetManifestPath = %q, want inside sandbox", layout.Paths.TargetManifestPath(TargetAttila32))
@@ -291,5 +291,74 @@ func TestResolve_ToolsDirOverrideAndEnv_PrecedenceAndExternalGuards(t *testing.T
 	defaultToolsInSandbox := filepath.Join(overrideLayout.Paths.DataDir, "tools")
 	if _, statErr := os.Stat(defaultToolsInSandbox); !os.IsNotExist(statErr) {
 		t.Fatalf("EnsureDirs must not create %s when external ToolsDir is configured", defaultToolsInSandbox)
+	}
+}
+
+func TestExpandTargets_GlobsAndConfiguredFiltering(t *testing.T) {
+	root := t.TempDir()
+	p := NewPaths(root, filepath.Join(root, "twdll.toml"), filepath.Join(root, ".twdll"))
+	layout := Layout{
+		Paths: p,
+		Config: Config{
+			Games: GamesConfig{
+				Attila: `C:\Games\Attila`,
+			},
+		},
+	}
+	if err := os.MkdirAll(filepath.Dir(p.BinaryPath(TargetRome2_32)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.BinaryPath(TargetRome2_32), []byte("dll"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	configured := ConfiguredTargets(layout)
+	wantCfg := []TargetID{TargetAttila64, TargetAttila32, TargetRome2_32}
+	if len(configured) != len(wantCfg) {
+		t.Fatalf("ConfiguredTargets = %v, want %v", configured, wantCfg)
+	}
+	for i := range wantCfg {
+		if configured[i] != wantCfg[i] {
+			t.Fatalf("ConfiguredTargets[%d] = %q, want %q", i, configured[i], wantCfg[i])
+		}
+	}
+
+	cases := []struct {
+		name string
+		raw  []string
+		want []TargetID
+	}{
+		{name: "empty defaults to candidates", raw: nil, want: wantCfg},
+		{name: "star_32 excludes unconfigured tob_32", raw: []string{"*_32"}, want: []TargetID{TargetAttila32, TargetRome2_32}},
+		{name: "attila_star case-insensitive", raw: []string{"ATTILA_*"}, want: []TargetID{TargetAttila64, TargetAttila32}},
+		{name: "dedup across overlapping globs and explicit", raw: []string{"attila_*", "attila_32", "*_32"}, want: []TargetID{TargetAttila64, TargetAttila32, TargetRome2_32}},
+		{name: "explicit unconfigured target still resolves", raw: []string{"tob_32"}, want: []TargetID{TargetToB32}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ExpandTargets(tc.raw, configured)
+			if err != nil {
+				t.Fatalf("ExpandTargets(%v): %v", tc.raw, err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("ExpandTargets(%v) = %v, want %v", tc.raw, got, tc.want)
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Fatalf("ExpandTargets(%v)[%d] = %q, want %q", tc.raw, i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+
+	for _, bad := range [][]string{
+		{"tob_*"},
+		{"foo_*"},
+		{"bogus"},
+		{"["},
+	} {
+		if _, err := ExpandTargets(bad, configured); err == nil {
+			t.Fatalf("expected error for ExpandTargets(%v)", bad)
+		}
 	}
 }

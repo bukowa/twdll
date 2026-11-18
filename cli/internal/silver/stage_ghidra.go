@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"twdll/cli/internal/analyze"
-	"twdll/cli/internal/bronze"
 	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/workspace"
 )
@@ -59,6 +58,10 @@ func hasDotPathSegment(dir string) bool {
 }
 
 func stageGhidraReadOnly(paths workspace.Paths, target workspace.TargetID, tmpBaseDir string) (stageDir string, cleanup func(), err error) {
+	return stageGhidraDir(paths, target, tmpBaseDir, false)
+}
+
+func stageGhidraDir(paths workspace.Paths, target workspace.TargetID, tmpBaseDir string, writable bool) (stageDir string, cleanup func(), err error) {
 	srcDir := filepath.Join(paths.DBDir, "ghidra", string(target))
 	srcGPR := filepath.Join(srcDir, string(target)+".gpr")
 	srcRep := filepath.Join(srcDir, string(target)+".rep")
@@ -117,7 +120,7 @@ func stageGhidraReadOnly(paths workspace.Paths, target workspace.TargetID, tmpBa
 		return "", nil, fmt.Errorf("read %s: %w", srcProjectPRP, err)
 	}
 	ownerLine := fmt.Sprintf(`<STATE NAME="OWNER" TYPE="string" VALUE="%s" />`, currentOSUsername())
-	prpRewritten := ghidraOwnerAttrRe.ReplaceAllString(string(prpData), ownerLine)
+	prpRewritten := ghidraOwnerAttrRe.ReplaceAllLiteralString(string(prpData), ownerLine)
 	if err := os.WriteFile(filepath.Join(dstRep, "project.prp"), []byte(prpRewritten), 0o644); err != nil {
 		return "", nil, fmt.Errorf("write staged project.prp: %w", err)
 	}
@@ -137,7 +140,8 @@ func stageGhidraReadOnly(paths workspace.Paths, target workspace.TargetID, tmpBa
 		}
 	}
 
-	// Hardlink db.*.gbf files (0 MB extra disk, 0 ms copy) with CopyFileAtomic cross-volume fallback.
+	// Hardlink db.*.gbf files when read-only (0 MB extra disk, 0 ms copy) with CopyFileAtomic fallback;
+	// copy instead of hardlinking when writable enrichers are active so .twdll/db/ can never be mutated.
 	srcDBSubdir := filepath.Join(srcRep, "idata", "00", "~00000000.db")
 	entries, err := os.ReadDir(srcDBSubdir)
 	if err != nil {
@@ -150,7 +154,11 @@ func stageGhidraReadOnly(paths workspace.Paths, target workspace.TargetID, tmpBa
 		}
 		srcFile := filepath.Join(srcDBSubdir, entry.Name())
 		dstFile := filepath.Join(dstDBSubdir, entry.Name())
-		if linkErr := os.Link(srcFile, dstFile); linkErr != nil {
+		if writable {
+			if cpErr := workspace.CopyFileAtomic(srcFile, dstFile); cpErr != nil {
+				return "", nil, fmt.Errorf("copy ghidra payload %s: %w", entry.Name(), cpErr)
+			}
+		} else if linkErr := os.Link(srcFile, dstFile); linkErr != nil {
 			if cpErr := workspace.CopyFileAtomic(srcFile, dstFile); cpErr != nil {
 				return "", nil, fmt.Errorf("stage ghidra payload %s (link: %v, copy: %w)", entry.Name(), linkErr, cpErr)
 			}
@@ -165,13 +173,41 @@ func stageGhidraReadOnly(paths workspace.Paths, target workspace.TargetID, tmpBa
 	return stageDir, cleanup, nil
 }
 
-func runGhidraSilverExport(ctx context.Context, opts SilverOptions) ([]bronze.SilverFunc, error) {
+func stageGhidraEnrichers(scriptDir string, envMap map[string]string, enrichers []EnrichScript) ([]string, error) {
+	seen := map[string]bool{
+		"twdllsilverexport.java": true,
+		"twdlldecompexport.java": true,
+	}
+	var preArgs []string
+	for _, sc := range enrichers {
+		name := filepath.Base(strings.TrimSpace(sc.Filename))
+		if name == "" || name == "." || name == string(filepath.Separator) || name == "/" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			return nil, fmt.Errorf("ghidra enricher filename %q collides with reserved or duplicate script", name)
+		}
+		seen[key] = true
+		if err := os.WriteFile(filepath.Join(scriptDir, name), []byte(sc.Body), 0o644); err != nil {
+			return nil, fmt.Errorf("write ghidra enricher %s: %w", name, err)
+		}
+		for k, v := range sc.Env {
+			envMap[k] = v
+		}
+		preArgs = append(preArgs, "-preScript", name)
+	}
+	return preArgs, nil
+}
+
+func runGhidraSilverExport(ctx context.Context, opts Options, enrichers []EnrichScript, asmOutPath, stringsOutPath string) ([]SilverFunc, error) {
 	headlessPath, jdkDir, err := analyze.ResolveGhidraToolchain(opts.Paths)
 	if err != nil {
 		return nil, err
 	}
 
-	stageDir, cleanup, err := stageGhidraReadOnly(opts.Paths, opts.Target, resolveTmpBase(opts.Paths, opts.TmpBaseDir))
+	writable := len(enrichers) > 0
+	stageDir, cleanup, err := stageGhidraDir(opts.Paths, opts.Target, resolveTmpBase(opts.Paths, opts.TmpBaseDir), writable)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +222,7 @@ func runGhidraSilverExport(ctx context.Context, opts SilverOptions) ([]bronze.Si
 	}
 
 	outPath := filepath.Join(stageDir, "silver.jsonl")
+	totalPath := filepath.Join(stageDir, "silver.total")
 	logPath := filepath.Join(stageDir, "ghidra_silver.log")
 
 	mem := analyze.ProbeSystemMemory()
@@ -194,13 +231,26 @@ func runGhidraSilverExport(ctx context.Context, opts SilverOptions) ([]bronze.Si
 		maxMem = analyze.ComputeGhidraMaxMem(mem, opts.Target, false, 1)
 	}
 
-	env, err := analyze.PrepareStageEnv(stageDir, true, map[string]string{
+	envMap := map[string]string{
 		"JAVA_HOME":                    jdkDir,
 		"GHIDRA_HEADLESS_MAXMEM":       maxMem,
 		"GHIDRA_HEADLESS_JAVA_OPTIONS": analyze.BuildGhidraJavaOptions(stageDir, runtime.NumCPU()),
 		"PATH":                         filepath.Join(jdkDir, "bin") + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"TWDLL_SILVER_OUT":             outPath,
-	})
+		"TWDLL_SILVER_TOTAL_OUT":       totalPath,
+	}
+	if strings.TrimSpace(asmOutPath) != "" {
+		envMap["TWDLL_SILVER_ASM_OUT"] = asmOutPath
+	}
+	if strings.TrimSpace(stringsOutPath) != "" {
+		envMap["TWDLL_SILVER_STRINGS_OUT"] = stringsOutPath
+	}
+	preArgs, err := stageGhidraEnrichers(scriptDir, envMap, enrichers)
+	if err != nil {
+		return nil, err
+	}
+
+	env, err := analyze.PrepareStageEnv(stageDir, true, envMap)
 	if err != nil {
 		return nil, err
 	}
@@ -209,11 +259,13 @@ func runGhidraSilverExport(ctx context.Context, opts SilverOptions) ([]bronze.Si
 		stageDir,
 		string(opts.Target),
 		"-process", opts.Target.BinaryFileName(),
-		"-readOnly",
-		"-noanalysis",
-		"-scriptPath", scriptDir,
-		"-postScript", "TwdllSilverExport.java",
 	}
+	if !writable {
+		args = append(args, "-readOnly")
+	}
+	args = append(args, "-noanalysis", "-scriptPath", scriptDir)
+	args = append(args, preArgs...)
+	args = append(args, "-postScript", "TwdllSilverExport.java")
 
 	logFile, err := os.Create(logPath)
 	if err != nil {
@@ -225,19 +277,37 @@ func runGhidraSilverExport(ctx context.Context, opts SilverOptions) ([]bronze.Si
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
+	stopWatch := make(chan struct{})
+	watchDone := make(chan struct{})
+	go func() {
+		defer close(watchDone)
+		watchJSONLLineProgress(ctx, outPath, totalPath, stopWatch, opts.OnProgress)
+	}()
+
 	_, runErr := analyze.RunObservedCommand(cmd, nil)
+	close(stopWatch)
+	<-watchDone
 	_ = logFile.Close()
 	if runErr != nil {
 		tail := readLogTail(logPath, 20)
 		return nil, fmt.Errorf("ghidra silver export failed (%w)\n%s", runErr, tail)
 	}
 
-	return parseSilverJSONL(outPath)
+	funcs, parseErr := parseSilverJSONL(outPath)
+	if parseErr != nil {
+		tail := readLogTail(logPath, 25)
+		if tail != "" {
+			return nil, fmt.Errorf("%w\n%s", parseErr, tail)
+		}
+		return nil, parseErr
+	}
+	return funcs, nil
 }
 
 func runGhidraDecompExport(
 	ctx context.Context,
-	opts DecompOptions,
+	opts Options,
+	enrichers []EnrichScript,
 	pending []extractdb.FuncSpec,
 	outCh chan<- extractdb.DecompRecord,
 ) (uint64, error) {
@@ -246,7 +316,8 @@ func runGhidraDecompExport(
 		return 0, err
 	}
 
-	stageDir, cleanup, err := stageGhidraReadOnly(opts.Paths, opts.Target, resolveTmpBase(opts.Paths, opts.TmpBaseDir))
+	writable := len(enrichers) > 0
+	stageDir, cleanup, err := stageGhidraDir(opts.Paths, opts.Target, resolveTmpBase(opts.Paths, opts.TmpBaseDir), writable)
 	if err != nil {
 		return 0, err
 	}
@@ -264,7 +335,6 @@ func runGhidraDecompExport(
 	outPath := filepath.Join(stageDir, "decomp.jsonl")
 	logPath := filepath.Join(stageDir, "ghidra_decomp.log")
 
-	// Write Size ASC, EA ASC order so fast functions stream continuously before giant outliers.
 	ordered := make([]extractdb.FuncSpec, len(pending))
 	copy(ordered, pending)
 	shards := BuildWorkerShards(ordered, 1)
@@ -287,7 +357,7 @@ func runGhidraDecompExport(
 		maxMem = analyze.ComputeGhidraMaxMem(mem, opts.Target, false, 1)
 	}
 
-	env, err := analyze.PrepareStageEnv(stageDir, true, map[string]string{
+	envMap := map[string]string{
 		"JAVA_HOME":                    jdkDir,
 		"GHIDRA_HEADLESS_MAXMEM":       maxMem,
 		"GHIDRA_HEADLESS_JAVA_OPTIONS": analyze.BuildGhidraJavaOptions(stageDir, runtime.NumCPU()),
@@ -296,7 +366,13 @@ func runGhidraDecompExport(
 		"TWDLL_DECOMP_OUT":             outPath,
 		"TWDLL_DECOMP_WORKERS":         strconv.Itoa(workers),
 		"TWDLL_DECOMP_TIMEOUT_SECS":    strconv.Itoa(timeoutSecs),
-	})
+	}
+	preArgs, err := stageGhidraEnrichers(scriptDir, envMap, enrichers)
+	if err != nil {
+		return 0, err
+	}
+
+	env, err := analyze.PrepareStageEnv(stageDir, true, envMap)
 	if err != nil {
 		return 0, err
 	}
@@ -305,11 +381,13 @@ func runGhidraDecompExport(
 		stageDir,
 		string(opts.Target),
 		"-process", opts.Target.BinaryFileName(),
-		"-readOnly",
-		"-noanalysis",
-		"-scriptPath", scriptDir,
-		"-postScript", "TwdllDecompExport.java",
 	}
+	if !writable {
+		args = append(args, "-readOnly")
+	}
+	args = append(args, "-noanalysis", "-scriptPath", scriptDir)
+	args = append(args, preArgs...)
+	args = append(args, "-postScript", "TwdllDecompExport.java")
 
 	logFile, err := os.Create(logPath)
 	if err != nil {
@@ -321,6 +399,10 @@ func runGhidraDecompExport(
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 
+	if opts.OnStatus != nil {
+		opts.OnStatus("starting ghidra")
+	}
+
 	var peakMem atomic.Uint64
 	stopTail := make(chan struct{})
 	tailDone := make(chan error, 1)
@@ -329,10 +411,16 @@ func runGhidraDecompExport(
 
 	go func() {
 		tailDone <- tailDecompJSONL(ctx, outPath, stopTail, func(frame decompFrameJSON) {
+			if frame.Event == "phase" {
+				if opts.OnStatus != nil && strings.TrimSpace(frame.Phase) != "" {
+					opts.OnStatus(strings.TrimSpace(frame.Phase))
+				}
+				return
+			}
 			if frame.Event != "result" && frame.Event != "" {
 				return
 			}
-			if !sendDecompRecord(ctx, outCh, frame.toDecompRecord(opts.Engine)) {
+			if !sendDecompRecord(ctx, outCh, frame.toDecompRecord()) {
 				return
 			}
 			if opts.OnProgress != nil {
@@ -385,14 +473,14 @@ func writeDecompTargetsTSV(path string, specs []extractdb.FuncSpec) error {
 	return os.WriteFile(path, []byte(sb.String()), 0o644)
 }
 
-func parseSilverJSONL(path string) ([]bronze.SilverFunc, error) {
+func parseSilverJSONL(path string) ([]SilverFunc, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open silver jsonl %s: %w", path, err)
 	}
 	defer f.Close()
 
-	var funcs []bronze.SilverFunc
+	var funcs []SilverFunc
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 256*1024), 16*1024*1024)
 	for sc.Scan() {
@@ -404,7 +492,7 @@ func parseSilverJSONL(path string) ([]bronze.SilverFunc, error) {
 		if err := json.Unmarshal([]byte(line), &rec); err != nil {
 			return nil, fmt.Errorf("decode silver jsonl record: %w", err)
 		}
-		funcs = append(funcs, rec.toBronze())
+		funcs = append(funcs, rec.toSilverFunc())
 	}
 	if err := sc.Err(); err != nil {
 		return nil, fmt.Errorf("scan silver jsonl %s: %w", path, err)

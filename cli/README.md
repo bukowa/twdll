@@ -2,7 +2,7 @@
 
 Native Go CLI driving the self-contained `twdll` reverse-engineering pipeline for Total War: Rome II (`rome2`), Attila (`attila`), and Thrones of Britannia (`tob`).
 
-**Stage Status:** Stage 1 (`status`, `init`, `analyze`, `clean` + 3-tier E2E verification) is **complete**. Stage 2 (`extract`, `derive`, `search`, `show`, `verify` over `.twdll/extracted/` + mandatory post-implementation extraction audit) is **active** (Steps 1–4 complete: selective `init`, `internal/extractdb`, `internal/bronze`, and `internal/silver`; CLI commands `extract`, `search`, `show`, `derive`, `verify` and the Extraction Audit phase are next). Stage 3 (`src/` C++ rewrite + `build`/`pack`/`install`/`run`/`test`/`docs`) is **planned / frozen** until Stage 2 implementation and audit complete.  
+**Stage Status:** Stage 1 (`status`, `init`, `analyze`, `clean` + 3-tier E2E verification) is **complete**. Stage 2 (layer-isolated `bronze.sqlite` + `silver_<engine>.sqlite` extraction via `extract` and `status` readiness; `search`/`show`/`derive`/`verify` deferred until `bronze` and `silver` are validated, followed by the mandatory Extraction Audit phase) is **active**. Stage 3 (`src/` C++ rewrite + `build`/`pack`/`install`/`run`/`test`/`docs`) is **planned / frozen** until Stage 2 implementation and audit complete.  
 See [`../docs/cli_re_pipeline_spec.md`](../docs/cli_re_pipeline_spec.md) for the full architecture spec and [`AGENTS.md`](AGENTS.md) for code invariants.
 
 ---
@@ -25,9 +25,9 @@ Run the CLI from the repository root without a pre-installed system Go toolchain
 ./twdll analyze
 ```
 
-How the wrappers work:
-- If `.twdll/bin/twdll(.exe)` exists and is newer than `cli/` sources, the wrapper executes it immediately (`0 ms` rebuild overhead).
-- Otherwise, it uses Go from `$TWDLL_TOOLS_DIR/go/bin/go` (if set), `.twdll/tools/go/bin/go` (downloading the pinned official Go archive if missing), compiles `./cli`, and forwards all arguments.
+How the wrappers (`twdll.cmd`, `twdll.ps1`, `./twdll`) work:
+- If `.twdll/bin/twdll(.exe)` exists and is newer than watched `cli/` source files (`.go` excluding `*_test.go`, `.java`, `.idc`, `.py`, `go.mod`, `go.sum` outside `.git`/`testdata`), or if `TWDLL_NO_REBUILD=1` is set, the wrapper runs the binary directly without recompiling.
+- Otherwise, it uses Go from `$TWDLL_TOOLS_DIR/go/bin/go` (if set) or `.twdll/tools/go/bin/go` (downloading the pinned official Go archive if missing), compiles `./cli` before launching it, and forwards all arguments.
 
 ---
 
@@ -46,7 +46,7 @@ How the wrappers work:
 ### Subcommands
 
 - **`twdll status [--json]`**  
-  Reports installed portable tools, configured games, staged binaries (with `[official]` check for pinned `attila_64`), and per-target decompiler database readiness. `--json` writes machine-readable JSON strictly to `stdout`.
+  Reports installed portable tools, configured games, staged binaries (with `[official]` check for pinned `attila_64`), per-target decompiler database readiness, and `.twdll/extracted/<target>/` (`bronze.sqlite` and `silver_<engine>.sqlite`) status. `--json` writes machine-readable JSON strictly to `stdout`.
 
 - **`twdll init [flags]`**  
   Idempotent 4-step setup: (1) portable `cmake`, `ninja`, `llvm`, `xwin`, `rpfm_cli`; (2) 32-bit `empire.retail.dll` staging; (3) mandatory 64-bit Linux `attila_64` ELF+DWARF acquisition/verification; (4) `ghidra` (+ OpenJDK) or `ida` validation.
@@ -66,17 +66,30 @@ How the wrappers work:
   - `-j`, `--jobs <N>` — Max concurrent 32-bit workers (`0` = RAM/CPU auto).
   - `-m`, `--max-mem <SIZE>` — Override Ghidra JVM `-Xmx` (e.g. `16G`, `32G`).
   - `--full-analysis` — Keep heavy cascade/reference and DWARF line/comment passes enabled on `attila_64` (higher RAM usage).
-  - `[targets...]` — Positional target list (`attila_64`, `attila_32`, `rome2_32`, `tob_32`).
+  - `[targets...]` — Positional target list or glob patterns (`attila_64`, `attila_32`, `rome2_32`, `tob_32`, `*_32`, `attila_*`).
+
+- **`twdll extract [flags] [targets...]`**  
+  Extracts Layer 1 deterministic format/DWARF4 facts (`bronze.sqlite`) and independent Layer 2 per-engine decompiler metadata/pseudo-C (`silver_ghidra.sqlite`, `silver_ida.sqlite`) into `.twdll/extracted/<target>/` (with `manifest.json` readiness metadata).
+  - `-d`, `--decompiler <ghidra|ida|all>` — Override `twdll.toml` decompiler (or extract both via `all`).
+  - `--force` — Re-extract even when extracted databases are up to date.
+  - `-j`, `--jobs <N>` — Max concurrent decompilation workers (`0` = auto).
+  - `-m`, `--max-mem <SIZE>` — Override Ghidra JVM max heap per worker (e.g. `4G`, `8G`).
+  - `--no-decomp` — Extract `bronze.sqlite` and `silver` metadata (`silver_funcs`, `silver_func_ranges`, `silver_asm`, `silver_strings`) without pseudo-C decompilation.
+  - `--timeout <DURATION>` — Per-function decompilation timeout (default: `15s`; `0s` disables timeout).
+  - `--no-timeout` — Disable per-function decompilation timeout.
+  - `--retry`, `--retry-timeouts`, `--retry-failed` — Retry previously timed-out and/or failed functions during decompilation.
+  - `--json` — Emit machine-readable JSON summary to `stdout`.
+  - `[targets...]` — Positional target list or glob patterns (`attila_64`, `attila_32`, `rome2_32`, `tob_32`, `*_32`, `attila_*`).
 
 - **`twdll clean [-d ghidra|ida|all] [--all] [targets...]`**  
-  Deletes `.twdll/db/<engine>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without touching `.twdll/tools/`, `.twdll/binaries/`, or `.twdll/extracted/`. Pass `--all` alone to wipe all `init`, `analyze`, and `extract` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `extracted/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
+  Deletes `.twdll/db/<engine>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files for explicit targets or glob patterns (`*_32`, `attila_*`) and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without touching `.twdll/tools/`, `.twdll/binaries/`, or `.twdll/extracted/`. Pass `--all` alone to wipe all `init`, `analyze`, and `extract` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `extracted/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
 
 ### Additional Environment Variables
 
 | Variable | Purpose |
 | :--- | :--- |
 | `TWDLL_TOOLS_DIR` | Point to an external read-only shared tools directory (used by sandboxes/E2E tests without junctions). Protected from `EnsureDirs` and `init --clear`. |
-| `TWDLL_NO_REBUILD=1` | Skip automatic wrapper rebuild checks inside `bootstrap.MaybeRebuildAndExec`. |
+| `TWDLL_NO_REBUILD=1` | Skip source timestamp rebuild checks in `twdll`, `twdll.cmd`, and `twdll.ps1`. |
 | `TWDLL_WRAPPER_ROOT` | Set by root wrappers to pass detected repository root into the binary. |
 
 ---
@@ -91,12 +104,11 @@ cli/
 ├── internal/
 │   ├── analyze/                # ELF/PE inspection, memory sizing, Ghidra/IDA runners, telemetry
 │   ├── binaries/               # Steam discovery, PE32/ELF64+DWARF verification, pinned attila_64 hash
-│   ├── bootstrap/              # Staleness-checked CLI auto-rebuild
-│   ├── bronze/                 # Pure-Go PE32/ELF64/DWARF/string/vtable/lua_reg extractors feeding binary.sqlite
-│   ├── cmd/                    # status, init, analyze, clean orchestration
+│   ├── bronze/                 # Pure-Go PE32/ELF64/data-string/DWARF4 extractors feeding bronze.sqlite
+│   ├── cmd/                    # status, init, analyze, extract, clean orchestration
 │   ├── e2e/                    # //go:build e2e real-decompiler harness & mini_warscape.cpp fixture
-│   ├── extractdb/              # Pure-Go SQLite (modernc.org/sqlite + FTS5) storage (AtomicBuilder, DecompStore, manifest.json)
-│   ├── silver/                 # Headless IDA & Ghidra topology + resumable decomp_<engine>.sqlite extractors
+│   ├── extractdb/              # Pure-Go SQLite (modernc.org/sqlite + FTS5) storage (AtomicBuilder, SilverStore, manifest.json)
+│   ├── silver/                 # Independent headless IDA & Ghidra exporters feeding silver_<engine>.sqlite
 │   ├── term/                   # TTY detection, Out/Err stream separation, prompts, diagnostics
 │   ├── toolchain/              # Portable tool manifest, archive downloads, IDA validation
 │   └── workspace/              # twdll.toml, .twdll/state.json, path resolution
@@ -113,7 +125,7 @@ All tests are strictly isolated from live `twdll.toml` and `.twdll/` data via `t
 | Tier | Command (from `cli/`) | Runtime / RAM | What It Covers | When to Run |
 | :--- | :--- | :--- | :--- | :--- |
 | **Tier 0: Unit** | `go vet ./...`<br>`go test ./...` | `<5s` / `<200 MB` | Flag parsing, `Out`/`Err` separation, `state.json` & `twdll.toml` round-trips, memory/CLI-arg builders, ELF/PE inspection, fake-decompiler runner tests. | **Mandatory** on every `cli/` edit. |
-| **Tier 1: Quick Real E2E** | `go test -v -tags=e2e -timeout 5m ./internal/e2e` | `~30–45s` / `~2.5 GB` | Compiles `internal/e2e/testdata/mini_warscape.cpp` (~20 KB PE32 DLL + ELF64-DWARF) via portable LLVM and runs real `twdll.exe`, IDA, and Ghidra (`init -> analyze -> skip check -> status --json -> clean -> init --clear -> clean --all`). Asserts live `twdll.toml` & `.twdll/state.json` SHA-256 + mtime remain unchanged. | Required before finishing changes to `init`, `analyze`, `clean`, `status`, `workspace`, decompiler scripts, or PE/ELF inspection. |
+| **Tier 1: Quick Real E2E** | `go test -v -tags=e2e -timeout 5m ./internal/e2e` | `~30–45s` / `~2.5 GB` | Compiles `internal/e2e/testdata/mini_warscape.cpp` (~20 KB PE32 DLL + ELF64-DWARF) via portable LLVM and runs real `twdll.exe`, IDA, and Ghidra (`init -> analyze -> skip check -> extract -d all -> status --json -> clean -> init --clear -> clean --all`) while verifying `bronze`/`silver` SQLite invariants. Asserts live `twdll.toml` & `.twdll/state.json` SHA-256 + mtime remain unchanged. | Required before finishing changes to `init`, `analyze`, `extract`, `clean`, `status`, `workspace`, decompiler scripts, or PE/ELF inspection. |
 | **Tier 2: Background Soak** | `pwsh -NoProfile -File scripts/run-e2e-bg.ps1` *(from `cli/`, or `cli/scripts/run-e2e-bg.ps1` from root)* | `~20–22m` (`attila_32`)<br>`~75m` (`-Full`)<br>`6–17 GB` RAM | Detached single-instance soak test (`TWDLL_E2E_SOAK=1`) against real game binaries copied from `.twdll/binaries/` into an isolated sandbox. Archives `analyze_resources.jsonl`, prunes sandbox on pass, retains on fail. | Only when explicitly validating real-binary scale, DWARF import, or JVM/IDA memory changes. |
 
 ### Tier 1 & Tier 2 Overrides

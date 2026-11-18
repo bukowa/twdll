@@ -120,37 +120,15 @@ func resolveDecompiler(override string, configured workspace.DecompilerID) (work
 }
 
 func resolveTargets(layout workspace.Layout, rawTargets []string) ([]workspace.TargetID, error) {
-	if len(rawTargets) > 0 {
-		seen := make(map[workspace.TargetID]bool, len(rawTargets))
-		out := make([]workspace.TargetID, 0, len(rawTargets))
-		for _, raw := range rawTargets {
-			tid, ok := workspace.ParseTargetID(raw)
-			if !ok {
-				return nil, &term.DiagnosticError{
-					Message:  fmt.Sprintf("unknown target %q", raw),
-					Expected: "one of: attila_64, attila_32, rome2_32, tob_32",
-					Help:     []string{"Specify valid target IDs or omit positional arguments to analyze all configured targets."},
-				}
-			}
-			if !seen[tid] {
-				seen[tid] = true
-				out = append(out, tid)
-			}
-		}
-		return out, nil
-	}
-
-	out := []workspace.TargetID{workspace.TargetAttila64}
-	for _, game := range workspace.AllGames() {
-		tid := game.Target32()
-		configured := strings.TrimSpace(layout.Config.Games.Get(game)) != ""
-		info, err := os.Stat(layout.Paths.BinaryPath(tid))
-		present := err == nil && !info.IsDir()
-		if configured || present {
-			out = append(out, tid)
+	targets, err := workspace.ExpandTargets(rawTargets, workspace.ConfiguredTargets(layout))
+	if err != nil {
+		return nil, &term.DiagnosticError{
+			Message:  err.Error(),
+			Expected: "target IDs or glob patterns matching: attila_64, attila_32, rome2_32, tob_32",
+			Help:     []string{"Specify valid target IDs/globs (e.g. `*_32`, `attila_*`) or omit positional arguments to analyze all configured targets."},
 		}
 	}
-	return out, nil
+	return targets, nil
 }
 
 func describePlanReason(opts Options, shaMatches, validDB bool) string {

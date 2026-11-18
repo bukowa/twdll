@@ -10,80 +10,185 @@ import (
 	"strings"
 	"time"
 
-	"twdll/cli/internal/bronze"
 	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/workspace"
 )
 
 const DefaultFastTimeoutSecs = 15
 
-type SilverOptions struct {
-	Paths        workspace.Paths
-	Target       workspace.TargetID
-	Engine       workspace.DecompilerID
-	IDADir       string
-	BinaryPath   string
-	BinaryDBPath string
-	ManifestPath string
-	MaxMem       string
-	TmpBaseDir   string
+// EnrichScript describes an optional pre-export decompiler script staged into
+// a disposable worker copy before export.
+type EnrichScript struct {
+	Filename string
+	Body     string
+	Env      map[string]string
 }
 
-type DecompOptions struct {
+// Enricher augments a temporary staged copy of an IDA or Ghidra database before export.
+// Enrichers must never mutate .twdll/db/ and must keep silver independent from bronze.
+type Enricher interface {
+	ID() string
+	AppliesTo(target workspace.TargetID, engine workspace.DecompilerID) bool
+	Script(target workspace.TargetID, engine workspace.DecompilerID) (EnrichScript, error)
+}
+
+// Selector filters or selects functions before decompilation/export.
+type Selector interface {
+	ID() string
+	Select(funcs []SilverFunc) []SilverFunc
+}
+
+// SelectorFunc adapts a Go function into a Selector.
+type SelectorFunc struct {
+	SelectorID string
+	SelectFn   func(funcs []SilverFunc) []SilverFunc
+}
+
+func (s SelectorFunc) ID() string { return s.SelectorID }
+
+func (s SelectorFunc) Select(funcs []SilverFunc) []SilverFunc {
+	if s.SelectFn == nil {
+		return funcs
+	}
+	return s.SelectFn(funcs)
+}
+
+// EASelector returns a Selector restricting processing to the given entry addresses.
+func EASelector(eas ...uint64) Selector {
+	allow := make(map[uint64]bool, len(eas))
+	for _, ea := range eas {
+		if ea != 0 {
+			allow[ea] = true
+		}
+	}
+	return SelectorFunc{
+		SelectorID: "ea_allowlist",
+		SelectFn: func(funcs []SilverFunc) []SilverFunc {
+			out := make([]SilverFunc, 0, min(len(allow), len(funcs)))
+			for _, f := range funcs {
+				if allow[f.EA] {
+					out = append(out, f)
+				}
+			}
+			return out
+		},
+	}
+}
+
+// Aspect performs one modular silver extraction step into an engine's silver_<engine>.sqlite store.
+type Aspect interface {
+	ID() string
+	Run(ctx context.Context, sess *Session, store *extractdb.SilverStore) error
+}
+
+type SilverRange struct {
+	StartEA uint64 `json:"start_ea"`
+	EndEA   uint64 `json:"end_ea"`
+}
+
+type SilverFunc struct {
+	EA            uint64        `json:"ea"`
+	Size          uint64        `json:"size"`
+	Ranges        []SilverRange `json:"ranges"`
+	Name          string        `json:"name"`
+	Signature     string        `json:"signature"`
+	CallingConv   string        `json:"calling_conv"`
+	StackPurge    int           `json:"stack_purge"`
+	IsThunk       bool          `json:"is_thunk"`
+	IsNoRet       bool          `json:"is_noret"`
+	ThunkTargetEA uint64        `json:"thunk_target_ea"`
+}
+
+type Options struct {
 	Paths         workspace.Paths
 	Target        workspace.TargetID
 	Engine        workspace.DecompilerID
 	IDADir        string
-	BinaryDBPath  string
-	DecompDBPath  string
+	BinaryPath    string
+	BinarySHA256  string
+	SilverDBPath  string
+	NoDecomp      bool
+	Force         bool
+	RetryFailed   bool
+	RetryTimeouts bool
+	PruneOrphans  bool
 	TimeoutSecs   int
 	NoTimeout     bool
 	Workers       int
 	BatchSize     int
-	Force         bool
-	RetryFailed   bool
-	RetryTimeouts bool
 	MaxMem        string
 	TmpBaseDir    string
-	FilterSpecs   []extractdb.FuncSpec
+	Enrichers     []Enricher
+	Selector      Selector
+	Aspects       []Aspect
+	OnPhase       func(phase string)
+	OnStatus      func(status string)
+	OnResume      func(cached, pending int)
 	OnProgress    func(done, total int)
+	OnBytes       func(doneBytes, totalBytes uint64)
 }
 
-type DecompPassResult struct {
+type Result struct {
 	Target          workspace.TargetID
 	Engine          workspace.DecompilerID
+	BinarySHA256    string
+	FuncsRan        bool
+	FuncCount       int
+	AsmRan          bool
+	AsmCount        int
+	StringsRan      bool
+	StringCount     int
+	DecompRan       bool
 	Resume          extractdb.ResumeStats
-	Written         int
+	DecompWritten   int
 	StatusCounts    map[string]int
+	Enrichers       []string
+	Aspects         []string
 	Elapsed         time.Duration
 	PeakJobMemBytes uint64
 }
 
-type silverJSONLRecord struct {
-	EA            flexUint64   `json:"ea"`
-	Size          flexUint64   `json:"size"`
-	Ranges        [][2]flexUint64 `json:"ranges"`
-	Name          string       `json:"name"`
-	CallingConv   string       `json:"calling_conv"`
-	StackPurge    int          `json:"stack_purge"`
-	IsThunk       bool         `json:"is_thunk"`
-	IsNoRet       bool         `json:"is_noret"`
-	ThunkTargetEA flexUint64   `json:"thunk_target_ea"`
+type silverAsmJSONLRecord struct {
+	EA        flexUint64 `json:"ea"`
+	InsnCount int        `json:"insn_count"`
+	RawAsm    string     `json:"raw_asm"`
 }
 
-func (r silverJSONLRecord) toBronze() bronze.SilverFunc {
-	ranges := make([]bronze.SilverRange, 0, len(r.Ranges))
+type silverStringJSONLRecord struct {
+	EA       flexUint64 `json:"ea"`
+	Encoding string     `json:"encoding"`
+	Length   int        `json:"length"`
+	Value    string     `json:"value"`
+	RefCount int        `json:"ref_count"`
+}
+
+type silverJSONLRecord struct {
+	EA            flexUint64      `json:"ea"`
+	Size          flexUint64      `json:"size"`
+	Ranges        [][2]flexUint64 `json:"ranges"`
+	Name          string          `json:"name"`
+	Signature     string          `json:"signature"`
+	CallingConv   string          `json:"calling_conv"`
+	StackPurge    int             `json:"stack_purge"`
+	IsThunk       bool            `json:"is_thunk"`
+	IsNoRet       bool            `json:"is_noret"`
+	ThunkTargetEA flexUint64      `json:"thunk_target_ea"`
+}
+
+func (r silverJSONLRecord) toSilverFunc() SilverFunc {
+	ranges := make([]SilverRange, 0, len(r.Ranges))
 	for _, pair := range r.Ranges {
-		ranges = append(ranges, bronze.SilverRange{
+		ranges = append(ranges, SilverRange{
 			StartEA: uint64(pair[0]),
 			EndEA:   uint64(pair[1]),
 		})
 	}
-	return bronze.SilverFunc{
+	return SilverFunc{
 		EA:            uint64(r.EA),
 		Size:          uint64(r.Size),
 		Ranges:        ranges,
 		Name:          r.Name,
+		Signature:     r.Signature,
 		CallingConv:   r.CallingConv,
 		StackPurge:    r.StackPurge,
 		IsThunk:       r.IsThunk,
@@ -93,19 +198,20 @@ func (r silverJSONLRecord) toBronze() bronze.SilverFunc {
 }
 
 type decompFrameJSON struct {
-	Event     string              `json:"event"`
-	EA        flexUint64          `json:"ea"`
-	Size      flexUint64          `json:"size"`
-	Name      string              `json:"name"`
-	Status    string              `json:"status"`
-	ElapsedMs int64               `json:"elapsed_ms"`
-	RawC      string              `json:"raw_c"`
-	LineEA    []json.RawMessage   `json:"line_ea"`
+	Event     string                `json:"event"`
+	Phase     string                `json:"phase"`
+	EA        flexUint64            `json:"ea"`
+	Size      flexUint64            `json:"size"`
+	Name      string                `json:"name"`
+	Status    string                `json:"status"`
+	ElapsedMs int64                 `json:"elapsed_ms"`
+	RawC      string                `json:"raw_c"`
+	LineEA    []json.RawMessage     `json:"line_ea"`
 	Vars      []extractdb.DecompVar `json:"vars"`
-	Error     string              `json:"error"`
+	Error     string                `json:"error"`
 }
 
-func (f decompFrameJSON) toDecompRecord(engine workspace.DecompilerID) extractdb.DecompRecord {
+func (f decompFrameJSON) toDecompRecord() extractdb.DecompRecord {
 	status := f.Status
 	switch status {
 	case extractdb.DecompStatusOK, extractdb.DecompStatusTimeout, extractdb.DecompStatusFailed:
@@ -134,16 +240,15 @@ func (f decompFrameJSON) toDecompRecord(engine workspace.DecompilerID) extractdb
 	}
 
 	return extractdb.DecompRecord{
-		FuncEA:             uint64(f.EA),
-		Engine:             string(engine),
-		FuncSize:           uint64(f.Size),
-		FuncName:           f.Name,
-		RawC:               rawC,
-		LineEAJSON:         lineEAJSON,
-		DecompilerVarsJSON: varsJSON,
-		Status:             status,
-		ErrorText:          f.Error,
-		ElapsedMs:          f.ElapsedMs,
+		FuncEA:    uint64(f.EA),
+		FuncSize:  uint64(f.Size),
+		FuncName:  f.Name,
+		RawC:      rawC,
+		LineEA:    lineEAJSON,
+		VarsJSON:  varsJSON,
+		Status:    status,
+		ErrorText: f.Error,
+		ElapsedMs: f.ElapsedMs,
 	}
 }
 
@@ -258,10 +363,7 @@ func resolveTmpBase(paths workspace.Paths, override string) string {
 	return ""
 }
 
-// resolveDecompTimeoutSecs returns 0 when unlimited timeout is requested
-// (NoTimeout == true or TimeoutSecs < 0), DefaultFastTimeoutSecs when
-// TimeoutSecs == 0, or the explicit positive TimeoutSecs value.
-func resolveDecompTimeoutSecs(opts DecompOptions) int {
+func resolveDecompTimeoutSecs(opts Options) int {
 	if opts.NoTimeout || opts.TimeoutSecs < 0 {
 		return 0
 	}
@@ -272,6 +374,9 @@ func resolveDecompTimeoutSecs(opts DecompOptions) int {
 }
 
 func sendDecompRecord(ctx context.Context, outCh chan<- extractdb.DecompRecord, rec extractdb.DecompRecord) bool {
+	if ctx.Err() != nil {
+		return false
+	}
 	select {
 	case outCh <- rec:
 		return true

@@ -12,97 +12,71 @@ import (
 	"twdll/cli/internal/extractdb"
 )
 
-type stringEntry struct {
-	strID int64
-	ea    uint64
+// StringsExtractor deterministically extracts ASCII, UTF-16LE (PE32), and UTF-32LE (ELF64)
+// printable strings from data sections staged on Source.
+type StringsExtractor struct{}
+
+func (StringsExtractor) ID() string { return "data.strings" }
+
+func (StringsExtractor) AppliesTo(src *Source) bool {
+	return src != nil && len(src.DataSlices) > 0
 }
 
-type stringIndex struct {
-	entries []stringEntry
-}
-
-func (idx *stringIndex) LookupEA(ea uint64) (int64, bool) {
-	if idx == nil || len(idx.entries) == 0 {
-		return 0, false
-	}
-	i := sort.Search(len(idx.entries), func(i int) bool {
-		return idx.entries[i].ea >= ea
-	})
-	if i < len(idx.entries) && idx.entries[i].ea == ea {
-		return idx.entries[i].strID, true
-	}
-	return 0, false
-}
-
-type dataSectionSlice struct {
-	name string
-	va   uint64
-	data []byte
-	// hasRelocAt reports whether a given byte offset within data overlaps a .reloc entry (PE32).
-	hasRelocAt func(off int) bool
+func (StringsExtractor) Extract(ctx context.Context, src *Source, db *sql.DB) error {
+	return scanAndPersistStrings(ctx, db, src.DataSlices)
 }
 
 type rawStringRecord struct {
-	strID    int64
 	ea       uint64
 	encoding string
 	value    string
 }
 
-func scanAndPersistStrings(ctx context.Context, db *sql.DB, sections []dataSectionSlice, is64Bit bool) (*stringIndex, error) {
+func scanAndPersistStrings(ctx context.Context, db *sql.DB, sections []DataSlice) error {
 	b := newTxStmtBatcher(ctx, db, `
-		INSERT INTO strings(str_id, ea, encoding, value, df_count)
-		VALUES (?, ?, ?, ?, 0)
+		INSERT INTO strings(str_id, ea, encoding, value)
+		VALUES (?, ?, ?, ?)
 	`)
 	defer func() { _ = b.Close() }()
 
-	var (
-		nextID  int64 = 1
-		entries       = make([]stringEntry, 0, 65536)
-	)
-
+	var nextID int64 = 1
 	emit := func(ea uint64, enc, val string) error {
 		id := nextID
 		nextID++
 		if err := b.Exec(id, int64(ea), enc, val); err != nil {
 			return fmt.Errorf("insert string 0x%x: %w", ea, err)
 		}
-		entries = append(entries, stringEntry{strID: id, ea: ea})
 		return nil
 	}
 
 	for _, sec := range sections {
-		if len(sec.data) == 0 {
+		if len(sec.Data) == 0 {
 			continue
 		}
-		claimed := make([]bool, len(sec.data))
+		claimed := make([]bool, len(sec.Data))
 		var secRecs []rawStringRecord
 
-		if is64Bit {
+		// Extract NUL-terminated ASCII runs first so claimed[] prevents trailing "<char>\x00"
+		// bytes of an ASCII string from being misdecoded as UTF-16LE, without breaking
+		// UTF-16LE strings preceded by random non-string bytes (e.g. floats ending in 0x3F).
+		scanASCIISection(sec, claimed, &secRecs)
+		if sec.Is64Bit {
 			scanUTF32LESection(sec, claimed, &secRecs)
 		} else {
 			scanUTF16LESection(sec, claimed, &secRecs)
 		}
-		scanASCIISection(sec, claimed, &secRecs)
 
 		sort.Slice(secRecs, func(i, j int) bool {
 			return secRecs[i].ea < secRecs[j].ea
 		})
 		for _, rec := range secRecs {
 			if err := emit(rec.ea, rec.encoding, rec.value); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 
-	if err := b.Flush(); err != nil {
-		return nil, err
-	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].ea < entries[j].ea
-	})
-	return &stringIndex{entries: entries}, nil
+	return b.Flush()
 }
 
 func isASCIIAlnumOrUnderscore(r rune) bool {
@@ -113,19 +87,18 @@ func isWidePrintable(u uint32) bool {
 	return (u >= 0x0020 && u <= 0x007E) || (u >= 0x00A0 && u <= 0x00FF) || u == '\t' || u == '\r' || u == '\n'
 }
 
-func scanUTF16LESection(sec dataSectionSlice, claimed []bool, out *[]rawStringRecord) {
-	data := sec.data
+func scanUTF16LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
+	data := sec.Data
 	n := len(data)
 	i := 0
 	for i+1 < n {
-		u0 := binary.LittleEndian.Uint16(data[i : i+2])
-		if !isWidePrintable(uint32(u0)) {
-			i += 2
+		if claimed[i] || claimed[i+1] {
+			i++
 			continue
 		}
-		// Do not treat the final "<char>\x00" of a preceding ASCII string as the first code unit of a UTF-16LE string.
-		if i >= 1 && isASCIIPrintable(data[i-1]) && data[i+1] == 0 {
-			i += 2
+		u0 := binary.LittleEndian.Uint16(data[i : i+2])
+		if !isWidePrintable(uint32(u0)) {
+			i++
 			continue
 		}
 		start := i
@@ -134,7 +107,10 @@ func scanUTF16LESection(sec dataSectionSlice, claimed []bool, out *[]rawStringRe
 		printable := 0
 		relocHit := false
 		for i+1 < n && units < 4096 {
-			if sec.hasRelocAt != nil && (sec.hasRelocAt(i) || sec.hasRelocAt(i+1)) {
+			if claimed[i] || claimed[i+1] {
+				break
+			}
+			if sec.HasRelocAt != nil && (sec.HasRelocAt(i) || sec.HasRelocAt(i+1)) {
 				relocHit = true
 			}
 			u := binary.LittleEndian.Uint16(data[i : i+2])
@@ -152,13 +128,11 @@ func scanUTF16LESection(sec dataSectionSlice, claimed []bool, out *[]rawStringRe
 			i += 2
 		}
 		hasNull := false
-		if i+1 < n && binary.LittleEndian.Uint16(data[i:i+2]) == 0 {
-			if sec.hasRelocAt != nil && (sec.hasRelocAt(i) || sec.hasRelocAt(i+1)) {
+		if i+1 < n && !claimed[i] && !claimed[i+1] && binary.LittleEndian.Uint16(data[i:i+2]) == 0 {
+			if sec.HasRelocAt != nil && (sec.HasRelocAt(i) || sec.HasRelocAt(i+1)) {
 				relocHit = true
 			}
 			hasNull = true
-			i += 2
-		} else {
 			i += 2
 		}
 
@@ -173,17 +147,19 @@ func scanUTF16LESection(sec dataSectionSlice, claimed []bool, out *[]rawStringRe
 					claimed[k] = true
 				}
 				*out = append(*out, rawStringRecord{
-					ea:       sec.va + uint64(start),
+					ea:       sec.VA + uint64(start),
 					encoding: extractdb.StringEncUTF16LE,
 					value:    val,
 				})
+				continue
 			}
 		}
+		i = start + 1
 	}
 }
 
-func scanUTF32LESection(sec dataSectionSlice, claimed []bool, out *[]rawStringRecord) {
-	data := sec.data
+func scanUTF32LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
+	data := sec.Data
 	n := len(data)
 	i := 0
 	for i+3 < n {
@@ -228,7 +204,7 @@ func scanUTF32LESection(sec dataSectionSlice, claimed []bool, out *[]rawStringRe
 					claimed[k] = true
 				}
 				*out = append(*out, rawStringRecord{
-					ea:       sec.va + uint64(start),
+					ea:       sec.VA + uint64(start),
 					encoding: extractdb.StringEncUTF32LE,
 					value:    val,
 				})
@@ -241,13 +217,13 @@ func isASCIIPrintable(b byte) bool {
 	return (b >= 0x20 && b <= 0x7E) || b == '\t' || b == '\r' || b == '\n'
 }
 
-func scanASCIISection(sec dataSectionSlice, claimed []bool, out *[]rawStringRecord) {
-	data := sec.data
+func scanASCIISection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
+	data := sec.Data
 	n := len(data)
 	start := -1
 	alnum := 0
 	for i := 0; i < n; i++ {
-		if claimed[i] {
+		if claimed[i] || (sec.HasRelocAt != nil && sec.HasRelocAt(i)) {
 			start = -1
 			alnum = 0
 			continue
@@ -267,8 +243,11 @@ func scanASCIISection(sec dataSectionSlice, claimed []bool, out *[]rawStringReco
 				if length >= 4 && length <= 8192 && alnum >= 1 {
 					s := string(data[start:i])
 					if utf8.ValidString(s) {
+						for k := start; k <= i && k < len(claimed); k++ {
+							claimed[k] = true
+						}
 						*out = append(*out, rawStringRecord{
-							ea:       sec.va + uint64(start),
+							ea:       sec.VA + uint64(start),
 							encoding: extractdb.StringEncASCII,
 							value:    s,
 						})
@@ -279,52 +258,4 @@ func scanASCIISection(sec dataSectionSlice, claimed []bool, out *[]rawStringReco
 			alnum = 0
 		}
 	}
-}
-
-func applyStringXrefsAndDFCount(ctx context.Context, db *sql.DB, xrefs []stringXrefRow) error {
-	if len(xrefs) == 0 {
-		return nil
-	}
-	sort.Slice(xrefs, func(i, j int) bool {
-		if xrefs[i].StrID != xrefs[j].StrID {
-			return xrefs[i].StrID < xrefs[j].StrID
-		}
-		return xrefs[i].FuncEA < xrefs[j].FuncEA
-	})
-
-	b := newTxStmtBatcher(ctx, db, `
-		INSERT OR IGNORE INTO string_xrefs(str_id, func_ea)
-		VALUES (?, ?)
-	`)
-	defer func() { _ = b.Close() }()
-
-	dfCounts := make(map[int64]int64)
-	var prev stringXrefRow
-	for i, xr := range xrefs {
-		if i > 0 && xr.StrID == prev.StrID && xr.FuncEA == prev.FuncEA {
-			continue
-		}
-		prev = xr
-		if err := b.Exec(xr.StrID, int64(xr.FuncEA)); err != nil {
-			return fmt.Errorf("insert string_xref (%d, 0x%x): %w", xr.StrID, xr.FuncEA, err)
-		}
-		dfCounts[xr.StrID]++
-	}
-	if err := b.Flush(); err != nil {
-		return err
-	}
-
-	upd := newTxStmtBatcher(ctx, db, `UPDATE strings SET df_count = ? WHERE str_id = ?`)
-	defer func() { _ = upd.Close() }()
-	strIDs := make([]int64, 0, len(dfCounts))
-	for id := range dfCounts {
-		strIDs = append(strIDs, id)
-	}
-	sort.Slice(strIDs, func(i, j int) bool { return strIDs[i] < strIDs[j] })
-	for _, id := range strIDs {
-		if err := upd.Exec(dfCounts[id], id); err != nil {
-			return fmt.Errorf("update string df_count %d: %w", id, err)
-		}
-	}
-	return upd.Flush()
 }

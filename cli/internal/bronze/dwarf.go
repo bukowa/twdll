@@ -4,16 +4,44 @@ import (
 	"context"
 	"database/sql"
 	"debug/dwarf"
-	"debug/elf"
 	"encoding/binary"
 	"fmt"
 	"path"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 
 	"twdll/cli/internal/extractdb"
 )
+
+// ELF64DWARF4Extractor extracts pure DWARF4 debug metadata (types, members, enums,
+// subprograms, ranges, locals/params, inlines, and source paths) from an ELF64 binary.
+type ELF64DWARF4Extractor struct{}
+
+func (ELF64DWARF4Extractor) ID() string { return "elf64.dwarf4" }
+
+func (ELF64DWARF4Extractor) AppliesTo(src *Source) bool {
+	return src != nil && src.ELF != nil
+}
+
+func (ELF64DWARF4Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) error {
+	dw, err := src.ELF.DWARF()
+	if err != nil || dw == nil {
+		return nil
+	}
+	p1, err := runDWARFPass1(ctx, db, dw)
+	if err != nil {
+		return err
+	}
+	if err := runDWARFPass2(ctx, db, dw, p1); err != nil {
+		return err
+	}
+	p1 = nil
+	dw = nil
+	runtime.GC()
+	return nil
+}
 
 const (
 	attrLinkageName     dwarf.Attr = 0x6e
@@ -579,10 +607,11 @@ type pass2StackFrame struct {
 }
 
 type elfFunctionAccum struct {
-	row         functionRow
-	ranges      []funcRangeRow
+	row         dwarfFuncRow
+	ranges      []dwarfFuncRangeRow
 	validRanges [][2]uint64
 	declFile    sql.NullInt64
+	declLine    int
 }
 
 type funcState struct {
@@ -598,11 +627,7 @@ func runDWARFPass2(
 	db *sql.DB,
 	dw *dwarf.Data,
 	p1 *dwarfPass1State,
-	symtabFuncs []elf.Symbol,
-	vtables []vtableRow,
-	luaRegs []luaRegRow,
-	textStart, textEnd uint64,
-) ([]funcRangeRow, []FunctionSeed, error) {
+) error {
 	const (
 		stmtMember = iota
 		stmtEnum
@@ -671,27 +696,6 @@ func runDWARFPass2(
 		return id, nil
 	}
 
-	// Build vtable and lua_regs lookup maps by target EA.
-	type vtHit struct {
-		vtableEA uint64
-		slot     int
-		count    int
-	}
-	vtByTarget := make(map[uint64]vtHit, len(vtables))
-	for _, vt := range vtables {
-		h, exists := vtByTarget[vt.TargetEA]
-		if !exists {
-			vtByTarget[vt.TargetEA] = vtHit{vtableEA: vt.VtableEA, slot: vt.Slot, count: 1}
-		} else {
-			h.count++
-			vtByTarget[vt.TargetEA] = h
-		}
-	}
-	luaByTarget := make(map[uint64]int, len(luaRegs))
-	for _, lr := range luaRegs {
-		luaByTarget[lr.FuncEA]++
-	}
-
 	funcMap := make(map[uint64]*elfFunctionAccum, 65536)
 	var (
 		stack     []pass2StackFrame
@@ -752,7 +756,7 @@ func runDWARFPass2(
 	for {
 		e, err := r.Next()
 		if err != nil {
-			return nil, nil, fmt.Errorf("dwarf pass2 read: %w", err)
+			return fmt.Errorf("dwarf pass2 read: %w", err)
 		}
 		if e == nil {
 			break
@@ -771,8 +775,11 @@ func runDWARFPass2(
 								acc.row.LowLine = lowLine
 								acc.row.HighLine = highLine
 								if lineFile.Valid && (!acc.declFile.Valid || lineFile.Int64 != acc.declFile.Int64) {
-									acc.row.SourceFileID = lineFile
+									acc.row.DeclFileID = lineFile
 									acc.row.DeclLine = 0
+								} else {
+									acc.row.DeclFileID = acc.declFile
+									acc.row.DeclLine = acc.declLine
 								}
 							}
 						}
@@ -801,7 +808,7 @@ func runDWARFPass2(
 					}
 					fID, err := internSourceFile(compDir, lf.Name)
 					if err != nil {
-						return nil, nil, err
+						return err
 					}
 					cuFileMap[idx] = fID
 				}
@@ -876,7 +883,7 @@ func runDWARFPass2(
 				ord := cf.memberOrd
 				cf.memberOrd++
 				if err := emitDWARFMember(pass2Batch, stmtMember, cf.compCanonID, ord, e, p1); err != nil {
-					return nil, nil, err
+					return err
 				}
 			}
 
@@ -885,7 +892,7 @@ func runDWARFPass2(
 				ord := cf.memberOrd
 				cf.memberOrd++
 				if err := emitDWARFInheritance(pass2Batch, stmtMember, cf.compCanonID, ord, e, p1); err != nil {
-					return nil, nil, err
+					return err
 				}
 			}
 
@@ -895,7 +902,7 @@ func runDWARFPass2(
 				cf.enumOrd++
 				val, _ := intValOK(e, dwarf.AttrConstValue)
 				if err := pass2Batch.Exec(stmtEnum, cf.compCanonID, ord, rawName, val); err != nil {
-					return nil, nil, fmt.Errorf("insert enum_value %s: %w", rawName, err)
+					return fmt.Errorf("insert enum_value %s: %w", rawName, err)
 				}
 			}
 
@@ -913,64 +920,38 @@ func runDWARFPass2(
 						if spec.linkageName != "" {
 							fnName = spec.linkageName
 						} else {
-							fnName = formatSubName(ea)
+							fnName = fmt.Sprintf("sub_%x", ea)
 						}
 					}
 					declFile := resolveCUFileID(spec.declFile)
 					declLine := spec.declLine
 					lowLine, highLine, lineFile := computeFuncLineSpan(cuLines, validRanges, nil, declFile)
 					srcFile := declFile
+					srcLine := declLine
 					if lineFile.Valid && (!declFile.Valid || lineFile.Int64 != declFile.Int64) {
 						srcFile = lineFile
-						declLine = 0
+						srcLine = 0
 					}
 
-					discMask := extractdb.DiscoveryDWARF
-					var flags uint32
-					if spec.isVirtual {
-						flags |= extractdb.FuncFlagVirtual
-					}
-					var vtEA, vtSlot sql.NullInt64
-					if vh, ok := vtByTarget[ea]; ok {
-						discMask |= extractdb.DiscoveryVtable
-						flags |= extractdb.FuncFlagVirtual
-						vtEA = sql.NullInt64{Int64: int64(vh.vtableEA), Valid: true}
-						vtSlot = sql.NullInt64{Int64: int64(vh.slot), Valid: true}
-						if vh.count >= 2 {
-							flags |= extractdb.FuncFlagICFCandidate
-						}
-					}
-					if lc := luaByTarget[ea]; lc > 0 {
-						discMask |= extractdb.DiscoveryLuaReg
-						if lc >= 2 {
-							flags |= extractdb.FuncFlagICFCandidate
-						}
-					}
-
-					if existing, exists := funcMap[ea]; !exists {
+					if _, exists := funcMap[ea]; !exists {
 						acc := &elfFunctionAccum{
-							row: functionRow{
-								EA:            ea,
-								Size:          size,
-								Name:          fnName,
-								MangledName:   spec.linkageName,
-								ClassName:     spec.className,
-								CallingConv:   "sysv_amd64",
-								CCSource:      extractdb.CCSourceDWARF,
-								DiscoveryMask: discMask,
-								SourceFileID:  srcFile,
-								DeclLine:      declLine,
-								LowLine:       lowLine,
-								HighLine:      highLine,
-								VtableEA:      vtEA,
-								VtableSlot:    vtSlot,
-								Flags:         flags,
+							row: dwarfFuncRow{
+								EA:          ea,
+								Size:        size,
+								Name:        fnName,
+								LinkageName: spec.linkageName,
+								ClassName:   spec.className,
+								DeclFileID:  srcFile,
+								DeclLine:    srcLine,
+								LowLine:     lowLine,
+								HighLine:    highLine,
 							},
 							validRanges: validRanges,
 							declFile:    declFile,
+							declLine:    declLine,
 						}
 						for _, rg := range validRanges {
-							acc.ranges = append(acc.ranges, funcRangeRow{
+							acc.ranges = append(acc.ranges, dwarfFuncRangeRow{
 								StartEA: rg[0],
 								EndEA:   rg[1],
 								FuncEA:  ea,
@@ -978,9 +959,6 @@ func runDWARFPass2(
 						}
 						funcMap[ea] = acc
 						frameFuncEA = ea
-					} else {
-						existing.row.DiscoveryMask |= discMask
-						existing.row.Flags |= flags
 					}
 				}
 			}
@@ -993,7 +971,7 @@ func runDWARFPass2(
 				ord := cf.varOrd
 				cf.varOrd++
 				if err := emitDWARFFuncVar(pass2Batch, stmtVar, cf.ea, ord, e, p1); err != nil {
-					return nil, nil, err
+					return err
 				}
 			}
 
@@ -1009,7 +987,7 @@ func runDWARFPass2(
 				calleeName := resolveInlinedCalleeName(e, p1.subprogSpecs, curCUIdx)
 				calleeNameID, err := internName(calleeName)
 				if err != nil {
-					return nil, nil, err
+					return err
 				}
 				callFileIdx, _ := intValOK(e, dwarf.AttrCallFile)
 				callLine, _ := intValOK(e, dwarf.AttrCallLine)
@@ -1035,7 +1013,7 @@ func runDWARFPass2(
 						callFileID,
 						int(callLine),
 					); err != nil {
-						return nil, nil, fmt.Errorf("insert inline at 0x%x: %w", cf.ea, err)
+						return fmt.Errorf("insert inline at 0x%x: %w", cf.ea, err)
 					}
 				}
 			}
@@ -1058,101 +1036,7 @@ func runDWARFPass2(
 	}
 
 	if err := pass2Batch.Flush(); err != nil {
-		return nil, nil, err
-	}
-
-	// Merge .symtab STT_FUNC symbols and vtable/lua_reg targets not already covered by DWARF.
-	for _, sym := range symtabFuncs {
-		if elf.ST_TYPE(sym.Info) != elf.STT_FUNC || sym.Value == 0 {
-			continue
-		}
-		if acc, exists := funcMap[sym.Value]; exists {
-			acc.row.DiscoveryMask |= extractdb.DiscoverySymtab
-			if acc.row.MangledName == "" && strings.HasPrefix(sym.Name, "_Z") {
-				acc.row.MangledName = sym.Name
-			}
-			continue
-		}
-		sz := sym.Size
-		if sz == 0 {
-			sz = 16
-		}
-		discMask := extractdb.DiscoverySymtab
-		var flags uint32
-		var vtEA, vtSlot sql.NullInt64
-		if vh, ok := vtByTarget[sym.Value]; ok {
-			discMask |= extractdb.DiscoveryVtable
-			flags |= extractdb.FuncFlagVirtual
-			vtEA = sql.NullInt64{Int64: int64(vh.vtableEA), Valid: true}
-			vtSlot = sql.NullInt64{Int64: int64(vh.slot), Valid: true}
-		}
-		if luaByTarget[sym.Value] > 0 {
-			discMask |= extractdb.DiscoveryLuaReg
-		}
-		mangled := ""
-		if strings.HasPrefix(sym.Name, "_Z") {
-			mangled = sym.Name
-		}
-		funcMap[sym.Value] = &elfFunctionAccum{
-			row: functionRow{
-				EA:            sym.Value,
-				Size:          sz,
-				Name:          sym.Name,
-				MangledName:   mangled,
-				CallingConv:   "sysv_amd64",
-				CCSource:      extractdb.CCSourceX86Asm,
-				DiscoveryMask: discMask,
-				VtableEA:      vtEA,
-				VtableSlot:    vtSlot,
-				Flags:         flags,
-			},
-			ranges: []funcRangeRow{{
-				StartEA: sym.Value,
-				EndEA:   sym.Value + sz,
-				FuncEA:  sym.Value,
-			}},
-		}
-	}
-
-	// Also ensure any vtable or lua_reg targets in .text without DWARF/symtab entries are seeded.
-	for targetEA, vh := range vtByTarget {
-		if targetEA < textStart || targetEA >= textEnd {
-			continue
-		}
-		if _, exists := funcMap[targetEA]; !exists {
-			funcMap[targetEA] = &elfFunctionAccum{
-				row: functionRow{
-					EA:            targetEA,
-					Size:          16,
-					Name:          formatSubName(targetEA),
-					CallingConv:   "sysv_amd64",
-					CCSource:      extractdb.CCSourceVtable,
-					DiscoveryMask: extractdb.DiscoveryVtable,
-					VtableEA:      sql.NullInt64{Int64: int64(vh.vtableEA), Valid: true},
-					VtableSlot:    sql.NullInt64{Int64: int64(vh.slot), Valid: true},
-					Flags:         extractdb.FuncFlagVirtual,
-				},
-				ranges: []funcRangeRow{{StartEA: targetEA, EndEA: targetEA + 16, FuncEA: targetEA}},
-			}
-		}
-	}
-	for targetEA := range luaByTarget {
-		if targetEA < textStart || targetEA >= textEnd {
-			continue
-		}
-		if _, exists := funcMap[targetEA]; !exists {
-			funcMap[targetEA] = &elfFunctionAccum{
-				row: functionRow{
-					EA:            targetEA,
-					Size:          16,
-					Name:          formatSubName(targetEA),
-					CallingConv:   "sysv_amd64",
-					CCSource:      extractdb.CCSourceLuaReg,
-					DiscoveryMask: extractdb.DiscoveryLuaReg,
-				},
-				ranges: []funcRangeRow{{StartEA: targetEA, EndEA: targetEA + 16, FuncEA: targetEA}},
-			}
-		}
+		return err
 	}
 
 	sortedEAs := make([]uint64, 0, len(funcMap))
@@ -1161,32 +1045,12 @@ func runDWARFPass2(
 	}
 	sort.Slice(sortedEAs, func(i, j int) bool { return sortedEAs[i] < sortedEAs[j] })
 
-	funcRows := make([]functionRow, 0, len(sortedEAs))
-	allRanges := make([]funcRangeRow, 0, len(sortedEAs))
-	seeds := make([]FunctionSeed, 0, len(sortedEAs))
+	funcRows := make([]dwarfFuncRow, 0, len(sortedEAs))
+	allRanges := make([]dwarfFuncRangeRow, 0, len(sortedEAs))
 	for _, ea := range sortedEAs {
 		acc := funcMap[ea]
 		funcRows = append(funcRows, acc.row)
 		allRanges = append(allRanges, acc.ranges...)
-		vtSlot := -1
-		if acc.row.VtableSlot.Valid {
-			vtSlot = int(acc.row.VtableSlot.Int64)
-		}
-		var vtEA uint64
-		if acc.row.VtableEA.Valid {
-			vtEA = uint64(acc.row.VtableEA.Int64)
-		}
-		seeds = append(seeds, FunctionSeed{
-			EA:            acc.row.EA,
-			Name:          acc.row.Name,
-			CallingConv:   acc.row.CallingConv,
-			CCSource:      acc.row.CCSource,
-			StackPurge:    acc.row.StackPurge,
-			DiscoveryMask: acc.row.DiscoveryMask,
-			VtableEA:      vtEA,
-			VtableSlot:    vtSlot,
-			Flags:         acc.row.Flags,
-		})
 	}
 
 	sort.Slice(allRanges, func(i, j int) bool {
@@ -1210,13 +1074,10 @@ func runDWARFPass2(
 		allRanges = dedup
 	}
 
-	if err := insertFunctions(ctx, db, funcRows); err != nil {
-		return nil, nil, err
+	if err := insertDwarfFuncs(ctx, db, funcRows); err != nil {
+		return err
 	}
-	if err := insertFuncRanges(ctx, db, allRanges); err != nil {
-		return nil, nil, err
-	}
-	return allRanges, seeds, nil
+	return insertDwarfFuncRanges(ctx, db, allRanges)
 }
 
 func emitDWARFMember(b *multiStmtTxBatcher, stmtIdx int, typeID int64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
@@ -1407,7 +1268,7 @@ func parseDWARFDataMemberLoc(e *dwarf.Entry) (offset int64, hasConst bool, compl
 				return int64(uval), true, ""
 			}
 		}
-		// DW_OP_consts / DW_OP_constu / DW_OP_lit0..31 + DW_OP_plus
+		// DW_OP_lit0..31 + DW_OP_plus
 		if len(v) == 2 && v[0] >= 0x30 && v[0] <= 0x4F && v[1] == 0x22 {
 			return int64(v[0] - 0x30), true, ""
 		}
@@ -1435,6 +1296,25 @@ func formatAttrConstVal(f *dwarf.Field) string {
 	}
 }
 
+func decodeSLEB128(b []byte) (int64, int) {
+	var val uint64
+	var shift uint
+	for i, c := range b {
+		val |= uint64(c&0x7f) << shift
+		shift += 7
+		if c&0x80 == 0 {
+			if shift < 64 && (c&0x40) != 0 {
+				val |= ^uint64(0) << shift
+			}
+			return int64(val), i + 1
+		}
+		if shift >= 64 {
+			return 0, 0
+		}
+	}
+	return 0, 0
+}
+
 func summarizeDWARFLocField(f *dwarf.Field) string {
 	if f == nil {
 		return ""
@@ -1451,11 +1331,15 @@ func summarizeDWARFLocField(f *dwarf.Field) string {
 		case op >= 0x50 && op <= 0x6F:
 			return fmt.Sprintf("reg%d", op-0x50)
 		case op >= 0x70 && op <= 0x8F:
-			sval, _ := binary.Varint(v[1:])
-			return fmt.Sprintf("breg%d%+d", op-0x70, sval)
+			if sval, n := decodeSLEB128(v[1:]); n > 0 && 1+n == len(v) {
+				return fmt.Sprintf("breg%d%+d", op-0x70, sval)
+			}
+			return fmt.Sprintf("expr:%x", v)
 		case op == 0x91: // DW_OP_fbreg
-			sval, _ := binary.Varint(v[1:])
-			return fmt.Sprintf("fbreg%+d", sval)
+			if sval, n := decodeSLEB128(v[1:]); n > 0 && 1+n == len(v) {
+				return fmt.Sprintf("fbreg%+d", sval)
+			}
+			return fmt.Sprintf("expr:%x", v)
 		case op == 0x03 && len(v) >= 9: // DW_OP_addr (64-bit)
 			addr := binary.LittleEndian.Uint64(v[1:9])
 			return fmt.Sprintf("addr:0x%x", addr)
@@ -1548,7 +1432,7 @@ func resolveSubprogSpec(e *dwarf.Entry, specs map[dwarf.Offset]subprogSpec, pare
 		if res.linkageName == "" {
 			res.linkageName = sp.linkageName
 		}
-		if res.className == "" {
+		if res.className == "" || (sp.className != "" && strings.HasPrefix(sp.className, res.className+"::")) {
 			res.className = sp.className
 		}
 		if curCUIdx == 0 || sp.cuIdx == curCUIdx {

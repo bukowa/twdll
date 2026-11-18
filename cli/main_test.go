@@ -109,14 +109,14 @@ func TestExecute_HelpAndVersion_ReturnZeroWithoutOsExit(t *testing.T) {
 			t.Fatalf("expected 0 bytes on stderr for --help, got %q", stderr.String())
 		}
 		helpText := stdout.String()
-		for _, sub := range []string{"status", "init", "analyze", "clean"} {
+		for _, sub := range []string{"status", "init", "analyze", "extract", "clean"} {
 			if !strings.Contains(helpText, sub) {
 				t.Fatalf("expected --help output to mention command %q:\n%s", sub, helpText)
 			}
 		}
-		for _, forbidden := range []string{"extract", "search", "show", "wt"} {
+		for _, forbidden := range []string{"search", "show", "derive", "verify", "wt"} {
 			if strings.Contains(helpText, "\n  "+forbidden) {
-				t.Fatalf("unexpected non-Stage-1 command %q in --help:\n%s", forbidden, helpText)
+				t.Fatalf("unexpected non-active command %q in --help:\n%s", forbidden, helpText)
 			}
 		}
 	})
@@ -129,6 +129,11 @@ func TestExecute_HelpAndVersion_ReturnZeroWithoutOsExit(t *testing.T) {
 		}{
 			{args: []string{"init", "--help"}, mustHave: "--clear", forbidden: "--clean"},
 			{args: []string{"analyze", "--help"}, mustHave: "--clear", forbidden: "--clean"},
+			{args: []string{"extract", "--help"}, mustHave: "--no-decomp", forbidden: "--facts-only"},
+			{args: []string{"extract", "--help"}, mustHave: "--timeout", forbidden: "--experimental-seed"},
+			{args: []string{"extract", "--help"}, mustHave: "--no-timeout"},
+			{args: []string{"extract", "--help"}, mustHave: "--retry-timeouts"},
+			{args: []string{"extract", "--help"}, mustHave: "--retry-failed"},
 			{args: []string{"clean", "--help"}, mustHave: "--all"},
 		} {
 			var stdout, stderr bytes.Buffer
@@ -173,7 +178,7 @@ func TestExecute_UnknownCommandAndInvalidFlag_WriteErrorsStrictlyToStderr(t *tes
 		name string
 		args []string
 	}{
-		{name: "unregistered command extract", args: []string{"extract"}},
+		{name: "unregistered command search", args: []string{"search"}},
 		{name: "unregistered command wt", args: []string{"wt"}},
 		{name: "invalid flag on status", args: []string{"status", "--bogus-flag"}},
 		{name: "removed --clean flag on init", args: []string{"init", "--clean"}},
@@ -369,4 +374,69 @@ func writeTestELF64DWARF(t *testing.T, path string) {
 	if err := os.WriteFile(path, buf, 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestExecute_ExtractTimeoutAndRetryFlags(t *testing.T) {
+	root := t.TempDir()
+	cfgPath := filepath.Join(root, "twdll.sandbox.toml")
+	if err := workspace.SaveConfig(cfgPath, workspace.Config{
+		DataDir:     ".twdll-sandbox",
+		DefaultGame: workspace.GameAttila,
+		Decompiler:  workspace.DecompilerGhidra,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("negative timeout returns diagnostic error", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		code := Execute(context.Background(), []string{
+			"--root", root, "--config", cfgPath,
+			"extract", "--timeout=-1s",
+		}, term.Streams{
+			Out:       &stdout,
+			Err:       &stderr,
+			ColorMode: term.ColorNever,
+		})
+		if code == 0 {
+			t.Fatalf("expected non-zero exit code for --timeout=-1s, got 0")
+		}
+		if !strings.Contains(stderr.String(), "invalid --timeout") {
+			t.Fatalf("expected stderr to mention invalid --timeout, got %q", stderr.String())
+		}
+	})
+
+	t.Run("timeout and split retry flags parse and reject unanalyzed target", func(t *testing.T) {
+		layout, err := workspace.Resolve(workspace.ResolveSpec{
+			RootOverride:   root,
+			ConfigOverride: cfgPath,
+			WorkingDir:     root,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		binPath := layout.Paths.BinaryPath(workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeTestPE32(t, binPath)
+
+		for _, flagArgs := range [][]string{
+			{"extract", "--timeout", "60s", "--retry-timeouts", "attila_32"},
+			{"extract", "--no-timeout", "--retry-failed", "attila_32"},
+		} {
+			var stdout, stderr bytes.Buffer
+			args := append([]string{"--root", root, "--config", cfgPath}, flagArgs...)
+			code := Execute(context.Background(), args, term.Streams{
+				Out:       &stdout,
+				Err:       &stderr,
+				ColorMode: term.ColorNever,
+			})
+			if code == 0 {
+				t.Fatalf("expected non-zero exit code for unanalyzed target (%v), got 0", flagArgs)
+			}
+			if !strings.Contains(stderr.String(), "decompiler database for attila_32 (ghidra) is not analyzed") {
+				t.Fatalf("expected unanalyzed diagnostic for %v, got:\n%s", flagArgs, stderr.String())
+			}
+		}
+	})
 }

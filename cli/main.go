@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/alecthomas/kong"
 
-	"twdll/cli/internal/bootstrap"
 	"twdll/cli/internal/cmd"
 	"twdll/cli/internal/term"
 	"twdll/cli/internal/workspace"
@@ -27,6 +28,7 @@ type CLI struct {
 	Status  StatusCmd  `cmd:"" help:"Show workspace, toolchain, binary, and database status."`
 	Init    InitCmd    `cmd:"" help:"Initialize workspace toolchains, game binaries, and decompiler setup."`
 	Analyze AnalyzeCmd `cmd:"" help:"Run headless decompiler analysis on staged binaries."`
+	Extract ExtractCmd `cmd:"" help:"Extract binary facts and decompiled pseudo-C into SQLite databases."`
 	Clean   CleanCmd   `cmd:"" help:"Remove decompiler databases and logs, or wipe the workspace (--all)."`
 }
 
@@ -95,7 +97,7 @@ type AnalyzeCmd struct {
 	Jobs         int      `short:"j" name:"jobs" help:"Maximum concurrent analysis jobs (0 = auto)."`
 	MaxMem       string   `short:"m" name:"max-mem" help:"Override Ghidra JVM max heap (e.g. 16G, 32G)."`
 	FullAnalysis bool     `name:"full-analysis" help:"Keep heavy reference/stack analysis passes enabled on attila_64."`
-	Targets      []string `arg:"" optional:"" help:"Targets to analyze (attila_64, attila_32, rome2_32, tob_32)."`
+	Targets      []string `arg:"" optional:"" help:"Targets to analyze (attila_64, attila_32, rome2_32, tob_32, or globs like *_32, attila_*)."`
 }
 
 func (c *AnalyzeCmd) Run(rctx *runContext) error {
@@ -114,10 +116,59 @@ func (c *AnalyzeCmd) Run(rctx *runContext) error {
 	})
 }
 
+type ExtractCmd struct {
+	Decompiler    string        `short:"d" name:"decompiler" help:"Decompiler backend override (ghidra, ida, all)."`
+	Force         bool          `name:"force" help:"Re-extract even when extracted databases are up to date."`
+	Jobs          int           `short:"j" name:"jobs" help:"Maximum concurrent decompilation workers (e.g. 0 = auto)."`
+	MaxMem        string        `short:"m" name:"max-mem" help:"Override Ghidra JVM max heap per worker (e.g. 4G, 8G)."`
+	NoDecomp      bool          `name:"no-decomp" help:"Extract bronze and silver metadata (funcs, asm, strings) without pseudo-C decompilation."`
+	Timeout       time.Duration `name:"timeout" default:"15s" help:"Per-function decompilation timeout (e.g. 15s, 60s; 0s disables timeout)."`
+	NoTimeout     bool          `name:"no-timeout" help:"Disable per-function decompilation timeout."`
+	Retry         bool          `name:"retry" help:"Retry previously failed or timed-out functions during decompilation."`
+	RetryTimeouts bool          `name:"retry-timeouts" help:"Retry previously timed-out functions during decompilation."`
+	RetryFailed   bool          `name:"retry-failed" help:"Retry previously failed functions during decompilation."`
+	JSON          bool          `name:"json" help:"Emit machine-readable JSON summary to stdout."`
+	Targets       []string      `arg:"" optional:"" help:"Targets to extract (attila_64, attila_32, rome2_32, tob_32, or globs like *_32, attila_*)."`
+}
+
+func (c *ExtractCmd) Run(rctx *runContext) error {
+	if c.Timeout < 0 {
+		return &term.DiagnosticError{
+			Message:  fmt.Sprintf("invalid --timeout %s", c.Timeout),
+			Expected: "a non-negative duration (e.g. 15s, 60s, or 0s)",
+			Help:     []string{"Pass `--timeout 60s` or `--no-timeout`."},
+		}
+	}
+	noTimeout := c.NoTimeout || c.Timeout == 0
+	var timeoutSecs int
+	if !noTimeout {
+		timeoutSecs = int((c.Timeout + time.Second - 1) / time.Second)
+	}
+	_, err := cmd.RunExtract(rctx.ctx, cmd.ExtractRequest{
+		Layout: rctx.layout,
+		Options: cmd.ExtractOptions{
+			Decompiler:    c.Decompiler,
+			Force:         c.Force,
+			Jobs:          c.Jobs,
+			MaxMem:        c.MaxMem,
+			NoDecomp:      c.NoDecomp,
+			TimeoutSecs:   timeoutSecs,
+			NoTimeout:     noTimeout,
+			Retry:         c.Retry,
+			RetryTimeouts: c.RetryTimeouts,
+			RetryFailed:   c.RetryFailed,
+			JSON:          c.JSON,
+			Targets:       c.Targets,
+		},
+		UI: rctx.ui,
+	})
+	return err
+}
+
 type CleanCmd struct {
 	Decompiler string   `short:"d" name:"decompiler" help:"Decompiler databases to remove (ghidra, ida, all). Default: all."`
 	All        bool     `name:"all" help:"Wipe all initialized configuration, staged binaries, local tools, databases, and logs."`
-	Targets    []string `arg:"" optional:"" help:"Specific targets to clean."`
+	Targets    []string `arg:"" optional:"" help:"Specific targets to clean (or globs like *_32, attila_*)."`
 }
 
 func (c *CleanCmd) Run(rctx *runContext) error {
@@ -224,12 +275,11 @@ func Execute(ctx context.Context, args []string, streams term.Streams) int {
 }
 
 func main() {
-	repoRoot := workspace.ResolveRepoRoot(workspace.ResolveSpec{})
-	if rebuilt, code := bootstrap.MaybeRebuildAndExec(repoRoot, os.Args[1:]); rebuilt {
-		os.Exit(code)
-	}
-
 	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCtx.Done()
+		stop()
+	}()
 	code := Execute(sigCtx, os.Args[1:], term.Streams{
 		In:        os.Stdin,
 		Out:       os.Stdout,

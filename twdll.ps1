@@ -21,13 +21,57 @@ $exeSuffix = if ($onWindows) { '.exe' } else { '' }
 $BinDir = Join-Path (Join-Path $ScriptDir '.twdll') 'bin'
 $Bin = Join-Path $BinDir ("twdll" + $exeSuffix)
 
-if (Test-Path -LiteralPath $Bin -PathType Leaf) {
+function Test-CliNeedsRebuild {
+    param([string]$BinPath, [string]$RepoRoot)
+    if (-not (Test-Path -LiteralPath $BinPath -PathType Leaf)) {
+        return $true
+    }
+    if ($env:TWDLL_NO_REBUILD -eq '1') {
+        return $false
+    }
+    $binTime = [System.IO.File]::GetLastWriteTimeUtc($BinPath)
+    $cliDir = Join-Path $RepoRoot 'cli'
+    $dirs = New-Object System.Collections.Generic.Stack[string]
+    $dirs.Push($cliDir)
+    while ($dirs.Count -gt 0) {
+        $d = $dirs.Pop()
+        foreach ($sub in [System.IO.Directory]::EnumerateDirectories($d)) {
+            $name = [System.IO.Path]::GetFileName($sub)
+            if ($name -ne '.git' -and $name -ne 'testdata') {
+                $dirs.Push($sub)
+            }
+        }
+        foreach ($f in [System.IO.Directory]::EnumerateFiles($d)) {
+            $name = [System.IO.Path]::GetFileName($f)
+            if ($name.EndsWith('_test.go')) { continue }
+            if ($name -eq 'go.mod' -or $name -eq 'go.sum' -or $name -match '\.(go|java|idc|py)$') {
+                if ([System.IO.File]::GetLastWriteTimeUtc($f) -gt $binTime) {
+                    return $true
+                }
+            }
+        }
+    }
+    return $false
+}
+
+if (-not (Test-CliNeedsRebuild -BinPath $Bin -RepoRoot $ScriptDir)) {
     & $Bin @args
     exit $LASTEXITCODE
 }
 
-$ToolsDir = Join-Path (Join-Path $ScriptDir '.twdll') 'tools'
-$PortableGo = Join-Path (Join-Path (Join-Path $ToolsDir 'go') 'bin') ("go" + $exeSuffix)
+$PortableGo = $null
+if ($env:TWDLL_TOOLS_DIR) {
+    $externalGo = Join-Path (Join-Path $env:TWDLL_TOOLS_DIR 'go') (Join-Path 'bin' ("go" + $exeSuffix))
+    if (Test-Path -LiteralPath $externalGo -PathType Leaf) {
+        $PortableGo = $externalGo
+    }
+}
+if (-not $PortableGo) {
+    $ToolsDir = Join-Path (Join-Path $ScriptDir '.twdll') 'tools'
+    $PortableGo = Join-Path (Join-Path (Join-Path $ToolsDir 'go') 'bin') ("go" + $exeSuffix)
+} else {
+    $ToolsDir = Join-Path (Join-Path $ScriptDir '.twdll') 'tools'
+}
 
 if (-not (Test-Path -LiteralPath $PortableGo -PathType Leaf)) {
     $GoVer = '1.27.3'
@@ -92,7 +136,6 @@ if (-not (Test-Path -LiteralPath $PortableGo -PathType Leaf)) {
 $CliDir = Join-Path $ScriptDir 'cli'
 Push-Location -LiteralPath $CliDir
 try {
-    $env:TWDLL_NO_REBUILD = '1'
     & $PortableGo build -buildvcs=false -o $Bin .
     $buildExit = $LASTEXITCODE
 } finally {
@@ -103,6 +146,5 @@ if ($buildExit -ne 0) {
     exit $buildExit
 }
 
-$env:TWDLL_NO_REBUILD = '1'
 & $Bin @args
 exit $LASTEXITCODE

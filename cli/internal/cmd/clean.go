@@ -277,20 +277,13 @@ func resolveCleanEngines(raw string) ([]workspace.DecompilerID, error) {
 }
 
 func resolveCleanTargets(rawTargets []string) ([]workspace.TargetID, error) {
-	if len(rawTargets) == 0 {
-		return workspace.AllTargets(), nil
-	}
-	seen := make(map[workspace.TargetID]bool, len(rawTargets))
-	out := make([]workspace.TargetID, 0, len(rawTargets))
-	for _, raw := range rawTargets {
-		tid, ok := workspace.ParseTargetID(raw)
-		if !ok {
-			return nil, fmt.Errorf("unknown target %q (valid: %v)", raw, workspace.AllTargets())
-		}
-		if !seen[tid] {
-			seen[tid] = true
-			out = append(out, tid)
+	targets, err := workspace.ExpandTargets(rawTargets, workspace.AllTargets())
+	if err != nil {
+		return nil, &term.DiagnosticError{
+			Message:  err.Error(),
+			Expected: "target IDs or glob patterns matching: attila_64, attila_32, rome2_32, tob_32",
+			Help:     []string{"Specify valid target IDs/globs (e.g. `*_32`, `attila_*`) or omit positional arguments to clean all targets."},
 		}
 	}
-	return out, nil
+	return targets, nil
 }

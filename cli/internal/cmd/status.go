@@ -3,12 +3,15 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"twdll/cli/internal/binaries"
+	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/term"
 	"twdll/cli/internal/toolchain"
 	"twdll/cli/internal/workspace"
@@ -55,6 +58,30 @@ type DBStatus struct {
 	Path     string             `json:"path,omitempty"`
 }
 
+type ExtractedSilverStatus struct {
+	Present  bool   `json:"present"`
+	UpToDate bool   `json:"up_to_date"`
+	Locked   bool   `json:"locked,omitempty"`
+	Funcs    int    `json:"funcs"`
+	Asm      int    `json:"asm,omitempty"`
+	OK       int    `json:"ok"`
+	Failed   int    `json:"failed"`
+	Timeout  int    `json:"timeout"`
+	Skipped  int    `json:"skipped"`
+	Path     string `json:"path,omitempty"`
+}
+
+type ExtractedStatus struct {
+	Target          workspace.TargetID               `json:"target"`
+	BronzePresent   bool                             `json:"bronze_present"`
+	BronzeUpToDate  bool                             `json:"bronze_up_to_date"`
+	BronzeSections  int                              `json:"bronze_sections,omitempty"`
+	BronzeStrings   int                              `json:"bronze_strings,omitempty"`
+	BronzeDwarfFunc int                              `json:"bronze_dwarf_funcs,omitempty"`
+	BronzePath      string                           `json:"bronze_path,omitempty"`
+	Silver          map[string]ExtractedSilverStatus `json:"silver,omitempty"`
+}
+
 type StatusReport struct {
 	Initialized     bool               `json:"initialized"`
 	ConfigPath      string             `json:"config_path"`
@@ -68,9 +95,13 @@ type StatusReport struct {
 	Decompilers     []DecompilerStatus `json:"decompilers"`
 	Binaries        []BinaryStatus     `json:"binaries"`
 	Databases       []DBStatus         `json:"databases"`
+	Extracted       []ExtractedStatus  `json:"extracted"`
 }
 
-func RunStatus(_ context.Context, req StatusRequest) (*StatusReport, error) {
+func RunStatus(ctx context.Context, req StatusRequest) (*StatusReport, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	paths := req.Layout.Paths
 	cfg := req.Layout.Config
 	state, _, _ := workspace.LoadState(paths.StateFile)
@@ -91,6 +122,7 @@ func RunStatus(_ context.Context, req StatusRequest) (*StatusReport, error) {
 		Decompilers:     collectDecompilerStatuses(paths, cfg, idaValid),
 		Binaries:        make([]BinaryStatus, 0, 4),
 		Databases:       make([]DBStatus, 0, 8),
+		Extracted:       make([]ExtractedStatus, 0, 4),
 	}
 
 	for _, tid := range workspace.AllTargets() {
@@ -99,6 +131,7 @@ func RunStatus(_ context.Context, req StatusRequest) (*StatusReport, error) {
 		for _, engine := range workspace.AllDecompilers() {
 			report.Databases = append(report.Databases, inspectTargetDB(paths, state, tid, engine, binStat.SHA256))
 		}
+		report.Extracted = append(report.Extracted, inspectTargetExtracted(ctx, paths, tid, binStat.SHA256))
 	}
 
 	if req.UI != nil {
@@ -301,7 +334,197 @@ func renderHumanStatus(r *StatusReport, ui *term.UI) {
 		fmt.Fprintf(&b, "  %s%s%s\n", padRight(string(bin.Target), 16), ghCell, idaCell)
 	}
 
+	b.WriteByte('\n')
+	fmt.Fprintf(&b, "%s\n", st.Bold("Extracted Databases:"))
+	fmt.Fprintf(&b, "  %s%s%s%s\n",
+		st.Bold(padRight("Target", 16)),
+		st.Bold(padRight("Bronze (format)", 24)),
+		st.Bold(padRight("Ghidra Silver", 24)),
+		st.Bold("IDA Silver"),
+	)
+	for _, ext := range r.Extracted {
+		bronzeCell := formatBronzeCell(st, ext, 24)
+		ghCell := formatSilverCell(st, ext.Silver[string(workspace.DecompilerGhidra)], 24)
+		idaCell := formatSilverCell(st, ext.Silver[string(workspace.DecompilerIDA)], 0)
+		fmt.Fprintf(&b, "  %s%s%s%s\n", padRight(string(ext.Target), 16), bronzeCell, ghCell, idaCell)
+	}
+
 	ui.WriteData("%s", b.String())
+}
+
+func inspectTargetExtracted(ctx context.Context, paths workspace.Paths, tid workspace.TargetID, currentSHA string) ExtractedStatus {
+	bronzePath := paths.BronzeDBPath(tid)
+	out := ExtractedStatus{
+		Target:     tid,
+		BronzePath: filepath.ToSlash(bronzePath),
+		Silver:     make(map[string]ExtractedSilverStatus, 2),
+	}
+
+	if info, err := os.Stat(bronzePath); err == nil && info.Mode().IsRegular() {
+		out.BronzePresent = true
+		inspectBronzeForStatus(ctx, bronzePath, currentSHA, &out)
+	}
+
+	for _, engine := range workspace.AllDecompilers() {
+		silverPath := paths.SilverDBPath(tid, engine)
+		ss := ExtractedSilverStatus{
+			Path: filepath.ToSlash(silverPath),
+		}
+		if info, err := os.Stat(silverPath); err == nil && info.Mode().IsRegular() {
+			ss.Present = true
+			inspectSilverForStatus(ctx, silverPath, engine, currentSHA, &ss)
+		}
+		out.Silver[string(engine)] = ss
+	}
+	return out
+}
+
+func inspectBronzeForStatus(ctx context.Context, bronzePath, currentSHA string, out *ExtractedStatus) {
+	qCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+
+	db, err := extractdb.OpenReadOnly(bronzePath)
+	if err != nil {
+		return
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	_, _ = db.ExecContext(qCtx, `PRAGMA busy_timeout = 100`)
+
+	var gotSHA string
+	if err := db.QueryRowContext(qCtx, `SELECT value FROM meta WHERE key = ?`, extractdb.MetaBinarySHA256).Scan(&gotSHA); err == nil {
+		out.BronzeUpToDate = currentSHA != "" && strings.EqualFold(strings.TrimSpace(gotSHA), strings.TrimSpace(currentSHA))
+	}
+
+	_ = db.QueryRowContext(qCtx, `SELECT COUNT(*) FROM sections`).Scan(&out.BronzeSections)
+	_ = db.QueryRowContext(qCtx, `SELECT COUNT(*) FROM strings`).Scan(&out.BronzeStrings)
+	_ = db.QueryRowContext(qCtx, `SELECT COUNT(*) FROM dwarf_funcs`).Scan(&out.BronzeDwarfFunc)
+}
+
+func inspectSilverForStatus(ctx context.Context, silverPath string, engine workspace.DecompilerID, currentSHA string, ss *ExtractedSilverStatus) {
+	qCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
+	defer cancel()
+
+	db, err := extractdb.OpenReadOnly(silverPath)
+	if err != nil {
+		if isSQLiteBusyErr(err) {
+			ss.Locked = true
+		}
+		return
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	_, _ = db.ExecContext(qCtx, `PRAGMA busy_timeout = 100`)
+
+	var gotEngine, gotSHA string
+	if err := db.QueryRowContext(qCtx, `SELECT value FROM meta WHERE key = ?`, extractdb.MetaBinarySHA256).Scan(&gotSHA); err != nil {
+		if isSQLiteBusyErr(err) {
+			ss.Locked = true
+		}
+		return
+	}
+	_ = db.QueryRowContext(qCtx, `SELECT value FROM meta WHERE key = ?`, extractdb.MetaSilverEngine).Scan(&gotEngine)
+	ss.UpToDate = gotEngine == string(engine) &&
+		currentSHA != "" && strings.EqualFold(strings.TrimSpace(gotSHA), strings.TrimSpace(currentSHA))
+
+	_ = db.QueryRowContext(qCtx, `SELECT COUNT(*) FROM silver_funcs`).Scan(&ss.Funcs)
+	_ = db.QueryRowContext(qCtx, `SELECT COUNT(*) FROM silver_asm`).Scan(&ss.Asm)
+
+	rows, err := db.QueryContext(qCtx, `SELECT status, COUNT(*) FROM decomp_funcs GROUP BY status`)
+	if err != nil {
+		if isSQLiteBusyErr(err) {
+			ss.Locked = true
+		}
+		return
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var rowStatus string
+		var cnt int
+		if sErr := rows.Scan(&rowStatus, &cnt); sErr != nil {
+			continue
+		}
+		switch rowStatus {
+		case extractdb.DecompStatusOK:
+			ss.OK += cnt
+		case extractdb.DecompStatusFailed:
+			ss.Failed += cnt
+		case extractdb.DecompStatusTimeout:
+			ss.Timeout += cnt
+		default:
+			ss.Skipped += cnt
+		}
+	}
+	if err := rows.Err(); err != nil && isSQLiteBusyErr(err) {
+		ss.Locked = true
+	}
+}
+
+func isSQLiteBusyErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "locked") || strings.Contains(msg, "busy")
+}
+
+func formatBronzeCell(st term.Style, ext ExtractedStatus, width int) string {
+	if !ext.BronzePresent {
+		return padCell(st.Dim("[-] None"), len("[-] None"), width)
+	}
+	label := fmt.Sprintf("%d sec / %d str", ext.BronzeSections, ext.BronzeStrings)
+	if ext.BronzeDwarfFunc > 0 {
+		label = fmt.Sprintf("%d fn / %d str", ext.BronzeDwarfFunc, ext.BronzeStrings)
+	}
+	if !ext.BronzeUpToDate {
+		raw := fmt.Sprintf("[!] %s (stale)", label)
+		return padCell(st.Yellow(raw), len(raw), width)
+	}
+	raw := "[x] " + label
+	return padCell(st.Green(raw), len(raw), width)
+}
+
+func formatSilverCell(st term.Style, ss ExtractedSilverStatus, width int) string {
+	if !ss.Present {
+		return padCell(st.Dim("[-] None"), len("[-] None"), width)
+	}
+	if ss.Locked {
+		raw := "[!] Locked"
+		return padCell(st.Yellow(raw), len(raw), width)
+	}
+	if !ss.UpToDate {
+		raw := fmt.Sprintf("[!] %d ok (stale)", ss.OK)
+		return padCell(st.Yellow(raw), len(raw), width)
+	}
+	denom := ss.Funcs
+	if denom == 0 {
+		denom = ss.OK + ss.Failed + ss.Timeout + ss.Skipped
+	}
+	var raw string
+	switch {
+	case ss.OK > 0 && denom > 0:
+		raw = fmt.Sprintf("[x] %d/%d", ss.OK, denom)
+	case ss.OK > 0:
+		raw = fmt.Sprintf("[x] %d ok", ss.OK)
+	default:
+		raw = fmt.Sprintf("[x] %d fn", ss.Funcs)
+	}
+	styled := st.Yellow(raw)
+	if ss.OK > 0 || ss.Funcs > 0 {
+		styled = st.Green(raw)
+	}
+	return padCell(styled, len(raw), width)
+}
+
+func padCell(styled string, rawLen, width int) string {
+	if width <= rawLen {
+		return styled
+	}
+	return styled + strings.Repeat(" ", width-rawLen)
 }
 
 func formatDBCell(st term.Style, analyzed, isActive bool, width int) string {

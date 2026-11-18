@@ -3,51 +3,77 @@ package bronze
 import (
 	"context"
 	"database/sql"
+	"debug/elf"
+	"debug/pe"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"strconv"
+	"strings"
 	"time"
 
 	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/workspace"
 )
 
-type Options struct {
-	Target       workspace.TargetID
-	BinaryPath   string
-	BinaryDBPath string
-	ManifestPath string
+// DataSlice exposes a contiguous data section for deterministic string scanning.
+type DataSlice struct {
+	Name       string
+	VA         uint64
+	Data       []byte
+	Is64Bit    bool
+	HasRelocAt func(off int) bool
 }
 
-type FunctionSeed struct {
-	EA            uint64
-	Name          string
-	CallingConv   string
-	CCSource      string
-	StackPurge    int
-	DiscoveryMask uint32
-	ThunkTargetEA uint64
-	VtableEA      uint64
-	VtableSlot    int
-	Flags         uint32
+// Source holds open binary format handles and shared deterministic metadata populated
+// when the binary is opened during a single ExtractTarget run.
+type Source struct {
+	Target     workspace.TargetID
+	BinaryPath string
+	ImageBase  uint64
+	Arch       string
+	Format     string
+	PE         *pe.File
+	ELF        *elf.File
+	DataSlices []DataSlice
+
+	pe32 *pe32Prepared
+}
+
+// Extractor populates one deterministic format or debug-info facet into bronze.sqlite.
+// Extractors must never disassemble code or run heuristic recovery.
+type Extractor interface {
+	ID() string
+	AppliesTo(src *Source) bool
+	Extract(ctx context.Context, src *Source, db *sql.DB) error
+}
+
+type Options struct {
+	Target             workspace.TargetID
+	BinaryPath         string
+	BinarySHA256       string
+	BronzeDBPath       string
+	ManifestPath       string
+	Extractors         []Extractor
+	DisabledExtractors []string
 }
 
 type Result struct {
 	Target       workspace.TargetID
 	BinarySHA256 string
 	ImageBase    uint64
-	Sources      []string
+	Extractors   []string
 	Counts       map[string]int64
-	Seeds        []FunctionSeed
 	Elapsed      time.Duration
 }
 
-type targetExtractResult struct {
-	imageBase uint64
-	arch      string
-	format    string
-	sources   []string
-	counts    map[string]int64
-	seeds     []FunctionSeed
+// DefaultExtractors returns the ordered built-in binary and DWARF extractors.
+func DefaultExtractors() []Extractor {
+	return []Extractor{
+		PE32Extractor{},
+		ELF64Extractor{},
+		StringsExtractor{},
+		ELF64DWARF4Extractor{},
+	}
 }
 
 func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
@@ -55,193 +81,152 @@ func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
 	if !opts.Target.IsValid() {
 		return nil, fmt.Errorf("invalid target id %q", opts.Target)
 	}
-	if opts.BinaryPath == "" {
-		return nil, fmt.Errorf("binary path is required for %s", opts.Target)
+	if opts.BinaryPath == "" || opts.BronzeDBPath == "" {
+		return nil, errors.New("BinaryPath and BronzeDBPath are required")
 	}
-	if opts.BinaryDBPath == "" {
-		return nil, fmt.Errorf("binary db path is required for %s", opts.Target)
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
-	binSHA, err := workspace.ComputeFileSHA256(opts.BinaryPath)
+	sha := strings.TrimSpace(opts.BinarySHA256)
+	if sha == "" {
+		var err error
+		sha, err = workspace.ComputeFileSHA256(opts.BinaryPath)
+		if err != nil {
+			return nil, fmt.Errorf("hash binary %s: %w", opts.BinaryPath, err)
+		}
+	}
+
+	src, closeSrc, err := openSource(opts.Target, opts.BinaryPath)
 	if err != nil {
-		return nil, fmt.Errorf("hash binary %s: %w", opts.BinaryPath, err)
+		return nil, err
+	}
+	defer closeSrc()
+
+	extractors := opts.Extractors
+	if len(extractors) == 0 {
+		extractors = DefaultExtractors()
+	}
+	disabled := make(map[string]bool, len(opts.DisabledExtractors))
+	for _, id := range opts.DisabledExtractors {
+		if id = strings.TrimSpace(id); id != "" {
+			disabled[id] = true
+		}
 	}
 
-	builder, err := extractdb.NewAtomicBuilder(opts.BinaryDBPath)
+	builder, err := extractdb.NewAtomicBuilder(opts.BronzeDBPath)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = builder.Abort() }()
 
 	db := builder.DB()
-	if err := extractdb.InitFactsSchema(ctx, db); err != nil {
+	if err := extractdb.InitBronzeSchema(ctx, db); err != nil {
 		return nil, err
 	}
 
-	var extRes *targetExtractResult
-	if opts.Target.Is64Bit() {
-		extRes, err = extractELF64(ctx, db, opts.BinaryPath)
-	} else {
-		extRes, err = extractPE32(ctx, db, opts.BinaryPath)
+	applied := make([]string, 0, len(extractors))
+	for _, ext := range extractors {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if ext == nil || disabled[ext.ID()] || !ext.AppliesTo(src) {
+			continue
+		}
+		if err := ext.Extract(ctx, src, db); err != nil {
+			return nil, fmt.Errorf("bronze extractor %s: %w", ext.ID(), err)
+		}
+		applied = append(applied, ext.ID())
 	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	appliedJSON, err := json.Marshal(applied)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshal extractors_applied: %w", err)
 	}
-
-	extractedAt := time.Now().UTC().Format(time.RFC3339)
-	metaPairs := [][2]string{
+	for _, kv := range [][2]string{
 		{extractdb.MetaTarget, string(opts.Target)},
-		{extractdb.MetaBinarySHA256, binSHA},
-		{extractdb.MetaImageBase, fmt.Sprintf("0x%x", extRes.imageBase)},
-		{extractdb.MetaArch, extRes.arch},
-		{extractdb.MetaFormat, extRes.format},
-		{extractdb.MetaBronzeExtractedAt, extractedAt},
-	}
-	for _, kv := range metaPairs {
+		{extractdb.MetaBinarySHA256, sha},
+		{extractdb.MetaImageBase, fmt.Sprintf("0x%x", src.ImageBase)},
+		{extractdb.MetaArch, src.Arch},
+		{extractdb.MetaFormat, src.Format},
+		{extractdb.MetaExtractedAt, now},
+		{extractdb.MetaExtractorsApplied, string(appliedJSON)},
+	} {
 		if _, err := db.ExecContext(ctx,
 			`INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 			kv[0], kv[1],
 		); err != nil {
-			return nil, fmt.Errorf("insert meta %s: %w", kv[0], err)
+			return nil, fmt.Errorf("store bronze meta %s: %w", kv[0], err)
 		}
 	}
 
-	if err := populateTableCounts(ctx, db, extRes.counts); err != nil {
+	counts, err := extractdb.RefreshBronzeCounts(ctx, db)
+	if err != nil {
 		return nil, err
 	}
-
-	if err := extractdb.RebuildFactsFTS(ctx, db); err != nil {
+	if err := extractdb.RebuildBronzeFTS(ctx, db); err != nil {
 		return nil, err
 	}
 	if _, err := db.ExecContext(ctx, `ANALYZE;`); err != nil {
-		return nil, fmt.Errorf("analyze facts sqlite: %w", err)
+		return nil, fmt.Errorf("analyze bronze db: %w", err)
 	}
-
 	if err := builder.Commit(ctx); err != nil {
 		return nil, err
 	}
 
 	if opts.ManifestPath != "" {
-		manifestCounts := make(map[string]int, len(extRes.counts))
-		for k, v := range extRes.counts {
-			manifestCounts[k] = int(v)
+		mCounts := make(map[string]int, len(counts))
+		for k, v := range counts {
+			mCounts[k] = int(v)
 		}
-		m := extractdb.TargetManifest{
-			SchemaVersion:      extractdb.ManifestSchemaVersion,
-			Target:             string(opts.Target),
-			BinarySHA256:       binSHA,
-			ExtractedAt:        extractedAt,
-			FactsSchemaVersion: extractdb.FactsSchemaVersion,
-			Sources:            extRes.sources,
-			Counts:             manifestCounts,
-		}
-		if err := extractdb.WriteManifestAtomic(opts.ManifestPath, m); err != nil {
+		if err := extractdb.WriteManifestAtomic(opts.ManifestPath, extractdb.TargetManifest{
+			Target:       string(opts.Target),
+			BinarySHA256: sha,
+			ExtractedAt:  now,
+			Extractors:   applied,
+			Counts:       mCounts,
+		}); err != nil {
 			return nil, err
 		}
 	}
 
 	return &Result{
 		Target:       opts.Target,
-		BinarySHA256: binSHA,
-		ImageBase:    extRes.imageBase,
-		Sources:      extRes.sources,
-		Counts:       extRes.counts,
-		Seeds:        extRes.seeds,
+		BinarySHA256: sha,
+		ImageBase:    src.ImageBase,
+		Extractors:   applied,
+		Counts:       counts,
 		Elapsed:      time.Since(t0),
 	}, nil
 }
 
-func populateTableCounts(ctx context.Context, db *sql.DB, counts map[string]int64) error {
-	tables := []string{
-		"sections", "relocs", "imports", "exports",
-		"functions", "func_ranges", "types", "type_members", "enum_values",
-		"func_vars", "source_files", "names", "inlines",
-		"strings", "string_xrefs", "call_sites", "data_xrefs",
-		"vtables", "lua_regs",
+func openSource(target workspace.TargetID, binaryPath string) (*Source, func(), error) {
+	src := &Source{
+		Target:     target,
+		BinaryPath: binaryPath,
 	}
-	for _, tbl := range tables {
-		var cnt int64
-		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+tbl).Scan(&cnt); err != nil {
-			return fmt.Errorf("count %s: %w", tbl, err)
+	if target.Is64Bit() {
+		ef, err := elf.Open(binaryPath)
+		if err != nil {
+			return nil, func() {}, fmt.Errorf("open elf64 %s: %w", binaryPath, err)
 		}
-		counts[tbl] = cnt
+		src.ELF = ef
+		if err := prepareELF64(src); err != nil {
+			_ = ef.Close()
+			return nil, func() {}, err
+		}
+		return src, func() { _ = ef.Close() }, nil
 	}
-	return nil
-}
 
-func LoadSeedsFromFacts(ctx context.Context, db *sql.DB) ([]FunctionSeed, error) {
-	rows, err := db.QueryContext(ctx, `
-		SELECT ea, name, calling_conv, cc_source, stack_purge, discovery_mask,
-		       thunk_target_ea, vtable_ea, vtable_slot, flags
-		FROM functions
-		ORDER BY ea ASC
-	`)
+	pf, err := pe.Open(binaryPath)
 	if err != nil {
-		return nil, fmt.Errorf("query functions for seeds: %w", err)
+		return nil, func() {}, fmt.Errorf("open pe32 %s: %w", binaryPath, err)
 	}
-	defer rows.Close()
-
-	var seeds []FunctionSeed
-	for rows.Next() {
-		var (
-			ea            int64
-			name          string
-			cc            string
-			ccSrc         string
-			stackPurge    int
-			discMask      int64
-			thunkTargetEA sql.NullInt64
-			vtableEA      sql.NullInt64
-			vtableSlot    sql.NullInt64
-			flags         int64
-		)
-		if err := rows.Scan(
-			&ea, &name, &cc, &ccSrc, &stackPurge, &discMask,
-			&thunkTargetEA, &vtableEA, &vtableSlot, &flags,
-		); err != nil {
-			return nil, fmt.Errorf("scan function seed: %w", err)
-		}
-		seed := FunctionSeed{
-			EA:            uint64(ea),
-			Name:          name,
-			CallingConv:   cc,
-			CCSource:      ccSrc,
-			StackPurge:    stackPurge,
-			DiscoveryMask: uint32(discMask),
-			VtableSlot:    -1,
-			Flags:         uint32(flags),
-		}
-		if thunkTargetEA.Valid {
-			seed.ThunkTargetEA = uint64(thunkTargetEA.Int64)
-		}
-		if vtableEA.Valid {
-			seed.VtableEA = uint64(vtableEA.Int64)
-		}
-		if vtableSlot.Valid {
-			seed.VtableSlot = int(vtableSlot.Int64)
-		}
-		seeds = append(seeds, seed)
+	src.PE = pf
+	if err := preparePE32(src); err != nil {
+		_ = pf.Close()
+		return nil, func() {}, err
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate function seeds: %w", err)
-	}
-	return seeds, nil
-}
-
-func nullInt64(v int64, valid bool) sql.NullInt64 {
-	if !valid {
-		return sql.NullInt64{}
-	}
-	return sql.NullInt64{Int64: v, Valid: true}
-}
-
-func nullUint64NonZero(v uint64) sql.NullInt64 {
-	if v == 0 {
-		return sql.NullInt64{}
-	}
-	return sql.NullInt64{Int64: int64(v), Valid: true}
-}
-
-func formatSubName(ea uint64) string {
-	return "sub_" + strconv.FormatUint(ea, 16)
+	return src, func() { _ = pf.Close() }, nil
 }

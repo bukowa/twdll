@@ -10,7 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"twdll/cli/internal/bronze"
+	"twdll/cli/internal/extractdb"
+	"twdll/cli/internal/silver"
 	"twdll/cli/internal/term"
 	"twdll/cli/internal/toolchain"
 	"twdll/cli/internal/workspace"
@@ -335,11 +339,11 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		if err := os.WriteFile(resLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		extractedBinary := paths.BinaryDBPath(workspace.TargetAttila32)
-		if err := os.MkdirAll(filepath.Dir(extractedBinary), 0o755); err != nil {
+		extractedBronze := paths.BronzeDBPath(workspace.TargetAttila32)
+		if err := os.MkdirAll(filepath.Dir(extractedBronze), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(extractedBinary, []byte("binary-sqlite"), 0o644); err != nil {
+		if err := os.WriteFile(extractedBronze, []byte("bronze-sqlite"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -374,7 +378,7 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		}
 
 		// Config, staged binaries, extracted DBs, and init state entries must remain intact
-		for _, kept := range []string{paths.Config, binFile, extractedBinary, paths.StateFile} {
+		for _, kept := range []string{paths.Config, binFile, extractedBronze, paths.StateFile} {
 			if _, sErr := os.Stat(kept); sErr != nil {
 				t.Fatalf("expected %s to be preserved by unscoped clean: %v", kept, sErr)
 			}
@@ -437,7 +441,7 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		if err := os.WriteFile(logFile, []byte("log"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		extractedFile := paths.BinaryDBPath(workspace.TargetAttila32)
+		extractedFile := paths.BronzeDBPath(workspace.TargetAttila32)
 		if err := os.MkdirAll(filepath.Dir(extractedFile), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -540,7 +544,7 @@ func TestRunInit_Clear_PreservesExternalToolsDir(t *testing.T) {
 	if err := os.WriteFile(preservedResLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	preservedExtracted := layout.Paths.BinaryDBPath(workspace.TargetAttila32)
+	preservedExtracted := layout.Paths.BronzeDBPath(workspace.TargetAttila32)
 	if err := os.MkdirAll(filepath.Dir(preservedExtracted), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -878,4 +882,713 @@ func writeMinimalELF64DWARF(t *testing.T, path string) {
 	if err := os.WriteFile(path, buf, 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writeValidTestPE32DLL(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const (
+		peOffset     = 0x80
+		coffOffset   = peOffset + 4
+		optOffset    = coffOffset + 20
+		optSize      = 224
+		secOffset    = optOffset + optSize
+		textFileOff  = 0x200
+		textFileSize = 0x200
+	)
+	buf := make([]byte, textFileOff+textFileSize)
+	buf[0] = 'M'
+	buf[1] = 'Z'
+	binary.LittleEndian.PutUint32(buf[0x3c:], peOffset)
+	copy(buf[peOffset:], []byte{'P', 'E', 0, 0})
+
+	// COFF Header
+	binary.LittleEndian.PutUint16(buf[coffOffset:], 0x014c) // i386
+	binary.LittleEndian.PutUint16(buf[coffOffset+2:], 1)    // NumberOfSections
+	binary.LittleEndian.PutUint16(buf[coffOffset+16:], optSize)
+	binary.LittleEndian.PutUint16(buf[coffOffset+18:], 0x2102) // EXECUTABLE_IMAGE | 32BIT_MACHINE | DLL
+
+	// OptionalHeader32
+	binary.LittleEndian.PutUint16(buf[optOffset:], 0x010b)         // PE32
+	binary.LittleEndian.PutUint32(buf[optOffset+16:], 0x1000)      // AddressOfEntryPoint
+	binary.LittleEndian.PutUint32(buf[optOffset+28:], 0x10000000)  // ImageBase
+	binary.LittleEndian.PutUint32(buf[optOffset+32:], 0x1000)      // SectionAlignment
+	binary.LittleEndian.PutUint32(buf[optOffset+36:], 0x200)       // FileAlignment
+	binary.LittleEndian.PutUint16(buf[optOffset+40:], 6)           // MajorOSVersion
+	binary.LittleEndian.PutUint16(buf[optOffset+48:], 6)           // MajorSubsystemVersion
+	binary.LittleEndian.PutUint32(buf[optOffset+56:], 0x2000)      // SizeOfImage
+	binary.LittleEndian.PutUint32(buf[optOffset+60:], textFileOff) // SizeOfHeaders
+	binary.LittleEndian.PutUint16(buf[optOffset+68:], 2)           // WINDOWS_GUI
+	binary.LittleEndian.PutUint32(buf[optOffset+92:], 16)          // NumberOfRvaAndSizes
+
+	// Section Header 0: .text
+	copy(buf[secOffset:], []byte(".text\x00\x00\x00"))
+	binary.LittleEndian.PutUint32(buf[secOffset+8:], 0x10)
+	binary.LittleEndian.PutUint32(buf[secOffset+12:], 0x1000)
+	binary.LittleEndian.PutUint32(buf[secOffset+16:], textFileSize)
+	binary.LittleEndian.PutUint32(buf[secOffset+20:], textFileOff)
+	binary.LittleEndian.PutUint32(buf[secOffset+36:], 0x60000020) // CODE | EXECUTE | READ
+
+	// Tiny cdecl/simple function body: push ebp; mov ebp, esp; pop ebp; ret
+	copy(buf[textFileOff:], []byte{0x55, 0x8b, 0xec, 0x5d, 0xc3})
+
+	if err := os.WriteFile(path, buf, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunExtract_NoDecomp_ExtractsBronzeAndSkipsWhenUpToDate(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
+	writeValidTestPE32DLL(t, layout.Paths.BinaryPath(workspace.TargetAttila32))
+
+	var stdout1, stderr1 bytes.Buffer
+	ui1 := term.NewUI(term.Streams{Out: &stdout1, Err: &stderr1, ColorMode: term.ColorNever})
+	rep1, err := RunExtract(context.Background(), ExtractRequest{
+		Layout: layout,
+		Options: ExtractOptions{
+			NoDecomp: true,
+			Targets:  []string{"attila_32"},
+		},
+		UI: ui1,
+	})
+	if err != nil {
+		t.Fatalf("first RunExtract failed: %v\nstderr:\n%s", err, stderr1.String())
+	}
+	if _, statErr := os.Stat(layout.Paths.BronzeDBPath(workspace.TargetAttila32)); statErr != nil {
+		t.Fatalf("expected bronze.sqlite to exist: %v", statErr)
+	}
+	if len(rep1.Targets) != 1 || !rep1.Targets[0].BronzeRan {
+		t.Fatalf("expected BronzeRan=true on first extract, got %+v", rep1)
+	}
+	if len(rep1.Targets[0].Engines) != 1 || !rep1.Targets[0].Engines[0].SilverSkipped {
+		t.Fatalf("expected SilverSkipped=true without analyzed DB, got %+v", rep1.Targets[0].Engines)
+	}
+
+	var stdout2, stderr2 bytes.Buffer
+	ui2 := term.NewUI(term.Streams{Out: &stdout2, Err: &stderr2, ColorMode: term.ColorNever})
+	rep2, err := RunExtract(context.Background(), ExtractRequest{
+		Layout: layout,
+		Options: ExtractOptions{
+			NoDecomp: true,
+			Targets:  []string{"attila_32"},
+		},
+		UI: ui2,
+	})
+	if err != nil {
+		t.Fatalf("second RunExtract failed: %v\nstderr:\n%s", err, stderr2.String())
+	}
+	if len(rep2.Targets) != 1 || rep2.Targets[0].BronzeRan {
+		t.Fatalf("expected BronzeRan=false when bronze.sqlite is already up to date, got %+v", rep2)
+	}
+}
+
+func TestRunExtract_FullPipelineAndFlags_UsesInjectedRunners(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
+	writeValidTestPE32DLL(t, layout.Paths.BinaryPath(workspace.TargetAttila32))
+
+	var silverCalls []silver.Options
+	var order []string
+
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{Out: &stdout, Err: &stderr, ColorMode: term.ColorNever})
+	rep, err := RunExtract(context.Background(), ExtractRequest{
+		Layout: layout,
+		Options: ExtractOptions{
+			Decompiler: "all",
+			Jobs:       4,
+			MaxMem:     "4G",
+			Retry:      true,
+			JSON:       true,
+			Targets:    []string{"attila_32"},
+		},
+		UI: ui,
+		ExtractBronze: func(_ context.Context, opts bronze.Options) (*bronze.Result, error) {
+			order = append(order, "bronze")
+			return &bronze.Result{Target: opts.Target, Counts: map[string]int64{"sections": 4}}, nil
+		},
+		ExtractSilver: func(_ context.Context, opts silver.Options) (*silver.Result, error) {
+			order = append(order, "silver:"+string(opts.Engine))
+			silverCalls = append(silverCalls, opts)
+			return &silver.Result{
+				Target:        opts.Target,
+				Engine:        opts.Engine,
+				FuncsRan:      true,
+				FuncCount:     10,
+				DecompRan:     true,
+				DecompWritten: 5,
+				StatusCounts:  map[string]int{extractdb.DecompStatusOK: 4, extractdb.DecompStatusFailed: 1},
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunExtract failed: %v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr on extract --json, got %q", stderr.String())
+	}
+	wantOrder := []string{"bronze", "silver:ghidra", "silver:ida"}
+	if strings.Join(order, ",") != strings.Join(wantOrder, ",") {
+		t.Fatalf("execution order = %v, want %v", order, wantOrder)
+	}
+	for _, sc := range silverCalls {
+		if sc.Workers != 4 || sc.MaxMem != "4G" || !sc.RetryFailed || !sc.RetryTimeouts || sc.NoDecomp {
+			t.Fatalf("unexpected silver.Options forwarded: %+v", sc)
+		}
+		if !strings.HasSuffix(filepath.ToSlash(sc.SilverDBPath), "/silver_"+string(sc.Engine)+".sqlite") {
+			t.Fatalf("unexpected SilverDBPath: %q", sc.SilverDBPath)
+		}
+	}
+
+	var decoded ExtractReport
+	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
+		t.Fatalf("invalid JSON extract report: %v\nraw:\n%s", err, stdout.String())
+	}
+	if len(decoded.Targets) != 1 || len(decoded.Targets[0].Engines) != 2 {
+		t.Fatalf("unexpected decoded report: %+v", decoded)
+	}
+	if decoded.Targets[0].Engines[0].Engine != "ghidra" || decoded.Targets[0].Engines[1].Engine != "ida" {
+		t.Fatalf("expected raw engine names, got %+v", decoded.Targets[0].Engines)
+	}
+	if rep.Targets[0].Engines[0].DecompWritten != 5 || rep.Targets[0].Engines[0].FuncCount != 10 {
+		t.Fatalf("unexpected engine summary: %+v", rep.Targets[0].Engines[0])
+	}
+}
+
+func TestRunStatus_ReportsExtractedDatabases(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
+	binPath := layout.Paths.BinaryPath(workspace.TargetAttila32)
+	writeValidTestPE32DLL(t, binPath)
+
+	sha, err := workspace.ComputeFileSHA256(binPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bronze.ExtractTarget(ctx, bronze.Options{
+		Target:       workspace.TargetAttila32,
+		BinaryPath:   binPath,
+		BronzeDBPath: layout.Paths.BronzeDBPath(workspace.TargetAttila32),
+		ManifestPath: layout.Paths.TargetManifestPath(workspace.TargetAttila32),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := extractdb.OpenSilverStore(ctx, layout.Paths.SilverDBPath(workspace.TargetAttila32, workspace.DecompilerGhidra), "attila_32", "ghidra", sha, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ReplaceFuncs(ctx, []extractdb.SilverFuncRow{
+		{EA: 0x10001000, Size: 5, Name: "sub_10001000"},
+	}, nil, "funcs"); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.ReplaceAsm(ctx, []extractdb.SilverAsmRow{
+		{FuncEA: 0x10001000, InsnCount: 1, RawAsm: "10001000: ret"},
+	}, ""); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.WriteBatch(ctx, []extractdb.DecompRecord{
+		{FuncEA: 0x10001000, FuncSize: 5, FuncName: "sub_10001000", RawC: "void sub_10001000(void) {}", Status: extractdb.DecompStatusOK},
+	}); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{Out: &stdout, Err: &stderr, ColorMode: term.ColorNever})
+	report, err := RunStatus(ctx, StatusRequest{
+		Layout: layout,
+		JSON:   false,
+		UI:     ui,
+	})
+	if err != nil {
+		t.Fatalf("RunStatus failed: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "Extracted Databases:") {
+		t.Fatalf("expected human status output to contain Extracted Databases section:\n%s", stdout.String())
+	}
+
+	var found *ExtractedStatus
+	for i := range report.Extracted {
+		if report.Extracted[i].Target == workspace.TargetAttila32 {
+			found = &report.Extracted[i]
+			break
+		}
+	}
+	if found == nil || !found.BronzePresent || !found.BronzeUpToDate {
+		t.Fatalf("expected attila_32 BronzePresent & BronzeUpToDate, got %+v", found)
+	}
+	ghSilver := found.Silver[string(workspace.DecompilerGhidra)]
+	if !ghSilver.Present || !ghSilver.UpToDate || ghSilver.Funcs != 1 || ghSilver.Asm != 1 || ghSilver.OK != 1 {
+		t.Fatalf("unexpected ghidra silver status: %+v", ghSilver)
+	}
+}
+
+func TestRunStatus_BronzeBinarySHAMismatchMarksNotUpToDate(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
+	binPath := layout.Paths.BinaryPath(workspace.TargetAttila32)
+	writeValidTestPE32DLL(t, binPath)
+
+	bronzePath := layout.Paths.BronzeDBPath(workspace.TargetAttila32)
+	b, err := extractdb.NewAtomicBuilder(bronzePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = b.Abort() }()
+	if err := extractdb.InitBronzeSchema(ctx, b.DB()); err != nil {
+		t.Fatal(err)
+	}
+	for _, kv := range [][2]string{
+		{extractdb.MetaTarget, "attila_32"},
+		{extractdb.MetaBinarySHA256, "stale_sha_value"},
+	} {
+		if _, err := b.DB().ExecContext(ctx, `INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, kv[0], kv[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := b.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	report, err := RunStatus(ctx, StatusRequest{
+		Layout: layout,
+		JSON:   true,
+		UI:     term.NewUI(term.Streams{Out: &stdout, Err: &stderr, ColorMode: term.ColorNever}),
+	})
+	if err != nil {
+		t.Fatalf("RunStatus failed: %v", err)
+	}
+	var found *ExtractedStatus
+	for i := range report.Extracted {
+		if report.Extracted[i].Target == workspace.TargetAttila32 {
+			found = &report.Extracted[i]
+			break
+		}
+	}
+	if found == nil || !found.BronzePresent || found.BronzeUpToDate {
+		t.Fatalf("expected BronzePresent=true and BronzeUpToDate=false on binary_sha256 mismatch, got %+v", found)
+	}
+}
+
+func TestRunExtract_AnimatedDashboard_RendersAllTargetsAndFinalOKRows(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
+	writeValidTestPE32DLL(t, layout.Paths.BinaryPath(workspace.TargetAttila32))
+	writeValidTestPE32DLL(t, layout.Paths.BinaryPath(workspace.TargetRome2_32))
+
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{
+		Out:         &stdout,
+		Err:         &stderr,
+		ColorMode:   term.ColorAlways,
+		ForceTTYErr: true,
+	})
+	rep, err := RunExtract(context.Background(), ExtractRequest{
+		Layout: layout,
+		Options: ExtractOptions{
+			Decompiler: "all",
+			Targets:    []string{"attila_32", "rome2_32"},
+		},
+		UI: ui,
+		ExtractSilver: func(_ context.Context, opts silver.Options) (*silver.Result, error) {
+			if opts.OnPhase != nil {
+				opts.OnPhase("decomp")
+			}
+			if opts.OnProgress != nil {
+				opts.OnProgress(6, 12)
+				opts.OnProgress(12, 12)
+			}
+			return &silver.Result{
+				Target:          opts.Target,
+				Engine:          opts.Engine,
+				FuncsRan:        true,
+				FuncCount:       12,
+				AsmCount:        12,
+				DecompRan:       true,
+				DecompWritten:   12,
+				StatusCounts:    map[string]int{extractdb.DecompStatusOK: 12},
+				PeakJobMemBytes: 256 * 1024 * 1024,
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunExtract failed: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if len(rep.Targets) != 2 {
+		t.Fatalf("len(Targets) = %d, want 2", len(rep.Targets))
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("expected empty stdout without --json, got %q", stdout.String())
+	}
+	errOut := stderr.String()
+	for _, want := range []string{"Extracting (ghidra, ida)", "queued", "attila_32", "rome2_32", "bronze (format)", "silver (ghidra)", "silver (ida)", "12 fn, 12 asm | ok=12 | pk 256 MiB", "[ok]"} {
+		if !strings.Contains(errOut, want) {
+			t.Fatalf("expected live dashboard stderr to contain %q\ngot:\n%s", want, errOut)
+		}
+	}
+}
+
+func TestExtractObserver_RendersCountOnlyAndPercentProgress(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{
+		Out:         &stdout,
+		Err:         &stderr,
+		ColorMode:   term.ColorAlways,
+		ForceTTYErr: true,
+	})
+	obs := newExtractObserver(ui, []workspace.DecompilerID{workspace.DecompilerGhidra, workspace.DecompilerIDA}, ExtractOptions{}, []plannedExtractTarget{
+		{target: workspace.TargetAttila32},
+	})
+	ghidraKey := extractRowKey{target: workspace.TargetAttila32, step: "ghidra"}
+	idaKey := extractRowKey{target: workspace.TargetAttila32, step: "ida"}
+	obs.RowStarted(ghidraKey, "funcs+asm...")
+	obs.RowProgress(ghidraKey, "funcs+asm", 4200, 0)
+	obs.mu.Lock()
+	obs.renderLocked()
+	obs.mu.Unlock()
+	if !strings.Contains(stderr.String(), "funcs+asm: 4200 fn") {
+		t.Fatalf("expected count-only progress line, got:\n%s", stderr.String())
+	}
+
+	stderr.Reset()
+	obs.RowProgress(ghidraKey, "decomp", 50, 100)
+	obs.mu.Lock()
+	rs := obs.states[ghidraKey]
+	now := time.Now()
+	rs.samples = []progressSample{
+		{at: now.Add(-5 * time.Second), done: 0},
+		{at: now, done: 50},
+	}
+	rs.etaSmooth = 0
+	obs.renderLocked()
+	obs.mu.Unlock()
+	if !strings.Contains(stderr.String(), "decomp: 50/100 (50.0%, 50 left, ~5s)") {
+		t.Fatalf("expected percentage/left/ETA progress line, got:\n%s", stderr.String())
+	}
+
+	// Simulate tail slowdown (only 10 items in last 10s -> 1/s -> 40 left = ~40s, not anchored to early burst).
+	stderr.Reset()
+	obs.mu.Lock()
+	rs.samples = []progressSample{
+		{at: now.Add(-10 * time.Second), done: 50},
+		{at: now, done: 60},
+	}
+	rs.done = 60
+	rs.etaSmooth = 0
+	obs.renderLocked()
+	obs.mu.Unlock()
+	if !strings.Contains(stderr.String(), "decomp: 60/100 (60.0%, 40 left, ~40s)") {
+		t.Fatalf("expected sliding-window ETA to adapt to tail slowdown, got:\n%s", stderr.String())
+	}
+
+	// Simulate byte-weighted ETA when 75% of functions processed but only 20% of bytes (200/1000 bytes in 10s -> 40s left).
+	stderr.Reset()
+	obs.RowBytes(ghidraKey, 200, 1000)
+	obs.mu.Lock()
+	rs.done = 75
+	rs.byteSamples = []progressSample{
+		{at: now.Add(-10 * time.Second), done: 0},
+		{at: now, done: 200},
+	}
+	rs.etaSmooth = 0
+	obs.renderLocked()
+	obs.mu.Unlock()
+	if !strings.Contains(stderr.String(), "decomp: 75/100 (75.0%, 25 left, ~40s)") {
+		t.Fatalf("expected byte-weighted ETA line, got:\n%s", stderr.String())
+	}
+
+	// Simulate ghidra finished and ida starting: both rows stay visible in the dashboard.
+	stderr.Reset()
+	obs.RowFinished(ghidraKey, "86295 fn, 86295 asm | ok=86291 timeout=4 | pk 4.1 GiB")
+	obs.RowStarted(idaKey, "decomp...")
+	obs.RowBytes(idaKey, 0, 1000)
+	obs.RowProgress(idaKey, "decomp", 0, 100)
+	obs.mu.Lock()
+	irs := obs.states[idaKey]
+	if irs.totalBytes != 1000 {
+		obs.mu.Unlock()
+		t.Fatalf("expected totalBytes preserved across phase ellipsis transition, got %d", irs.totalBytes)
+	}
+	obs.mu.Unlock()
+
+	obs.RowProgress(idaKey, "decomp", 50, 100)
+	obs.RowBytes(idaKey, 200, 1000)
+	obs.mu.Lock()
+	irs.byteSamples = []progressSample{
+		{at: now.Add(-10 * time.Second), done: 0},
+		{at: now, done: 200},
+	}
+	irs.etaSmooth = 0
+	obs.mu.Unlock()
+	// Stale out-of-order lower progress count (e.g. 49 after 50) must be ignored without clearing ETA samples.
+	obs.RowProgress(idaKey, "decomp", 49, 100)
+	obs.mu.Lock()
+	obs.renderLocked()
+	obs.mu.Unlock()
+	out := stderr.String()
+	if !strings.Contains(out, "silver (ghidra)") || !strings.Contains(out, "ok=86291 timeout=4") {
+		t.Fatalf("expected finished ghidra row to stay visible, got:\n%s", out)
+	}
+	if !strings.Contains(out, "silver (ida)") || !strings.Contains(out, "decomp: 50/100 (50.0%, 50 left, ~40s)") {
+		t.Fatalf("expected active ida row with preserved done and byte ETA, got:\n%s", out)
+	}
+}
+
+func TestExtractObserver_ResumeAndStatusTransitions(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{
+		Out:         &stdout,
+		Err:         &stderr,
+		ColorMode:   term.ColorAlways,
+		ForceTTYErr: true,
+	})
+	planned := []plannedExtractTarget{
+		{target: workspace.TargetAttila64},
+	}
+	obs := newExtractObserver(ui, []workspace.DecompilerID{workspace.DecompilerGhidra}, ExtractOptions{}, planned)
+	ghKey := extractRowKey{target: workspace.TargetAttila64, step: string(workspace.DecompilerGhidra)}
+
+	obs.RowStarted(ghKey, "starting...")
+	obs.RowPhase(ghKey, "decomp...")
+	obs.RowResume(ghKey, 900, 100)
+	obs.RowBytes(ghKey, 0, 1000)
+	obs.RowProgress(ghKey, "decomp", 0, 100)
+	obs.RowStatus(ghKey, "loading types")
+
+	stderr.Reset()
+	obs.mu.Lock()
+	obs.renderLocked()
+	obs.mu.Unlock()
+	if !strings.Contains(stderr.String(), "loading types: 900/1000 (90.0%, 100 left)") {
+		t.Fatalf("expected loading types with cached/total progress, got:\n%s", stderr.String())
+	}
+
+	obs.RowStatus(ghKey, "decomp")
+	obs.RowProgress(ghKey, "decomp", 25, 100)
+	obs.RowBytes(ghKey, 500, 1000)
+	now := time.Now()
+	obs.mu.Lock()
+	rs := obs.states[ghKey]
+	rs.byteSamples = []progressSample{
+		{at: now.Add(-10 * time.Second), done: 0},
+		{at: now, done: 500},
+	}
+	rs.etaSmooth = 0
+	stderr.Reset()
+	obs.renderLocked()
+	obs.mu.Unlock()
+	if !strings.Contains(stderr.String(), "decomp: 925/1000 (92.5%, 75 left, ~10s)") {
+		t.Fatalf("expected overall resumed progress with pending-only ETA, got:\n%s", stderr.String())
+	}
+}
+
+func TestRunExtract_RejectsStaleDatabaseWhenAnalyzedSHA256Differs(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
+	binPath := layout.Paths.BinaryPath(workspace.TargetAttila32)
+	writeValidTestPE32DLL(t, binPath)
+
+	dbDir := layout.Paths.DatabaseDir(workspace.DecompilerGhidra, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Join(dbDir, "attila_32.rep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dbDir, "attila_32.gpr"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !layout.Paths.HasValidDatabase(workspace.DecompilerGhidra, workspace.TargetAttila32) {
+		t.Fatalf("expected valid on-disk Ghidra database in %s", dbDir)
+	}
+
+	st := workspace.NewState()
+	st.UpsertBinary(workspace.TargetAttila32, binPath, "old-sha")
+	st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerGhidra, "old-sha")
+	if err := workspace.SaveState(layout.Paths.StateFile, st); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := RunExtract(context.Background(), ExtractRequest{
+		Layout: layout,
+		Options: ExtractOptions{
+			Targets: []string{"attila_32"},
+		},
+		UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+	})
+	var diag *term.DiagnosticError
+	if !errors.As(err, &diag) {
+		t.Fatalf("expected *term.DiagnosticError for stale DB, got %T (%v)", err, err)
+	}
+	if !strings.Contains(diag.Message, "is stale (binary changed since last analyze)") {
+		t.Fatalf("unexpected diagnostic message: %q", diag.Message)
+	}
+
+	var stdout, stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{Out: &stdout, Err: &stderr, ColorMode: term.ColorNever})
+	rep, err := RunExtract(context.Background(), ExtractRequest{
+		Layout: layout,
+		Options: ExtractOptions{
+			NoDecomp: true,
+			Targets:  []string{"attila_32"},
+		},
+		UI: ui,
+	})
+	if err != nil {
+		t.Fatalf("RunExtract --no-decomp with stale DB failed: %v", err)
+	}
+	if len(rep.Targets) != 1 || len(rep.Targets[0].Engines) != 1 {
+		t.Fatalf("unexpected report targets/engines: %+v", rep)
+	}
+	eng := rep.Targets[0].Engines[0]
+	if !eng.SilverSkipped || eng.FuncsRan {
+		t.Fatalf("expected SilverSkipped=true and FuncsRan=false for stale DB, got %+v", eng)
+	}
+	if !strings.Contains(stderr.String(), "decompiler database missing or stale") {
+		t.Fatalf("expected stderr to warn about missing or stale DB, got:\n%s", stderr.String())
+	}
+}
+
+func TestRunExtract_ForwardsSplitRetryAndTimeoutFlags(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
+	writeValidTestPE32DLL(t, layout.Paths.BinaryPath(workspace.TargetAttila32))
+
+	t.Run("retry-timeouts and timeout-secs", func(t *testing.T) {
+		var got silver.Options
+		_, err := RunExtract(context.Background(), ExtractRequest{
+			Layout: layout,
+			Options: ExtractOptions{
+				TimeoutSecs:   60,
+				RetryTimeouts: true,
+				Targets:       []string{"attila_32"},
+			},
+			UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+			ExtractSilver: func(_ context.Context, opts silver.Options) (*silver.Result, error) {
+				got = opts
+				return &silver.Result{Target: opts.Target, Engine: opts.Engine}, nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("RunExtract failed: %v", err)
+		}
+		if got.TimeoutSecs != 60 || got.NoTimeout || !got.RetryTimeouts || got.RetryFailed {
+			t.Fatalf("unexpected silver.Options: TimeoutSecs=%d NoTimeout=%v RetryTimeouts=%v RetryFailed=%v",
+				got.TimeoutSecs, got.NoTimeout, got.RetryTimeouts, got.RetryFailed)
+		}
+	})
+
+	t.Run("retry-failed and no-timeout", func(t *testing.T) {
+		var got silver.Options
+		_, err := RunExtract(context.Background(), ExtractRequest{
+			Layout: layout,
+			Options: ExtractOptions{
+				NoTimeout:   true,
+				RetryFailed: true,
+				Targets:     []string{"attila_32"},
+			},
+			UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+			ExtractSilver: func(_ context.Context, opts silver.Options) (*silver.Result, error) {
+				got = opts
+				return &silver.Result{Target: opts.Target, Engine: opts.Engine}, nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("RunExtract failed: %v", err)
+		}
+		if !got.NoTimeout || !got.RetryFailed || got.RetryTimeouts {
+			t.Fatalf("unexpected silver.Options: NoTimeout=%v RetryFailed=%v RetryTimeouts=%v",
+				got.NoTimeout, got.RetryFailed, got.RetryTimeouts)
+		}
+	})
+}
+
+func TestRunExtract_And_Clean_ExpandTargetGlobs(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-test")
+	attila64Path := layout.Paths.BinaryPath(workspace.TargetAttila64)
+	if err := os.MkdirAll(filepath.Dir(attila64Path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeMinimalELF64DWARF(t, attila64Path)
+	writeValidTestPE32DLL(t, layout.Paths.BinaryPath(workspace.TargetAttila32))
+	writeValidTestPE32DLL(t, layout.Paths.BinaryPath(workspace.TargetRome2_32))
+
+	t.Run("extract *_32 expands configured 32-bit targets", func(t *testing.T) {
+		rep, err := RunExtract(context.Background(), ExtractRequest{
+			Layout: layout,
+			Options: ExtractOptions{
+				NoDecomp: true,
+				Targets:  []string{"*_32"},
+			},
+			UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+			ExtractSilver: func(_ context.Context, opts silver.Options) (*silver.Result, error) {
+				return &silver.Result{Target: opts.Target, Engine: opts.Engine}, nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("RunExtract(*_32): %v", err)
+		}
+		if len(rep.Targets) != 2 || rep.Targets[0].Target != workspace.TargetAttila32 || rep.Targets[1].Target != workspace.TargetRome2_32 {
+			t.Fatalf("RunExtract(*_32) targets = %+v, want [attila_32, rome2_32]", rep.Targets)
+		}
+	})
+
+	t.Run("extract attila_* expands attila_64 and attila_32", func(t *testing.T) {
+		rep, err := RunExtract(context.Background(), ExtractRequest{
+			Layout: layout,
+			Options: ExtractOptions{
+				NoDecomp: true,
+				Targets:  []string{"attila_*"},
+			},
+			UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+			ExtractSilver: func(_ context.Context, opts silver.Options) (*silver.Result, error) {
+				return &silver.Result{Target: opts.Target, Engine: opts.Engine}, nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("RunExtract(attila_*): %v", err)
+		}
+		if len(rep.Targets) != 2 || rep.Targets[0].Target != workspace.TargetAttila64 || rep.Targets[1].Target != workspace.TargetAttila32 {
+			t.Fatalf("RunExtract(attila_*) targets = %+v, want [attila_64, attila_32]", rep.Targets)
+		}
+	})
+
+	t.Run("clean *_32 removes only 32-bit DBs and preserves attila_64", func(t *testing.T) {
+		for _, tid := range []workspace.TargetID{workspace.TargetAttila64, workspace.TargetAttila32, workspace.TargetRome2_32} {
+			dbDir := layout.Paths.DatabaseDir(workspace.DecompilerGhidra, tid)
+			if err := os.MkdirAll(filepath.Join(dbDir, string(tid)+".rep"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dbDir, string(tid)+".gpr"), []byte("ok"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := RunClean(context.Background(), CleanRequest{
+			Layout:  layout,
+			Options: CleanOptions{Decompiler: "ghidra", Targets: []string{"*_32"}},
+			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+		}); err != nil {
+			t.Fatalf("RunClean(*_32): %v", err)
+		}
+		if !layout.Paths.HasValidDatabase(workspace.DecompilerGhidra, workspace.TargetAttila64) {
+			t.Fatalf("expected attila_64 DB preserved after clean *_32")
+		}
+		if layout.Paths.HasValidDatabase(workspace.DecompilerGhidra, workspace.TargetAttila32) {
+			t.Fatalf("expected attila_32 DB removed after clean *_32")
+		}
+		if layout.Paths.HasValidDatabase(workspace.DecompilerGhidra, workspace.TargetRome2_32) {
+			t.Fatalf("expected rome2_32 DB removed after clean *_32")
+		}
+	})
 }

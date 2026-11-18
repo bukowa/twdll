@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"twdll/cli/internal/analyze"
-	"twdll/cli/internal/bronze"
 	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/workspace"
 )
@@ -45,9 +45,14 @@ func stageIDAWorkerDir(srcI64Path string, target workspace.TargetID, tmpBaseDir,
 	}
 	cleanup = func() { _ = os.RemoveAll(workerDir) }
 
-	if err := os.MkdirAll(filepath.Join(workerDir, "idausr"), 0o755); err != nil {
+	idaCfgDir := filepath.Join(workerDir, "idausr", "cfg")
+	if err := os.MkdirAll(idaCfgDir, 0o755); err != nil {
 		cleanup()
 		return "", "", nil, err
+	}
+	if err := os.WriteFile(filepath.Join(idaCfgDir, "hexrays.cfg"), []byte("MAX_FUNCSIZE = 128\nARG_HINTS_MODE = 0\n"), 0o644); err != nil {
+		cleanup()
+		return "", "", nil, fmt.Errorf("stage hexrays.cfg: %w", err)
 	}
 	stagedI64 = filepath.Join(workerDir, string(target)+".i64")
 	if err := workspace.CopyFileAtomic(srcI64Path, stagedI64); err != nil {
@@ -64,7 +69,60 @@ func cleanupIDAUnpackedSidecars(workerDir string, target workspace.TargetID) {
 	}
 }
 
-func runIDASilverExport(ctx context.Context, opts SilverOptions) ([]bronze.SilverFunc, error) {
+func stageIDAScriptsAndEnv(
+	workerDir string,
+	exportScriptName string,
+	exportScriptBody string,
+	enrichers []EnrichScript,
+	envMap map[string]string,
+) (string, error) {
+	if err := os.WriteFile(filepath.Join(workerDir, exportScriptName), []byte(exportScriptBody), 0o644); err != nil {
+		return "", err
+	}
+	if len(enrichers) == 0 {
+		return exportScriptName, nil
+	}
+
+	var orderedNames []string
+	for i, sc := range enrichers {
+		base := filepath.Base(strings.TrimSpace(sc.Filename))
+		if base == "" || base == "." {
+			continue
+		}
+		name := fmt.Sprintf("enrich_%d_%s", i, base)
+		if err := os.WriteFile(filepath.Join(workerDir, name), []byte(sc.Body), 0o644); err != nil {
+			return "", fmt.Errorf("write ida enricher %s: %w", name, err)
+		}
+		for k, v := range sc.Env {
+			envMap[k] = v
+		}
+		orderedNames = append(orderedNames, name)
+	}
+	if len(orderedNames) == 0 {
+		return exportScriptName, nil
+	}
+
+	orderedNames = append(orderedNames, exportScriptName)
+	var py strings.Builder
+	py.WriteString("import os, runpy, traceback, idc\n\n")
+	py.WriteString("base_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()\n")
+	py.WriteString("try:\n")
+	for _, nm := range orderedNames {
+		fmt.Fprintf(&py, "    runpy.run_path(os.path.join(base_dir, %q), run_name='__main__')\n", nm)
+	}
+	py.WriteString("except SystemExit:\n")
+	py.WriteString("    raise\n")
+	py.WriteString("except Exception:\n")
+	py.WriteString("    traceback.print_exc()\n")
+	py.WriteString("    idc.qexit(1)\n")
+	entryName := "twdll_ida_run.py"
+	if err := os.WriteFile(filepath.Join(workerDir, entryName), []byte(py.String()), 0o644); err != nil {
+		return "", err
+	}
+	return entryName, nil
+}
+
+func runIDASilverExport(ctx context.Context, opts Options, enrichers []EnrichScript, asmOutPath, stringsOutPath string) ([]SilverFunc, error) {
 	idaExe, err := analyze.ResolveIDAExecutable(opts.IDADir, opts.Target)
 	if err != nil {
 		return nil, err
@@ -80,17 +138,26 @@ func runIDASilverExport(ctx context.Context, opts SilverOptions) ([]bronze.Silve
 	}
 	defer cleanup()
 
-	scriptName := "export_ida_silver.py"
-	if err := os.WriteFile(filepath.Join(workerDir, scriptName), []byte(exportIDASilverPy), 0o644); err != nil {
+	outPath := filepath.Join(workerDir, "silver.jsonl")
+	totalPath := filepath.Join(workerDir, "silver.total")
+	logName := "ida_silver.log"
+	envMap := map[string]string{
+		"IDAUSR":                 filepath.Join(workerDir, "idausr"),
+		"TWDLL_SILVER_OUT":       outPath,
+		"TWDLL_SILVER_TOTAL_OUT": totalPath,
+	}
+	if strings.TrimSpace(asmOutPath) != "" {
+		envMap["TWDLL_SILVER_ASM_OUT"] = asmOutPath
+	}
+	if strings.TrimSpace(stringsOutPath) != "" {
+		envMap["TWDLL_SILVER_STRINGS_OUT"] = stringsOutPath
+	}
+	scriptName, err := stageIDAScriptsAndEnv(workerDir, "export_ida_silver.py", exportIDASilverPy, enrichers, envMap)
+	if err != nil {
 		return nil, err
 	}
-	outPath := filepath.Join(workerDir, "silver.jsonl")
-	logName := "ida_silver.log"
 
-	env, err := analyze.PrepareStageEnv(workerDir, false, map[string]string{
-		"IDAUSR":           filepath.Join(workerDir, "idausr"),
-		"TWDLL_SILVER_OUT": outPath,
-	})
+	env, err := analyze.PrepareStageEnv(workerDir, false, envMap)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +170,16 @@ func runIDASilverExport(ctx context.Context, opts SilverOptions) ([]bronze.Silve
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &outBuf
 
+	stopWatch := make(chan struct{})
+	watchDone := make(chan struct{})
+	go func() {
+		defer close(watchDone)
+		watchJSONLLineProgress(ctx, outPath, totalPath, stopWatch, opts.OnProgress)
+	}()
+
 	_, runErr := analyze.RunObservedCommand(cmd, nil)
+	close(stopWatch)
+	<-watchDone
 	if runErr != nil {
 		tail := readLogTail(filepath.Join(workerDir, logName), 20)
 		stdOut := strings.TrimSpace(outBuf.String())
@@ -129,22 +205,25 @@ func resolveIDADecompWorkers(target workspace.TargetID, requested int) int {
 }
 
 type idaWorkerConfig struct {
-	workerID    int
-	idaExe      string
-	srcI64      string
-	srcI64Size  int64
-	target      workspace.TargetID
-	engine      workspace.DecompilerID
-	timeoutSecs int
-	tmpBaseDir  string
-	shard       []extractdb.FuncSpec
-	outCh       chan<- extractdb.DecompRecord
-	onDone      func()
+	workerID     int
+	idaExe       string
+	srcI64       string
+	srcI64Size   int64
+	target       workspace.TargetID
+	engine       workspace.DecompilerID
+	timeoutSecs  int
+	startupGrace time.Duration
+	tmpBaseDir   string
+	enrichers    []EnrichScript
+	shard        []extractdb.FuncSpec
+	outCh        chan<- extractdb.DecompRecord
+	onDone       func()
 }
 
 func runIDADecompExport(
 	ctx context.Context,
-	opts DecompOptions,
+	opts Options,
+	enrichers []EnrichScript,
 	pending []extractdb.FuncSpec,
 	outCh chan<- extractdb.DecompRecord,
 ) (uint64, error) {
@@ -167,8 +246,13 @@ func runIDADecompExport(
 
 	tmpBase := resolveTmpBase(opts.Paths, opts.TmpBaseDir)
 	total := len(pending)
-	var doneCount atomic.Int64
+	var progMu sync.Mutex
+	var doneCount int
+	var startedDecomp atomic.Bool
 	var peakMem atomic.Uint64
+	if opts.OnStatus != nil {
+		opts.OnStatus("starting ida")
+	}
 
 	g, gCtx := errgroup.WithContext(ctx)
 	for wIdx, shard := range shards {
@@ -184,12 +268,21 @@ func runIDADecompExport(
 				engine:      opts.Engine,
 				timeoutSecs: timeoutSecs,
 				tmpBaseDir:  tmpBase,
+				enrichers:   enrichers,
 				shard:       shard,
 				outCh:       outCh,
 				onDone: func() {
-					if opts.OnProgress != nil {
-						opts.OnProgress(int(doneCount.Add(1)), total)
+					if opts.OnStatus != nil && startedDecomp.CompareAndSwap(false, true) {
+						opts.OnStatus("decomp")
 					}
+					if opts.OnProgress == nil {
+						return
+					}
+					progMu.Lock()
+					doneCount++
+					n := doneCount
+					opts.OnProgress(n, total)
+					progMu.Unlock()
 				},
 			})
 			peakMem.Add(wPeak)
@@ -214,13 +307,14 @@ func runIDAWorkerShard(ctx context.Context, cfg idaWorkerConfig) (uint64, error)
 	}
 	defer cleanup()
 
-	scriptName := "export_ida_decomp.py"
-	if err := os.WriteFile(filepath.Join(workerDir, scriptName), []byte(exportIDADecompPy), 0o644); err != nil {
+	extraEnv := make(map[string]string)
+	scriptName, err := stageIDAScriptsAndEnv(workerDir, "export_ida_decomp.py", exportIDADecompPy, cfg.enrichers, extraEnv)
+	if err != nil {
 		return 0, err
 	}
 
 	runner := func(attemptCtx context.Context, attempt int, remaining []extractdb.FuncSpec) idaAttemptOutcome {
-		return executeIDAAttempt(attemptCtx, workerDir, stagedI64, scriptName, attempt, remaining, cfg)
+		return executeIDAAttempt(attemptCtx, workerDir, stagedI64, scriptName, extraEnv, attempt, remaining, cfg)
 	}
 	return driveIDAWorkerShardWithWatchdog(ctx, workerDir, stagedI64, cfg, runner)
 }
@@ -279,9 +373,15 @@ func driveIDAWorkerShardWithWatchdog(
 
 		// 0 progress on attempt (e.g. startup crash / fatal IDA error).
 		consecutiveZeroProgress++
-		if consecutiveZeroProgress >= 2 || outcome.err != nil && errors.Is(outcome.err, errIDANoProgressFatal) {
-			return maxWorkerPeak, outcome.err
+		if consecutiveZeroProgress >= 2 || (outcome.err != nil && errors.Is(outcome.err, errIDANoProgressFatal)) {
+			if outcome.err != nil {
+				return maxWorkerPeak, outcome.err
+			}
+			return maxWorkerPeak, fmt.Errorf("%w: worker %d stopped at cursor %d/%d", errIDANoProgressFatal, cfg.workerID, cursor, len(cfg.shard))
 		}
+	}
+	if cursor < len(cfg.shard) {
+		return maxWorkerPeak, fmt.Errorf("%w: worker %d incomplete at cursor %d/%d", errIDANoProgressFatal, cfg.workerID, cursor, len(cfg.shard))
 	}
 	return maxWorkerPeak, nil
 }
@@ -293,6 +393,7 @@ func executeIDAAttempt(
 	workerDir string,
 	stagedI64 string,
 	scriptName string,
+	extraEnv map[string]string,
 	attempt int,
 	remaining []extractdb.FuncSpec,
 	cfg idaWorkerConfig,
@@ -305,11 +406,15 @@ func executeIDAAttempt(
 		return idaAttemptOutcome{err: err}
 	}
 
-	env, err := analyze.PrepareStageEnv(workerDir, false, map[string]string{
-		"IDAUSR":          filepath.Join(workerDir, "idausr"),
+	envMap := map[string]string{
+		"IDAUSR":           filepath.Join(workerDir, "idausr"),
 		"TWDLL_DECOMP_IN":  inPath,
 		"TWDLL_DECOMP_OUT": outPath,
-	})
+	}
+	for k, v := range extraEnv {
+		envMap[k] = v
+	}
+	env, err := analyze.PrepareStageEnv(workerDir, false, envMap)
 	if err != nil {
 		return idaAttemptOutcome{err: err}
 	}
@@ -371,7 +476,7 @@ func executeIDAAttempt(
 				inFlight = &cp
 				inFlightStarted = time.Now()
 			case "result":
-				rec := frame.toDecompRecord(cfg.engine)
+				rec := frame.toDecompRecord()
 				if !sendDecompRecord(ctx, cfg.outCh, rec) {
 					return
 				}
@@ -390,6 +495,11 @@ func executeIDAAttempt(
 	if cfg.timeoutSecs > 0 {
 		perFuncDeadline = time.Duration(cfg.timeoutSecs)*time.Second + 2*time.Second
 	}
+	attemptStarted := time.Now()
+	startupDeadline := cfg.startupGrace
+	if startupDeadline <= 0 && cfg.timeoutSecs > 0 {
+		startupDeadline = perFuncDeadline + 15*time.Second
+	}
 	ticker := time.NewTicker(40 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -406,15 +516,20 @@ func executeIDAAttempt(
 				<-procDone
 				return idaAttemptOutcome{completed: completedUntil, peakMem: peakMem.Load(), err: dErr}
 			}
-			deadline := perFuncDeadline
-			if completedUntil == 0 {
-				deadline += 15 * time.Second
-			}
-			if cfg.timeoutSecs > 0 && inFlight != nil && time.Since(inFlightStarted) > deadline {
-				timedOut = true
-				runCancel()
-				pRes = <-procDone
-				procExited = true
+			if cfg.timeoutSecs > 0 {
+				if inFlight != nil {
+					if time.Since(inFlightStarted) > perFuncDeadline {
+						timedOut = true
+						runCancel()
+						pRes = <-procDone
+						procExited = true
+					}
+				} else if completedUntil == 0 && startupDeadline > 0 && time.Since(attemptStarted) > startupDeadline {
+					timedOut = true
+					runCancel()
+					pRes = <-procDone
+					procExited = true
+				}
 			}
 		}
 	}
@@ -437,7 +552,6 @@ func executeIDAAttempt(
 		}
 		rec := extractdb.DecompRecord{
 			FuncEA:    uint64(inFlight.EA),
-			Engine:    string(cfg.engine),
 			FuncSize:  uint64(inFlight.Size),
 			FuncName:  inFlight.Name,
 			Status:    status,
@@ -453,7 +567,7 @@ func executeIDAAttempt(
 		if idx, ok := eaIndex[rec.FuncEA]; ok && idx+1 > completedUntil {
 			completedUntil = idx + 1
 		}
-	} else if completedUntil == 0 && pRes.err != nil {
+	} else if completedUntil == 0 && len(remaining) > 0 {
 		tail := readLogTail(filepath.Join(workerDir, logName), 20)
 		stdOut := strings.TrimSpace(outBuf.String())
 		if tail == "" {
@@ -461,10 +575,16 @@ func executeIDAAttempt(
 		} else if stdOut != "" {
 			tail = tail + "\nstdout/stderr:\n" + stdOut
 		}
+		cause := "exited 0 without JSONL progress"
+		if timedOut {
+			cause = fmt.Sprintf("startup timeout (>%s before first begin frame)", startupDeadline)
+		} else if pRes.err != nil {
+			cause = pRes.err.Error()
+		}
 		return idaAttemptOutcome{
 			completed: 0,
 			peakMem:   peakMem.Load(),
-			err:       fmt.Errorf("%w: %v\n%s", errIDANoProgressFatal, pRes.err, tail),
+			err:       fmt.Errorf("%w: %s\n%s", errIDANoProgressFatal, cause, tail),
 		}
 	}
 

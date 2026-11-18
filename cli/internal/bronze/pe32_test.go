@@ -3,6 +3,8 @@ package bronze
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"debug/pe"
 	"encoding/binary"
 	"os"
 	"path/filepath"
@@ -18,7 +20,7 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 	ctx := context.Context(t.Context())
 	tmpDir := t.TempDir()
 	binPath := filepath.Join(tmpDir, "empire.retail.dll")
-	binaryDBPath := filepath.Join(tmpDir, "binary.sqlite")
+	bronzeDBPath := filepath.Join(tmpDir, "bronze.sqlite")
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
 
 	fix := buildSyntheticPE32DLL(t, binPath)
@@ -26,7 +28,7 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 	res, err := ExtractTarget(ctx, Options{
 		Target:       workspace.TargetAttila32,
 		BinaryPath:   binPath,
-		BinaryDBPath: binaryDBPath,
+		BronzeDBPath: bronzeDBPath,
 		ManifestPath: manifestPath,
 	})
 	if err != nil {
@@ -36,11 +38,30 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 		t.Fatalf("ImageBase = 0x%x, want 0x%x", res.ImageBase, fix.imageBase)
 	}
 
-	db, err := extractdb.OpenReadOnly(binaryDBPath)
+	// PE32 has no ELF symbols or DWARF data; bronze stores only raw format facts.
+	if res.Counts["dwarf_funcs"] != 0 || res.Counts["dwarf_func_ranges"] != 0 || res.Counts["elf_symbols"] != 0 {
+		t.Fatalf("expected 0 DWARF/ELF rows on PE32, got counts=%v", res.Counts)
+	}
+	if res.Counts["sections"] < 4 || res.Counts["relocs"] == 0 {
+		t.Fatalf("expected PE sections and relocs populated, got counts=%v", res.Counts)
+	}
+
+	db, err := extractdb.OpenReadOnly(bronzeDBPath)
 	if err != nil {
 		t.Fatalf("OpenReadOnly: %v", err)
 	}
 	defer db.Close()
+
+	// Verify zero legacy heuristic tables exist in bronze.sqlite.
+	for _, legacyTable := range []string{"vtables", "lua_regs", "call_sites", "data_xrefs", "functions"} {
+		var cnt int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, legacyTable).Scan(&cnt); err != nil {
+			t.Fatal(err)
+		}
+		if cnt != 0 {
+			t.Fatalf("unexpected legacy/heuristic table %q present in bronze.sqlite", legacyTable)
+		}
+	}
 
 	// 1. Verify imports (both named and ordinal).
 	impRows, err := db.QueryContext(ctx, `SELECT iat_va, dll_name, sym_name, ordinal FROM imports ORDER BY iat_va`)
@@ -74,7 +95,7 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 		t.Errorf("unexpected ordinal import: %+v", imps[1])
 	}
 
-	// 2. Verify exports (forwarded export must be excluded!).
+	// 2. Verify exports (forwarded export must be excluded).
 	expRows, err := db.QueryContext(ctx, `SELECT ea, name, ordinal FROM exports ORDER BY ordinal`)
 	if err != nil {
 		t.Fatalf("query exports: %v", err)
@@ -102,137 +123,32 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 		t.Errorf("unexpected export: %+v", exps[0])
 	}
 
-	// 3. Verify packed /GR- vtables split cleanly and switch jump table (FF 24 85) is rejected.
-	vtRows, err := db.QueryContext(ctx, `SELECT vtable_ea, slot, target_ea FROM vtables ORDER BY vtable_ea, slot`)
-	if err != nil {
-		t.Fatalf("query vtables: %v", err)
-	}
-	type vtRec struct {
-		vtEA   uint64
-		slot   int
-		target uint64
-	}
-	var vts []vtRec
-	for vtRows.Next() {
-		var r vtRec
-		var vtEA, target int64
-		if err := vtRows.Scan(&vtEA, &r.slot, &target); err != nil {
-			t.Fatal(err)
-		}
-		r.vtEA = uint64(vtEA)
-		r.target = uint64(target)
-		vts = append(vts, r)
-	}
-	vtRows.Close()
-
-	wantVts := []vtRec{
-		{vtEA: uint64(fix.vt1VA), slot: 0, target: uint64(fix.fnVirt0VA)},
-		{vtEA: uint64(fix.vt1VA), slot: 1, target: uint64(fix.fnVirt1VA)},
-		{vtEA: uint64(fix.vt2VA), slot: 0, target: uint64(fix.fnVirt2VA)},
-		{vtEA: uint64(fix.vt2VA), slot: 1, target: uint64(fix.fnVirt0VA)}, // shared ICF slot
-	}
-	if len(vts) != len(wantVts) {
-		t.Fatalf("vtables = %+v, want %+v", vts, wantVts)
-	}
-	for i := range wantVts {
-		if vts[i] != wantVts[i] {
-			t.Errorf("vtable[%d] = %+v, want %+v", i, vts[i], wantVts[i])
-		}
-	}
-
-	// 4. Verify lua_regs (both luaL_Reg 8-byte and Lunar<T> 12-byte tables).
-	lrRows, err := db.QueryContext(ctx, `SELECT table_ea, method_name, func_ea FROM lua_regs ORDER BY table_ea, method_name`)
-	if err != nil {
-		t.Fatalf("query lua_regs: %v", err)
-	}
-	var luaMethods []string
-	for lrRows.Next() {
-		var tEA, fEA int64
-		var mName string
-		if err := lrRows.Scan(&tEA, &mName, &fEA); err != nil {
-			t.Fatal(err)
-		}
-		luaMethods = append(luaMethods, mName)
-	}
-	lrRows.Close()
-	if len(luaMethods) != 6 {
-		t.Fatalf("lua_regs methods = %v, want 6 methods (3 luaL_Reg + 3 Lunar)", luaMethods)
-	}
-
-	// 5. Verify LoadSeedsFromFacts and function attributes (thunks, calling_conv, push ecx local rejection, ICF flag).
-	loadedSeeds, err := LoadSeedsFromFacts(ctx, db)
-	if err != nil {
-		t.Fatalf("LoadSeedsFromFacts: %v", err)
-	}
-	if len(loadedSeeds) != len(res.Seeds) {
-		t.Fatalf("len(loadedSeeds)=%d != len(res.Seeds)=%d", len(loadedSeeds), len(res.Seeds))
-	}
-	seedByEA := make(map[uint64]FunctionSeed, len(loadedSeeds))
-	for _, s := range loadedSeeds {
-		seedByEA[s.EA] = s
-	}
-
-	// Check FF 25 IAT thunk.
-	thunkIAT, ok := seedByEA[uint64(fix.fnThunkIATVA)]
-	if !ok {
-		t.Fatalf("missing IAT thunk seed at 0x%x", fix.fnThunkIATVA)
-	}
-	if thunkIAT.Flags&extractdb.FuncFlagThunk == 0 || thunkIAT.ThunkTargetEA != uint64(fix.iatNamedVA) {
-		t.Errorf("IAT thunk seed = %+v, want FuncFlagThunk and ThunkTargetEA=0x%x", thunkIAT, fix.iatNamedVA)
-	}
-
-	// Check E9 rel32 thunk.
-	thunkJmp, ok := seedByEA[uint64(fix.fnThunkJmpVA)]
-	if !ok {
-		t.Fatalf("missing E9 thunk seed at 0x%x", fix.fnThunkJmpVA)
-	}
-	if thunkJmp.Flags&extractdb.FuncFlagThunk == 0 || thunkJmp.ThunkTargetEA != uint64(fix.fnPushECXLocalVA) {
-		t.Errorf("E9 thunk seed = %+v, want FuncFlagThunk and ThunkTargetEA=0x%x", thunkJmp, fix.fnPushECXLocalVA)
-	}
-
-	// Check standalone `push ecx` local allocation + `ret 4` -> must be `__stdcall` (NOT `__thiscall`!).
-	fnStdcall, ok := seedByEA[uint64(fix.fnPushECXLocalVA)]
-	if !ok {
-		t.Fatalf("missing stdcall seed at 0x%x", fix.fnPushECXLocalVA)
-	}
-	if fnStdcall.CallingConv != "__stdcall" || fnStdcall.StackPurge != 4 {
-		t.Errorf("push-ecx local function = %+v, want __stdcall with StackPurge=4", fnStdcall)
-	}
-
-	// Check luaL_Reg method (RET 0, no ECX read) -> `__cdecl` (`bronze_lua_reg`).
-	fnLuaC, ok := seedByEA[uint64(fix.fnLuaCdeclVA)]
-	if !ok {
-		t.Fatalf("missing luaL_Reg seed at 0x%x", fix.fnLuaCdeclVA)
-	}
-	if fnLuaC.CallingConv != "__cdecl" || fnLuaC.CCSource != extractdb.CCSourceLuaReg {
-		t.Errorf("luaL_Reg function = %+v, want __cdecl / %s", fnLuaC, extractdb.CCSourceLuaReg)
-	}
-
-	// Check Lunar<T> method (reads [ecx+4], RET 4) -> `__thiscall` (`bronze_lua_reg`).
-	fnLunar, ok := seedByEA[uint64(fix.fnLunarMethodVA)]
-	if !ok {
-		t.Fatalf("missing Lunar seed at 0x%x", fix.fnLunarMethodVA)
-	}
-	if fnLunar.CallingConv != "__thiscall" || fnLunar.CCSource != extractdb.CCSourceLuaReg || fnLunar.StackPurge != 4 {
-		t.Errorf("Lunar<T> function = %+v, want __thiscall / %s / StackPurge=4", fnLunar, extractdb.CCSourceLuaReg)
-	}
-
-	// Check ICF shared virtual method (referenced by vt1[0] and vt2[1]).
-	fnVirt0, ok := seedByEA[uint64(fix.fnVirt0VA)]
-	if !ok {
-		t.Fatalf("missing virtual method seed at 0x%x", fix.fnVirt0VA)
-	}
-	if fnVirt0.Flags&extractdb.FuncFlagICFCandidate == 0 || fnVirt0.CallingConv != "__thiscall" {
-		t.Errorf("shared virtual method = %+v, want FuncFlagICFCandidate & __thiscall", fnVirt0)
-	}
-
-	// 6. Verify UTF-16LE strings: valid UTF-16LE extracted, .reloc-overlapping UTF-16LE rejected, ASCII string xref counted.
-	var validUTF16Count, relocUTF16Count, asciiDFCount int
+	// 3. Verify UTF-16LE and ASCII strings: valid strings extracted, .reloc-overlapping runs rejected.
+	var validUTF16Count, relocUTF16Count, validASCIICount, relocASCIICount int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'utf16le' AND value = 'WarscapeWideText'`).Scan(&validUTF16Count); err != nil {
 		t.Fatal(err)
 	}
 	if validUTF16Count != 1 {
 		t.Errorf("validUTF16Count = %d, want 1", validUTF16Count)
+	}
+	var conoutCount, oddWideCount, asciiTailCount int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'utf16le' AND value = 'CONOUT$'`).Scan(&conoutCount); err != nil {
+		t.Fatal(err)
+	}
+	if conoutCount != 1 {
+		t.Errorf("CONOUT$ utf16le count = %d, want 1", conoutCount)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'utf16le' AND value = 'OddWide'`).Scan(&oddWideCount); err != nil {
+		t.Fatal(err)
+	}
+	if oddWideCount != 1 {
+		t.Errorf("OddWide utf16le count = %d, want 1", oddWideCount)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'ascii' AND value = 'abcd'`).Scan(&asciiTailCount); err != nil {
+		t.Fatal(err)
+	}
+	if asciiTailCount != 1 {
+		t.Errorf("abcdA ascii count = %d, want 1", asciiTailCount)
 	}
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE value = 'RelocFakeWide'`).Scan(&relocUTF16Count); err != nil {
 		t.Fatal(err)
@@ -240,124 +156,76 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 	if relocUTF16Count != 0 {
 		t.Errorf("relocUTF16Count = %d, want 0 (.reloc-overlapping UTF-16LE must be rejected)", relocUTF16Count)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT df_count FROM strings WHERE value = 'FACTION_TREASURY_LOG'`).Scan(&asciiDFCount); err != nil {
-		t.Fatalf("lookup FACTION_TREASURY_LOG: %v", err)
-	}
-	if asciiDFCount != 1 {
-		t.Errorf("FACTION_TREASURY_LOG df_count = %d, want 1", asciiDFCount)
-	}
-
-	// 7. Verify >260-instruction function has full size, RET 4 stack_purge, and string_xref after instruction 260.
-	fnLarge, ok := seedByEA[uint64(fix.fnLargeFuncVA)]
-	if !ok {
-		t.Fatalf("missing large function seed at 0x%x", fix.fnLargeFuncVA)
-	}
-	if fnLarge.StackPurge != 4 || fnLarge.CallingConv != "__stdcall" {
-		t.Errorf("large function seed = %+v, want __stdcall with StackPurge=4", fnLarge)
-	}
-	var largeSize, largePurge int
-	if err := db.QueryRowContext(ctx, `SELECT size, stack_purge FROM functions WHERE ea = ?`, int64(fix.fnLargeFuncVA)).Scan(&largeSize, &largePurge); err != nil {
-		t.Fatalf("query large function: %v", err)
-	}
-	if largeSize != int(fix.fnLargeFuncSize) || largePurge != 4 {
-		t.Errorf("large function (size=%d, stack_purge=%d), want (size=%d, stack_purge=4)", largeSize, largePurge, fix.fnLargeFuncSize)
-	}
-	var largeStrDF int
-	if err := db.QueryRowContext(ctx, `SELECT df_count FROM strings WHERE value = 'LARGE_FUNC_TAIL_XREF'`).Scan(&largeStrDF); err != nil {
-		t.Fatalf("lookup LARGE_FUNC_TAIL_XREF: %v", err)
-	}
-	if largeStrDF != 1 {
-		t.Errorf("LARGE_FUNC_TAIL_XREF df_count = %d, want 1", largeStrDF)
-	}
-
-	// 8. Verify multi-slot switch jump table does NOT create DiscoveryDataPtr functions for slot >= 1
-	// (even when targets start with 33 C0 / 56 / E9).
-	for idx, swVA := range fix.swCaseVAs {
-		if s, exists := seedByEA[uint64(swVA)]; exists {
-			t.Errorf("switch jump table slot %d target 0x%x was falsely seeded as function: %+v", idx+1, swVA, s)
-		}
-	}
-
-	// 9. Verify `cmp [esp+4], 0; sete cl; movzx eax, cl; ret` classifies as __cdecl (NOT __thiscall).
-	fnSete, ok := seedByEA[uint64(fix.fnSeteCdeclVA)]
-	if !ok {
-		t.Fatalf("missing sete function seed at 0x%x", fix.fnSeteCdeclVA)
-	}
-	if fnSete.CallingConv != "__cdecl" {
-		t.Errorf("sete cl function CallingConv = %q, want __cdecl", fnSete.CallingConv)
-	}
-
-	// 10. Verify FLD [rdata_float] + CALL [iat_slot] emit AccessKindRead and 0 AccessKindWrite targeting .rdata.
-	for _, targetVA := range []uint32{fix.rdataFloatVA, fix.iatNamedVA} {
-		var kind string
-		if err := db.QueryRowContext(ctx, `
-			SELECT access_kind FROM data_xrefs WHERE func_ea = ? AND to_ea = ?
-		`, int64(fix.fnSeteCdeclVA), int64(targetVA)).Scan(&kind); err != nil {
-			t.Fatalf("lookup data_xref to 0x%x: %v", targetVA, err)
-		}
-		if kind != extractdb.AccessKindRead {
-			t.Errorf("data_xref to 0x%x access_kind = %q, want %q", targetVA, kind, extractdb.AccessKindRead)
-		}
-	}
-	var rdataWrites int
-	if err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM data_xrefs dx
-		JOIN sections s ON dx.to_ea >= s.va AND dx.to_ea < s.va + s.virtual_size
-		WHERE s.name IN ('.rdata', '.rodata') AND dx.access_kind = 'write'
-	`).Scan(&rdataWrites); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'ascii' AND value = 'FACTION_TREASURY_LOG'`).Scan(&validASCIICount); err != nil {
 		t.Fatal(err)
 	}
-	if rdataWrites != 0 {
-		t.Errorf("rdata write data_xrefs = %d, want 0", rdataWrites)
+	if validASCIICount != 1 {
+		t.Errorf("validASCIICount = %d, want 1", validASCIICount)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE value IN ('Relc', 'Pref', 'PrefRelc')`).Scan(&relocASCIICount); err != nil {
+		t.Fatal(err)
+	}
+	if relocASCIICount != 0 {
+		t.Errorf("relocASCIICount = %d, want 0 (.reloc-overlapping ASCII must be rejected)", relocASCIICount)
 	}
 
-	// 11. Verify __chkstk caller (`MOV EAX, 0x1044; CALL __chkstk; MOV EDI, ECX; ...; RET`) classifies as __thiscall,
-	// and __chkstk itself gets FuncFlagNoSeedOverride.
-	fnChkstkCaller, ok := seedByEA[uint64(fix.fnChkstkCallerVA)]
-	if !ok {
-		t.Fatalf("missing __chkstk caller seed at 0x%x", fix.fnChkstkCallerVA)
+	// 4. Verify extractors are toggleable/extensible, and disabling pe32.format does not break data.strings or meta.
+	noStrDB := filepath.Join(tmpDir, "bronze_nostr.sqlite")
+	resNoStr, err := ExtractTarget(ctx, Options{
+		Target:             workspace.TargetAttila32,
+		BinaryPath:         binPath,
+		BronzeDBPath:       noStrDB,
+		DisabledExtractors: []string{"data.strings"},
+	})
+	if err != nil {
+		t.Fatalf("ExtractTarget(disable data.strings): %v", err)
 	}
-	if fnChkstkCaller.CallingConv != "__thiscall" {
-		t.Errorf("__chkstk caller CallingConv = %q, want __thiscall (seed=%+v)", fnChkstkCaller.CallingConv, fnChkstkCaller)
-	}
-	fnChkstk, ok := seedByEA[uint64(fix.fnChkstkVA)]
-	if !ok {
-		t.Fatalf("missing __chkstk seed at 0x%x", fix.fnChkstkVA)
-	}
-	if fnChkstk.Flags&extractdb.FuncFlagNoSeedOverride == 0 {
-		t.Errorf("__chkstk Flags = 0x%x, want FuncFlagNoSeedOverride (0x%x)", fnChkstk.Flags, extractdb.FuncFlagNoSeedOverride)
+	if resNoStr.Counts["strings"] != 0 {
+		t.Fatalf("strings count with data.strings disabled = %d, want 0", resNoStr.Counts["strings"])
 	}
 
-	// 12. Verify .CRT$XCU initializer (`PUSH reloc(str); MOV ECX, reloc(obj); CALL ctor; ...; RET`)
-	// is discovered from .rdata pointer array as DiscoveryDataPtr.
-	fnCRTInit, ok := seedByEA[uint64(fix.fnCRTInitStubVA)]
-	if !ok {
-		t.Fatalf("missing .CRT$XCU initializer seed at 0x%x", fix.fnCRTInitStubVA)
+	noFmtDB := filepath.Join(tmpDir, "bronze_nofmt.sqlite")
+	resNoFmt, err := ExtractTarget(ctx, Options{
+		Target:             workspace.TargetAttila32,
+		BinaryPath:         binPath,
+		BronzeDBPath:       noFmtDB,
+		DisabledExtractors: []string{"pe32.format"},
+	})
+	if err != nil {
+		t.Fatalf("ExtractTarget(disable pe32.format): %v", err)
 	}
-	if fnCRTInit.DiscoveryMask&extractdb.DiscoveryDataPtr == 0 {
-		t.Errorf(".CRT$XCU initializer DiscoveryMask = 0x%x, want DiscoveryDataPtr", fnCRTInit.DiscoveryMask)
+	if resNoFmt.ImageBase != uint64(fix.imageBase) {
+		t.Fatalf("ImageBase with pe32.format disabled = 0x%x, want 0x%x", resNoFmt.ImageBase, fix.imageBase)
 	}
-
-	// 13. Verify _atexit destructor thunk (`MOV ECX, reloc(obj); JMP dtor`) is discovered from .text PUSH imm32 reloc.
-	fnAtexitDtor, ok := seedByEA[uint64(fix.fnAtexitDtorVA)]
-	if !ok {
-		t.Fatalf("missing _atexit destructor thunk seed at 0x%x", fix.fnAtexitDtorVA)
+	if resNoFmt.Counts["strings"] == 0 {
+		t.Fatalf("expected strings populated when pe32.format is disabled")
 	}
-	if fnAtexitDtor.DiscoveryMask&extractdb.DiscoveryDataPtr == 0 {
-		t.Errorf("_atexit destructor thunk DiscoveryMask = 0x%x, want DiscoveryDataPtr", fnAtexitDtor.DiscoveryMask)
+	noFmtReadDB, err := extractdb.OpenReadOnly(noFmtDB)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// 14. Verify normal `6A FF 68 <reloc> 64 A1 00 00 00 00` SEH game function is discovered and does NOT get FuncFlagNoSeedOverride.
-	fnNormalSEH, ok := seedByEA[uint64(fix.fnNormalSEHVA)]
-	if !ok {
-		t.Fatalf("missing normal SEH game function seed at 0x%x", fix.fnNormalSEHVA)
+	defer noFmtReadDB.Close()
+	var fmtVal, archVal, baseVal string
+	if err := noFmtReadDB.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, extractdb.MetaFormat).Scan(&fmtVal); err != nil {
+		t.Fatal(err)
 	}
-	if fnNormalSEH.Flags&extractdb.FuncFlagNoSeedOverride != 0 {
-		t.Errorf("normal SEH game function Flags = 0x%x, must NOT have FuncFlagNoSeedOverride", fnNormalSEH.Flags)
+	if err := noFmtReadDB.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, extractdb.MetaArch).Scan(&archVal); err != nil {
+		t.Fatal(err)
 	}
-	if fnNormalSEH.CallingConv != "__thiscall" {
-		t.Errorf("normal SEH game function CallingConv = %q, want __thiscall", fnNormalSEH.CallingConv)
+	if err := noFmtReadDB.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = ?`, extractdb.MetaImageBase).Scan(&baseVal); err != nil {
+		t.Fatal(err)
 	}
+	if fmtVal != extractdb.FormatPE32 || archVal != extractdb.ArchX86 || baseVal != "0x10000000" {
+		t.Fatalf("meta with pe32.format disabled = (%q, %q, %q)", fmtVal, archVal, baseVal)
+	}
+	var noFmtRelocStr int
+	if err := noFmtReadDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE value IN ('RelocFakeWide', 'Relc', 'Pref', 'PrefRelc')`).Scan(&noFmtRelocStr); err != nil {
+		t.Fatal(err)
+	}
+	if noFmtRelocStr != 0 {
+		t.Fatalf("expected .reloc filtering to remain active when pe32.format disabled, got %d", noFmtRelocStr)
+	}
+	_ = sql.ErrNoRows
 }
 
 type syntheticPE32Layout struct {
@@ -365,6 +233,7 @@ type syntheticPE32Layout struct {
 	iatNamedVA       uint32
 	iatOrdVA         uint32
 	rdataFloatVA     uint32
+	bssGlobalVA      uint32
 	fnExportCtorVA   uint32
 	fnVirt0VA        uint32
 	fnVirt1VA        uint32
@@ -394,7 +263,8 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 		textRVA    = 0x1000
 		rdataRVA   = 0x2000
 		dataRVA    = 0x3000
-		relocRVA   = 0x4000
+		dataVSize  = 0x1800 // VirtualSize > RawSize (0x1000) to include .bss tail [0x4000, 0x4800)
+		relocRVA   = 0x5000
 		secFileSz  = 0x1000
 		headerSize = 0x400
 	)
@@ -457,6 +327,44 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	addReloc(fakeWideRVA + 4)
 	rdPos += 4
 
+	// Relocated 4-byte printable ASCII pointer followed by NUL, and non-relocated prefix + relocated 4-byte pointer + NUL.
+	for rdPos%4 != 0 {
+		rdPos++
+	}
+	relocASCIIRVA := uint32(rdataRVA + rdPos)
+	copy(rdata[rdPos:], "Relc\x00\x00\x00\x00")
+	addReloc(relocASCIIRVA)
+	rdPos += 8
+
+	prefixRelocRVA := uint32(rdataRVA + rdPos)
+	copy(rdata[rdPos:], "PrefRelc\x00\x00\x00\x00")
+	addReloc(prefixRelocRVA + 4)
+	rdPos += 12
+
+	// Regression: a float constant ending in printable '?' (0x3F) immediately before L"CONOUT$"
+	// must NOT truncate the leading 'C' of the UTF-16LE string, and an odd-length ASCII string
+	// immediately before an odd-offset UTF-16LE string must still yield both cleanly.
+	for rdPos%4 != 0 {
+		rdPos++
+	}
+	copy(rdata[rdPos:], []byte{0xf5, 0x9a, 0xb6, 0x3f})
+	rdPos += 4
+	for _, u := range utf16.Encode([]rune("CONOUT$")) {
+		binary.LittleEndian.PutUint16(rdata[rdPos:rdPos+2], u)
+		rdPos += 2
+	}
+	binary.LittleEndian.PutUint16(rdata[rdPos:rdPos+2], 0)
+	rdPos += 2
+
+	copy(rdata[rdPos:], "abcd\x00")
+	rdPos += 5
+	for _, u := range utf16.Encode([]rune("OddWide")) {
+		binary.LittleEndian.PutUint16(rdata[rdPos:rdPos+2], u)
+		rdPos += 2
+	}
+	binary.LittleEndian.PutUint16(rdata[rdPos:rdPos+2], 0)
+	rdPos += 2
+
 	// Define function offsets in .text:
 	const (
 		offExportCtor   = 0x000
@@ -486,11 +394,15 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	binary.LittleEndian.PutUint32(rdata[rdPos:rdPos+4], 0x3F800000) // 1.0f
 	rdPos += 4
 
+	// .bss global residing inside .data VirtualSize tail [dataRVA+0x1000, dataRVA+0x1800) beyond RawSize (0x1000).
+	bssGlobalVA := uint32(imageBase + dataRVA + 0x1400)
+
 	lay := syntheticPE32Layout{
 		imageBase:        imageBase,
 		iatNamedVA:       imageBase + rdataRVA + 0x100,
 		iatOrdVA:         imageBase + rdataRVA + 0x104,
 		rdataFloatVA:     rdataFloatVA,
+		bssGlobalVA:      bssGlobalVA,
 		fnExportCtorVA:   imageBase + textRVA + offExportCtor,
 		fnVirt0VA:        imageBase + textRVA + offVirt0,
 		fnVirt1VA:        imageBase + textRVA + offVirt1,
@@ -534,7 +446,7 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	rdPos = vt2Off + 12
 
 	// Place a 4-slot switch jump table in .rdata referenced by `FF 24 85 <jmpTblVA>` ->
-	// must NOT be emitted as vtable AND slots 1..3 (starting with 33 C0 / 56 / E9) must NOT be seeded as DiscoveryDataPtr!
+	// must NOT be emitted as vtable AND slots 1..3 (starting with 33 C0 / 56 / E9) must NOT be seeded!
 	jmpTblOff := rdPos
 	jmpTblVA := uint32(imageBase + rdataRVA + jmpTblOff)
 	binary.LittleEndian.PutUint32(rdata[jmpTblOff:jmpTblOff+4], lay.fnVirt0VA)
@@ -668,7 +580,7 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	sp += 6
 	text[sp] = 0xC3
 
-	// Switch case blocks starting with 33 C0, 56, and E9 (must NOT be seeded by jump table slots 1..3):
+	// Switch case blocks starting with 33 C0, 56, and E9:
 	copy(text[offSwCase1:], []byte{0x33, 0xC0, 0xC3})
 	copy(text[offSwCase2:], []byte{0x56, 0x5E, 0xC3})
 	text[offSwCase3] = 0xE9
@@ -709,12 +621,13 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	cp += 5
 	copy(text[cp:], []byte{0x8B, 0xF9, 0x8B, 0xE5, 0x5D, 0xC3}) // mov edi, ecx; mov esp, ebp; pop ebp; ret
 
-	// 14. fnCRTInitStub (preceded by 0xCC, discovered from .rdata pointer array):
+	// 14. fnCRTInitStub:
 	//   68 <strLun1>          push reloc(str)
 	//   B9 <dataObjVA>        mov ecx, reloc(obj)
 	//   E8 <offChkstkCaller>  call ctor
-	//   68 <fnAtexitDtorVA>   push reloc(atexit_dtor)
+	//   68 <fnAtexitDtorVA>   push reloc(atexit_dtor)   -> .text function-pointer addr xref!
 	//   E8 <offLuaCdecl>      call _atexit
+	//   A3 <bssGlobalVA>      mov [bssGlobalVA], eax    -> .data .bss write xref!
 	//   59                    pop ecx
 	//   C3                    ret
 	dataObjVA := uint32(imageBase + dataRVA + 0x20)
@@ -737,9 +650,13 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	text[ip] = 0xE8
 	binary.LittleEndian.PutUint32(text[ip+1:ip+5], uint32(int32(offLuaCdecl-(ip+5))))
 	ip += 5
+	text[ip] = 0xA3
+	binary.LittleEndian.PutUint32(text[ip+1:ip+5], bssGlobalVA)
+	addReloc(uint32(textRVA + ip + 1))
+	ip += 5
 	copy(text[ip:], []byte{0x59, 0xC3})
 
-	// 15. fnAtexitDtor (preceded by 0xCC, discovered from .text PUSH imm32 reloc):
+	// 15. fnAtexitDtor:
 	//   B9 <dataObjVA>        mov ecx, reloc(obj)
 	//   E9 <offNormalSEH>     jmp dtor
 	dp := offAtexitDtor
@@ -768,11 +685,6 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	})
 
 	// Build Import Directory at rdata+0x000:
-	// Descriptor 0 (20B) at +0x000, Descriptor 1 (null, 20B) at +0x014
-	// OriginalFirstThunk at +0x040 (3 u32: hint/name RVA, ordinal flag, 0)
-	// FirstThunk (IAT) at +0x100
-	// DLL name "KERNEL32.dll\0" at +0x060
-	// IMAGE_IMPORT_BY_NAME {uint16(42), "GetTickCount\0"} at +0x080
 	binary.LittleEndian.PutUint32(rdata[0x000:0x004], rdataRVA+0x040) // OriginalFirstThunk
 	binary.LittleEndian.PutUint32(rdata[0x00C:0x010], rdataRVA+0x060) // Name RVA
 	binary.LittleEndian.PutUint32(rdata[0x010:0x014], rdataRVA+0x100) // FirstThunk RVA
@@ -829,7 +741,7 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	binary.LittleEndian.PutUint32(opt[28:32], imageBase)  // ImageBase
 	binary.LittleEndian.PutUint32(opt[32:36], 0x1000)     // SectionAlignment
 	binary.LittleEndian.PutUint32(opt[36:40], 0x1000)     // FileAlignment
-	binary.LittleEndian.PutUint32(opt[56:60], 0x5000)     // SizeOfImage
+	binary.LittleEndian.PutUint32(opt[56:60], 0x6000)     // SizeOfImage
 	binary.LittleEndian.PutUint32(opt[60:64], headerSize) // SizeOfHeaders
 	binary.LittleEndian.PutUint32(opt[92:96], 16)         // NumberOfRvaAndSizes = 16
 	// DataDirectory[0] (Export) at opt[96:104]
@@ -854,7 +766,7 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	}
 	writeSecHdr(0, ".text", secFileSz, textRVA, secFileSz, headerSize, 0x60000020)
 	writeSecHdr(1, ".rdata", secFileSz, rdataRVA, secFileSz, headerSize+secFileSz, 0x40000040)
-	writeSecHdr(2, ".data", secFileSz, dataRVA, secFileSz, headerSize+2*secFileSz, 0xC0000040)
+	writeSecHdr(2, ".data", dataVSize, dataRVA, secFileSz, headerSize+2*secFileSz, 0xC0000040)
 	writeSecHdr(3, ".reloc", secFileSz, relocRVA, secFileSz, headerSize+3*secFileSz, 0x42000040)
 
 	fileBuf.Write(hdr)
@@ -902,4 +814,52 @@ func buildPERelocSection(rvas []uint32, secSize int) ([]byte, uint32) {
 	out := make([]byte, secSize)
 	copy(out, buf.Bytes())
 	return out, totalLen
+}
+
+func TestPE32MalformedRVAOverflowAndExportCap(t *testing.T) {
+	prep := &pe32Prepared{
+		secs: []pe32Section{
+			{name: ".rdata", rva: 0xFFFFFFF0, data: []byte{1, 2, 3, 4}},
+		},
+		relocWords: make([]uint64, 2),
+		maxRVA:     0x100000000,
+	}
+	if _, ok := prep.readSliceAtRVA(0xFFFFFFF0, 0x20); ok {
+		t.Fatalf("expected readSliceAtRVA with overflowing size to return false")
+	}
+	if slice, ok := prep.readSliceAtRVA(0xFFFFFFF0, 4); !ok || len(slice) != 4 {
+		t.Fatalf("expected valid readSliceAtRVA near 0xFFFFFFFF to succeed, got ok=%v len=%d", ok, len(slice))
+	}
+	if prep.hasRelocByte(0xFFFFFFFF) {
+		t.Fatalf("expected out-of-range reloc check to return false")
+	}
+
+	// Malformed Export Directory with numNames = 0xFFFFFFFF must not panic or attempt a 4B-entry map allocation.
+	dir := make([]byte, 40)
+	binary.LittleEndian.PutUint32(dir[16:20], 1)          // Base
+	binary.LittleEndian.PutUint32(dir[20:24], 0)          // NumberOfFunctions
+	binary.LittleEndian.PutUint32(dir[24:28], 0xFFFFFFFF) // NumberOfNames
+	binary.LittleEndian.PutUint32(dir[28:32], 0x2000)
+	binary.LittleEndian.PutUint32(dir[32:36], 0x2000)
+	binary.LittleEndian.PutUint32(dir[36:40], 0x2000)
+
+	oh := &pe.OptionalHeader32{
+		ImageBase: 0x10000000,
+		DataDirectory: [16]pe.DataDirectory{
+			pe.IMAGE_DIRECTORY_ENTRY_EXPORT: {VirtualAddress: 0x1000, Size: 40},
+		},
+	}
+	exports := parsePE32Exports(
+		oh,
+		func(rva uint64, size uint32) ([]byte, bool) {
+			if rva == 0x1000 && size == 40 {
+				return dir, true
+			}
+			return nil, false
+		},
+		func(uint64, int) (string, bool) { return "", false },
+	)
+	if len(exports) != 0 {
+		t.Fatalf("expected 0 exports from malformed export directory, got %d", len(exports))
+	}
 }
