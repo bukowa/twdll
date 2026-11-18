@@ -72,12 +72,33 @@ func isWidePrintable(u uint32) bool {
 	return (u >= 0x0020 && u <= 0x007E) || (u >= 0x00A0 && u <= 0x00FF) || u == '\t' || u == '\r' || u == '\n'
 }
 
+func hasClaimedBytes(claimed []bool, offset, width int) bool {
+	for k := 0; k < width; k++ {
+		if claimed[offset+k] {
+			return true
+		}
+	}
+	return false
+}
+
+func hasRelocSpan(hasReloc func(int) bool, offset, width int) bool {
+	if hasReloc == nil {
+		return false
+	}
+	for k := 0; k < width; k++ {
+		if hasReloc(offset + k) {
+			return true
+		}
+	}
+	return false
+}
+
 func scanUTF16LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 	data := sec.Data
 	n := len(data)
 	i := 0
 	for i+1 < n {
-		if claimed[i] || claimed[i+1] {
+		if hasClaimedBytes(claimed, i, 2) {
 			i++
 			continue
 		}
@@ -92,10 +113,10 @@ func scanUTF16LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 		printable := 0
 		relocHit := false
 		for i+1 < n && units < 4096 {
-			if claimed[i] || claimed[i+1] {
+			if hasClaimedBytes(claimed, i, 2) {
 				break
 			}
-			if sec.HasRelocAt != nil && (sec.HasRelocAt(i) || sec.HasRelocAt(i+1)) {
+			if hasRelocSpan(sec.HasRelocAt, i, 2) {
 				relocHit = true
 			}
 			u := binary.LittleEndian.Uint16(data[i : i+2])
@@ -113,8 +134,8 @@ func scanUTF16LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 			i += 2
 		}
 		hasNull := false
-		if i+1 < n && !claimed[i] && !claimed[i+1] && binary.LittleEndian.Uint16(data[i:i+2]) == 0 {
-			if sec.HasRelocAt != nil && (sec.HasRelocAt(i) || sec.HasRelocAt(i+1)) {
+		if i+1 < n && !hasClaimedBytes(claimed, i, 2) && binary.LittleEndian.Uint16(data[i:i+2]) == 0 {
+			if hasRelocSpan(sec.HasRelocAt, i, 2) {
 				relocHit = true
 			}
 			hasNull = true
@@ -148,6 +169,10 @@ func scanUTF32LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 	n := len(data)
 	i := 0
 	for i+3 < n {
+		if hasClaimedBytes(claimed, i, 4) {
+			i += 4
+			continue
+		}
 		u0 := binary.LittleEndian.Uint32(data[i : i+4])
 		if !isWidePrintable(u0) {
 			i += 4
@@ -157,8 +182,15 @@ func scanUTF32LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 		units := 0
 		alnum := 0
 		printable := 0
+		relocHit := false
 		var runes []rune
 		for i+3 < n && units < 4096 {
+			if hasClaimedBytes(claimed, i, 4) {
+				break
+			}
+			if hasRelocSpan(sec.HasRelocAt, i, 4) {
+				relocHit = true
+			}
 			u := binary.LittleEndian.Uint32(data[i : i+4])
 			if u == 0 {
 				break
@@ -175,14 +207,17 @@ func scanUTF32LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 			i += 4
 		}
 		hasNull := false
-		if i+3 < n && binary.LittleEndian.Uint32(data[i:i+4]) == 0 {
+		if i+3 < n && !hasClaimedBytes(claimed, i, 4) && binary.LittleEndian.Uint32(data[i:i+4]) == 0 {
+			if hasRelocSpan(sec.HasRelocAt, i, 4) {
+				relocHit = true
+			}
 			hasNull = true
 			i += 4
 		} else {
 			i += 4
 		}
 
-		if hasNull && units >= 5 && alnum >= 2 && printable*100 >= units*80 {
+		if hasNull && !relocHit && units >= 5 && alnum >= 2 && printable*100 >= units*80 {
 			val := string(runes)
 			if utf8.ValidString(val) {
 				for k := start; k < start+(units+1)*4 && k < len(claimed); k++ {

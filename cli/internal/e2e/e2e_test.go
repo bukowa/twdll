@@ -529,8 +529,9 @@ func TestE2E_MiniWarscape_RealDecompilers(t *testing.T) {
 	runCLI(t, sb, "extract", "-d", "ida", "--clear", "attila_32")
 	repAfterSelectiveClear := parseStatusReport(t, sb)
 	for _, db := range repAfterSelectiveClear.Databases {
-		if !db.Analyzed {
-			t.Fatalf("after analyze --clear attila_32, database %s/%s Analyzed = false, want true", db.Engine, db.Target)
+		wantAnalyzed := db.Target == workspace.TargetAttila64 || db.Target == workspace.TargetAttila32
+		if db.Analyzed != wantAnalyzed {
+			t.Fatalf("after analyze --clear attila_32, database %s/%s Analyzed = %v, want %v", db.Engine, db.Target, db.Analyzed, wantAnalyzed)
 		}
 	}
 
@@ -561,8 +562,9 @@ func TestE2E_MiniWarscape_RealDecompilers(t *testing.T) {
 		t.Fatalf("expected Initialized == true after init --clear")
 	}
 	for _, db := range repAfterClear.Databases {
-		if !db.Analyzed {
-			t.Fatalf("after init --clear, database %s/%s Analyzed = false, want true", db.Engine, db.Target)
+		wantAnalyzed := db.Target == workspace.TargetAttila64 || db.Target == workspace.TargetAttila32
+		if db.Analyzed != wantAnalyzed {
+			t.Fatalf("after init --clear, database %s/%s Analyzed = %v, want %v", db.Engine, db.Target, db.Analyzed, wantAnalyzed)
 		}
 	}
 
@@ -675,6 +677,55 @@ func verifyMiniSilverDB(t *testing.T, dbPath string, expectSigs bool) {
 	}
 	if badLineEA != 0 {
 		t.Fatalf("%s: found %d out-of-range line_ea entries", dbPath, badLineEA)
+	}
+
+	bronzeDB, err := extractdb.OpenReadOnly(filepath.Join(filepath.Dir(dbPath), "bronze.sqlite"))
+	if err != nil {
+		t.Fatalf("OpenReadOnly(bronze.sqlite for %s): %v", dbPath, err)
+	}
+	defer bronzeDB.Close()
+	type memRange struct{ start, end int64 }
+	var loadedRanges []memRange
+	secRows, err := bronzeDB.Query(`SELECT va, virtual_size FROM sections WHERE va > 0 AND virtual_size > 0`)
+	if err != nil {
+		t.Fatalf("query bronze sections (%s): %v", dbPath, err)
+	}
+	for secRows.Next() {
+		var va, vsize int64
+		if err := secRows.Scan(&va, &vsize); err != nil {
+			secRows.Close()
+			t.Fatal(err)
+		}
+		loadedRanges = append(loadedRanges, memRange{start: va, end: va + vsize})
+	}
+	secRows.Close()
+
+	strRows, err := db.Query(`SELECT ea, value FROM silver_strings`)
+	if err != nil {
+		t.Fatalf("query silver_strings (%s): %v", dbPath, err)
+	}
+	defer strRows.Close()
+	strCnt := 0
+	for strRows.Next() {
+		var ea int64
+		var val string
+		if err := strRows.Scan(&ea, &val); err != nil {
+			t.Fatal(err)
+		}
+		strCnt++
+		inLoaded := false
+		for _, r := range loadedRanges {
+			if ea >= r.start && ea < r.end {
+				inLoaded = true
+				break
+			}
+		}
+		if !inLoaded {
+			t.Fatalf("%s: silver_strings row ea=0x%x (%q) is outside loaded virtual memory sections", dbPath, ea, val)
+		}
+	}
+	if strCnt == 0 {
+		t.Fatalf("%s: expected non-empty silver_strings", dbPath)
 	}
 }
 

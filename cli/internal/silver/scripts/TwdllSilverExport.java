@@ -2,6 +2,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import ghidra.app.script.GhidraScript;
 import ghidra.app.util.template.TemplateSimplifier;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressRange;
 import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.data.StringDataInstance;
@@ -13,6 +14,8 @@ import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.listing.Listing;
+import ghidra.program.model.mem.Memory;
+import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.util.DefinedDataIterator;
 
 import java.io.BufferedWriter;
@@ -261,6 +264,7 @@ public class TwdllSilverExport extends GhidraScript {
         if (exportStrings && !monitor.isCancelled()) {
             long ts0 = System.currentTimeMillis();
             int strCount = 0;
+            Memory memory = currentProgram.getMemory();
             Set<Long> seenStringEas = new HashSet<>();
             try (BufferedWriter sbw = new BufferedWriter(
                     new OutputStreamWriter(new FileOutputStream(stringsOutPath), StandardCharsets.UTF_8), 65536)) {
@@ -271,6 +275,18 @@ public class TwdllSilverExport extends GhidraScript {
                     if (d == null || !StringDataInstance.isString(d)) {
                         continue;
                     }
+                    Address minAddr = d.getMinAddress();
+                    if (minAddr == null || !minAddr.isMemoryAddress()) {
+                        continue;
+                    }
+                    MemoryBlock block = memory.getBlock(minAddr);
+                    if (block == null || !block.isLoaded() || !block.isInitialized() || block.isOverlay()) {
+                        continue;
+                    }
+                    String blockName = block.getName();
+                    if (".strtab".equals(blockName) || ".shstrtab".equals(blockName) || (blockName != null && blockName.startsWith(".debug_"))) {
+                        continue;
+                    }
                     StringDataInstance sdi = StringDataInstance.getStringDataInstance(d);
                     if (sdi == null) {
                         continue;
@@ -279,7 +295,7 @@ public class TwdllSilverExport extends GhidraScript {
                     if (val == null || val.isEmpty()) {
                         continue;
                     }
-                    long sEa = d.getMinAddress().getOffset();
+                    long sEa = minAddr.getOffset();
                     if (!seenStringEas.add(sEa)) {
                         continue;
                     }
@@ -288,7 +304,7 @@ public class TwdllSilverExport extends GhidraScript {
                         len = val.length();
                     }
                     String enc = normalizeStringEncoding(sdi.getCharsetName(), d.getDataType().getName());
-                    int refs = currentProgram.getReferenceManager().getReferenceCountTo(d.getMinAddress());
+                    int refs = currentProgram.getReferenceManager().getReferenceCountTo(minAddr);
                     sbw.write(GSON.toJson(new SilverStringRec(hexEA(sEa), enc, len, val, refs)));
                     sbw.newLine();
                     strCount++;
