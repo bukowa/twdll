@@ -9,18 +9,45 @@ import (
 )
 
 const (
-	esContinuous       = 0x80000000
-	esSystemRequired   = 0x00000001
-	esDisplayRequired  = 0x00000002
-	esAwayModeRequired = 0x00000040
+	esContinuous     = 0x80000000
+	esSystemRequired = 0x00000001
 )
 
 var procSetThreadExecutionState = modKernel32.NewProc("SetThreadExecutionState")
 
-// AcquirePowerAssertion prevents the OS from entering sleep/standby while
-// a long-running analysis or extraction job is active. Returns a release func.
+var (
+	powerMu             sync.Mutex
+	powerRefs           int
+	powerRelease        func()
+	startPowerAssertion = acquirePowerAssertion
+)
+
+// AcquirePowerAssertion prevents the OS from entering sleep or idle hibernation while
+// a long-running analysis or extraction job is active. Nested calls share one assertion.
 func AcquirePowerAssertion() func() {
-	return acquirePowerAssertion()
+	powerMu.Lock()
+	if powerRefs == 0 {
+		powerRelease = startPowerAssertion()
+	}
+	powerRefs++
+	powerMu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			powerMu.Lock()
+			powerRefs--
+			var rel func()
+			if powerRefs == 0 {
+				rel = powerRelease
+				powerRelease = nil
+			}
+			powerMu.Unlock()
+			if rel != nil {
+				rel()
+			}
+		})
+	}
 }
 
 func acquirePowerAssertion() func() {
@@ -32,7 +59,7 @@ func acquirePowerAssertion() func() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 
-		activeFlags := uintptr(esContinuous | esSystemRequired | esDisplayRequired | esAwayModeRequired)
+		activeFlags := uintptr(esContinuous | esSystemRequired)
 		_, _, _ = procSetThreadExecutionState.Call(activeFlags)
 		close(readyCh)
 

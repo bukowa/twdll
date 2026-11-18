@@ -48,9 +48,6 @@ func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
 }
 
 func extractWithHooks(ctx context.Context, opts Options, fnExp funcsExporter, decompExp decompExporter) (retRes *Result, retErr error) {
-	releasePower := analyze.AcquirePowerAssertion()
-	defer releasePower()
-
 	t0 := time.Now()
 	if !opts.Target.IsValid() {
 		return nil, fmt.Errorf("invalid target id %q", opts.Target)
@@ -64,6 +61,9 @@ func extractWithHooks(ctx context.Context, opts Options, fnExp funcsExporter, de
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+
+	releasePower := analyze.AcquirePowerAssertion()
+	defer releasePower()
 
 	binSHA := strings.TrimSpace(opts.BinarySHA256)
 	if binSHA == "" {

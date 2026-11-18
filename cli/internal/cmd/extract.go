@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"twdll/cli/internal/analyze"
 	"twdll/cli/internal/bronze"
 	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/silver"
@@ -154,6 +155,9 @@ func RunExtract(ctx context.Context, req ExtractRequest) (*ExtractReport, error)
 	if extractSilver == nil {
 		extractSilver = silver.ExtractTarget
 	}
+
+	releasePower := analyze.AcquirePowerAssertion()
+	defer releasePower()
 
 	var logUI *term.UI
 	if !opts.JSON {

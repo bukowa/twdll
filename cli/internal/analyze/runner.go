@@ -67,7 +67,7 @@ func Run(ctx context.Context, req Request) error {
 		}
 	}
 
-	releasePower := acquirePowerAssertion()
+	releasePower := AcquirePowerAssertion()
 	defer releasePower()
 
 	probe := req.ProbeMemory
