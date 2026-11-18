@@ -23,6 +23,27 @@ type BronzeSummary struct {
 	Error        string
 }
 
+// CountsMap returns the bronze row counts keyed by table name for JSON/report compatibility.
+func (b BronzeSummary) CountsMap() map[string]int64 {
+	return map[string]int64{
+		"sections":    int64(b.Sections),
+		"strings":     int64(b.Strings),
+		"dwarf_funcs": int64(b.DwarfFuncs),
+	}
+}
+
+// BronzeSummaryFromCounts builds a BronzeSummary from a table-name count map.
+func BronzeSummaryFromCounts(counts map[string]int64) BronzeSummary {
+	if len(counts) == 0 {
+		return BronzeSummary{}
+	}
+	return BronzeSummary{
+		Sections:   int(counts["sections"]),
+		Strings:    int(counts["strings"]),
+		DwarfFuncs: int(counts["dwarf_funcs"]),
+	}
+}
+
 // SilverSummary holds lightweight readiness, row-count, and decompilation status totals for a silver_<engine>.sqlite store.
 type SilverSummary struct {
 	Present      bool

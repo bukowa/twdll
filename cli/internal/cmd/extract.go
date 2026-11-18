@@ -73,7 +73,7 @@ type plannedExtractTarget struct {
 
 type bronzeDBState struct {
 	upToDate bool
-	counts   map[string]int64
+	summary  extractdb.BronzeSummary
 }
 
 func RunExtract(ctx context.Context, req ExtractRequest) (*ExtractReport, error) {
@@ -201,8 +201,10 @@ func RunExtract(ctx context.Context, req ExtractRequest) (*ExtractReport, error)
 		tRep := ExtractTargetReport{
 			Target:       tid,
 			BinarySHA256: item.sha256,
-			BronzeCounts: bronzeState.counts,
 			Engines:      make([]ExtractEngineReport, 0, len(engines)),
+		}
+		if bronzeState.upToDate {
+			tRep.BronzeCounts = bronzeState.summary.CountsMap()
 		}
 
 		// Layer 1 (bronze): deterministic format and DWARF parsing -> bronze.sqlite.
@@ -225,21 +227,23 @@ func RunExtract(ctx context.Context, req ExtractRequest) (*ExtractReport, error)
 				return nil, fmt.Errorf("extract bronze for %s: %w", tid, err)
 			}
 			tRep.BronzeRan = true
+			var summary extractdb.BronzeSummary
 			if res != nil {
 				tRep.BronzeCounts = res.Counts
+				summary = extractdb.BronzeSummaryFromCounts(res.Counts)
 			}
 			if obs != nil {
-				obs.RowFinished(bronzeKey, buildBronzeSummary(tRep.BronzeCounts, false))
+				obs.RowFinished(bronzeKey, buildBronzeSummary(summary, false))
 			} else if logUI != nil {
 				logUI.Success("%s Bronze extracted (sections=%d, strings=%d, dwarf_funcs=%d)",
 					tid,
-					tRep.BronzeCounts["sections"],
-					tRep.BronzeCounts["strings"],
-					tRep.BronzeCounts["dwarf_funcs"],
+					summary.Sections,
+					summary.Strings,
+					summary.DwarfFuncs,
 				)
 			}
 		} else if obs != nil {
-			obs.RowFinished(bronzeKey, buildBronzeSummary(tRep.BronzeCounts, true))
+			obs.RowFinished(bronzeKey, buildBronzeSummary(bronzeState.summary, true))
 		} else if logUI != nil {
 			logUI.Success("%s Bronze already up to date", tid)
 		}
@@ -459,24 +463,20 @@ func inspectBronzeState(ctx context.Context, dbPath, wantSHA string) bronzeDBSta
 	}
 	return bronzeDBState{
 		upToDate: true,
-		counts: map[string]int64{
-			"sections":    int64(summary.Sections),
-			"strings":     int64(summary.Strings),
-			"dwarf_funcs": int64(summary.DwarfFuncs),
-		},
+		summary:  summary,
 	}
 }
 
-func buildBronzeSummary(counts map[string]int64, cached bool) string {
+func buildBronzeSummary(summary extractdb.BronzeSummary, cached bool) string {
 	var parts []string
-	if df := counts["dwarf_funcs"]; df > 0 {
-		parts = append(parts, fmt.Sprintf("%d dwarf_fn", df))
+	if summary.DwarfFuncs > 0 {
+		parts = append(parts, fmt.Sprintf("%d dwarf_fn", summary.DwarfFuncs))
 	}
-	if str := counts["strings"]; str > 0 {
-		parts = append(parts, fmt.Sprintf("%d str", str))
+	if summary.Strings > 0 {
+		parts = append(parts, fmt.Sprintf("%d str", summary.Strings))
 	}
-	if sec := counts["sections"]; sec > 0 {
-		parts = append(parts, fmt.Sprintf("%d sec", sec))
+	if summary.Sections > 0 {
+		parts = append(parts, fmt.Sprintf("%d sec", summary.Sections))
 	}
 	detail := strings.Join(parts, ", ")
 	if cached {

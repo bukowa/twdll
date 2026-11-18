@@ -2,7 +2,6 @@ package bronze
 
 import (
 	"context"
-	"database/sql"
 	"debug/elf"
 	"encoding/binary"
 	"fmt"
@@ -72,7 +71,7 @@ func prepareELF64(src *Source) error {
 	return nil
 }
 
-func (ELF64Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) error {
+func (ELF64Extractor) Extract(ctx context.Context, src *Source, store *extractdb.BronzeStore) error {
 	if src.Format == "" {
 		if err := prepareELF64(src); err != nil {
 			return err
@@ -80,7 +79,7 @@ func (ELF64Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) erro
 	}
 	ef := src.ELF
 
-	secRows := make([]sectionRow, 0, len(ef.Sections))
+	secRows := make([]extractdb.BronzeSectionRow, 0, len(ef.Sections))
 	for idx, sec := range ef.Sections {
 		if sec.Type == elf.SHT_NULL {
 			continue
@@ -95,7 +94,7 @@ func (ELF64Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) erro
 		if sec.Flags&elf.SHF_EXECINSTR != 0 {
 			flags |= extractdb.SecFlagExec
 		}
-		secRows = append(secRows, sectionRow{
+		secRows = append(secRows, extractdb.BronzeSectionRow{
 			SecIdx:      idx,
 			Name:        sec.Name,
 			VA:          sec.Addr,
@@ -106,37 +105,37 @@ func (ELF64Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) erro
 		})
 	}
 
-	if err := insertSections(ctx, db, secRows); err != nil {
+	if err := store.InsertSections(ctx, secRows); err != nil {
 		return err
 	}
 
 	dynSyms, _ := ef.DynamicSymbols()
-	imports, exports, err := parseELF64RelocsImportsExports(ctx, db, ef, dynSyms)
+	imports, exports, err := parseELF64RelocsImportsExports(ctx, store, ef, dynSyms)
 	if err != nil {
 		return err
 	}
-	if err := insertImports(ctx, db, imports); err != nil {
+	if err := store.InsertImports(ctx, imports); err != nil {
 		return err
 	}
-	if err := insertExports(ctx, db, exports); err != nil {
+	if err := store.InsertExports(ctx, exports); err != nil {
 		return err
 	}
 
 	symtabSyms, _ := ef.Symbols()
 	elfSyms := collectRawELFSymbols(symtabSyms, dynSyms)
-	return insertELFSymbols(ctx, db, elfSyms)
+	return store.InsertELFSymbols(ctx, elfSyms)
 }
 
 func parseELF64RelocsImportsExports(
 	ctx context.Context,
-	db *sql.DB,
+	store *extractdb.BronzeStore,
 	ef *elf.File,
 	dynSyms []elf.Symbol,
-) ([]importRow, []exportRow, error) {
-	relocBatch := newTxStmtBatcher(ctx, db, `INSERT OR IGNORE INTO relocs(va) VALUES (?)`)
-	defer func() { _ = relocBatch.Close() }()
+) ([]extractdb.BronzeImportRow, []extractdb.BronzeExportRow, error) {
+	const relocChunkSize = 16384
+	relocVAs := make([]uint64, 0, relocChunkSize)
 
-	var imports []importRow
+	var imports []extractdb.BronzeImportRow
 	seenIAT := make(map[uint64]bool)
 
 	for _, sec := range ef.Sections {
@@ -153,8 +152,12 @@ func parseELF64RelocsImportsExports(
 			if rOffset == 0 {
 				continue
 			}
-			if err := relocBatch.Exec(int64(rOffset)); err != nil {
-				return nil, nil, fmt.Errorf("insert elf reloc 0x%x: %w", rOffset, err)
+			relocVAs = append(relocVAs, rOffset)
+			if len(relocVAs) >= relocChunkSize {
+				if err := store.InsertRelocs(ctx, relocVAs); err != nil {
+					return nil, nil, err
+				}
+				relocVAs = relocVAs[:0]
 			}
 
 			symIdx := uint32(rInfo >> 32)
@@ -162,7 +165,7 @@ func parseELF64RelocsImportsExports(
 				sym := dynSyms[symIdx-1]
 				if sym.Name != "" && sym.Section == elf.SHN_UNDEF && !seenIAT[rOffset] {
 					seenIAT[rOffset] = true
-					imports = append(imports, importRow{
+					imports = append(imports, extractdb.BronzeImportRow{
 						IATVA:   rOffset,
 						DLLName: sym.Library,
 						SymName: sym.Name,
@@ -172,13 +175,15 @@ func parseELF64RelocsImportsExports(
 			}
 		}
 	}
-	if err := relocBatch.Flush(); err != nil {
-		return nil, nil, err
+	if len(relocVAs) > 0 {
+		if err := store.InsertRelocs(ctx, relocVAs); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	sort.Slice(imports, func(i, j int) bool { return imports[i].IATVA < imports[j].IATVA })
 
-	var exports []exportRow
+	var exports []extractdb.BronzeExportRow
 	var nextExpID int64 = 1
 	for idx, sym := range dynSyms {
 		if sym.Section == elf.SHN_UNDEF || sym.Value == 0 || sym.Name == "" {
@@ -188,7 +193,7 @@ func parseELF64RelocsImportsExports(
 		if st != elf.STT_FUNC && st != elf.STT_OBJECT {
 			continue
 		}
-		exports = append(exports, exportRow{
+		exports = append(exports, extractdb.BronzeExportRow{
 			ExportID: nextExpID,
 			EA:       sym.Value,
 			Name:     sym.Name,
@@ -199,15 +204,15 @@ func parseELF64RelocsImportsExports(
 	return imports, exports, nil
 }
 
-func collectRawELFSymbols(symtabSyms, dynSyms []elf.Symbol) []elfSymbolRow {
-	var out []elfSymbolRow
+func collectRawELFSymbols(symtabSyms, dynSyms []elf.Symbol) []extractdb.BronzeELFSymbolRow {
+	var out []extractdb.BronzeELFSymbolRow
 	idx := 1
 	appendGroup := func(kind string, syms []elf.Symbol) {
 		for _, sym := range syms {
 			if sym.Name == "" && sym.Value == 0 {
 				continue
 			}
-			out = append(out, elfSymbolRow{
+			out = append(out, extractdb.BronzeELFSymbolRow{
 				SymIdx:    idx,
 				EA:        sym.Value,
 				Size:      sym.Size,

@@ -362,3 +362,86 @@ func TestExpandTargets_GlobsAndConfiguredFiltering(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzedState_HasAnyAndIsEmpty(t *testing.T) {
+	var empty AnalyzedState
+	if empty.HasAny() || !empty.IsEmpty() {
+		t.Fatalf("zero AnalyzedState should be empty: %+v", empty)
+	}
+
+	onlyGhidra := AnalyzedState{Ghidra: "aaa"}
+	if !onlyGhidra.HasAny() || onlyGhidra.IsEmpty() {
+		t.Fatalf("AnalyzedState with Ghidra should not be empty: %+v", onlyGhidra)
+	}
+
+	onlyIDA := AnalyzedState{IDA: "bbb"}
+	if !onlyIDA.HasAny() || onlyIDA.IsEmpty() {
+		t.Fatalf("AnalyzedState with IDA should not be empty: %+v", onlyIDA)
+	}
+
+	both := AnalyzedState{Ghidra: "aaa", IDA: "bbb"}
+	if !both.HasAny() || both.IsEmpty() {
+		t.Fatalf("AnalyzedState with both engines should not be empty: %+v", both)
+	}
+}
+
+func TestState_ClearAnalyzedAndPruneToAnalyzed(t *testing.T) {
+	var nilMapState State
+	if nilMapState.ClearAnalyzed(TargetAttila32, DecompilerIDA) {
+		t.Fatalf("ClearAnalyzed on nil Binaries map must return false")
+	}
+
+	st := NewState()
+	st.SetTool(ToolGhidra, ToolState{Version: "12.0.4", SHA256: "toolhash"})
+	st.UpsertBinary(TargetAttila32, "src.dll", "binhash")
+	st.SetAnalyzed(TargetAttila32, DecompilerGhidra, "binhash")
+	st.SetAnalyzed(TargetAttila32, DecompilerIDA, "binhash")
+	st.UpsertBinary(TargetRome2_32, "rome2.dll", "rome2hash")
+	st.Binaries[TargetToB32] = BinaryState{
+		Analyzed: AnalyzedState{IDA: "tobhash"},
+	}
+
+	// Clearing missing target or already-empty engine returns false.
+	if st.ClearAnalyzed(TargetAttila64, DecompilerGhidra) {
+		t.Fatalf("ClearAnalyzed on missing target must return false")
+	}
+	if st.ClearAnalyzed(TargetRome2_32, DecompilerIDA) {
+		t.Fatalf("ClearAnalyzed on unanalyzed engine must return false")
+	}
+
+	// Clearing one engine when staging metadata exists preserves the binary entry.
+	if !st.ClearAnalyzed(TargetAttila32, DecompilerIDA) {
+		t.Fatalf("expected ClearAnalyzed to return true for attila_32 IDA")
+	}
+	if st.Binaries[TargetAttila32].Analyzed.IDA != "" || st.Binaries[TargetAttila32].Analyzed.Ghidra != "binhash" {
+		t.Fatalf("unexpected attila_32 state after clearing IDA: %+v", st.Binaries[TargetAttila32])
+	}
+	if !st.ClearAnalyzed(TargetAttila32, DecompilerGhidra) {
+		t.Fatalf("expected ClearAnalyzed to return true for attila_32 Ghidra")
+	}
+	if _, exists := st.Binaries[TargetAttila32]; !exists {
+		t.Fatalf("expected attila_32 entry preserved while SourcePath/BinarySHA256 are non-empty")
+	}
+
+	// Clearing the last analyzed hash when staging metadata is empty deletes the map entry.
+	if !st.ClearAnalyzed(TargetToB32, DecompilerIDA) {
+		t.Fatalf("expected ClearAnalyzed to return true for tob_32 IDA")
+	}
+	if _, exists := st.Binaries[TargetToB32]; exists {
+		t.Fatalf("expected tob_32 entry deleted when staging metadata and analyzed hashes are all empty")
+	}
+
+	// PruneToAnalyzed drops tools, drops targets without analyzed hashes, and strips staging metadata.
+	st.SetAnalyzed(TargetAttila32, DecompilerGhidra, "binhash")
+	pruned := st.PruneToAnalyzed()
+	if len(pruned.Tools) != 0 {
+		t.Fatalf("expected pruned state Tools to be empty, got %+v", pruned.Tools)
+	}
+	if len(pruned.Binaries) != 1 {
+		t.Fatalf("expected 1 pruned binary entry, got %+v", pruned.Binaries)
+	}
+	got := pruned.Binaries[TargetAttila32]
+	if got.SourcePath != "" || got.BinarySHA256 != "" || got.Analyzed.Ghidra != "binhash" || got.Analyzed.IDA != "" {
+		t.Fatalf("unexpected pruned binary entry: %+v", got)
+	}
+}

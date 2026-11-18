@@ -80,13 +80,7 @@ func RunClean(_ context.Context, req CleanRequest) error {
 				}
 				removed = true
 			}
-			if binState, ok := state.Binaries[tid]; ok && binState.Analyzed.Get(engine) != "" {
-				binState.Analyzed.Set(engine, "")
-				if binState.SourcePath == "" && binState.BinarySHA256 == "" && binState.Analyzed.Ghidra == "" && binState.Analyzed.IDA == "" {
-					delete(state.Binaries, tid)
-				} else {
-					state.Binaries[tid] = binState
-				}
+			if state.ClearAnalyzed(tid, engine) {
 				stateDirty = true
 				removed = true
 			}
@@ -242,14 +236,7 @@ func clearInitArtifacts(paths workspace.Paths, ui *term.UI) (workspace.State, er
 		return workspace.State{}, fmt.Errorf("remove binaries dir %s: %w", paths.BinsDir, err)
 	}
 
-	nextState := workspace.NewState()
-	for tid, b := range prevState.Binaries {
-		if b.Analyzed.Ghidra != "" || b.Analyzed.IDA != "" {
-			nextState.Binaries[tid] = workspace.BinaryState{
-				Analyzed: b.Analyzed,
-			}
-		}
-	}
+	nextState := prevState.PruneToAnalyzed()
 
 	if len(nextState.Binaries) == 0 {
 		if err := removeFileIfExists(paths.StateFile); err != nil {

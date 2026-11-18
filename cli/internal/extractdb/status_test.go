@@ -144,3 +144,31 @@ func TestInspectStatus_DistinguishesLockTimeoutAndMissingMeta(t *testing.T) {
 		t.Fatalf("expected missing meta to report clean uninitialized summary, got %+v", sEmpty)
 	}
 }
+
+func TestBronzeSummary_CountsMapAndFromCounts(t *testing.T) {
+	sum := BronzeSummary{
+		Present:      true,
+		BinarySHA256: "abc123",
+		Sections:     7,
+		Strings:      42,
+		DwarfFuncs:   120,
+	}
+	gotMap := sum.CountsMap()
+	if len(gotMap) != 3 || gotMap["sections"] != 7 || gotMap["strings"] != 42 || gotMap["dwarf_funcs"] != 120 {
+		t.Fatalf("CountsMap() = %v, want sections=7 strings=42 dwarf_funcs=120", gotMap)
+	}
+
+	roundTrip := BronzeSummaryFromCounts(gotMap)
+	if roundTrip.Sections != 7 || roundTrip.Strings != 42 || roundTrip.DwarfFuncs != 120 {
+		t.Fatalf("BronzeSummaryFromCounts(CountsMap()) = %+v, want 7/42/120", roundTrip)
+	}
+
+	if empty := BronzeSummaryFromCounts(nil); empty != (BronzeSummary{}) {
+		t.Fatalf("BronzeSummaryFromCounts(nil) = %+v, want zero value", empty)
+	}
+
+	partial := BronzeSummaryFromCounts(map[string]int64{"sections": 4})
+	if partial.Sections != 4 || partial.Strings != 0 || partial.DwarfFuncs != 0 {
+		t.Fatalf("BronzeSummaryFromCounts(partial) = %+v, want 4/0/0", partial)
+	}
+}

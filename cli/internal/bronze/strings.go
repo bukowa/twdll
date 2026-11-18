@@ -2,9 +2,7 @@ package bronze
 
 import (
 	"context"
-	"database/sql"
 	"encoding/binary"
-	"fmt"
 	"sort"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -22,8 +20,8 @@ func (StringsExtractor) AppliesTo(src *Source) bool {
 	return src != nil && len(src.DataSlices) > 0
 }
 
-func (StringsExtractor) Extract(ctx context.Context, src *Source, db *sql.DB) error {
-	return scanAndPersistStrings(ctx, db, src.DataSlices)
+func (StringsExtractor) Extract(ctx context.Context, src *Source, store *extractdb.BronzeStore) error {
+	return scanAndPersistStrings(ctx, store, src.DataSlices)
 }
 
 type rawStringRecord struct {
@@ -32,22 +30,9 @@ type rawStringRecord struct {
 	value    string
 }
 
-func scanAndPersistStrings(ctx context.Context, db *sql.DB, sections []DataSlice) error {
-	b := newTxStmtBatcher(ctx, db, `
-		INSERT INTO strings(str_id, ea, encoding, value)
-		VALUES (?, ?, ?, ?)
-	`)
-	defer func() { _ = b.Close() }()
-
-	var nextID int64 = 1
-	emit := func(ea uint64, enc, val string) error {
-		id := nextID
-		nextID++
-		if err := b.Exec(id, int64(ea), enc, val); err != nil {
-			return fmt.Errorf("insert string 0x%x: %w", ea, err)
-		}
-		return nil
-	}
+func scanAndPersistStrings(ctx context.Context, store *extractdb.BronzeStore, sections []DataSlice) error {
+	w := store.NewStringWriter(ctx)
+	defer func() { _ = w.Close() }()
 
 	for _, sec := range sections {
 		if len(sec.Data) == 0 {
@@ -70,13 +55,13 @@ func scanAndPersistStrings(ctx context.Context, db *sql.DB, sections []DataSlice
 			return secRecs[i].ea < secRecs[j].ea
 		})
 		for _, rec := range secRecs {
-			if err := emit(rec.ea, rec.encoding, rec.value); err != nil {
+			if err := w.Add(rec.ea, rec.encoding, rec.value); err != nil {
 				return err
 			}
 		}
 	}
 
-	return b.Flush()
+	return w.Flush()
 }
 
 func isASCIIAlnumOrUnderscore(r rune) bool {

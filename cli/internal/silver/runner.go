@@ -634,34 +634,25 @@ func normalizeSilverFuncs(raw []SilverFunc) ([]extractdb.SilverFuncRow, []extrac
 }
 
 func loadSilverFuncsFromStore(ctx context.Context, store *extractdb.SilverStore) ([]SilverFunc, error) {
-	rows, err := store.DB().QueryContext(ctx, `
-		SELECT ea, size, name, signature, calling_conv, stack_purge, is_thunk, is_noret, thunk_target_ea
-		FROM silver_funcs ORDER BY ea ASC
-	`)
+	rows, err := store.ListFuncs(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("query silver_funcs: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-
-	var out []SilverFunc
-	for rows.Next() {
-		var sf SilverFunc
-		var ea, sz int64
-		var isThunk, isNoRet int
-		var thunkTarget any
-		if err := rows.Scan(&ea, &sz, &sf.Name, &sf.Signature, &sf.CallingConv, &sf.StackPurge, &isThunk, &isNoRet, &thunkTarget); err != nil {
-			return nil, fmt.Errorf("scan silver_func: %w", err)
-		}
-		sf.EA = uint64(ea)
-		sf.Size = uint64(sz)
-		sf.IsThunk = isThunk != 0
-		sf.IsNoRet = isNoRet != 0
-		if v, ok := thunkTarget.(int64); ok && v > 0 {
-			sf.ThunkTargetEA = uint64(v)
-		}
-		out = append(out, sf)
+	out := make([]SilverFunc, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, SilverFunc{
+			EA:            r.EA,
+			Size:          r.Size,
+			Name:          r.Name,
+			Signature:     r.Signature,
+			CallingConv:   r.CallingConv,
+			StackPurge:    r.StackPurge,
+			IsThunk:       r.IsThunk,
+			IsNoRet:       r.IsNoRet,
+			ThunkTargetEA: r.ThunkTargetEA,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func normalizeSilverCallingConv(raw string) string {

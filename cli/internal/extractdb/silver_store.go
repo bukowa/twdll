@@ -562,6 +562,46 @@ func (s *SilverStore) ReplaceStringsStream(ctx context.Context, produce func(emi
 	return nil
 }
 
+func (s *SilverStore) ListFuncs(ctx context.Context) ([]SilverFuncRow, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT ea, size, name, signature, calling_conv, stack_purge, is_thunk, is_noret, thunk_target_ea
+		FROM silver_funcs ORDER BY ea ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query silver_funcs: %w", err)
+	}
+	defer rows.Close()
+
+	var out []SilverFuncRow
+	for rows.Next() {
+		var r SilverFuncRow
+		var ea, sz int64
+		var isThunk, isNoRet int
+		var thunkTarget sql.NullInt64
+		if err := rows.Scan(
+			&ea, &sz, &r.Name, &r.Signature, &r.CallingConv,
+			&r.StackPurge, &isThunk, &isNoRet, &thunkTarget,
+		); err != nil {
+			return nil, fmt.Errorf("scan silver_func: %w", err)
+		}
+		r.EA = uint64(ea)
+		r.Size = uint64(sz)
+		r.IsThunk = isThunk != 0
+		r.IsNoRet = isNoRet != 0
+		if thunkTarget.Valid && thunkTarget.Int64 > 0 {
+			r.ThunkTargetEA = uint64(thunkTarget.Int64)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (s *SilverStore) ListFuncSpecs(ctx context.Context) ([]FuncSpec, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT ea, size, name FROM silver_funcs ORDER BY ea ASC`)
 	if err != nil {

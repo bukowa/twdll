@@ -222,6 +222,21 @@ func (a *AnalyzedState) Set(d DecompilerID, sha256 string) {
 	}
 }
 
+// HasAny reports whether at least one decompiler holds a non-empty analyzed digest.
+func (a AnalyzedState) HasAny() bool {
+	for _, d := range AllDecompilers() {
+		if a.Get(d) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// IsEmpty reports whether no decompiler holds an analyzed digest.
+func (a AnalyzedState) IsEmpty() bool {
+	return !a.HasAny()
+}
+
 func (b BinaryState) IsAnalyzed(d DecompilerID) bool {
 	return b.BinarySHA256 != "" && strings.EqualFold(b.Analyzed.Get(d), b.BinarySHA256)
 }

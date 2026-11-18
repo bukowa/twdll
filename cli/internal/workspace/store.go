@@ -142,6 +142,40 @@ func (s *State) SetAnalyzed(t TargetID, d DecompilerID, sha256 string) {
 	s.Binaries[t] = b
 }
 
+// ClearAnalyzed clears the analyzed digest for target t and decompiler d,
+// removing the binary entry if staging metadata and all other decompiler hashes are empty.
+// It returns true iff a non-empty digest was cleared.
+func (s *State) ClearAnalyzed(t TargetID, d DecompilerID) bool {
+	if s.Binaries == nil {
+		return false
+	}
+	b, ok := s.Binaries[t]
+	if !ok || b.Analyzed.Get(d) == "" {
+		return false
+	}
+	b.Analyzed.Set(d, "")
+	if b.SourcePath == "" && b.BinarySHA256 == "" && b.Analyzed.IsEmpty() {
+		delete(s.Binaries, t)
+	} else {
+		s.Binaries[t] = b
+	}
+	return true
+}
+
+// PruneToAnalyzed returns a fresh State keeping only target entries with at least one
+// analyzed digest, stripping staged binary paths/digests and tool entries.
+func (s State) PruneToAnalyzed() State {
+	next := NewState()
+	for tid, b := range s.Binaries {
+		if b.Analyzed.HasAny() {
+			next.Binaries[tid] = BinaryState{
+				Analyzed: b.Analyzed,
+			}
+		}
+	}
+	return next
+}
+
 func ComputeFileSHA256(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {

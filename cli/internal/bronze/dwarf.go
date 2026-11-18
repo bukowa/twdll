@@ -2,7 +2,6 @@ package bronze
 
 import (
 	"context"
-	"database/sql"
 	"debug/dwarf"
 	"encoding/binary"
 	"fmt"
@@ -25,16 +24,16 @@ func (ELF64DWARF4Extractor) AppliesTo(src *Source) bool {
 	return src != nil && src.ELF != nil
 }
 
-func (ELF64DWARF4Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) error {
+func (ELF64DWARF4Extractor) Extract(ctx context.Context, src *Source, store *extractdb.BronzeStore) error {
 	dw, err := src.ELF.DWARF()
 	if err != nil || dw == nil {
 		return nil
 	}
-	p1, err := runDWARFPass1(ctx, db, dw)
+	p1, err := runDWARFPass1(ctx, store, dw)
 	if err != nil {
 		return err
 	}
-	if err := runDWARFPass2(ctx, db, dw, p1); err != nil {
+	if err := runDWARFPass2(ctx, store, dw, p1); err != nil {
 		return err
 	}
 	p1 = nil
@@ -177,7 +176,7 @@ type pass1ScopeFrame struct {
 	compRawID  int32
 }
 
-func runDWARFPass1(ctx context.Context, db *sql.DB, dw *dwarf.Data) (*dwarfPass1State, error) {
+func runDWARFPass1(ctx context.Context, store *extractdb.BronzeStore, dw *dwarf.Data) (*dwarfPass1State, error) {
 	var (
 		rawTypes     = make([]rawTypeNode, 1, 65536) // 1-indexed
 		offToRawIdx  = make(map[dwarf.Offset]int32, 65536)
@@ -552,31 +551,32 @@ func runDWARFPass1(ctx context.Context, db *sql.DB, dw *dwarf.Data) (*dwarfPass1
 		offsetToCanonID[rawTypes[id].offset] = cID
 	}
 
-	// Stream canonical types into SQLite.
-	b := newTxStmtBatcher(ctx, db, `
-		INSERT INTO types(type_id, kind, name, byte_size, target_type_id, is_declaration)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`)
-	defer func() { _ = b.Close() }()
-	for cID := 1; cID < len(canonTypes); cID++ {
-		ct := &canonTypes[cID]
-		isDeclInt := 0
-		if ct.isDecl {
-			isDeclInt = 1
+	// Stream canonical types into BronzeStore in bounded chunks.
+	const typeChunkSize = 16384
+	if len(canonTypes) > 1 {
+		typeChunk := make([]extractdb.BronzeTypeRow, 0, min(len(canonTypes)-1, typeChunkSize))
+		for cID := 1; cID < len(canonTypes); cID++ {
+			ct := &canonTypes[cID]
+			typeChunk = append(typeChunk, extractdb.BronzeTypeRow{
+				TypeID:        ct.id,
+				Kind:          ct.kind,
+				Name:          ct.name,
+				ByteSize:      ct.byteSize,
+				TargetTypeID:  ct.targetID,
+				IsDeclaration: ct.isDecl,
+			})
+			if len(typeChunk) >= typeChunkSize {
+				if err := store.InsertDwarfTypes(ctx, typeChunk); err != nil {
+					return nil, err
+				}
+				typeChunk = typeChunk[:0]
+			}
 		}
-		if err := b.Exec(
-			ct.id,
-			ct.kind,
-			ct.name,
-			ct.byteSize,
-			nullInt64(ct.targetID, ct.targetID > 0),
-			isDeclInt,
-		); err != nil {
-			return nil, fmt.Errorf("insert canonical type %d: %w", ct.id, err)
+		if len(typeChunk) > 0 {
+			if err := store.InsertDwarfTypes(ctx, typeChunk); err != nil {
+				return nil, err
+			}
 		}
-	}
-	if err := b.Flush(); err != nil {
-		return nil, err
 	}
 
 	return &dwarfPass1State{
@@ -607,10 +607,10 @@ type pass2StackFrame struct {
 }
 
 type elfFunctionAccum struct {
-	row         dwarfFuncRow
-	ranges      []dwarfFuncRangeRow
+	row         extractdb.BronzeDwarfFuncRow
+	ranges      []extractdb.BronzeDwarfFuncRangeRow
 	validRanges [][2]uint64
-	declFile    sql.NullInt64
+	declFile    int64
 	declLine    int
 }
 
@@ -624,39 +624,12 @@ type funcState struct {
 
 func runDWARFPass2(
 	ctx context.Context,
-	db *sql.DB,
+	store *extractdb.BronzeStore,
 	dw *dwarf.Data,
 	p1 *dwarfPass1State,
 ) error {
-	const (
-		stmtMember = iota
-		stmtEnum
-		stmtVar
-		stmtInline
-		stmtFile
-		stmtName
-	)
-	pass2Batch := newMultiStmtTxBatcher(ctx, db,
-		`INSERT INTO type_members(
-			type_id, ordinal, member_kind, byte_offset, bit_offset, bit_size,
-			name, member_type_id, display_type, is_virtual_base, vbase_expr
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		`INSERT INTO enum_values(type_id, ordinal, name, value)
-		VALUES (?, ?, ?, ?)`,
-		`INSERT OR IGNORE INTO func_vars(
-			func_ea, ordinal, kind, name, type_id, display_type,
-			const_val, loc_summary, is_optimized_out
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		`INSERT INTO inlines(
-			host_ea, inline_idx, parent_idx, start_ea, end_ea,
-			depth, callee_name_id, call_file_id, call_line
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		`INSERT INTO source_files(file_id, norm_path, basename)
-		VALUES (?, ?, ?)`,
-		`INSERT INTO names(name_id, value)
-		VALUES (?, ?)`,
-	)
-	defer func() { _ = pass2Batch.Close() }()
+	w := store.NewDWARFPass2Writer(ctx)
+	defer func() { _ = w.Close() }()
 
 	fileIDByPath := make(map[string]int64, 16384)
 	var nextFileID int64 = 1
@@ -671,8 +644,12 @@ func runDWARFPass2(
 		id := nextFileID
 		nextFileID++
 		base := path.Base(norm)
-		if err := pass2Batch.Exec(stmtFile, id, norm, base); err != nil {
-			return 0, fmt.Errorf("insert source_file %s: %w", norm, err)
+		if err := w.AddSourceFile(extractdb.BronzeSourceFileRow{
+			FileID:   id,
+			NormPath: norm,
+			Basename: base,
+		}); err != nil {
+			return 0, err
 		}
 		fileIDByPath[norm] = id
 		return id, nil
@@ -689,8 +666,11 @@ func runDWARFPass2(
 		}
 		id := nextNameID
 		nextNameID++
-		if err := pass2Batch.Exec(stmtName, id, val); err != nil {
-			return 0, fmt.Errorf("insert name %s: %w", val, err)
+		if err := w.AddName(extractdb.BronzeNameRow{
+			NameID: id,
+			Value:  val,
+		}); err != nil {
+			return 0, err
 		}
 		nameIDByVal[val] = id
 		return id, nil
@@ -745,11 +725,11 @@ func runDWARFPass2(
 		return ""
 	}
 
-	resolveCUFileID := func(idx int) sql.NullInt64 {
+	resolveCUFileID := func(idx int) int64 {
 		if idx > 0 && idx < len(cuFileMap) && cuFileMap[idx] > 0 {
-			return sql.NullInt64{Int64: cuFileMap[idx], Valid: true}
+			return cuFileMap[idx]
 		}
-		return sql.NullInt64{}
+		return 0
 	}
 
 	r := dw.Reader()
@@ -774,7 +754,7 @@ func runDWARFPass2(
 								lowLine, highLine, lineFile := computeFuncLineSpan(cuLines, acc.validRanges, popped.inlineRanges, acc.declFile)
 								acc.row.LowLine = lowLine
 								acc.row.HighLine = highLine
-								if lineFile.Valid && (!acc.declFile.Valid || lineFile.Int64 != acc.declFile.Int64) {
+								if lineFile > 0 && (acc.declFile <= 0 || lineFile != acc.declFile) {
 									acc.row.DeclFileID = lineFile
 									acc.row.DeclLine = 0
 								} else {
@@ -882,7 +862,7 @@ func runDWARFPass2(
 			if cf := currentCompositeFrame(); cf != nil && cf.isCanonDef {
 				ord := cf.memberOrd
 				cf.memberOrd++
-				if err := emitDWARFMember(pass2Batch, stmtMember, cf.compCanonID, ord, e, p1); err != nil {
+				if err := emitDWARFMember(w, cf.compCanonID, ord, e, p1); err != nil {
 					return err
 				}
 			}
@@ -891,7 +871,7 @@ func runDWARFPass2(
 			if cf := currentCompositeFrame(); cf != nil && cf.isCanonDef {
 				ord := cf.memberOrd
 				cf.memberOrd++
-				if err := emitDWARFInheritance(pass2Batch, stmtMember, cf.compCanonID, ord, e, p1); err != nil {
+				if err := emitDWARFInheritance(w, cf.compCanonID, ord, e, p1); err != nil {
 					return err
 				}
 			}
@@ -901,8 +881,13 @@ func runDWARFPass2(
 				ord := cf.enumOrd
 				cf.enumOrd++
 				val, _ := intValOK(e, dwarf.AttrConstValue)
-				if err := pass2Batch.Exec(stmtEnum, cf.compCanonID, ord, rawName, val); err != nil {
-					return fmt.Errorf("insert enum_value %s: %w", rawName, err)
+				if err := w.AddEnumValue(extractdb.BronzeEnumValueRow{
+					TypeID:  cf.compCanonID,
+					Ordinal: ord,
+					Name:    rawName,
+					Value:   val,
+				}); err != nil {
+					return err
 				}
 			}
 
@@ -928,14 +913,14 @@ func runDWARFPass2(
 					lowLine, highLine, lineFile := computeFuncLineSpan(cuLines, validRanges, nil, declFile)
 					srcFile := declFile
 					srcLine := declLine
-					if lineFile.Valid && (!declFile.Valid || lineFile.Int64 != declFile.Int64) {
+					if lineFile > 0 && (declFile <= 0 || lineFile != declFile) {
 						srcFile = lineFile
 						srcLine = 0
 					}
 
 					if _, exists := funcMap[ea]; !exists {
 						acc := &elfFunctionAccum{
-							row: dwarfFuncRow{
+							row: extractdb.BronzeDwarfFuncRow{
 								EA:          ea,
 								Size:        size,
 								Name:        fnName,
@@ -951,7 +936,7 @@ func runDWARFPass2(
 							declLine:    declLine,
 						}
 						for _, rg := range validRanges {
-							acc.ranges = append(acc.ranges, dwarfFuncRangeRow{
+							acc.ranges = append(acc.ranges, extractdb.BronzeDwarfFuncRangeRow{
 								StartEA: rg[0],
 								EndEA:   rg[1],
 								FuncEA:  ea,
@@ -970,7 +955,7 @@ func runDWARFPass2(
 				}
 				ord := cf.varOrd
 				cf.varOrd++
-				if err := emitDWARFFuncVar(pass2Batch, stmtVar, cf.ea, ord, e, p1); err != nil {
+				if err := emitDWARFFuncVar(w, cf.ea, ord, e, p1); err != nil {
 					return err
 				}
 			}
@@ -1001,19 +986,18 @@ func runDWARFPass2(
 					if frameInlineIdx < 0 {
 						frameInlineIdx = idx
 					}
-					if err := pass2Batch.Exec(
-						stmtInline,
-						int64(cf.ea),
-						idx,
-						parentIdx,
-						int64(rg[0]),
-						int64(rg[1]),
-						inlDepth,
-						calleeNameID,
-						callFileID,
-						int(callLine),
-					); err != nil {
-						return fmt.Errorf("insert inline at 0x%x: %w", cf.ea, err)
+					if err := w.AddInline(extractdb.BronzeInlineRow{
+						HostEA:       cf.ea,
+						InlineIdx:    idx,
+						ParentIdx:    parentIdx,
+						StartEA:      rg[0],
+						EndEA:        rg[1],
+						Depth:        inlDepth,
+						CalleeNameID: calleeNameID,
+						CallFileID:   callFileID,
+						CallLine:     int(callLine),
+					}); err != nil {
+						return err
 					}
 				}
 			}
@@ -1035,7 +1019,7 @@ func runDWARFPass2(
 		}
 	}
 
-	if err := pass2Batch.Flush(); err != nil {
+	if err := w.Flush(); err != nil {
 		return err
 	}
 
@@ -1045,8 +1029,8 @@ func runDWARFPass2(
 	}
 	sort.Slice(sortedEAs, func(i, j int) bool { return sortedEAs[i] < sortedEAs[j] })
 
-	funcRows := make([]dwarfFuncRow, 0, len(sortedEAs))
-	allRanges := make([]dwarfFuncRangeRow, 0, len(sortedEAs))
+	funcRows := make([]extractdb.BronzeDwarfFuncRow, 0, len(sortedEAs))
+	allRanges := make([]extractdb.BronzeDwarfFuncRangeRow, 0, len(sortedEAs))
 	for _, ea := range sortedEAs {
 		acc := funcMap[ea]
 		funcRows = append(funcRows, acc.row)
@@ -1074,13 +1058,13 @@ func runDWARFPass2(
 		allRanges = dedup
 	}
 
-	if err := insertDwarfFuncs(ctx, db, funcRows); err != nil {
+	if err := store.InsertDwarfFuncs(ctx, funcRows); err != nil {
 		return err
 	}
-	return insertDwarfFuncRanges(ctx, db, allRanges)
+	return store.InsertDwarfFuncRanges(ctx, allRanges)
 }
 
-func emitDWARFMember(b *multiStmtTxBatcher, stmtIdx int, typeID int64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
+func emitDWARFMember(w *extractdb.BronzeDWARFPass2Writer, typeID int64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
 	name, _ := e.Val(dwarf.AttrName).(string)
 	var mTypeID int64
 	if to, ok := e.Val(dwarf.AttrType).(dwarf.Offset); ok {
@@ -1090,20 +1074,14 @@ func emitDWARFMember(b *multiStmtTxBatcher, stmtIdx int, typeID int64, ord int, 
 
 	// Static member check: DW_AT_external or DW_AT_declaration on DW_TAG_member.
 	if boolVal(e, dwarf.AttrExternal) || boolVal(e, dwarf.AttrDeclaration) {
-		return b.Exec(
-			stmtIdx,
-			typeID,
-			ord,
-			extractdb.MemberKindStatic,
-			sql.NullInt64{}, // MUST be NULL for static members
-			0,
-			0,
-			name,
-			nullInt64(mTypeID, mTypeID > 0),
-			dispType,
-			0,
-			"",
-		)
+		return w.AddMember(extractdb.BronzeTypeMemberRow{
+			TypeID:       typeID,
+			Ordinal:      ord,
+			MemberKind:   extractdb.MemberKindStatic,
+			Name:         name,
+			MemberTypeID: mTypeID,
+			DisplayType:  dispType,
+		})
 	}
 
 	byteOff, hasByteOff, _ := parseDWARFDataMemberLoc(e)
@@ -1123,23 +1101,21 @@ func emitDWARFMember(b *multiStmtTxBatcher, stmtIdx int, typeID int64, ord int, 
 		hasByteOff = true
 	}
 
-	return b.Exec(
-		stmtIdx,
-		typeID,
-		ord,
-		extractdb.MemberKindField,
-		nullInt64(byteOff, hasByteOff),
-		int(bitOff),
-		int(bitSize),
-		name,
-		nullInt64(mTypeID, mTypeID > 0),
-		dispType,
-		0,
-		"",
-	)
+	return w.AddMember(extractdb.BronzeTypeMemberRow{
+		TypeID:        typeID,
+		Ordinal:       ord,
+		MemberKind:    extractdb.MemberKindField,
+		ByteOffset:    byteOff,
+		HasByteOffset: hasByteOff,
+		BitOffset:     int(bitOff),
+		BitSize:       int(bitSize),
+		Name:          name,
+		MemberTypeID:  mTypeID,
+		DisplayType:   dispType,
+	})
 }
 
-func emitDWARFInheritance(b *multiStmtTxBatcher, stmtIdx int, typeID int64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
+func emitDWARFInheritance(w *extractdb.BronzeDWARFPass2Writer, typeID int64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
 	var mTypeID int64
 	if to, ok := e.Val(dwarf.AttrType).(dwarf.Offset); ok {
 		mTypeID = p1.offsetToCanonID[to]
@@ -1154,42 +1130,34 @@ func emitDWARFInheritance(b *multiStmtTxBatcher, stmtIdx int, typeID int64, ord 
 		if exprSummary == "" {
 			exprSummary = "virtual"
 		}
-		return b.Exec(
-			stmtIdx,
-			typeID,
-			ord,
-			extractdb.MemberKindBase,
-			sql.NullInt64{}, // MUST be NULL when is_virtual_base = 1
-			0,
-			0,
-			baseName,
-			nullInt64(mTypeID, mTypeID > 0),
-			dispType,
-			1,
-			exprSummary,
-		)
+		return w.AddMember(extractdb.BronzeTypeMemberRow{
+			TypeID:        typeID,
+			Ordinal:       ord,
+			MemberKind:    extractdb.MemberKindBase,
+			Name:          baseName,
+			MemberTypeID:  mTypeID,
+			DisplayType:   dispType,
+			IsVirtualBase: true,
+			VBaseExpr:     exprSummary,
+		})
 	}
 
 	if !hasConstOff {
 		byteOff = 0
 	}
-	return b.Exec(
-		stmtIdx,
-		typeID,
-		ord,
-		extractdb.MemberKindBase,
-		sql.NullInt64{Int64: byteOff, Valid: true},
-		0,
-		0,
-		baseName,
-		nullInt64(mTypeID, mTypeID > 0),
-		dispType,
-		0,
-		"",
-	)
+	return w.AddMember(extractdb.BronzeTypeMemberRow{
+		TypeID:        typeID,
+		Ordinal:       ord,
+		MemberKind:    extractdb.MemberKindBase,
+		ByteOffset:    byteOff,
+		HasByteOffset: true,
+		Name:          baseName,
+		MemberTypeID:  mTypeID,
+		DisplayType:   dispType,
+	})
 }
 
-func emitDWARFFuncVar(b *multiStmtTxBatcher, stmtIdx int, funcEA uint64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
+func emitDWARFFuncVar(w *extractdb.BronzeDWARFPass2Writer, funcEA uint64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
 	kind := extractdb.VarKindLocal
 	if e.Tag == dwarf.TagFormalParameter {
 		kind = extractdb.VarKindParam
@@ -1228,23 +1196,19 @@ func emitDWARFFuncVar(b *multiStmtTxBatcher, stmtIdx int, funcEA uint64, ord int
 
 	constVal := formatAttrConstVal(e.AttrField(dwarf.AttrConstValue))
 	locSummary := summarizeDWARFLocField(e.AttrField(dwarf.AttrLocation))
-	isOptOut := 0
-	if constVal == "" && locSummary == "" {
-		isOptOut = 1
-	}
+	isOptOut := constVal == "" && locSummary == ""
 
-	return b.Exec(
-		stmtIdx,
-		int64(funcEA),
-		ord,
-		kind,
-		name,
-		nullInt64(typeID, typeID > 0),
-		dispType,
-		constVal,
-		locSummary,
-		isOptOut,
-	)
+	return w.AddFuncVar(extractdb.BronzeFuncVarRow{
+		FuncEA:         funcEA,
+		Ordinal:        ord,
+		Kind:           kind,
+		Name:           name,
+		TypeID:         typeID,
+		DisplayType:    dispType,
+		ConstVal:       constVal,
+		LocSummary:     locSummary,
+		IsOptimizedOut: isOptOut,
+	})
 }
 
 func parseDWARFDataMemberLoc(e *dwarf.Entry) (offset int64, hasConst bool, complexExpr string) {
@@ -1478,10 +1442,10 @@ func computeFuncLineSpan(
 	cuLines []cuLineRec,
 	ranges [][2]uint64,
 	inlineRanges [][2]uint64,
-	declFile sql.NullInt64,
-) (lowLine, highLine int, fallbackFile sql.NullInt64) {
+	declFile int64,
+) (lowLine, highLine int, fallbackFile int64) {
 	if len(cuLines) == 0 || len(ranges) == 0 {
-		return 0, 0, sql.NullInt64{}
+		return 0, 0, 0
 	}
 	type fileSpan struct {
 		fileID int64
@@ -1523,9 +1487,9 @@ func computeFuncLineSpan(
 			addHit(rec.fileID, rec.line)
 		}
 	}
-	if declFile.Valid {
+	if declFile > 0 {
 		for _, s := range spans {
-			if s.fileID == declFile.Int64 && s.count > 0 {
+			if s.fileID == declFile && s.count > 0 {
 				return s.low, s.high, declFile
 			}
 		}
@@ -1537,12 +1501,12 @@ func computeFuncLineSpan(
 		}
 	}
 	if best.count > 0 {
-		return best.low, best.high, nullInt64(best.fileID, best.fileID > 0)
+		return best.low, best.high, best.fileID
 	}
 	if len(inlineRanges) > 0 {
 		return computeFuncLineSpan(cuLines, ranges, nil, declFile)
 	}
-	return 0, 0, sql.NullInt64{}
+	return 0, 0, 0
 }
 
 func normalizeDWARFPath(compDir, filePath string) string {

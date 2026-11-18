@@ -1035,3 +1035,146 @@ func TestRunBatchWriter_FlushesByPayloadBytes(t *testing.T) {
 		t.Fatalf("expected RunBatchWriter to flush before channel close once payload exceeded %d bytes", defaultSilverBatchBytes)
 	}
 }
+
+func TestSilverStore_ListFuncs(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "silver_ida.sqlite")
+
+	store, err := OpenSilverStore(ctx, dbPath, "attila_32", "ida", "sha_list_funcs", "")
+	if err != nil {
+		t.Fatalf("OpenSilverStore: %v", err)
+	}
+	defer store.Close()
+
+	// Empty store returns no rows and no error.
+	empty, err := store.ListFuncs(ctx)
+	if err != nil {
+		t.Fatalf("ListFuncs empty: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("ListFuncs empty len = %d, want 0", len(empty))
+	}
+
+	// Insert out of EA order to verify ORDER BY ea ASC, flags, and nullable thunk_target_ea.
+	input := []SilverFuncRow{
+		{
+			EA:            0x3000,
+			Size:          16,
+			Name:          "j_Target",
+			Signature:     "void j_Target()",
+			CallingConv:   "__cdecl",
+			StackPurge:    0,
+			IsThunk:       true,
+			IsNoRet:       false,
+			ThunkTargetEA: 0x1000,
+		},
+		{
+			EA:            0x1000,
+			Size:          64,
+			Name:          "Target",
+			Signature:     "int Target(void *this, int x)",
+			CallingConv:   "__thiscall",
+			StackPurge:    4,
+			IsThunk:       false,
+			IsNoRet:       false,
+			ThunkTargetEA: 0, // stored as SQL NULL via NullUint64NonZero
+		},
+		{
+			EA:            0x2000,
+			Size:          32,
+			Name:          "FatalAbort",
+			Signature:     "void FatalAbort()",
+			CallingConv:   "__stdcall",
+			StackPurge:    0,
+			IsThunk:       false,
+			IsNoRet:       true,
+			ThunkTargetEA: 0,
+		},
+	}
+	if err := store.ReplaceFuncs(ctx, input, nil, "funcs"); err != nil {
+		t.Fatalf("ReplaceFuncs: %v", err)
+	}
+
+	// Also insert explicit 0 and negative thunk_target_ea rows to verify <= 0 maps to 0.
+	if _, err := store.DB().ExecContext(ctx, `
+		INSERT INTO silver_funcs(ea, size, name, signature, calling_conv, stack_purge, is_thunk, is_noret, thunk_target_ea)
+		VALUES
+			(?, 8, 'ZeroThunk', '', '__cdecl', 0, 1, 0, 0),
+			(?, 12, 'NegThunk', '', '__cdecl', 0, 1, 0, -5)
+	`, int64(0x0800), int64(0x2500)); err != nil {
+		t.Fatalf("insert edge thunk_target_ea rows: %v", err)
+	}
+
+	got, err := store.ListFuncs(ctx)
+	if err != nil {
+		t.Fatalf("ListFuncs: %v", err)
+	}
+
+	want := []SilverFuncRow{
+		{
+			EA:            0x0800,
+			Size:          8,
+			Name:          "ZeroThunk",
+			CallingConv:   "__cdecl",
+			IsThunk:       true,
+			ThunkTargetEA: 0,
+		},
+		{
+			EA:            0x1000,
+			Size:          64,
+			Name:          "Target",
+			Signature:     "int Target(void *this, int x)",
+			CallingConv:   "__thiscall",
+			StackPurge:    4,
+			IsThunk:       false,
+			IsNoRet:       false,
+			ThunkTargetEA: 0,
+		},
+		{
+			EA:            0x2000,
+			Size:          32,
+			Name:          "FatalAbort",
+			Signature:     "void FatalAbort()",
+			CallingConv:   "__stdcall",
+			StackPurge:    0,
+			IsThunk:       false,
+			IsNoRet:       true,
+			ThunkTargetEA: 0,
+		},
+		{
+			EA:            0x2500,
+			Size:          12,
+			Name:          "NegThunk",
+			CallingConv:   "__cdecl",
+			IsThunk:       true,
+			ThunkTargetEA: 0,
+		},
+		{
+			EA:            0x3000,
+			Size:          16,
+			Name:          "j_Target",
+			Signature:     "void j_Target()",
+			CallingConv:   "__cdecl",
+			StackPurge:    0,
+			IsThunk:       true,
+			IsNoRet:       false,
+			ThunkTargetEA: 0x1000,
+		},
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("ListFuncs len = %d, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("ListFuncs[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	// Canceled context must fail cleanly.
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := store.ListFuncs(canceledCtx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("ListFuncs(canceled) err = %v, want context.Canceled", err)
+	}
+}

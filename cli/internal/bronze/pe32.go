@@ -3,7 +3,6 @@ package bronze
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"debug/pe"
 	"encoding/binary"
 	"fmt"
@@ -33,7 +32,7 @@ type pe32Section struct {
 type pe32Prepared struct {
 	oh         *pe.OptionalHeader32
 	secs       []pe32Section
-	secRows    []sectionRow
+	secRows    []extractdb.BronzeSectionRow
 	relocRVAs  []uint32
 	relocWords []uint64
 	maxRVA     uint64
@@ -94,7 +93,7 @@ func preparePE32(src *Source) error {
 
 	var maxRVA uint64
 	secs := make([]pe32Section, 0, len(src.PE.Sections))
-	secRows := make([]sectionRow, 0, len(src.PE.Sections))
+	secRows := make([]extractdb.BronzeSectionRow, 0, len(src.PE.Sections))
 
 	for idx, sec := range src.PE.Sections {
 		name := strings.TrimRight(sec.Name, "\x00")
@@ -134,7 +133,7 @@ func preparePE32(src *Source) error {
 			va:   va,
 			data: data,
 		})
-		secRows = append(secRows, sectionRow{
+		secRows = append(secRows, extractdb.BronzeSectionRow{
 			SecIdx:      idx,
 			Name:        name,
 			VA:          va,
@@ -190,7 +189,7 @@ func preparePE32(src *Source) error {
 	return nil
 }
 
-func (PE32Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) error {
+func (PE32Extractor) Extract(ctx context.Context, src *Source, store *extractdb.BronzeStore) error {
 	if src.pe32 == nil {
 		if err := preparePE32(src); err != nil {
 			return err
@@ -198,10 +197,10 @@ func (PE32Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) error
 	}
 	prep := src.pe32
 
-	if err := insertSections(ctx, db, prep.secRows); err != nil {
+	if err := store.InsertSections(ctx, prep.secRows); err != nil {
 		return err
 	}
-	if err := insertPE32Relocs(ctx, db, prep.oh.ImageBase, prep.relocRVAs); err != nil {
+	if err := insertPE32Relocs(ctx, store, prep.oh.ImageBase, prep.relocRVAs); err != nil {
 		return err
 	}
 
@@ -209,12 +208,12 @@ func (PE32Extractor) Extract(ctx context.Context, src *Source, db *sql.DB) error
 	if err != nil {
 		return err
 	}
-	if err := insertImports(ctx, db, imports); err != nil {
+	if err := store.InsertImports(ctx, imports); err != nil {
 		return err
 	}
 
 	exports := parsePE32Exports(prep.oh, prep.readSliceAtRVA, prep.readCStringAtRVA)
-	return insertExports(ctx, db, exports)
+	return store.InsertExports(ctx, exports)
 }
 
 func collectPE32Relocs(
@@ -260,28 +259,24 @@ func collectPE32Relocs(
 	return rvas
 }
 
-func insertPE32Relocs(ctx context.Context, db *sql.DB, imageBase uint32, relocRVAs []uint32) error {
+func insertPE32Relocs(ctx context.Context, store *extractdb.BronzeStore, imageBase uint32, relocRVAs []uint32) error {
 	if len(relocRVAs) == 0 {
 		return nil
 	}
-	b := newTxStmtBatcher(ctx, db, `INSERT OR IGNORE INTO relocs(va) VALUES (?)`)
-	defer func() { _ = b.Close() }()
-
-	for _, rva := range relocRVAs {
-		va := uint64(imageBase) + uint64(rva)
-		if err := b.Exec(int64(va)); err != nil {
-			return fmt.Errorf("insert reloc 0x%x: %w", va, err)
-		}
+	vas := make([]uint64, len(relocRVAs))
+	base := uint64(imageBase)
+	for i, rva := range relocRVAs {
+		vas[i] = base + uint64(rva)
 	}
-	return b.Flush()
+	return store.InsertRelocs(ctx, vas)
 }
 
 func parsePE32Imports(
 	oh *pe.OptionalHeader32,
 	readSliceAtRVA func(rva uint64, size uint32) ([]byte, bool),
 	readCStringAtRVA func(rva uint64, maxLen int) (string, bool),
-) ([]importRow, error) {
-	var rows []importRow
+) ([]extractdb.BronzeImportRow, error) {
+	var rows []extractdb.BronzeImportRow
 	if len(oh.DataDirectory) <= pe.IMAGE_DIRECTORY_ENTRY_IMPORT {
 		return rows, nil
 	}
@@ -337,7 +332,7 @@ func parsePE32Imports(
 					symName = fmt.Sprintf("ord_%d", ordinal)
 				}
 			}
-			rows = append(rows, importRow{
+			rows = append(rows, extractdb.BronzeImportRow{
 				IATVA:   iatVA,
 				DLLName: dllName,
 				SymName: symName,
@@ -353,8 +348,8 @@ func parsePE32Exports(
 	oh *pe.OptionalHeader32,
 	readSliceAtRVA func(rva uint64, size uint32) ([]byte, bool),
 	readCStringAtRVA func(rva uint64, maxLen int) (string, bool),
-) []exportRow {
-	var rows []exportRow
+) []extractdb.BronzeExportRow {
+	var rows []extractdb.BronzeExportRow
 	if len(oh.DataDirectory) <= pe.IMAGE_DIRECTORY_ENTRY_EXPORT {
 		return rows
 	}
@@ -405,7 +400,7 @@ func parsePE32Exports(
 		if name == "" {
 			name = fmt.Sprintf("ord_%d", ordinal)
 		}
-		rows = append(rows, exportRow{
+		rows = append(rows, extractdb.BronzeExportRow{
 			ExportID: nextID,
 			EA:       uint64(oh.ImageBase) + uint64(fnRVA),
 			Name:     name,

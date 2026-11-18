@@ -2,7 +2,6 @@ package bronze
 
 import (
 	"context"
-	"database/sql"
 	"debug/elf"
 	"debug/pe"
 	"encoding/json"
@@ -44,7 +43,7 @@ type Source struct {
 type Extractor interface {
 	ID() string
 	AppliesTo(src *Source) bool
-	Extract(ctx context.Context, src *Source, db *sql.DB) error
+	Extract(ctx context.Context, src *Source, store *extractdb.BronzeStore) error
 }
 
 type Options struct {
@@ -114,16 +113,11 @@ func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
 		}
 	}
 
-	builder, err := extractdb.NewAtomicBuilder(opts.BronzeDBPath)
+	store, err := extractdb.NewBronzeStore(ctx, opts.BronzeDBPath)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = builder.Abort() }()
-
-	db := builder.DB()
-	if err := extractdb.InitBronzeSchema(ctx, db); err != nil {
-		return nil, err
-	}
+	defer func() { _ = store.Abort() }()
 
 	applied := make([]string, 0, len(extractors))
 	for _, ext := range extractors {
@@ -133,7 +127,7 @@ func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
 		if ext == nil || disabled[ext.ID()] || !ext.AppliesTo(src) {
 			continue
 		}
-		if err := ext.Extract(ctx, src, db); err != nil {
+		if err := ext.Extract(ctx, src, store); err != nil {
 			return nil, fmt.Errorf("bronze extractor %s: %w", ext.ID(), err)
 		}
 		applied = append(applied, ext.ID())
@@ -144,7 +138,7 @@ func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("marshal extractors_applied: %w", err)
 	}
-	for _, kv := range [][2]string{
+	counts, err := store.FinalizeAndCommit(ctx, [][2]string{
 		{extractdb.MetaTarget, string(opts.Target)},
 		{extractdb.MetaBinarySHA256, sha},
 		{extractdb.MetaImageBase, fmt.Sprintf("0x%x", src.ImageBase)},
@@ -152,26 +146,8 @@ func ExtractTarget(ctx context.Context, opts Options) (*Result, error) {
 		{extractdb.MetaFormat, src.Format},
 		{extractdb.MetaExtractedAt, now},
 		{extractdb.MetaExtractorsApplied, string(appliedJSON)},
-	} {
-		if _, err := db.ExecContext(ctx,
-			`INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-			kv[0], kv[1],
-		); err != nil {
-			return nil, fmt.Errorf("store bronze meta %s: %w", kv[0], err)
-		}
-	}
-
-	counts, err := extractdb.RefreshBronzeCounts(ctx, db)
+	})
 	if err != nil {
-		return nil, err
-	}
-	if err := extractdb.RebuildBronzeFTS(ctx, db); err != nil {
-		return nil, err
-	}
-	if _, err := db.ExecContext(ctx, `ANALYZE;`); err != nil {
-		return nil, fmt.Errorf("analyze bronze db: %w", err)
-	}
-	if err := builder.Commit(ctx); err != nil {
 		return nil, err
 	}
 
