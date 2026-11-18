@@ -57,15 +57,13 @@ func TestBuildPlan_SkipsUpToDateAndDetectsDriftFlagsAndMissingInputs(t *testing.
 		}
 	}
 
-	// When --force or --clear is passed, Then NeedsRun becomes true
-	for _, opts := range []Options{{Force: true}, {Clear: true}} {
-		_, items, err := BuildPlan(PlanInput{Layout: layout, State: state, Options: opts})
-		if err != nil {
-			t.Fatalf("BuildPlan(%+v): %v", opts, err)
-		}
-		if !items[0].NeedsRun || !items[1].NeedsRun {
-			t.Fatalf("expected NeedsRun=true for %+v, got %+v", opts, items)
-		}
+	// When --clear is passed, Then NeedsRun becomes true
+	_, clearItems, err := BuildPlan(PlanInput{Layout: layout, State: state, Options: Options{Clear: true}})
+	if err != nil {
+		t.Fatalf("BuildPlan(Clear): %v", err)
+	}
+	if !clearItems[0].NeedsRun || !clearItems[1].NeedsRun {
+		t.Fatalf("expected NeedsRun=true for Clear, got %+v", clearItems)
 	}
 
 	// When attila_32 binary drifts on disk, Then only attila_32 requires re-analysis
@@ -495,6 +493,65 @@ func TestClearPlannedTargets_RemovesTargetDBAndLogWhilePreservingSiblingsAndReso
 	}
 	if reloaded.Binaries[workspace.TargetAttila64].Analyzed.Ghidra != "sha64" {
 		t.Fatalf("expected ghidra/attila_64 Analyzed preserved, got %q", reloaded.Binaries[workspace.TargetAttila64].Analyzed.Ghidra)
+	}
+}
+
+func TestCleanWorkspace_RemovesAnalyzeArtifactsAndPreservesInitArtifacts(t *testing.T) {
+	root := t.TempDir()
+	layout := newTestLayout(t, root, workspace.DecompilerGhidra)
+	paths := layout.Paths
+
+	sha := stageFakeBinary(t, paths, workspace.TargetAttila32, []byte("pe32"))
+	dbMarker := paths.DatabaseMarkerPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(dbMarker), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbMarker, []byte("db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logPath := paths.AnalyzeLogPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(logPath, []byte("log"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resLog := paths.AnalyzeResourceLogPath()
+	if err := os.WriteFile(resLog, []byte("telemetry"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	st := workspace.NewState()
+	st.UpsertBinary(workspace.TargetAttila32, "/src/attila32", sha)
+	st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerIDA, sha)
+	if err := workspace.SaveState(paths.StateFile, st); err != nil {
+		t.Fatal(err)
+	}
+
+	removed, err := CleanWorkspace(paths, term.NewUI(term.Streams{ColorMode: term.ColorNever}))
+	if err != nil || !removed {
+		t.Fatalf("CleanWorkspace = (%v, %v), want (true, nil)", removed, err)
+	}
+
+	for _, gone := range []string{paths.DBDir, logPath, resLog} {
+		if _, err := os.Stat(gone); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected %s deleted, stat err = %v", gone, err)
+		}
+	}
+	for _, kept := range []string{paths.Config, paths.BinaryPath(workspace.TargetAttila32), paths.StateFile} {
+		if _, err := os.Stat(kept); err != nil {
+			t.Fatalf("expected %s preserved: %v", kept, err)
+		}
+	}
+	reloaded, _, err := workspace.LoadState(paths.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Binaries[workspace.TargetAttila32].Analyzed.HasAny() {
+		t.Fatalf("expected Analyzed cleared, got %+v", reloaded.Binaries[workspace.TargetAttila32].Analyzed)
+	}
+	if reloaded.Binaries[workspace.TargetAttila32].BinarySHA256 != sha {
+		t.Fatalf("expected BinarySHA256 preserved, got %q", reloaded.Binaries[workspace.TargetAttila32].BinarySHA256)
 	}
 }
 

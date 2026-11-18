@@ -5,6 +5,7 @@ package e2e
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -523,19 +524,13 @@ func TestE2E_MiniWarscape_RealDecompilers(t *testing.T) {
 		}
 	}
 
-	// 6. Selective clean: clean -d ida attila_32.
-	runCLI(t, sb, "clean", "-d", "ida", "attila_32")
-	repAfterClean := parseStatusReport(t, sb)
-	for _, db := range repAfterClean.Databases {
-		wantAnalyzed := false
-		if db.Target == workspace.TargetAttila64 && (db.Engine == "ida" || db.Engine == "ghidra") {
-			wantAnalyzed = true
-		}
-		if db.Target == workspace.TargetAttila32 && db.Engine == "ghidra" {
-			wantAnalyzed = true
-		}
-		if db.Analyzed != wantAnalyzed {
-			t.Fatalf("after selective clean, database %s/%s Analyzed = %v, want %v", db.Engine, db.Target, db.Analyzed, wantAnalyzed)
+	// 6. Selective stage reset: analyze -d ida --clear attila_32 and extract -d ida --clear attila_32.
+	runCLI(t, sb, "analyze", "-d", "ida", "--clear", "attila_32")
+	runCLI(t, sb, "extract", "-d", "ida", "--clear", "attila_32")
+	repAfterSelectiveClear := parseStatusReport(t, sb)
+	for _, db := range repAfterSelectiveClear.Databases {
+		if !db.Analyzed {
+			t.Fatalf("after analyze --clear attila_32, database %s/%s Analyzed = false, want true", db.Engine, db.Target)
 		}
 	}
 
@@ -566,46 +561,42 @@ func TestE2E_MiniWarscape_RealDecompilers(t *testing.T) {
 		t.Fatalf("expected Initialized == true after init --clear")
 	}
 	for _, db := range repAfterClear.Databases {
-		wantAnalyzed := false
-		if db.Target == workspace.TargetAttila64 && (db.Engine == "ida" || db.Engine == "ghidra") {
-			wantAnalyzed = true
-		}
-		if db.Target == workspace.TargetAttila32 && db.Engine == "ghidra" {
-			wantAnalyzed = true
-		}
-		if db.Analyzed != wantAnalyzed {
-			t.Fatalf("after init --clear, database %s/%s Analyzed = %v, want %v", db.Engine, db.Target, db.Analyzed, wantAnalyzed)
+		if !db.Analyzed {
+			t.Fatalf("after init --clear, database %s/%s Analyzed = false, want true", db.Engine, db.Target)
 		}
 	}
 
-	// 8. Full workspace wipe: clean --all removes config, binaries, state, databases, and logs while preserving external TWDLL_TOOLS_DIR.
-	runCLI(t, sb, "clean", "--all")
+	// 8. Full workspace wipe: clean --yes removes config, binaries, state, databases, extracted SQLite DBs, and logs while preserving external TWDLL_TOOLS_DIR.
+	runCLI(t, sb, "clean", "--yes")
 	for _, preservedTool := range []string{
 		filepath.Join(env.toolsDir, "ghidra", "support", "analyzeHeadless.bat"),
 		filepath.Join(env.toolsDir, "llvm", "bin", "clang++.exe"),
 	} {
 		if info, err := os.Stat(preservedTool); err != nil || info.IsDir() {
-			t.Fatalf("external tool %s was missing after clean --all: %v", preservedTool, err)
+			t.Fatalf("external tool %s was missing after clean --yes: %v", preservedTool, err)
 		}
 	}
-	repAfterCleanAll := parseStatusReport(t, sb)
-	if repAfterCleanAll.Initialized {
-		t.Fatalf("expected Initialized == false after clean --all")
+	if _, err := os.Stat(sb.paths.ExtractedDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected extracted dir deleted after clean --yes, stat err = %v", err)
 	}
-	for _, bin := range repAfterCleanAll.Binaries {
+	repAfterClean := parseStatusReport(t, sb)
+	if repAfterClean.Initialized {
+		t.Fatalf("expected Initialized == false after clean --yes")
+	}
+	for _, bin := range repAfterClean.Binaries {
 		if bin.Present {
-			t.Fatalf("expected binary %s Present == false after clean --all", bin.Target)
+			t.Fatalf("expected binary %s Present == false after clean --yes", bin.Target)
 		}
 	}
-	for _, db := range repAfterCleanAll.Databases {
+	for _, db := range repAfterClean.Databases {
 		if db.Analyzed {
-			t.Fatalf("expected database %s/%s Analyzed == false after clean --all", db.Engine, db.Target)
+			t.Fatalf("expected database %s/%s Analyzed == false after clean --yes", db.Engine, db.Target)
 		}
 	}
 
 	// Restore archived telemetry log so run-e2e-bg.ps1 -Mode mini can collect analyze_resources.jsonl.
 	if err := workspace.WriteFileAtomic(sb.paths.AnalyzeResourceLogPath(), rawResourceBytes, 0o644); err != nil {
-		t.Fatalf("restore resource log after clean --all: %v", err)
+		t.Fatalf("restore resource log after clean --yes: %v", err)
 	}
 }
 

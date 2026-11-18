@@ -190,7 +190,7 @@ func (funcsAspect) Run(ctx context.Context, sess *Session, store *extractdb.Silv
 	if err != nil {
 		return err
 	}
-	if hasFuncs && hasAsm && hasStrings && !sess.Opts.Force {
+	if hasFuncs && hasAsm && hasStrings {
 		return nil
 	}
 
@@ -382,7 +382,6 @@ func (decompAspect) Run(ctx context.Context, sess *Session, store *extractdb.Sil
 	}
 
 	pending, resume, err := store.PlanWork(ctx, specs, extractdb.PlanOptions{
-		Force:         sess.Opts.Force,
 		RetryFailed:   sess.Opts.RetryFailed,
 		RetryTimeouts: sess.Opts.RetryTimeouts,
 		PruneOrphans:  sess.Opts.PruneOrphans,

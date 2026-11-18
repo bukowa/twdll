@@ -36,7 +36,7 @@ Development follows three strictly sequential stages — never implement or stub
 
 ## Workspace & Data Safety
 
-- **Protect `.twdll/` and `twdll.toml`:** `.twdll/` stores ~9 GB of verified game binaries, portable toolchains, and analyzed Ghidra/IDA databases. Never run destructive commands (`twdll clean`, `twdll analyze --force`, or manual deletion inside `.twdll/` / `twdll.toml`) against the live workspace without explicit user permission.
+- **Protect `.twdll/` and `twdll.toml`:** `.twdll/` stores ~9 GB of verified game binaries, portable toolchains, and analyzed Ghidra/IDA databases. Never run destructive commands (`twdll clean`, `twdll analyze --clear`, `twdll extract --clear`, or manual deletion inside `.twdll/` / `twdll.toml`) against the live workspace without explicit user permission.
 - **Isolated Tests Only:** Automated tests must never mutate the repo's real `twdll.toml` or `.twdll/` directory; always isolate via `t.TempDir()`, `--config`, and `--data-dir`.
 
 ## Git Hygiene

@@ -20,7 +20,7 @@ import (
 
 type ExtractOptions struct {
 	Decompiler    string
-	Force         bool
+	Clear         bool
 	Jobs          int
 	MaxMem        string
 	NoDecomp      bool
@@ -200,6 +200,15 @@ func RunExtract(ctx context.Context, req ExtractRequest) (*ExtractReport, error)
 
 		bronzeDBPath := paths.BronzeDBPath(tid)
 		manifestPath := paths.TargetManifestPath(tid)
+		if opts.Clear {
+			if _, err := extractdb.ClearTarget(paths, tid, engines); err != nil {
+				if obs != nil {
+					obs.RowFailed(bronzeKey, false, err.Error())
+					obs.Close()
+				}
+				return nil, fmt.Errorf("clear extracted artifacts for %s: %w", tid, err)
+			}
+		}
 		bronzeState := inspectBronzeState(ctx, bronzeDBPath, item.sha256)
 
 		tRep := ExtractTargetReport{
@@ -212,7 +221,7 @@ func RunExtract(ctx context.Context, req ExtractRequest) (*ExtractReport, error)
 		}
 
 		// Layer 1 (bronze): deterministic format and DWARF parsing -> bronze.sqlite.
-		if opts.Force || !bronzeState.upToDate {
+		if !bronzeState.upToDate {
 			if obs != nil {
 				obs.RowStarted(bronzeKey, "extracting...")
 			}
@@ -287,7 +296,6 @@ func RunExtract(ctx context.Context, req ExtractRequest) (*ExtractReport, error)
 				BinarySHA256:  item.sha256,
 				SilverDBPath:  paths.SilverDBPath(tid, engine),
 				NoDecomp:      opts.NoDecomp,
-				Force:         opts.Force,
 				TimeoutSecs:   opts.TimeoutSecs,
 				NoTimeout:     opts.NoTimeout,
 				RetryFailed:   opts.Retry || opts.RetryFailed,

@@ -108,7 +108,6 @@ type Options struct {
 	BinarySHA256  string
 	SilverDBPath  string
 	NoDecomp      bool
-	Force         bool
 	RetryFailed   bool
 	RetryTimeouts bool
 	PruneOrphans  bool

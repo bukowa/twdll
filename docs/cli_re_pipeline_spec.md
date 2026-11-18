@@ -147,15 +147,15 @@ Idempotent 4-step linear setup process (loads existing `twdll.toml` as defaults 
   - `ida`: Validate `ida_dir` contains headless `idat` / `idat64`.
 - **Save & Report:** Write `twdll.toml` and `.twdll/state.json`, then display readiness summary (`next: run twdll analyze`).
 
-#### 3. `twdll analyze [-d ghidra|ida] [--clear] [--force] [-j N] [-m SIZE] [--full-analysis] [targets...]`
-- Inspects `.twdll/state.json` + binary traits (`InspectBinary` ELF DWARF / PE PDB inspection) and skips targets whose `.twdll/db/<decompiler>/` database already matches `binary_sha256` (unless `--force` or `--clear`; `--clear` removes the target's existing database, analyze log, and `analyzed_sha256` before analyzing).
+#### 3. `twdll analyze [-d ghidra|ida] [--clear] [-j N] [-m SIZE] [--full-analysis] [targets...]`
+- Inspects `.twdll/state.json` + binary traits (`InspectBinary` ELF DWARF / PE PDB inspection) and skips targets whose `.twdll/db/<decompiler>/` database already matches `binary_sha256` (unless `--clear`, which removes the target's existing database, analyze log, and `analyzed_sha256` before analyzing).
 - Schedules 32-bit targets in parallel before running `attila_64` solo, prevents OS sleep during batch runs, and writes raw decompiler logs to `.twdll/logs/analyze_<engine>_<target>.log` plus resource telemetry to `.twdll/logs/analyze_resources.jsonl`.
 - **Ghidra tuning (`!FullAnalysis`):** Keeps `"DWARF.Import Data Types"`, `"DWARF.Import Functions"`, and `"DWARF.Create Function Signatures"` enabled while disabling 19 cascade/bloat analyzers (including `"Create Address Tables"` / `"Create Address Tables - One Time"`), configures `G1GC + UseStringDeduplication`, sizes heap (`8G–16G` for `attila_64`, `5G–6G` for 32-bit), and uses non-blocking swap/pagefile warnings on 8–12 GB hosts (`--full-analysis` restores heavy passes at `22G–36G`).
 - **IDA tuning (`!FullAnalysis`):** Suppresses futile PDB HTTP lookups via `-Opdb:off` when no local `.pdb` exists and passes `-Odwarf:import_lnnums=0` on `attila_64`, while preserving `AF2_DOEH` and eager DWARF types (`0` struct/pseudocode degradation).
 - Records `analyzed_sha256` atomically **only** on clean exit code `0`.
 
-#### 4. `twdll clean [-d ghidra|ida|all] [--all] [targets...]`
-- Removes generated decompiler databases under `.twdll/db/<decompiler>/<target>` and matching `.twdll/logs/analyze_<engine>_<target>.log` files, and clears `analyzed_sha256` in `.twdll/state.json` (plus `analyze_resources.jsonl` when unscoped) without deleting `.twdll/tools/`, `.twdll/binaries/`, or `.twdll/extracted/`. Passing `--all` alone wipes all `init`, `analyze`, and `extract` artifacts (`twdll.toml`, `state.json`, `binaries/`, `db/`, `extracted/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`.
+#### 4. `twdll clean [-y|--yes]`
+- Atomically wipes all registered pipeline stage artifacts (`extract`, `analyze`, `init`: `twdll.toml`, `state.json`, `binaries/`, `db/`, `extracted/`, `logs/`, non-Go local `tools/`) while preserving `.twdll/bin/`, `.twdll/tools/go/`, and any external `TWDLL_TOOLS_DIR`. Requires interactive confirmation or `--yes` (`-y`); for targeted per-stage resets use `init --clear`, `analyze --clear`, or `extract --clear`.
 
 ---
 
@@ -211,8 +211,8 @@ Stage 2 enforces strict separation of truth from heuristics via **1 step = 1 SQL
 
 ### Preserved Stage 2 Audit & Cleanup Notes
 - `.twdll/extracted/<target>/manifest.json` tracks fast readiness and table counts for `status`.
-- **Current Stage 2 CLI Surface (`cli/main.go`):** `twdll extract` (`-d/--decompiler`, `--force`, `-j/--jobs`, `-m/--max-mem`, `--no-decomp`, `--timeout`, `--no-timeout`, `--retry`, `--retry-timeouts`, `--retry-failed`, `--json`) and `twdll status` extracted readiness are active; `twdll search` and `twdll show` are deferred until `bronze.sqlite` and `silver_<engine>.sqlite` are validated and query contracts are agreed.
-- **Zero Optimism & Pre-Stage-3 Audit Gate:** Extracted rows in `bronze.sqlite`, `silver_<engine>.sqlite`, and future derived artifacts are never treated as infallible facts. Compiler optimizations, decompiler hallucinations, and extractor bugs are caught and fixed directly in their owning layer (with unit tests + re-extraction), followed by a mandatory **Extraction Audit & Hardening Phase** before unlocking Stage 3 (`src/`). `twdll clean --all` wipes `.twdll/extracted/`, whereas scoped `twdll clean` and `twdll init --clear` preserve it.
+- **Current Stage 2 CLI Surface (`cli/main.go`):** `twdll extract` (`-d/--decompiler`, `--clear`, `-j/--jobs`, `-m/--max-mem`, `--no-decomp`, `--timeout`, `--no-timeout`, `--retry`, `--retry-timeouts`, `--retry-failed`, `--json`) and `twdll status` extracted readiness are active; `twdll search` and `twdll show` are deferred until `bronze.sqlite` and `silver_<engine>.sqlite` are validated and query contracts are agreed.
+- **Zero Optimism & Pre-Stage-3 Audit Gate:** Extracted rows in `bronze.sqlite`, `silver_<engine>.sqlite`, and future derived artifacts are never treated as infallible facts. Compiler optimizations, decompiler hallucinations, and extractor bugs are caught and fixed directly in their owning layer (with unit tests + re-extraction), followed by a mandatory **Extraction Audit & Hardening Phase** before unlocking Stage 3 (`src/`). `twdll clean` (`--yes`) wipes all stage artifacts including `.twdll/extracted/`, whereas per-stage `--clear` (`init --clear`, `analyze --clear`, `extract --clear`) resets only the targeted stage and scope.
 
 ### Stage 3 Context (Multi-Game C++ Rewrite & Build/Test CLI Commands)
 - **C++ Multi-Game Architecture (`rome2`, `attila`, `tob`):**

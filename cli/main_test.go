@@ -128,13 +128,14 @@ func TestExecute_HelpAndVersion_ReturnZeroWithoutOsExit(t *testing.T) {
 			forbidden string
 		}{
 			{args: []string{"init", "--help"}, mustHave: "--clear", forbidden: "--clean"},
-			{args: []string{"analyze", "--help"}, mustHave: "--clear", forbidden: "--clean"},
+			{args: []string{"analyze", "--help"}, mustHave: "--clear", forbidden: "--force"},
+			{args: []string{"extract", "--help"}, mustHave: "--clear", forbidden: "--force"},
 			{args: []string{"extract", "--help"}, mustHave: "--no-decomp", forbidden: "--facts-only"},
 			{args: []string{"extract", "--help"}, mustHave: "--timeout", forbidden: "--experimental-seed"},
 			{args: []string{"extract", "--help"}, mustHave: "--no-timeout"},
 			{args: []string{"extract", "--help"}, mustHave: "--retry-timeouts"},
 			{args: []string{"extract", "--help"}, mustHave: "--retry-failed"},
-			{args: []string{"clean", "--help"}, mustHave: "--all"},
+			{args: []string{"clean", "--help"}, mustHave: "--yes", forbidden: "--all"},
 		} {
 			var stdout, stderr bytes.Buffer
 			code := Execute(context.Background(), tc.args, term.Streams{
@@ -183,6 +184,9 @@ func TestExecute_UnknownCommandAndInvalidFlag_WriteErrorsStrictlyToStderr(t *tes
 		{name: "invalid flag on status", args: []string{"status", "--bogus-flag"}},
 		{name: "removed --clean flag on init", args: []string{"init", "--clean"}},
 		{name: "removed --clean flag on analyze", args: []string{"analyze", "--clean"}},
+		{name: "removed --force flag on analyze", args: []string{"analyze", "--force"}},
+		{name: "removed --force flag on extract", args: []string{"extract", "--force"}},
+		{name: "removed --all flag on clean", args: []string{"clean", "--all"}},
 	}
 
 	for _, tc := range cases {

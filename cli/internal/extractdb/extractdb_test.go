@@ -791,14 +791,6 @@ func TestSilverStore_TimeoutDeferralAndRetryTimeouts(t *testing.T) {
 		t.Fatalf("unexpected RetryTimeouts PlanWork stats=%+v pending=%+v", statsTO, pendingTO)
 	}
 
-	pendingForce, statsForce, err := store.PlanWork(ctx, specs, PlanOptions{Force: true})
-	if err != nil {
-		t.Fatalf("PlanWork Force: %v", err)
-	}
-	if len(pendingForce) != 3 || statsForce.Pending != 3 {
-		t.Fatalf("unexpected Force PlanWork stats=%+v pending=%+v", statsForce, pendingForce)
-	}
-
 	driftedSpecs := []FuncSpec{
 		{EA: 0x1000, Size: 64, Name: "FastFn"},
 		{EA: 0x2000, Size: 25400, Name: "SlowCtor"},

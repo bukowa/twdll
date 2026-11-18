@@ -189,8 +189,8 @@ func TestRunInit_MissingAttila64InAgentMode_FailsFastWithoutSteamSideEffects(t *
 	}
 }
 
-func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
-	// Given a sandbox with IDA and Ghidra databases, logs, analyze_resources.jsonl, and analyzed state
+func TestRunClean_PreservesSandboxIsolationAndWipesStages(t *testing.T) {
+	// Given a sandbox with IDA and Ghidra databases, logs, extracted DBs, state, and a separate production .twdll dir
 	root := t.TempDir()
 	layout := newPreseededToolchainSandbox(t, root, ".twdll-clean")
 
@@ -216,14 +216,14 @@ func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
 	if err := os.WriteFile(idaLog, []byte("ida-log"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	extractedBronze := layout.Paths.BronzeDBPath(workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(extractedBronze), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(extractedBronze, []byte("bronze"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
-	ghidraMarker := layout.Paths.DatabaseMarkerPath(workspace.DecompilerGhidra, workspace.TargetAttila32)
-	if err := os.MkdirAll(filepath.Dir(ghidraMarker), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(ghidraMarker, []byte("sandbox-ghidra-db"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	resLog := layout.Paths.AnalyzeResourceLogPath()
 	if err := os.WriteFile(resLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -232,50 +232,35 @@ func TestRunClean_PreservesSandboxIsolationAndClearsState(t *testing.T) {
 	st := workspace.NewState()
 	st.UpsertBinary(workspace.TargetAttila32, "src.dll", "hash123")
 	st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerIDA, "hash123")
-	st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerGhidra, "hash123")
 	if err := workspace.SaveState(layout.Paths.StateFile, st); err != nil {
 		t.Fatal(err)
 	}
 
-	// When scoped RunClean (-d ida attila_32) runs against the sandbox layout
+	// When RunClean(--yes) runs against the sandbox layout
 	err := RunClean(context.Background(), CleanRequest{
 		Layout:  layout,
-		Options: CleanOptions{Decompiler: "ida", Targets: []string{"attila_32"}},
+		Options: CleanOptions{Yes: true},
 		UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
 	})
 	if err != nil {
 		t.Fatalf("RunClean: %v", err)
 	}
 
-	// Then only the ida/attila_32 DB, log, and Analyzed.IDA are removed; production DB, ghidra DB, and analyze_resources.jsonl remain intact
-	if _, err := os.Stat(idaMarker); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected sandbox IDA DB to be deleted")
-	}
-	if _, err := os.Stat(idaLog); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected sandbox IDA log to be deleted")
-	}
-	if _, err := os.Stat(ghidraMarker); err != nil {
-		t.Fatalf("expected sibling Ghidra DB to remain untouched: %v", err)
-	}
-	if _, err := os.Stat(resLog); err != nil {
-		t.Fatalf("expected analyze_resources.jsonl to remain untouched on scoped clean: %v", err)
+	// Then sandbox artifacts are removed while the production .twdll DB remains untouched
+	for _, gone := range []string{idaMarker, idaLog, resLog, extractedBronze, layout.Paths.Config, layout.Paths.StateFile} {
+		if _, err := os.Stat(gone); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected %s to be deleted, stat err = %v", gone, err)
+		}
 	}
 	if _, err := os.Stat(prodDB); err != nil {
 		t.Fatalf("production .twdll DB must remain untouched: %v", err)
 	}
-	after, _, _ := workspace.LoadState(layout.Paths.StateFile)
-	if after.Binaries[workspace.TargetAttila32].Analyzed.IDA != "" {
-		t.Fatalf("expected IDA analyzed hash cleared, got %q", after.Binaries[workspace.TargetAttila32].Analyzed.IDA)
-	}
-	if after.Binaries[workspace.TargetAttila32].Analyzed.Ghidra != "hash123" {
-		t.Fatalf("expected Ghidra analyzed hash preserved, got %q", after.Binaries[workspace.TargetAttila32].Analyzed.Ghidra)
-	}
 }
 
-func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
-	t.Run("contradictory flags fail fast without deleting anything", func(t *testing.T) {
+func TestRunClean_ConfirmationAndRegisteredStages(t *testing.T) {
+	t.Run("non-interactive clean without --yes fails fast without deleting anything", func(t *testing.T) {
 		root := t.TempDir()
-		layout := newPreseededToolchainSandbox(t, root, ".twdll-contradict")
+		layout := newPreseededToolchainSandbox(t, root, ".twdll-noconfirm")
 		dbMarker := layout.Paths.DatabaseMarkerPath(workspace.DecompilerIDA, workspace.TargetAttila32)
 		if err := os.MkdirAll(filepath.Dir(dbMarker), 0o755); err != nil {
 			t.Fatal(err)
@@ -284,125 +269,26 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		for _, opts := range []CleanOptions{
-			{All: true, Decompiler: "ida"},
-			{All: true, Targets: []string{"attila_32"}},
-		} {
-			err := RunClean(context.Background(), CleanRequest{
-				Layout:  layout,
-				Options: opts,
-				UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
-			})
-			var diag *term.DiagnosticError
-			if !errors.As(err, &diag) {
-				t.Fatalf("expected *term.DiagnosticError for %+v, got %T (%v)", opts, err, err)
-			}
-			if _, sErr := os.Stat(dbMarker); sErr != nil {
-				t.Fatalf("contradictory clean must not delete %s: %v", dbMarker, sErr)
-			}
-			if _, sErr := os.Stat(layout.Paths.Config); sErr != nil {
-				t.Fatalf("contradictory clean must not delete %s: %v", layout.Paths.Config, sErr)
-			}
-		}
-	})
-
-	t.Run("unscoped clean removes all DBs logs and resource log while preserving init artifacts", func(t *testing.T) {
-		root := t.TempDir()
-		layout := newPreseededToolchainSandbox(t, root, ".twdll-unscoped")
-		paths := layout.Paths
-
-		binFile := paths.BinaryPath(workspace.TargetAttila32)
-		if err := os.MkdirAll(filepath.Dir(binFile), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(binFile, []byte("staged-pe32"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-
-		for _, eng := range workspace.AllDecompilers() {
-			marker := paths.DatabaseMarkerPath(eng, workspace.TargetAttila32)
-			if err := os.MkdirAll(filepath.Dir(marker), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(marker, []byte("db"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			logPath := paths.AnalyzeLogPath(eng, workspace.TargetAttila32)
-			if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(logPath, []byte("log"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-		}
-		resLog := paths.AnalyzeResourceLogPath()
-		if err := os.WriteFile(resLog, []byte("{\"status\":\"ok\"}\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		extractedBronze := paths.BronzeDBPath(workspace.TargetAttila32)
-		if err := os.MkdirAll(filepath.Dir(extractedBronze), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(extractedBronze, []byte("bronze-sqlite"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-
-		st := workspace.NewState()
-		st.SetTool(workspace.ToolGhidra, workspace.ToolState{Version: "12.0.4", SHA256: "toolhash"})
-		st.UpsertBinary(workspace.TargetAttila32, "C:/Games/Attila/empire.retail.dll", "binhash")
-		st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerGhidra, "binhash")
-		st.SetAnalyzed(workspace.TargetAttila32, workspace.DecompilerIDA, "binhash")
-		if err := workspace.SaveState(paths.StateFile, st); err != nil {
-			t.Fatal(err)
-		}
-
 		err := RunClean(context.Background(), CleanRequest{
 			Layout:  layout,
 			Options: CleanOptions{},
 			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
 		})
-		if err != nil {
-			t.Fatalf("unscoped RunClean: %v", err)
+		var diag *term.DiagnosticError
+		if !errors.As(err, &diag) {
+			t.Fatalf("expected *term.DiagnosticError without --yes, got %T (%v)", err, err)
 		}
-
-		for _, removed := range []string{
-			paths.DatabaseDir(workspace.DecompilerGhidra, workspace.TargetAttila32),
-			paths.DatabaseDir(workspace.DecompilerIDA, workspace.TargetAttila32),
-			paths.AnalyzeLogPath(workspace.DecompilerGhidra, workspace.TargetAttila32),
-			paths.AnalyzeLogPath(workspace.DecompilerIDA, workspace.TargetAttila32),
-			resLog,
-		} {
-			if _, sErr := os.Stat(removed); !errors.Is(sErr, os.ErrNotExist) {
-				t.Fatalf("expected %s to be deleted by unscoped clean, stat err = %v", removed, sErr)
-			}
+		if _, sErr := os.Stat(dbMarker); sErr != nil {
+			t.Fatalf("clean without confirmation must not delete %s: %v", dbMarker, sErr)
 		}
-
-		// Config, staged binaries, extracted DBs, and init state entries must remain intact
-		for _, kept := range []string{paths.Config, binFile, extractedBronze, paths.StateFile} {
-			if _, sErr := os.Stat(kept); sErr != nil {
-				t.Fatalf("expected %s to be preserved by unscoped clean: %v", kept, sErr)
-			}
-		}
-		after, _, err := workspace.LoadState(paths.StateFile)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if after.Tools[workspace.ToolGhidra].Version != "12.0.4" {
-			t.Fatalf("expected state.Tools preserved, got %+v", after.Tools)
-		}
-		b := after.Binaries[workspace.TargetAttila32]
-		if b.SourcePath != "C:/Games/Attila/empire.retail.dll" || b.BinarySHA256 != "binhash" {
-			t.Fatalf("expected binary staging metadata preserved, got %+v", b)
-		}
-		if b.Analyzed.Ghidra != "" || b.Analyzed.IDA != "" {
-			t.Fatalf("expected Analyzed hashes cleared, got %+v", b.Analyzed)
+		if _, sErr := os.Stat(layout.Paths.Config); sErr != nil {
+			t.Fatalf("clean without confirmation must not delete %s: %v", layout.Paths.Config, sErr)
 		}
 	})
 
-	t.Run("clean --all wipes workspace while preserving .twdll/bin go toolchain and external TWDLL_TOOLS_DIR", func(t *testing.T) {
-		// Case A: internal ToolsDir with go toolchain and .twdll/bin
+	t.Run("interactive confirmation n cancels without deleting and y wipes all stages", func(t *testing.T) {
 		root := t.TempDir()
-		layout := newPreseededToolchainSandbox(t, root, ".twdll")
+		layout := newPreseededToolchainSandbox(t, root, ".twdll-prompt")
 		paths := layout.Paths
 
 		cliExe := filepath.Join(paths.BinDir, "twdll.exe")
@@ -452,13 +338,27 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err := RunClean(context.Background(), CleanRequest{
-			Layout:  layout,
-			Options: CleanOptions{All: true},
-			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
-		})
-		if err != nil {
-			t.Fatalf("RunClean(--all): %v", err)
+		// Decline with 'n'
+		uiNo := term.NewUI(term.Streams{In: strings.NewReader("n\n"), ColorMode: term.ColorNever})
+		if err := RunClean(context.Background(), CleanRequest{
+			Layout:   layout,
+			Prompter: term.NewLinePrompter(uiNo),
+			UI:       uiNo,
+		}); err != nil {
+			t.Fatalf("RunClean(n): %v", err)
+		}
+		if _, err := os.Stat(extractedFile); err != nil {
+			t.Fatalf("expected workspace preserved on declined prompt: %v", err)
+		}
+
+		// Confirm with 'y'
+		uiYes := term.NewUI(term.Streams{In: strings.NewReader("y\n"), ColorMode: term.ColorNever})
+		if err := RunClean(context.Background(), CleanRequest{
+			Layout:   layout,
+			Prompter: term.NewLinePrompter(uiYes),
+			UI:       uiYes,
+		}); err != nil {
+			t.Fatalf("RunClean(y): %v", err)
 		}
 
 		for _, removed := range []string{
@@ -472,16 +372,16 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 			paths.ToolDir(workspace.ToolLLVM),
 		} {
 			if _, sErr := os.Stat(removed); !errors.Is(sErr, os.ErrNotExist) {
-				t.Fatalf("expected %s to be deleted by clean --all, stat err = %v", removed, sErr)
+				t.Fatalf("expected %s to be deleted by clean, stat err = %v", removed, sErr)
 			}
 		}
 		for _, preserved := range []string{cliExe, goExe} {
 			if _, sErr := os.Stat(preserved); sErr != nil {
-				t.Fatalf("expected %s to be preserved by clean --all: %v", preserved, sErr)
+				t.Fatalf("expected %s to be preserved by clean: %v", preserved, sErr)
 			}
 		}
 
-		// Case B: external TWDLL_TOOLS_DIR must remain completely untouched
+		// External TWDLL_TOOLS_DIR must remain completely untouched
 		extRoot := t.TempDir()
 		extTools := filepath.Join(t.TempDir(), "ext-tools")
 		t.Setenv("TWDLL_TOOLS_DIR", extTools)
@@ -492,13 +392,41 @@ func TestRunClean_UnscopedAndAllAndContradictoryFlags(t *testing.T) {
 		}
 		if err := RunClean(context.Background(), CleanRequest{
 			Layout:  extLayout,
-			Options: CleanOptions{All: true},
+			Options: CleanOptions{Yes: true},
 			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
 		}); err != nil {
-			t.Fatalf("RunClean(--all) with external tools: %v", err)
+			t.Fatalf("RunClean(--yes) with external tools: %v", err)
 		}
 		if _, sErr := os.Stat(extSentinel); sErr != nil {
-			t.Fatalf("external tools sentinel deleted by clean --all: %v", sErr)
+			t.Fatalf("external tools sentinel deleted by clean: %v", sErr)
+		}
+	})
+
+	t.Run("RunClean dispatches strictly to registered stage cleaners in order", func(t *testing.T) {
+		root := t.TempDir()
+		layout := workspace.Layout{Paths: workspace.NewPaths(root, filepath.Join(root, "twdll.toml"), filepath.Join(root, ".twdll"))}
+
+		var order []string
+		err := RunClean(context.Background(), CleanRequest{
+			Layout:  layout,
+			Options: CleanOptions{Yes: true},
+			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+			Stages: []CleanStage{
+				{Name: "stage-a", Clean: func(_ context.Context, _ workspace.Paths, _ *term.UI) (bool, error) {
+					order = append(order, "stage-a")
+					return true, nil
+				}},
+				{Name: "stage-b", Clean: func(_ context.Context, _ workspace.Paths, _ *term.UI) (bool, error) {
+					order = append(order, "stage-b")
+					return false, nil
+				}},
+			},
+		})
+		if err != nil {
+			t.Fatalf("RunClean(custom stages): %v", err)
+		}
+		if strings.Join(order, ",") != "stage-a,stage-b" {
+			t.Fatalf("stage invocation order = %v, want [stage-a stage-b]", order)
 		}
 	})
 }
@@ -1726,31 +1654,49 @@ func TestRunExtract_And_Clean_ExpandTargetGlobs(t *testing.T) {
 		}
 	})
 
-	t.Run("clean *_32 removes only 32-bit DBs and preserves attila_64", func(t *testing.T) {
+	t.Run("extract --clear -d ghidra *_32 clears only 32-bit bronze+ghidra DBs and preserves attila_64 and silver_ida", func(t *testing.T) {
 		for _, tid := range []workspace.TargetID{workspace.TargetAttila64, workspace.TargetAttila32, workspace.TargetRome2_32} {
-			dbDir := layout.Paths.DatabaseDir(workspace.DecompilerGhidra, tid)
-			if err := os.MkdirAll(filepath.Join(dbDir, string(tid)+".rep"), 0o755); err != nil {
-				t.Fatal(err)
+			for _, eng := range []workspace.DecompilerID{workspace.DecompilerGhidra, workspace.DecompilerIDA} {
+				p := layout.Paths.SilverDBPath(tid, eng)
+				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(p, []byte("stale-silver-"+string(eng)), 0o644); err != nil {
+					t.Fatal(err)
+				}
 			}
-			if err := os.WriteFile(filepath.Join(dbDir, string(tid)+".gpr"), []byte("ok"), 0o644); err != nil {
-				t.Fatal(err)
-			}
 		}
-		if err := RunClean(context.Background(), CleanRequest{
-			Layout:  layout,
-			Options: CleanOptions{Decompiler: "ghidra", Targets: []string{"*_32"}},
-			UI:      term.NewUI(term.Streams{ColorMode: term.ColorNever}),
-		}); err != nil {
-			t.Fatalf("RunClean(*_32): %v", err)
+
+		rep, err := RunExtract(context.Background(), ExtractRequest{
+			Layout: layout,
+			Options: ExtractOptions{
+				Decompiler: "ghidra",
+				Clear:      true,
+				NoDecomp:   true,
+				Targets:    []string{"*_32"},
+			},
+			UI: term.NewUI(term.Streams{ColorMode: term.ColorNever}),
+			ExtractSilver: func(_ context.Context, opts silver.Options) (*silver.Result, error) {
+				if _, err := os.Stat(opts.SilverDBPath); !errors.Is(err, os.ErrNotExist) {
+					return nil, errors.New("expected silver DB cleared before runner invocation")
+				}
+				return &silver.Result{Target: opts.Target, Engine: opts.Engine}, nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("RunExtract(--clear *_32): %v", err)
 		}
-		if !layout.Paths.HasValidDatabase(workspace.DecompilerGhidra, workspace.TargetAttila64) {
-			t.Fatalf("expected attila_64 DB preserved after clean *_32")
+		if len(rep.Targets) != 2 || !rep.Targets[0].BronzeRan || !rep.Targets[1].BronzeRan {
+			t.Fatalf("expected Bronze re-extracted after --clear, got %+v", rep.Targets)
 		}
-		if layout.Paths.HasValidDatabase(workspace.DecompilerGhidra, workspace.TargetAttila32) {
-			t.Fatalf("expected attila_32 DB removed after clean *_32")
+		if _, err := os.Stat(layout.Paths.SilverDBPath(workspace.TargetAttila64, workspace.DecompilerGhidra)); err != nil {
+			t.Fatalf("expected attila_64 silver_ghidra preserved: %v", err)
 		}
-		if layout.Paths.HasValidDatabase(workspace.DecompilerGhidra, workspace.TargetRome2_32) {
-			t.Fatalf("expected rome2_32 DB removed after clean *_32")
+		if _, err := os.Stat(layout.Paths.SilverDBPath(workspace.TargetAttila32, workspace.DecompilerIDA)); err != nil {
+			t.Fatalf("expected attila_32 silver_ida preserved: %v", err)
+		}
+		if _, err := os.Stat(layout.Paths.SilverDBPath(workspace.TargetRome2_32, workspace.DecompilerIDA)); err != nil {
+			t.Fatalf("expected rome2_32 silver_ida preserved: %v", err)
 		}
 	})
 }

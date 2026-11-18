@@ -168,7 +168,6 @@ type DecompRecord struct {
 }
 
 type PlanOptions struct {
-	Force         bool
 	RetryFailed   bool
 	RetryTimeouts bool
 	PruneOrphans  bool
@@ -710,21 +709,19 @@ func (s *SilverStore) PlanWork(ctx context.Context, funcs []FuncSpec, opts PlanO
 				pending = append(pending, spec)
 				continue
 			}
-			if !opts.Force {
-				switch row.status {
-				case DecompStatusOK:
-					stats.SkippedOK++
+			switch row.status {
+			case DecompStatusOK:
+				stats.SkippedOK++
+				continue
+			case DecompStatusTimeout:
+				if !opts.RetryTimeouts {
+					stats.SkippedTimeout++
 					continue
-				case DecompStatusTimeout:
-					if !opts.RetryTimeouts {
-						stats.SkippedTimeout++
-						continue
-					}
-				case DecompStatusFailed:
-					if !opts.RetryFailed {
-						stats.SkippedFailed++
-						continue
-					}
+				}
+			case DecompStatusFailed:
+				if !opts.RetryFailed {
+					stats.SkippedFailed++
+					continue
 				}
 			}
 		}

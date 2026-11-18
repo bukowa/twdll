@@ -2,175 +2,103 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
+	"twdll/cli/internal/analyze"
+	"twdll/cli/internal/extractdb"
 	"twdll/cli/internal/term"
 	"twdll/cli/internal/workspace"
 )
 
 type CleanOptions struct {
-	Decompiler string
-	All        bool
-	Targets    []string
+	Yes bool
+}
+
+// CleanStage represents one pipeline stage's workspace cleaner.
+type CleanStage struct {
+	Name  string
+	Clean func(ctx context.Context, paths workspace.Paths, ui *term.UI) (bool, error)
 }
 
 type CleanRequest struct {
-	Layout  workspace.Layout
-	Options CleanOptions
-	UI      *term.UI
+	Layout   workspace.Layout
+	Options  CleanOptions
+	Prompter term.Prompter
+	UI       *term.UI
+	Stages   []CleanStage
 }
 
-func RunClean(_ context.Context, req CleanRequest) error {
-	paths := req.Layout.Paths
-	opts := req.Options
-	ui := req.UI
-
-	if opts.All && (strings.TrimSpace(opts.Decompiler) != "" || len(opts.Targets) > 0) {
-		return &term.DiagnosticError{
-			Message:  "--all wipes the entire workspace and cannot be combined with --decompiler or target arguments",
-			Expected: "either `twdll clean --all` alone or scoped `twdll clean [-d <engine>] [<targets>...]`",
-			Help: []string{
-				"Run `twdll clean -d <engine> [<targets>...]` to remove specific decompiler databases and logs.",
-				"Run `twdll clean --all` without extra arguments to wipe the entire workspace.",
+// DefaultCleanStages returns the registered pipeline cleaners in reverse
+// dependency order (downstream outputs first, init artifacts last).
+func DefaultCleanStages() []CleanStage {
+	return []CleanStage{
+		{
+			Name: "extract",
+			Clean: func(_ context.Context, paths workspace.Paths, _ *term.UI) (bool, error) {
+				return extractdb.CleanWorkspace(paths)
 			},
-		}
+		},
+		{
+			Name: "analyze",
+			Clean: func(_ context.Context, paths workspace.Paths, ui *term.UI) (bool, error) {
+				return analyze.CleanWorkspace(paths, ui)
+			},
+		},
+		{
+			Name: "init",
+			Clean: func(_ context.Context, paths workspace.Paths, ui *term.UI) (bool, error) {
+				return cleanInitWorkspace(paths, ui)
+			},
+		},
 	}
-
-	if opts.All {
-		return runCleanAll(paths, ui)
-	}
-
-	engines, err := resolveCleanEngines(opts.Decompiler)
-	if err != nil {
-		return err
-	}
-	targets, err := resolveCleanTargets(opts.Targets)
-	if err != nil {
-		return err
-	}
-	fullAnalyzeScope := len(engines) == len(workspace.AllDecompilers()) && len(opts.Targets) == 0
-
-	state, stateExisted, err := workspace.LoadState(paths.StateFile)
-	if err != nil {
-		return fmt.Errorf("load state: %w", err)
-	}
-
-	cleared := 0
-	stateDirty := false
-	for _, tid := range targets {
-		for _, engine := range engines {
-			dbDir := paths.DatabaseDir(engine, tid)
-			logFile := paths.AnalyzeLogPath(engine, tid)
-			removed := false
-
-			if _, sErr := os.Stat(dbDir); sErr == nil {
-				if rErr := os.RemoveAll(dbDir); rErr != nil {
-					return fmt.Errorf("remove database dir %s: %w", dbDir, rErr)
-				}
-				_ = os.Remove(filepath.Dir(dbDir))
-				removed = true
-			}
-			if _, sErr := os.Stat(logFile); sErr == nil {
-				if rErr := removeFileIfExists(logFile); rErr != nil {
-					return fmt.Errorf("remove log file %s: %w", logFile, rErr)
-				}
-				removed = true
-			}
-			if state.ClearAnalyzed(tid, engine) {
-				stateDirty = true
-				removed = true
-			}
-
-			if removed {
-				cleared++
-				if ui != nil {
-					ui.Info("Removed %s database for %s", engine, tid)
-				}
-			}
-		}
-	}
-
-	if fullAnalyzeScope {
-		resLog := paths.AnalyzeResourceLogPath()
-		if _, sErr := os.Stat(resLog); sErr == nil {
-			if rErr := removeFileIfExists(resLog); rErr != nil {
-				return fmt.Errorf("remove resource log %s: %w", resLog, rErr)
-			}
-			cleared++
-			if ui != nil {
-				ui.Info("Removed analysis resource log %s", filepath.ToSlash(resLog))
-			}
-		}
-		for _, engine := range engines {
-			_ = os.Remove(filepath.Join(paths.DBDir, string(engine)))
-		}
-		_ = os.Remove(paths.DBDir)
-		_ = os.Remove(paths.LogsDir)
-	}
-
-	if stateDirty {
-		if stateExisted && len(state.Tools) == 0 && len(state.Binaries) == 0 {
-			if err := removeFileIfExists(paths.StateFile); err != nil {
-				return fmt.Errorf("remove state: %w", err)
-			}
-		} else {
-			if err := workspace.SaveState(paths.StateFile, state); err != nil {
-				return fmt.Errorf("save state: %w", err)
-			}
-		}
-	}
-
-	if ui != nil {
-		if cleared == 0 {
-			ui.Info("No databases needed cleaning.")
-		} else {
-			ui.Success("Cleared %d database(s).", cleared)
-		}
-	}
-	return nil
 }
 
-func runCleanAll(paths workspace.Paths, ui *term.UI) error {
-	hadArtifacts := false
-	for _, p := range []string{paths.Config, paths.StateFile, paths.BinsDir, paths.DBDir, paths.ExtractedDir, paths.LogsDir} {
-		if _, err := os.Stat(p); err == nil {
-			hadArtifacts = true
-			break
-		}
-	}
-	if !hadArtifacts && !paths.HasExternalToolsDir() {
-		if entries, err := os.ReadDir(paths.ToolsDir); err == nil {
-			for _, e := range entries {
-				if e.Name() != string(workspace.ToolGo) {
-					hadArtifacts = true
-					break
-				}
+func RunClean(ctx context.Context, req CleanRequest) error {
+	ui := req.UI
+	if !req.Options.Yes {
+		if req.Prompter == nil {
+			return &term.DiagnosticError{
+				Message:  "clean wipes the entire workspace and requires confirmation",
+				Expected: "`--yes` (`-y`) flag or interactive confirmation",
+				Help: []string{
+					"Run `twdll clean --yes` (`-y`) to wipe all workspace artifacts without prompting.",
+					"To reset a single stage, run `twdll init --clear`, `twdll analyze --clear`, or `twdll extract --clear`.",
+				},
 			}
+		}
+		ok, err := req.Prompter.Confirm(
+			"Wipe entire workspace (config, binaries, local tools, decompiler databases, extracted SQLite DBs, and logs)?",
+			false,
+		)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			if ui != nil {
+				ui.Info("Clean cancelled.")
+			}
+			return nil
 		}
 	}
 
-	if err := removeFileIfExists(paths.Config); err != nil {
-		return fmt.Errorf("remove config %s: %w", paths.Config, err)
+	stages := req.Stages
+	if len(stages) == 0 {
+		stages = DefaultCleanStages()
 	}
-	if err := removeFileIfExists(paths.StateFile); err != nil {
-		return fmt.Errorf("remove state %s: %w", paths.StateFile, err)
-	}
-	if err := cleanLocalTools(paths); err != nil {
-		return fmt.Errorf("clean local tools in %s: %w", paths.ToolsDir, err)
-	}
-	if !paths.HasExternalToolsDir() {
-		_ = os.Remove(paths.ToolsDir)
-	}
-	for _, dir := range []string{paths.BinsDir, paths.DBDir, paths.ExtractedDir, paths.LogsDir} {
-		if err := os.RemoveAll(dir); err != nil {
-			return fmt.Errorf("remove %s: %w", dir, err)
+
+	hadArtifacts := false
+	for _, stage := range stages {
+		if stage.Clean == nil {
+			continue
+		}
+		removed, err := stage.Clean(ctx, req.Layout.Paths, ui)
+		if err != nil {
+			return fmt.Errorf("clean %s: %w", stage.Name, err)
+		}
+		if removed {
+			hadArtifacts = true
 		}
 	}
-	_ = os.Remove(paths.DataDir)
 
 	if ui != nil {
 		if hadArtifacts {
@@ -180,97 +108,4 @@ func runCleanAll(paths workspace.Paths, ui *term.UI) error {
 		}
 	}
 	return nil
-}
-
-func removeFileIfExists(path string) error {
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
-}
-
-func cleanLocalTools(paths workspace.Paths) error {
-	if paths.HasExternalToolsDir() {
-		return nil
-	}
-	entries, err := os.ReadDir(paths.ToolsDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	for _, e := range entries {
-		if e.Name() == string(workspace.ToolGo) {
-			continue
-		}
-		if err := os.RemoveAll(filepath.Join(paths.ToolsDir, e.Name())); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func clearInitArtifacts(paths workspace.Paths, ui *term.UI) (workspace.State, error) {
-	if ui != nil {
-		ui.Info("Clearing initialized configuration, binaries, and local tools in %s...", filepath.ToSlash(paths.DataDir))
-	}
-	sp := ui.StartSpinner("Clearing initialized workspace artifacts")
-	defer sp.Stop()
-
-	prevState, _, err := workspace.LoadState(paths.StateFile)
-	if err != nil {
-		if ui != nil {
-			ui.Warn("Ignoring unreadable state file %s during --clear: %v", filepath.ToSlash(paths.StateFile), err)
-		}
-		prevState = workspace.NewState()
-	}
-
-	if err := removeFileIfExists(paths.Config); err != nil {
-		return workspace.State{}, fmt.Errorf("remove config %s: %w", paths.Config, err)
-	}
-	if err := cleanLocalTools(paths); err != nil {
-		return workspace.State{}, fmt.Errorf("clean local tools in %s: %w", paths.ToolsDir, err)
-	}
-	if err := os.RemoveAll(paths.BinsDir); err != nil {
-		return workspace.State{}, fmt.Errorf("remove binaries dir %s: %w", paths.BinsDir, err)
-	}
-
-	nextState := prevState.PruneToAnalyzed()
-
-	if len(nextState.Binaries) == 0 {
-		if err := removeFileIfExists(paths.StateFile); err != nil {
-			return workspace.State{}, fmt.Errorf("remove state %s: %w", paths.StateFile, err)
-		}
-	} else {
-		if err := workspace.SaveState(paths.StateFile, nextState); err != nil {
-			return workspace.State{}, fmt.Errorf("save state %s: %w", paths.StateFile, err)
-		}
-	}
-	return nextState, nil
-}
-
-func resolveCleanEngines(raw string) ([]workspace.DecompilerID, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "all":
-		return workspace.AllDecompilers(), nil
-	default:
-		d, ok := workspace.ParseDecompilerID(raw)
-		if !ok {
-			return nil, fmt.Errorf("unknown decompiler %q (expected ghidra, ida, or all)", raw)
-		}
-		return []workspace.DecompilerID{d}, nil
-	}
-}
-
-func resolveCleanTargets(rawTargets []string) ([]workspace.TargetID, error) {
-	targets, err := workspace.ExpandTargets(rawTargets, workspace.AllTargets())
-	if err != nil {
-		return nil, &term.DiagnosticError{
-			Message:  err.Error(),
-			Expected: "target IDs or glob patterns matching: attila_64, attila_32, rome2_32, tob_32",
-			Help:     []string{"Specify valid target IDs/globs (e.g. `*_32`, `attila_*`) or omit positional arguments to clean all targets."},
-		}
-	}
-	return targets, nil
 }

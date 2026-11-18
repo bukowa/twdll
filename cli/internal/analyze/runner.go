@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -146,32 +145,6 @@ func resolveBackendTools(layout workspace.Layout, engine workspace.DecompilerID,
 		exes[item.Target] = exe
 	}
 	return ghidraToolchain{}, exes, nil
-}
-
-func clearPlannedTargets(paths workspace.Paths, state *workspace.State, engine workspace.DecompilerID, items []PlanItem, ui *term.UI) error {
-	dirty := false
-	for _, item := range items {
-		if err := os.RemoveAll(item.DatabaseDir); err != nil {
-			return fmt.Errorf("clear database dir %s: %w", item.DatabaseDir, err)
-		}
-		if err := os.Remove(item.LogPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("clear log file %s: %w", item.LogPath, err)
-		}
-		if b, ok := state.Binaries[item.Target]; ok && b.Analyzed.Get(engine) != "" {
-			b.Analyzed.Set(engine, "")
-			state.Binaries[item.Target] = b
-			dirty = true
-		}
-		if ui != nil {
-			ui.Info("Cleared existing %s database and log for %s", engine, item.Target)
-		}
-	}
-	if dirty {
-		if err := workspace.SaveState(paths.StateFile, *state); err != nil {
-			return fmt.Errorf("save state after clear: %w", err)
-		}
-	}
-	return nil
 }
 
 type batchRunner struct {

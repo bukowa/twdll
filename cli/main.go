@@ -29,7 +29,7 @@ type CLI struct {
 	Init    InitCmd    `cmd:"" help:"Initialize workspace toolchains, game binaries, and decompiler setup."`
 	Analyze AnalyzeCmd `cmd:"" help:"Run headless decompiler analysis on staged binaries."`
 	Extract ExtractCmd `cmd:"" help:"Extract binary facts and decompiled pseudo-C into SQLite databases."`
-	Clean   CleanCmd   `cmd:"" help:"Remove decompiler databases and logs, or wipe the workspace (--all)."`
+	Clean   CleanCmd   `cmd:"" help:"Wipe all workspace artifacts (requires confirmation or --yes)."`
 }
 
 type runContext struct {
@@ -93,7 +93,6 @@ func (c *InitCmd) Run(rctx *runContext) error {
 type AnalyzeCmd struct {
 	Decompiler   string   `short:"d" name:"decompiler" help:"Decompiler backend override (ghidra, ida)."`
 	Clear        bool     `name:"clear" help:"Clear existing target databases and logs before analyzing."`
-	Force        bool     `name:"force" help:"Re-analyze even when database SHA-256 is up to date."`
 	Jobs         int      `short:"j" name:"jobs" help:"Maximum concurrent analysis jobs (0 = auto)."`
 	MaxMem       string   `short:"m" name:"max-mem" help:"Override Ghidra JVM max heap (e.g. 16G, 32G)."`
 	FullAnalysis bool     `name:"full-analysis" help:"Keep heavy reference/stack analysis passes enabled on attila_64."`
@@ -106,7 +105,6 @@ func (c *AnalyzeCmd) Run(rctx *runContext) error {
 		Options: cmd.AnalyzeOptions{
 			Decompiler:   c.Decompiler,
 			Clear:        c.Clear,
-			Force:        c.Force,
 			Jobs:         c.Jobs,
 			MaxMem:       c.MaxMem,
 			FullAnalysis: c.FullAnalysis,
@@ -118,7 +116,7 @@ func (c *AnalyzeCmd) Run(rctx *runContext) error {
 
 type ExtractCmd struct {
 	Decompiler    string        `short:"d" name:"decompiler" help:"Decompiler backend override (ghidra, ida, all)."`
-	Force         bool          `name:"force" help:"Re-extract even when extracted databases are up to date."`
+	Clear         bool          `name:"clear" help:"Clear extracted SQLite databases for the selected scope before re-extracting."`
 	Jobs          int           `short:"j" name:"jobs" help:"Maximum concurrent decompilation workers (e.g. 0 = auto)."`
 	MaxMem        string        `short:"m" name:"max-mem" help:"Override Ghidra JVM max heap per worker (e.g. 4G, 8G)."`
 	NoDecomp      bool          `name:"no-decomp" help:"Extract bronze and silver metadata (funcs, asm, strings) without pseudo-C decompilation."`
@@ -148,7 +146,7 @@ func (c *ExtractCmd) Run(rctx *runContext) error {
 		Layout: rctx.layout,
 		Options: cmd.ExtractOptions{
 			Decompiler:    c.Decompiler,
-			Force:         c.Force,
+			Clear:         c.Clear,
 			Jobs:          c.Jobs,
 			MaxMem:        c.MaxMem,
 			NoDecomp:      c.NoDecomp,
@@ -166,20 +164,21 @@ func (c *ExtractCmd) Run(rctx *runContext) error {
 }
 
 type CleanCmd struct {
-	Decompiler string   `short:"d" name:"decompiler" help:"Decompiler databases to remove (ghidra, ida, all). Default: all."`
-	All        bool     `name:"all" help:"Wipe all initialized configuration, staged binaries, local tools, databases, and logs."`
-	Targets    []string `arg:"" optional:"" help:"Specific targets to clean (or globs like *_32, attila_*)."`
+	Yes bool `short:"y" name:"yes" help:"Skip confirmation prompt and wipe the workspace."`
 }
 
 func (c *CleanCmd) Run(rctx *runContext) error {
+	var prompter term.Prompter
+	if rctx.ui.IsInteractive() && !c.Yes {
+		prompter = term.NewLinePrompter(rctx.ui)
+	}
 	return cmd.RunClean(rctx.ctx, cmd.CleanRequest{
 		Layout: rctx.layout,
 		Options: cmd.CleanOptions{
-			Decompiler: c.Decompiler,
-			All:        c.All,
-			Targets:    c.Targets,
+			Yes: c.Yes,
 		},
-		UI: rctx.ui,
+		Prompter: prompter,
+		UI:       rctx.ui,
 	})
 }
 
