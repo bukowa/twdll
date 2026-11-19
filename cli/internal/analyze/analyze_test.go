@@ -1,6 +1,7 @@
 package analyze
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -552,6 +553,52 @@ func TestCleanWorkspace_RemovesAnalyzeArtifactsAndPreservesInitArtifacts(t *test
 	}
 	if reloaded.Binaries[workspace.TargetAttila32].BinarySHA256 != sha {
 		t.Fatalf("expected BinarySHA256 preserved, got %q", reloaded.Binaries[workspace.TargetAttila32].BinarySHA256)
+	}
+}
+
+func TestCleanWorkspace_ToleratesCorruptStateJSON(t *testing.T) {
+	root := t.TempDir()
+	layout := newTestLayout(t, root, workspace.DecompilerGhidra)
+	paths := layout.Paths
+
+	dbMarker := paths.DatabaseMarkerPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(dbMarker), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbMarker, []byte("db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logPath := paths.AnalyzeLogPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(logPath, []byte("log"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(paths.StateFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.StateFile, []byte("{corrupt json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	ui := term.NewUI(term.Streams{Err: &stderr, ColorMode: term.ColorNever})
+
+	removed, err := CleanWorkspace(paths, ui)
+	if err != nil {
+		t.Fatalf("CleanWorkspace returned error on corrupt state.json: %v", err)
+	}
+	if !removed {
+		t.Fatalf("expected CleanWorkspace removed = true")
+	}
+	for _, gone := range []string{paths.DBDir, logPath} {
+		if _, err := os.Stat(gone); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected %s deleted, stat err = %v", gone, err)
+		}
+	}
+	if !strings.Contains(stderr.String(), "Ignoring unreadable state file") {
+		t.Fatalf("expected warning about unreadable state file, got stderr:\n%s", stderr.String())
 	}
 }
 

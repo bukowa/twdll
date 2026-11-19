@@ -212,6 +212,9 @@ func (p Paths) DatabaseDir(d DecompilerID, t TargetID) string {
 func (p Paths) ExtractedTargetDir(t TargetID) string {
 	return filepath.Join(p.ExtractedDir, string(t))
 }
+func (p Paths) ExtractedTmpDir() string {
+	return filepath.Join(p.ExtractedDir, "tmp")
+}
 func (p Paths) BronzeDBPath(t TargetID) string {
 	return filepath.Join(p.ExtractedTargetDir(t), "bronze.sqlite")
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -357,7 +356,7 @@ func resolveTmpBase(paths workspace.Paths, override string) string {
 		return override
 	}
 	if paths.ExtractedDir != "" {
-		return filepath.Join(paths.ExtractedDir, "tmp")
+		return paths.ExtractedTmpDir()
 	}
 	return ""
 }

@@ -51,7 +51,10 @@ func CleanWorkspace(paths workspace.Paths, ui *term.UI) (bool, error) {
 
 	state, stateExisted, err := workspace.LoadState(paths.StateFile)
 	if err != nil {
-		return removed, fmt.Errorf("load state: %w", err)
+		if ui != nil {
+			ui.Warn("Ignoring unreadable state file %s during clean: %v", filepath.ToSlash(paths.StateFile), err)
+		}
+		stateExisted = false
 	}
 	if stateExisted {
 		dirty := false

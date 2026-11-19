@@ -67,8 +67,82 @@ func prepareELF64(src *Source) error {
 				}
 			}
 		}
+		wireELF64DataSliceRelocs(ef, src.DataSlices)
 	}
 	return nil
+}
+
+func wireELF64DataSliceRelocs(ef *elf.File, slices []DataSlice) {
+	if ef == nil || len(slices) == 0 {
+		return
+	}
+	bitsets := make([][]uint64, len(slices))
+	for _, sec := range ef.Sections {
+		if sec.Type != elf.SHT_RELA && sec.Type != elf.SHT_REL {
+			continue
+		}
+		if sec.Flags&elf.SHF_ALLOC == 0 &&
+			sec.Name != ".rela.dyn" && sec.Name != ".rela.plt" &&
+			sec.Name != ".rel.dyn" && sec.Name != ".rel.plt" {
+			continue
+		}
+		step := 24
+		if sec.Type == elf.SHT_REL {
+			step = 16
+		}
+		data, err := sec.Data()
+		if err != nil || len(data) < step {
+			continue
+		}
+		for pos := 0; pos+step <= len(data); pos += step {
+			rOffset := binary.LittleEndian.Uint64(data[pos : pos+8])
+			rInfo := binary.LittleEndian.Uint64(data[pos+8 : pos+16])
+			rType := elf.R_X86_64(rInfo & 0xffffffff)
+			if rOffset == 0 || rType == elf.R_X86_64_NONE {
+				continue
+			}
+			span := uint64(8)
+			switch rType {
+			case elf.R_X86_64_32, elf.R_X86_64_32S, elf.R_X86_64_PC32:
+				span = 4
+			}
+			relEnd := rOffset + span
+			if relEnd < rOffset {
+				continue
+			}
+			for idx, s := range slices {
+				secStart := s.VA
+				secEnd := secStart + uint64(len(s.Data))
+				if secEnd < secStart || rOffset >= secEnd || relEnd <= secStart {
+					continue
+				}
+				words := bitsets[idx]
+				if words == nil {
+					words = make([]uint64, (len(s.Data)+63)/64)
+					bitsets[idx] = words
+				}
+				lo := max(rOffset, secStart)
+				hi := min(relEnd, secEnd)
+				for va := lo; va < hi; va++ {
+					off := va - secStart
+					words[off>>6] |= uint64(1) << (off & 63)
+				}
+			}
+		}
+	}
+	for idx, words := range bitsets {
+		if words == nil {
+			continue
+		}
+		n := len(slices[idx].Data)
+		w := words
+		slices[idx].HasRelocAt = func(off int) bool {
+			if off < 0 || off >= n {
+				return false
+			}
+			return (w[off>>6] & (uint64(1) << (uint(off) & 63))) != 0
+		}
+	}
 }
 
 func (ELF64Extractor) Extract(ctx context.Context, src *Source, store *extractdb.BronzeStore) error {

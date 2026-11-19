@@ -131,7 +131,7 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 	if validUTF16Count != 1 {
 		t.Errorf("validUTF16Count = %d, want 1", validUTF16Count)
 	}
-	var conoutCount, oddWideCount, asciiTailCount int
+	var conoutCount, oddWideCount, evenWideCount, asciiTailCount, asciiEvenCount int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'utf16le' AND value = 'CONOUT$'`).Scan(&conoutCount); err != nil {
 		t.Fatal(err)
 	}
@@ -141,20 +141,32 @@ func TestExtractPE32_SyntheticFixture(t *testing.T) {
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'utf16le' AND value = 'OddWide'`).Scan(&oddWideCount); err != nil {
 		t.Fatal(err)
 	}
-	if oddWideCount != 1 {
-		t.Errorf("OddWide utf16le count = %d, want 1", oddWideCount)
+	if oddWideCount != 0 {
+		t.Errorf("OddWide unaligned utf16le count = %d, want 0", oddWideCount)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'utf16le' AND value = 'EvenWide'`).Scan(&evenWideCount); err != nil {
+		t.Fatal(err)
+	}
+	if evenWideCount != 1 {
+		t.Errorf("EvenWide aligned utf16le count = %d, want 1", evenWideCount)
 	}
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'ascii' AND value = 'abcd'`).Scan(&asciiTailCount); err != nil {
 		t.Fatal(err)
 	}
 	if asciiTailCount != 1 {
-		t.Errorf("abcdA ascii count = %d, want 1", asciiTailCount)
+		t.Errorf("abcd ascii count = %d, want 1", asciiTailCount)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE value = 'RelocFakeWide'`).Scan(&relocUTF16Count); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'ascii' AND value = 'abcde'`).Scan(&asciiEvenCount); err != nil {
+		t.Fatal(err)
+	}
+	if asciiEvenCount != 1 {
+		t.Errorf("abcde ascii count = %d, want 1", asciiEvenCount)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE value LIKE '%FakeWide%'`).Scan(&relocUTF16Count); err != nil {
 		t.Fatal(err)
 	}
 	if relocUTF16Count != 0 {
-		t.Errorf("relocUTF16Count = %d, want 0 (.reloc-overlapping UTF-16LE must be rejected)", relocUTF16Count)
+		t.Errorf("relocUTF16Count = %d, want 0 (.reloc-overlapping UTF-16LE and its suffix must be rejected)", relocUTF16Count)
 	}
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM strings WHERE encoding = 'ascii' AND value = 'FACTION_TREASURY_LOG'`).Scan(&validASCIICount); err != nil {
 		t.Fatal(err)
@@ -342,8 +354,8 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	rdPos += 12
 
 	// Regression: a float constant ending in printable '?' (0x3F) immediately before L"CONOUT$"
-	// must NOT truncate the leading 'C' of the UTF-16LE string, and an odd-length ASCII string
-	// immediately before an odd-offset UTF-16LE string must still yield both cleanly.
+	// must NOT truncate the leading 'C' of the UTF-16LE string; unaligned odd-offset UTF-16LE
+	// must be rejected while an even-aligned UTF-16LE immediately after an ASCII string yields both cleanly.
 	for rdPos%4 != 0 {
 		rdPos++
 	}
@@ -359,6 +371,17 @@ func buildSyntheticPE32DLL(t *testing.T, outPath string) syntheticPE32Layout {
 	copy(rdata[rdPos:], "abcd\x00")
 	rdPos += 5
 	for _, u := range utf16.Encode([]rune("OddWide")) {
+		binary.LittleEndian.PutUint16(rdata[rdPos:rdPos+2], u)
+		rdPos += 2
+	}
+	binary.LittleEndian.PutUint16(rdata[rdPos:rdPos+2], 0)
+	rdPos += 2
+	if rdPos%2 != 0 {
+		rdPos++
+	}
+	copy(rdata[rdPos:], "abcde\x00")
+	rdPos += 6
+	for _, u := range utf16.Encode([]rune("EvenWide")) {
 		binary.LittleEndian.PutUint16(rdata[rdPos:rdPos+2], u)
 		rdPos += 2
 	}

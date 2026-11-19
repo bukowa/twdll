@@ -311,8 +311,8 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 		t.Errorf("dwarf_funcs_fts MATCH 'FACTION' returned 0 rows")
 	}
 
-	// 7. Verify UTF-32LE string & ASCII string extracted statically by data.strings.
-	var utf32Count, asciiCount int
+	// 7. Verify UTF-32LE, UTF-16LE, and ASCII strings extracted statically by data.strings.
+	var utf32Count, utf16Count, asciiCount int
 	if err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM strings WHERE encoding = 'utf32le' AND value = 'AttilaWide32'
 	`).Scan(&utf32Count); err != nil {
@@ -320,6 +320,14 @@ func TestExtractELF64_SyntheticTwoCUDWARF4(t *testing.T) {
 	}
 	if utf32Count != 1 {
 		t.Errorf("utf32le string count = %d, want 1", utf32Count)
+	}
+	if err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM strings WHERE encoding = 'utf16le' AND value = 'save_games/'
+	`).Scan(&utf16Count); err != nil {
+		t.Fatal(err)
+	}
+	if utf16Count != 1 {
+		t.Errorf("utf16le string count = %d, want 1", utf16Count)
 	}
 	if err := db.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM strings WHERE encoding = 'ascii' AND value = 'FACTION_GOLD_ADDED'
@@ -374,6 +382,9 @@ func buildSyntheticELF64WithTwoCUDWARF4(t *testing.T, outPath string) syntheticE
 	copy(rodata[0x000:], "FACTION_GOLD_ADDED\x00")
 	for idx, r := range "AttilaWide32" {
 		binary.LittleEndian.PutUint32(rodata[0x040+idx*4:], uint32(r))
+	}
+	for idx, r := range "save_games/" {
+		binary.LittleEndian.PutUint16(rodata[0x090+idx*2:], uint16(r))
 	}
 	ztiVA := uint64(rodataVA + 0x0E0)
 	ztvOff := 0x100
@@ -1399,5 +1410,229 @@ func TestResolveDWARFMemberLayout_BitfieldsAndLocations(t *testing.T) {
 					tc.wantByteOff, tc.wantHasByteOff, tc.wantBitOff, tc.wantBitSize)
 			}
 		})
+	}
+}
+
+func TestPrepareELF64_HasRelocAtFiltersDataStrings(t *testing.T) {
+	ctx := context.Context(t.Context())
+	tmpDir := t.TempDir()
+	binPath := filepath.Join(tmpDir, "pie_attila")
+
+	const (
+		imageBase   = uint64(0x200000)
+		rodataVA    = uint64(0x201000)
+		dataRelRoVA = uint64(0x202000)
+	)
+
+	// .rodata holds a clean ASCII string, a clean UTF-16LE string, and a fake ASCII string
+	// overlapped by an 8-byte SHT_RELA (.rela.dyn) relocation.
+	rodata := make([]byte, 0x100)
+	copy(rodata[0x00:], "CLEAN_RODATA_ASCII\x00")
+	copy(rodata[0x20:], encodeUTF16LE("CleanRodata16"))
+	copy(rodata[0x60:], "RELOC_ASCII_PTR\x00") // 8-byte reloc at +0x60 covers bytes [0x60..0x67]
+
+	// .data.rel.ro holds:
+	// - +0x00: fake UTF-32LE overlapped by SHT_RELA (R_X86_64_RELATIVE, 8-byte span)
+	// - +0x40: fake UTF-16LE overlapped by SHT_REL  (R_X86_64_64, 8-byte span)
+	// - +0x80: clean UTF-32LE immediately after an R_X86_64_NONE entry (must NOT be filtered)
+	dataRelRo := make([]byte, 0x100)
+	copy(dataRelRo[0x00:], encodeUTF32LE("RelocWide32"))
+	copy(dataRelRo[0x40:], encodeUTF16LE("RelocWide16"))
+	copy(dataRelRo[0x80:], encodeUTF32LE("CleanRelRo32"))
+
+	// .rela.dyn (SHT_RELA, 24 bytes/entry):
+	var relaDyn bytes.Buffer
+	writeRela := func(offset uint64, rType elf.R_X86_64) {
+		var rec [24]byte
+		binary.LittleEndian.PutUint64(rec[0:8], offset)
+		binary.LittleEndian.PutUint64(rec[8:16], uint64(rType))
+		relaDyn.Write(rec[:])
+	}
+	writeRela(rodataVA+0x60, elf.R_X86_64_RELATIVE)    // masks "RELOC_AS" in "RELOC_ASCII_PTR"
+	writeRela(dataRelRoVA+0x08, elf.R_X86_64_RELATIVE) // masks body of "RelocWide32"
+	writeRela(dataRelRoVA+0x80, elf.R_X86_64_NONE)     // NONE must NOT mask "CleanRelRo32"
+
+	// .rel.dyn (SHT_REL, 16 bytes/entry):
+	var relDyn bytes.Buffer
+	var relRec [16]byte
+	binary.LittleEndian.PutUint64(relRec[0:8], dataRelRoVA+0x44) // masks body of "RelocWide16"
+	binary.LittleEndian.PutUint64(relRec[8:16], uint64(elf.R_X86_64_64))
+	relDyn.Write(relRec[:])
+
+	var shstr bytes.Buffer
+	shstr.WriteByte(0)
+	addShStr := func(s string) uint32 {
+		off := uint32(shstr.Len())
+		shstr.WriteString(s)
+		shstr.WriteByte(0)
+		return off
+	}
+	nRodata := addShStr(".rodata")
+	nDataRelRo := addShStr(".data.rel.ro")
+	nRelaDyn := addShStr(".rela.dyn")
+	nRelDyn := addShStr(".rel.dyn")
+	nShstrtab := addShStr(".shstrtab")
+
+	type secDef struct {
+		nameOff uint32
+		typ     uint32
+		flags   uint64
+		addr    uint64
+		entsize uint64
+		data    []byte
+		offset  uint64
+	}
+	secs := []secDef{
+		{}, // SHT_NULL
+		{nameOff: nRodata, typ: uint32(elf.SHT_PROGBITS), flags: uint64(elf.SHF_ALLOC), addr: rodataVA, data: rodata},
+		{nameOff: nDataRelRo, typ: uint32(elf.SHT_PROGBITS), flags: uint64(elf.SHF_ALLOC | elf.SHF_WRITE), addr: dataRelRoVA, data: dataRelRo},
+		{nameOff: nRelaDyn, typ: uint32(elf.SHT_RELA), flags: uint64(elf.SHF_ALLOC), addr: 0x203000, entsize: 24, data: relaDyn.Bytes()},
+		{nameOff: nRelDyn, typ: uint32(elf.SHT_REL), flags: uint64(elf.SHF_ALLOC), addr: 0x203100, entsize: 16, data: relDyn.Bytes()},
+		{nameOff: nShstrtab, typ: uint32(elf.SHT_STRTAB), data: shstr.Bytes()},
+	}
+
+	const (
+		ehdrSize = 64
+		phdrSize = 56
+		shdrSize = 64
+	)
+	curOff := uint64(ehdrSize + phdrSize)
+	for i := 1; i < len(secs); i++ {
+		for curOff%16 != 0 {
+			curOff++
+		}
+		secs[i].offset = curOff
+		curOff += uint64(len(secs[i].data))
+	}
+	for curOff%16 != 0 {
+		curOff++
+	}
+	shdrOff := curOff
+
+	var f bytes.Buffer
+	var ehdr [ehdrSize]byte
+	copy(ehdr[0:4], []byte{0x7f, 'E', 'L', 'F'})
+	ehdr[4] = byte(elf.ELFCLASS64)
+	ehdr[5] = byte(elf.ELFDATA2LSB)
+	ehdr[6] = byte(elf.EV_CURRENT)
+	binary.LittleEndian.PutUint16(ehdr[16:18], uint16(elf.ET_DYN))
+	binary.LittleEndian.PutUint16(ehdr[18:20], uint16(elf.EM_X86_64))
+	binary.LittleEndian.PutUint32(ehdr[20:24], uint32(elf.EV_CURRENT))
+	binary.LittleEndian.PutUint64(ehdr[32:40], ehdrSize)
+	binary.LittleEndian.PutUint64(ehdr[40:48], shdrOff)
+	binary.LittleEndian.PutUint16(ehdr[52:54], ehdrSize)
+	binary.LittleEndian.PutUint16(ehdr[54:56], phdrSize)
+	binary.LittleEndian.PutUint16(ehdr[56:58], 1)
+	binary.LittleEndian.PutUint16(ehdr[58:60], shdrSize)
+	binary.LittleEndian.PutUint16(ehdr[60:62], uint16(len(secs)))
+	binary.LittleEndian.PutUint16(ehdr[62:64], uint16(len(secs)-1))
+	f.Write(ehdr[:])
+
+	var phdr [phdrSize]byte
+	binary.LittleEndian.PutUint32(phdr[0:4], uint32(elf.PT_LOAD))
+	binary.LittleEndian.PutUint32(phdr[4:8], uint32(elf.PF_R|elf.PF_X))
+	binary.LittleEndian.PutUint64(phdr[16:24], imageBase)
+	binary.LittleEndian.PutUint64(phdr[24:32], imageBase)
+	binary.LittleEndian.PutUint64(phdr[32:40], 0x4000)
+	binary.LittleEndian.PutUint64(phdr[40:48], 0x4000)
+	binary.LittleEndian.PutUint64(phdr[48:56], 0x1000)
+	f.Write(phdr[:])
+
+	for i := 1; i < len(secs); i++ {
+		for uint64(f.Len()) < secs[i].offset {
+			f.WriteByte(0)
+		}
+		f.Write(secs[i].data)
+	}
+	for uint64(f.Len()) < shdrOff {
+		f.WriteByte(0)
+	}
+	for _, s := range secs {
+		var sh [shdrSize]byte
+		binary.LittleEndian.PutUint32(sh[0:4], s.nameOff)
+		binary.LittleEndian.PutUint32(sh[4:8], s.typ)
+		binary.LittleEndian.PutUint64(sh[8:16], s.flags)
+		binary.LittleEndian.PutUint64(sh[16:24], s.addr)
+		binary.LittleEndian.PutUint64(sh[24:32], s.offset)
+		binary.LittleEndian.PutUint64(sh[32:40], uint64(len(s.data)))
+		binary.LittleEndian.PutUint64(sh[48:56], 8)
+		binary.LittleEndian.PutUint64(sh[56:64], s.entsize)
+		f.Write(sh[:])
+	}
+	if err := os.WriteFile(binPath, f.Bytes(), 0o644); err != nil {
+		t.Fatalf("write synthetic PIE ELF64: %v", err)
+	}
+
+	// Verify both direct HasRelocAt wiring and full ExtractTarget (even with elf64.format disabled).
+	src, closeSrc, err := openSource(workspace.TargetAttila64, binPath)
+	if err != nil {
+		t.Fatalf("openSource: %v", err)
+	}
+	defer closeSrc()
+
+	if len(src.DataSlices) != 2 {
+		t.Fatalf("len(DataSlices) = %d, want 2", len(src.DataSlices))
+	}
+	roSlice := src.DataSlices[0]
+	if roSlice.HasRelocAt == nil || !roSlice.HasRelocAt(0x60) || !roSlice.HasRelocAt(0x67) || roSlice.HasRelocAt(0x68) || roSlice.HasRelocAt(0x5f) {
+		t.Fatalf(".rodata HasRelocAt span mismatch around 0x60..0x67")
+	}
+	relRoSlice := src.DataSlices[1]
+	if relRoSlice.HasRelocAt == nil || !relRoSlice.HasRelocAt(0x08) || !relRoSlice.HasRelocAt(0x0f) || relRoSlice.HasRelocAt(0x10) {
+		t.Fatalf(".data.rel.ro SHT_RELA HasRelocAt span mismatch around 0x08..0x0f")
+	}
+	if !relRoSlice.HasRelocAt(0x44) || !relRoSlice.HasRelocAt(0x4b) || relRoSlice.HasRelocAt(0x4c) {
+		t.Fatalf(".data.rel.ro SHT_REL HasRelocAt span mismatch around 0x44..0x4b")
+	}
+	if relRoSlice.HasRelocAt(0x80) {
+		t.Fatalf("R_X86_64_NONE at 0x80 must not mark reloc bytes")
+	}
+
+	bronzeDBPath := filepath.Join(tmpDir, "bronze_pie.sqlite")
+	if _, err := ExtractTarget(ctx, Options{
+		Target:             workspace.TargetAttila64,
+		BinaryPath:         binPath,
+		BronzeDBPath:       bronzeDBPath,
+		DisabledExtractors: []string{"elf64.format", "elf64.dwarf4"},
+	}); err != nil {
+		t.Fatalf("ExtractTarget: %v", err)
+	}
+
+	db, err := extractdb.OpenReadOnly(bronzeDBPath)
+	if err != nil {
+		t.Fatalf("OpenReadOnly: %v", err)
+	}
+	defer db.Close()
+
+	rows, err := db.QueryContext(ctx, `SELECT encoding, value FROM strings ORDER BY ea`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	var got []string
+	for rows.Next() {
+		var enc, val string
+		if err := rows.Scan(&enc, &val); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, enc+":"+val)
+	}
+	// Note: "RELOC_ASCII_PTR" has 8-byte reloc on "RELOC_AS", leaving un-relocated "CII_PTR" at +0x68
+	// (which matches PE32 scanASCIISection behavior for non-relocated trailing bytes).
+	// Verify clean strings ARE present and relocated wide strings (plus their tails) and "RELOC_ASCII_PTR" are NOT.
+	gotSet := make(map[string]bool, len(got))
+	for _, g := range got {
+		gotSet[g] = true
+	}
+	for _, want := range []string{"ascii:CLEAN_RODATA_ASCII", "utf16le:CleanRodata16", "utf32le:CleanRelRo32"} {
+		if !gotSet[want] {
+			t.Errorf("missing expected string %q in %v", want, got)
+		}
+	}
+	for _, forbid := range []string{"ascii:RELOC_ASCII_PTR", "utf32le:RelocWide32", "utf32le:Wide32", "utf16le:RelocWide16", "utf16le:Wide16"} {
+		if gotSet[forbid] {
+			t.Errorf("unexpected relocated string %q present in %v", forbid, got)
+		}
 	}
 }

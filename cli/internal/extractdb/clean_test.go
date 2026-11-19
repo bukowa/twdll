@@ -95,4 +95,76 @@ func TestCleanWorkspace_And_ClearTarget(t *testing.T) {
 			t.Fatalf("expected %s deleted, stat err = %v", paths.ExtractedDir, err)
 		}
 	})
+
+	t.Run("ClearTarget removes interrupted .tmp sidecars, atomic temp files, and extracted/tmp staging dirs", func(t *testing.T) {
+		root := t.TempDir()
+		paths := workspace.NewPaths(root, filepath.Join(root, "twdll.toml"), filepath.Join(root, ".twdll"))
+
+		attila32 := workspace.TargetAttila32
+		attila64 := workspace.TargetAttila64
+
+		toRemove := []string{
+			paths.BronzeDBPath(attila32) + ".tmp",
+			paths.BronzeDBPath(attila32) + ".tmp-wal",
+			paths.BronzeDBPath(attila32) + ".tmp-shm",
+			paths.BronzeDBPath(attila32) + ".tmp-journal",
+			paths.TargetManifestPath(attila32) + ".tmp.123456",
+			paths.DerivedDBPath() + ".tmp",
+			paths.DerivedDBPath() + ".tmp-wal",
+			paths.SilverDBPath(attila32, workspace.DecompilerGhidra) + ".tmp",
+			paths.SilverDBPath(attila32, workspace.DecompilerGhidra) + ".tmp-wal",
+			paths.SilverDBPath(attila32, workspace.DecompilerGhidra) + ".tmp-shm",
+			paths.SilverDBPath(attila32, workspace.DecompilerGhidra) + ".tmp-journal",
+			paths.SilverDBPath(attila32, workspace.DecompilerGhidra) + ".tmp.tmp.7890",
+			filepath.Join(paths.ExtractedTmpDir(), "twdll_ida_w0_attila_32_1234", "attila_32.i64"),
+			filepath.Join(paths.ExtractedTmpDir(), "twdll_silver_asm_9999.jsonl"),
+		}
+		toPreserve := []string{
+			paths.SilverDBPath(attila32, workspace.DecompilerIDA),
+			paths.SilverDBPath(attila32, workspace.DecompilerIDA) + ".tmp",
+			paths.BronzeDBPath(attila64) + ".tmp",
+		}
+		for _, p := range append(append([]string{}, toRemove...), toPreserve...) {
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte("leftover"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		removed, err := ClearTarget(paths, attila32, []workspace.DecompilerID{workspace.DecompilerGhidra})
+		if err != nil {
+			t.Fatalf("ClearTarget: %v", err)
+		}
+		if !removed {
+			t.Fatalf("expected ClearTarget removed = true")
+		}
+
+		for _, gone := range append(toRemove, paths.ExtractedTmpDir()) {
+			if _, err := os.Stat(gone); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("expected %s deleted, stat err = %v", gone, err)
+			}
+		}
+		for _, kept := range toPreserve {
+			if _, err := os.Stat(kept); err != nil {
+				t.Fatalf("expected sibling artifact %s preserved: %v", kept, err)
+			}
+		}
+
+		// Clearing an empty extracted/tmp dir alone should also remove it and report removed=true.
+		if err := os.MkdirAll(paths.ExtractedTmpDir(), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		removed, err = ClearTarget(paths, attila32, []workspace.DecompilerID{workspace.DecompilerGhidra})
+		if err != nil {
+			t.Fatalf("ClearTarget (empty tmp): %v", err)
+		}
+		if !removed {
+			t.Fatalf("expected ClearTarget removed = true when cleaning empty extracted/tmp dir")
+		}
+		if _, err := os.Stat(paths.ExtractedTmpDir()); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected empty %s deleted, stat err = %v", paths.ExtractedTmpDir(), err)
+		}
+	})
 }

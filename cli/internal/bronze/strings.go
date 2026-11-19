@@ -10,9 +10,14 @@ import (
 	"twdll/cli/internal/extractdb"
 )
 
-// StringsExtractor deterministically extracts ASCII, UTF-16LE (PE32), and UTF-32LE (ELF64)
+// StringsExtractor deterministically extracts ASCII, UTF-32LE (ELF64), and UTF-16LE (PE32 & ELF64)
 // printable strings from data sections staged on Source.
 type StringsExtractor struct{}
+
+const (
+	minWideStringUnits = 4
+	maxWideStringUnits = 4096
+)
 
 func (StringsExtractor) ID() string { return "data.strings" }
 
@@ -42,14 +47,16 @@ func scanAndPersistStrings(ctx context.Context, store *extractdb.BronzeStore, se
 		var secRecs []rawStringRecord
 
 		// Extract NUL-terminated ASCII runs first so claimed[] prevents trailing "<char>\x00"
-		// bytes of an ASCII string from being misdecoded as UTF-16LE, without breaking
-		// UTF-16LE strings preceded by random non-string bytes (e.g. floats ending in 0x3F).
+		// bytes of an ASCII string from being misdecoded as wide text, without breaking
+		// wide strings preceded by random non-string bytes (e.g. floats ending in 0x3F).
+		// On 64-bit targets, scan UTF-32LE before UTF-16LE so claimed[] prevents UTF-32LE
+		// wchar_t literals from being partially re-decoded as UTF-16LE while still capturing
+		// UTF-16LE CA::UniString / char16_t literals in .rodata.
 		scanASCIISection(sec, claimed, &secRecs)
 		if sec.Is64Bit {
 			scanUTF32LESection(sec, claimed, &secRecs)
-		} else {
-			scanUTF16LESection(sec, claimed, &secRecs)
 		}
+		scanUTF16LESection(sec, claimed, &secRecs)
 
 		sort.Slice(secRecs, func(i, j int) bool {
 			return secRecs[i].ea < secRecs[j].ea
@@ -68,8 +75,12 @@ func isASCIIAlnumOrUnderscore(r rune) bool {
 	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_'
 }
 
+func isWideASCIIPrintable(u uint32) bool {
+	return (u >= 0x0020 && u <= 0x007E) || u == '\t' || u == '\r' || u == '\n'
+}
+
 func isWidePrintable(u uint32) bool {
-	return (u >= 0x0020 && u <= 0x007E) || (u >= 0x00A0 && u <= 0x00FF) || u == '\t' || u == '\r' || u == '\n'
+	return isWideASCIIPrintable(u) || (u >= 0x00A0 && u <= 0x00FF)
 }
 
 func hasClaimedBytes(claimed []bool, offset, width int) bool {
@@ -96,28 +107,27 @@ func hasRelocSpan(hasReloc func(int) bool, offset, width int) bool {
 func scanUTF16LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 	data := sec.Data
 	n := len(data)
-	i := 0
+	// Enforce natural 2-byte alignment relative to section VA.
+	i := int(sec.VA & 1)
 	for i+1 < n {
-		if hasClaimedBytes(claimed, i, 2) {
-			i++
+		if hasClaimedBytes(claimed, i, 2) || hasRelocSpan(sec.HasRelocAt, i, 2) {
+			i += 2
 			continue
 		}
 		u0 := binary.LittleEndian.Uint16(data[i : i+2])
-		if !isWidePrintable(uint32(u0)) {
-			i++
+		if !isWideASCIIPrintable(uint32(u0)) {
+			i += 2
 			continue
 		}
 		start := i
 		units := 0
 		alnum := 0
-		printable := 0
+		asciiCount := 0
 		relocHit := false
-		for i+1 < n && units < 4096 {
+		tooLong := false
+		for i+1 < n {
 			if hasClaimedBytes(claimed, i, 2) {
 				break
-			}
-			if hasRelocSpan(sec.HasRelocAt, i, 2) {
-				relocHit = true
 			}
 			u := binary.LittleEndian.Uint16(data[i : i+2])
 			if u == 0 {
@@ -126,23 +136,35 @@ func scanUTF16LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 			if !isWidePrintable(uint32(u)) {
 				break
 			}
+			if hasRelocSpan(sec.HasRelocAt, i, 2) {
+				relocHit = true
+			}
+			if units >= maxWideStringUnits {
+				tooLong = true
+				i += 2
+				continue
+			}
 			units++
-			printable++
+			if isWideASCIIPrintable(uint32(u)) {
+				asciiCount++
+			}
 			if isASCIIAlnumOrUnderscore(rune(u)) {
 				alnum++
 			}
 			i += 2
 		}
 		hasNull := false
-		if i+1 < n && !hasClaimedBytes(claimed, i, 2) && binary.LittleEndian.Uint16(data[i:i+2]) == 0 {
-			if hasRelocSpan(sec.HasRelocAt, i, 2) {
-				relocHit = true
+		if i+1 < n && !hasClaimedBytes(claimed, i, 2) {
+			if binary.LittleEndian.Uint16(data[i:i+2]) == 0 {
+				if hasRelocSpan(sec.HasRelocAt, i, 2) {
+					relocHit = true
+				}
+				hasNull = true
 			}
-			hasNull = true
 			i += 2
 		}
 
-		if hasNull && !relocHit && units >= 5 && alnum >= 2 && printable*100 >= units*75 {
+		if hasNull && !tooLong && !relocHit && units >= minWideStringUnits && alnum >= 2 && asciiCount*100 >= units*75 {
 			u16s := make([]uint16, units)
 			for k := 0; k < units; k++ {
 				u16s[k] = binary.LittleEndian.Uint16(data[start+k*2 : start+k*2+2])
@@ -157,39 +179,36 @@ func scanUTF16LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 					encoding: extractdb.StringEncUTF16LE,
 					value:    val,
 				})
-				continue
 			}
 		}
-		i = start + 1
 	}
 }
 
 func scanUTF32LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 	data := sec.Data
 	n := len(data)
-	i := 0
+	// Enforce natural 4-byte alignment relative to section VA.
+	i := int((4 - (sec.VA & 3)) & 3)
 	for i+3 < n {
-		if hasClaimedBytes(claimed, i, 4) {
+		if hasClaimedBytes(claimed, i, 4) || hasRelocSpan(sec.HasRelocAt, i, 4) {
 			i += 4
 			continue
 		}
 		u0 := binary.LittleEndian.Uint32(data[i : i+4])
-		if !isWidePrintable(u0) {
+		if !isWideASCIIPrintable(u0) {
 			i += 4
 			continue
 		}
 		start := i
 		units := 0
 		alnum := 0
-		printable := 0
+		asciiCount := 0
 		relocHit := false
+		tooLong := false
 		var runes []rune
-		for i+3 < n && units < 4096 {
+		for i+3 < n {
 			if hasClaimedBytes(claimed, i, 4) {
 				break
-			}
-			if hasRelocSpan(sec.HasRelocAt, i, 4) {
-				relocHit = true
 			}
 			u := binary.LittleEndian.Uint32(data[i : i+4])
 			if u == 0 {
@@ -198,8 +217,18 @@ func scanUTF32LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 			if !isWidePrintable(u) || !utf8.ValidRune(rune(u)) {
 				break
 			}
+			if hasRelocSpan(sec.HasRelocAt, i, 4) {
+				relocHit = true
+			}
+			if units >= maxWideStringUnits {
+				tooLong = true
+				i += 4
+				continue
+			}
 			units++
-			printable++
+			if isWideASCIIPrintable(u) {
+				asciiCount++
+			}
 			if isASCIIAlnumOrUnderscore(rune(u)) {
 				alnum++
 			}
@@ -207,17 +236,17 @@ func scanUTF32LESection(sec DataSlice, claimed []bool, out *[]rawStringRecord) {
 			i += 4
 		}
 		hasNull := false
-		if i+3 < n && !hasClaimedBytes(claimed, i, 4) && binary.LittleEndian.Uint32(data[i:i+4]) == 0 {
-			if hasRelocSpan(sec.HasRelocAt, i, 4) {
-				relocHit = true
+		if i+3 < n && !hasClaimedBytes(claimed, i, 4) {
+			if binary.LittleEndian.Uint32(data[i:i+4]) == 0 {
+				if hasRelocSpan(sec.HasRelocAt, i, 4) {
+					relocHit = true
+				}
+				hasNull = true
 			}
-			hasNull = true
-			i += 4
-		} else {
 			i += 4
 		}
 
-		if hasNull && !relocHit && units >= 5 && alnum >= 2 && printable*100 >= units*80 {
+		if hasNull && !tooLong && !relocHit && units >= minWideStringUnits && alnum >= 2 && asciiCount*100 >= units*75 {
 			val := string(runes)
 			if utf8.ValidString(val) {
 				for k := start; k < start+(units+1)*4 && k < len(claimed); k++ {

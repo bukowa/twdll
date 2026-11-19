@@ -257,6 +257,48 @@ func TestRunClean_PreservesSandboxIsolationAndWipesStages(t *testing.T) {
 	}
 }
 
+func TestRunClean_ToleratesCorruptStateJSON(t *testing.T) {
+	root := t.TempDir()
+	layout := newPreseededToolchainSandbox(t, root, ".twdll-corrupt-state")
+
+	dbMarker := layout.Paths.DatabaseMarkerPath(workspace.DecompilerIDA, workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(dbMarker), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbMarker, []byte("db"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	extractedBronze := layout.Paths.BronzeDBPath(workspace.TargetAttila32)
+	if err := os.MkdirAll(filepath.Dir(extractedBronze), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(extractedBronze, []byte("bronze"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(layout.Paths.StateFile, []byte("{truncated"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	err := RunClean(context.Background(), CleanRequest{
+		Layout:  layout,
+		Options: CleanOptions{Yes: true},
+		UI:      term.NewUI(term.Streams{Err: &stderr, ColorMode: term.ColorNever}),
+	})
+	if err != nil {
+		t.Fatalf("RunClean(--yes) failed on corrupt state.json: %v", err)
+	}
+
+	for _, gone := range []string{dbMarker, extractedBronze, layout.Paths.Config, layout.Paths.StateFile} {
+		if _, err := os.Stat(gone); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected %s to be deleted, stat err = %v", gone, err)
+		}
+	}
+	if !strings.Contains(stderr.String(), "Ignoring unreadable state file") {
+		t.Fatalf("expected warning about unreadable state file, got stderr:\n%s", stderr.String())
+	}
+}
+
 func TestRunClean_ConfirmationAndRegisteredStages(t *testing.T) {
 	t.Run("non-interactive clean without --yes fails fast without deleting anything", func(t *testing.T) {
 		root := t.TempDir()
