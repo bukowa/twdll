@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -81,6 +82,132 @@ func TestEnsureTool_DownloadsVerifiesStripsAndSkipsWhenInstalled(t *testing.T) {
 	if badErr == nil || !strings.Contains(badErr.Error(), "SHA-256 mismatch") {
 		t.Fatalf("expected SHA-256 mismatch error, got: %v", badErr)
 	}
+}
+
+func TestExternalToolsDir_ReadOnlyGuardsForEnsureToolAndProvisionXWin(t *testing.T) {
+	// Given an HTTP server that must never be contacted when external TWDLL_TOOLS_DIR is missing a tool
+	zipBytes, zipSHA := buildTestZip(t, map[string]string{
+		"cmake-4.4.5-windows-x86_64/bin/cmake.exe": "fake-cmake-binary",
+	})
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write(zipBytes)
+	}))
+	defer srv.Close()
+
+	toolDef := ToolDef{
+		ID:          workspace.ToolCMake,
+		Name:        "CMake",
+		Version:     "4.4.5",
+		URL:         srv.URL + "/cmake.zip",
+		SHA256:      zipSHA,
+		ArchiveType: "zip",
+		StripDirs:   1,
+		MarkerRel:   "bin/cmake.exe",
+	}
+
+	t.Run("missing_tool_in_nonexistent_external_dir_returns_diagnostic_without_mkdir", func(t *testing.T) {
+		root := t.TempDir()
+		extTools := filepath.Join(t.TempDir(), "shared-tools")
+		paths := workspace.NewPaths(root, "", filepath.Join(root, ".twdll"))
+		paths.ToolsDir = extTools
+		if !paths.HasExternalToolsDir() {
+			t.Fatalf("expected HasExternalToolsDir() = true")
+		}
+
+		st := workspace.NewState()
+		err := EnsureTool(context.Background(), InstallEnv{Paths: paths, State: &st}, toolDef)
+		if err == nil {
+			t.Fatalf("expected EnsureTool to fail for missing tool in external tools dir")
+		}
+		var diag *term.DiagnosticError
+		if !errors.As(err, &diag) {
+			t.Fatalf("expected *term.DiagnosticError, got %T: %v", err, err)
+		}
+		if !strings.Contains(diag.Message, "read-only") {
+			t.Fatalf("diagnostic message = %q, want mention of read-only external tools dir", diag.Message)
+		}
+		if hits.Load() != 0 {
+			t.Fatalf("HTTP hits = %d, want 0 (must not download into external tools dir)", hits.Load())
+		}
+		if _, statErr := os.Stat(extTools); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("EnsureTool must not create nonexistent external tools dir %s", extTools)
+		}
+		if _, ok := st.Tools[workspace.ToolCMake]; ok {
+			t.Fatalf("EnsureTool must not record missing tool in state")
+		}
+	})
+
+	t.Run("present_tool_in_external_dir_succeeds_and_updates_state", func(t *testing.T) {
+		root := t.TempDir()
+		extTools := t.TempDir()
+		marker := filepath.Join(extTools, "cmake", "bin", "cmake.exe")
+		if err := os.MkdirAll(filepath.Dir(marker), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(marker, []byte("preinstalled"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		paths := workspace.NewPaths(root, "", filepath.Join(root, ".twdll"))
+		paths.ToolsDir = extTools
+		st := workspace.NewState()
+
+		if err := EnsureTool(context.Background(), InstallEnv{Paths: paths, State: &st}, toolDef); err != nil {
+			t.Fatalf("EnsureTool failed for pre-installed external tool: %v", err)
+		}
+		if hits.Load() != 0 {
+			t.Fatalf("HTTP hits = %d, want 0", hits.Load())
+		}
+		if st.Tools[workspace.ToolCMake].Version != toolDef.Version {
+			t.Fatalf("state not updated for pre-installed external tool: %+v", st.Tools[workspace.ToolCMake])
+		}
+	})
+
+	t.Run("missing_xwin_sdk_in_external_dir_returns_diagnostic_without_mutating", func(t *testing.T) {
+		root := t.TempDir()
+		extTools := t.TempDir()
+		xwinDir := filepath.Join(extTools, "xwin")
+		if err := os.MkdirAll(xwinDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		paths := workspace.NewPaths(root, "", filepath.Join(root, ".twdll"))
+		paths.ToolsDir = extTools
+
+		err := ProvisionXWin(context.Background(), paths, nil)
+		if err == nil {
+			t.Fatalf("expected ProvisionXWin to fail when xwin SDK is missing from external tools dir")
+		}
+		var diag *term.DiagnosticError
+		if !errors.As(err, &diag) {
+			t.Fatalf("expected *term.DiagnosticError, got %T: %v", err, err)
+		}
+		if !strings.Contains(diag.Message, "read-only") {
+			t.Fatalf("diagnostic message = %q, want mention of read-only external tools dir", diag.Message)
+		}
+		if _, statErr := os.Stat(filepath.Join(xwinDir, "sdk")); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("ProvisionXWin must not create sdk dir inside external tools dir")
+		}
+	})
+
+	t.Run("provisioned_xwin_sdk_in_external_dir_succeeds", func(t *testing.T) {
+		root := t.TempDir()
+		extTools := t.TempDir()
+		libPath := filepath.Join(extTools, "xwin", "sdk", "crt", "lib", "x86", "libcmt.lib")
+		if err := os.MkdirAll(filepath.Dir(libPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(libPath, []byte("lib"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		paths := workspace.NewPaths(root, "", filepath.Join(root, ".twdll"))
+		paths.ToolsDir = extTools
+
+		if err := ProvisionXWin(context.Background(), paths, nil); err != nil {
+			t.Fatalf("ProvisionXWin failed for pre-provisioned external xwin SDK: %v", err)
+		}
+	})
 }
 
 func TestExtractArchive_RejectsZipSlipTraversal(t *testing.T) {

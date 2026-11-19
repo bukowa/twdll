@@ -33,7 +33,11 @@ func (ELF64DWARF4Extractor) Extract(ctx context.Context, src *Source, store *ext
 	if err != nil {
 		return err
 	}
-	if err := runDWARFPass2(ctx, store, dw, p1); err != nil {
+	byteOrder := src.ELF.ByteOrder
+	if byteOrder == nil {
+		byteOrder = binary.LittleEndian
+	}
+	if err := runDWARFPass2(ctx, store, dw, p1, byteOrder); err != nil {
 		return err
 	}
 	p1 = nil
@@ -627,6 +631,7 @@ func runDWARFPass2(
 	store *extractdb.BronzeStore,
 	dw *dwarf.Data,
 	p1 *dwarfPass1State,
+	byteOrder binary.ByteOrder,
 ) error {
 	w := store.NewDWARFPass2Writer(ctx)
 	defer func() { _ = w.Close() }()
@@ -862,7 +867,7 @@ func runDWARFPass2(
 			if cf := currentCompositeFrame(); cf != nil && cf.isCanonDef {
 				ord := cf.memberOrd
 				cf.memberOrd++
-				if err := emitDWARFMember(w, cf.compCanonID, ord, e, p1); err != nil {
+				if err := emitDWARFMember(w, cf.compCanonID, cf.tag, ord, e, p1, byteOrder); err != nil {
 					return err
 				}
 			}
@@ -871,7 +876,7 @@ func runDWARFPass2(
 			if cf := currentCompositeFrame(); cf != nil && cf.isCanonDef {
 				ord := cf.memberOrd
 				cf.memberOrd++
-				if err := emitDWARFInheritance(w, cf.compCanonID, ord, e, p1); err != nil {
+				if err := emitDWARFInheritance(w, cf.compCanonID, ord, e, p1, byteOrder); err != nil {
 					return err
 				}
 			}
@@ -1064,7 +1069,15 @@ func runDWARFPass2(
 	return store.InsertDwarfFuncRanges(ctx, allRanges)
 }
 
-func emitDWARFMember(w *extractdb.BronzeDWARFPass2Writer, typeID int64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
+func emitDWARFMember(
+	w *extractdb.BronzeDWARFPass2Writer,
+	typeID int64,
+	parentTag dwarf.Tag,
+	ord int,
+	e *dwarf.Entry,
+	p1 *dwarfPass1State,
+	byteOrder binary.ByteOrder,
+) error {
 	name, _ := e.Val(dwarf.AttrName).(string)
 	var mTypeID int64
 	if to, ok := e.Val(dwarf.AttrType).(dwarf.Offset); ok {
@@ -1084,22 +1097,11 @@ func emitDWARFMember(w *extractdb.BronzeDWARFPass2Writer, typeID int64, ord int,
 		})
 	}
 
-	byteOff, hasByteOff, _ := parseDWARFDataMemberLoc(e)
-	bitSize, _ := intValOK(e, dwarf.AttrBitSize)
-	var bitOff int64
-	if dbo, ok := intValOK(e, dwarf.AttrDataBitOffset); ok {
-		bitOff = dbo % 8
-		if !hasByteOff {
-			byteOff = dbo / 8
-			hasByteOff = true
-		}
-	} else if bo, ok := intValOK(e, dwarf.AttrBitOffset); ok {
-		bitOff = bo
+	var memberTypeByteSize int64
+	if mTypeID > 0 && int(mTypeID) < len(p1.canonTypes) {
+		memberTypeByteSize = p1.canonTypes[mTypeID].byteSize
 	}
-	if !hasByteOff {
-		byteOff = 0
-		hasByteOff = true
-	}
+	byteOff, hasByteOff, bitOff, bitSize := resolveDWARFMemberLayout(e, parentTag, memberTypeByteSize, byteOrder)
 
 	return w.AddMember(extractdb.BronzeTypeMemberRow{
 		TypeID:        typeID,
@@ -1107,15 +1109,98 @@ func emitDWARFMember(w *extractdb.BronzeDWARFPass2Writer, typeID int64, ord int,
 		MemberKind:    extractdb.MemberKindField,
 		ByteOffset:    byteOff,
 		HasByteOffset: hasByteOff,
-		BitOffset:     int(bitOff),
-		BitSize:       int(bitSize),
+		BitOffset:     bitOff,
+		BitSize:       bitSize,
 		Name:          name,
 		MemberTypeID:  mTypeID,
 		DisplayType:   dispType,
 	})
 }
 
-func emitDWARFInheritance(w *extractdb.BronzeDWARFPass2Writer, typeID int64, ord int, e *dwarf.Entry, p1 *dwarfPass1State) error {
+// resolveDWARFMemberLayout computes normalized (byte_offset, bit_offset, bit_size)
+// for a non-static DW_TAG_member using the DWARF4 LSB convention:
+//   - byte_offset is the byte offset from the start of the enclosing composite (NULL when unknown/unparsed).
+//   - bit_offset is the 0..7 LSB bit offset within byte_offset (0 for non-bitfields).
+//   - bit_size is the bitfield width in bits (0 for non-bitfields).
+func resolveDWARFMemberLayout(
+	e *dwarf.Entry,
+	parentTag dwarf.Tag,
+	memberTypeByteSize int64,
+	byteOrder binary.ByteOrder,
+) (byteOff int64, hasByteOff bool, bitOff int, bitSize int) {
+	if byteOrder == nil {
+		byteOrder = binary.LittleEndian
+	}
+	byteOff, hasByteOff, complexExpr := parseDWARFDataMemberLoc(e, byteOrder)
+	if !hasByteOff && complexExpr == "" && parentTag == dwarf.TagUnionType {
+		// In DWARF, union members omit DW_AT_data_member_location because all members start at byte 0.
+		byteOff = 0
+		hasByteOff = true
+	}
+
+	rawBitSize, hasBitSize := intValOK(e, dwarf.AttrBitSize)
+	if !hasBitSize || rawBitSize < 0 {
+		rawBitSize = 0
+	}
+
+	// DWARF4 DW_AT_data_bit_offset is measured in bits from the start of the enclosing object.
+	if dbo, ok := intValOK(e, dwarf.AttrDataBitOffset); ok && dbo >= 0 {
+		byteOff = dbo / 8
+		hasByteOff = true
+		bitOff = int(dbo % 8)
+		bitSize = int(rawBitSize)
+		return byteOff, hasByteOff, bitOff, bitSize
+	}
+
+	// Legacy DWARF2/3 DW_AT_bit_offset is measured from the MSB of the storage unit to the MSB of the field.
+	if bo, ok := intValOK(e, dwarf.AttrBitOffset); ok {
+		attrByteSize, hasAttrByteSize := intValOK(e, dwarf.AttrByteSize)
+		// GCC 4.x emits DW_AT_byte_size=0, DW_AT_bit_size=N*8, DW_AT_bit_offset=-N*8 on some
+		// non-bitfield fields (e.g. aligned structs, pointer-to-member, decltype(nullptr)).
+		if hasAttrByteSize && attrByteSize == 0 && rawBitSize > 0 && bo == -rawBitSize && rawBitSize%8 == 0 {
+			return byteOff, hasByteOff, 0, 0
+		}
+
+		storageBytes := attrByteSize
+		if !hasAttrByteSize || storageBytes <= 0 {
+			storageBytes = memberTypeByteSize
+		}
+
+		var lsb int64 = -1
+		if byteOrder == binary.BigEndian {
+			if bo >= 0 {
+				lsb = bo
+			}
+		} else if storageBytes > 0 && rawBitSize > 0 {
+			lsb = storageBytes*8 - bo - rawBitSize
+		}
+
+		if lsb >= 0 {
+			if hasByteOff {
+				byteOff += lsb / 8
+				bitOff = int(lsb % 8)
+			} else {
+				bitOff = int(lsb)
+			}
+		}
+		bitSize = int(rawBitSize)
+		return byteOff, hasByteOff, bitOff, bitSize
+	}
+
+	if rawBitSize > 0 {
+		bitSize = int(rawBitSize)
+	}
+	return byteOff, hasByteOff, bitOff, bitSize
+}
+
+func emitDWARFInheritance(
+	w *extractdb.BronzeDWARFPass2Writer,
+	typeID int64,
+	ord int,
+	e *dwarf.Entry,
+	p1 *dwarfPass1State,
+	byteOrder binary.ByteOrder,
+) error {
 	var mTypeID int64
 	if to, ok := e.Val(dwarf.AttrType).(dwarf.Offset); ok {
 		mTypeID = p1.offsetToCanonID[to]
@@ -1124,7 +1209,7 @@ func emitDWARFInheritance(w *extractdb.BronzeDWARFPass2Writer, typeID int64, ord
 	baseName := dispType
 
 	virt, _ := intValOK(e, dwarf.AttrVirtuality)
-	byteOff, hasConstOff, exprSummary := parseDWARFDataMemberLoc(e)
+	byteOff, hasConstOff, exprSummary := parseDWARFDataMemberLoc(e, byteOrder)
 	isVirtual := virt != 0 || exprSummary != ""
 	if isVirtual {
 		if exprSummary == "" {
@@ -1211,7 +1296,10 @@ func emitDWARFFuncVar(w *extractdb.BronzeDWARFPass2Writer, funcEA uint64, ord in
 	})
 }
 
-func parseDWARFDataMemberLoc(e *dwarf.Entry) (offset int64, hasConst bool, complexExpr string) {
+func parseDWARFDataMemberLoc(e *dwarf.Entry, byteOrder binary.ByteOrder) (offset int64, hasConst bool, complexExpr string) {
+	if byteOrder == nil {
+		byteOrder = binary.LittleEndian
+	}
 	f := e.AttrField(dwarf.AttrDataMemberLoc)
 	if f == nil {
 		return 0, false, ""
@@ -1232,9 +1320,28 @@ func parseDWARFDataMemberLoc(e *dwarf.Entry) (offset int64, hasConst bool, compl
 				return int64(uval), true, ""
 			}
 		}
-		// DW_OP_lit0..31 + DW_OP_plus
+		// DW_OP_lit0..31 (0x30..0x4f) + DW_OP_plus (0x22)
 		if len(v) == 2 && v[0] >= 0x30 && v[0] <= 0x4F && v[1] == 0x22 {
 			return int64(v[0] - 0x30), true, ""
+		}
+		// DW_OP_const1u (0x08 <u8>) + DW_OP_plus (0x22)
+		if len(v) == 3 && v[0] == 0x08 && v[2] == 0x22 {
+			return int64(v[1]), true, ""
+		}
+		// DW_OP_const2u (0x0a <u16>) + DW_OP_plus (0x22)
+		if len(v) == 4 && v[0] == 0x0a && v[3] == 0x22 {
+			return int64(byteOrder.Uint16(v[1:3])), true, ""
+		}
+		// DW_OP_const4u (0x0c <u32>) + DW_OP_plus (0x22)
+		if len(v) == 6 && v[0] == 0x0c && v[5] == 0x22 {
+			return int64(byteOrder.Uint32(v[1:5])), true, ""
+		}
+		// DW_OP_constu (0x10 <uleb128>) + DW_OP_plus (0x22)
+		if len(v) >= 3 && v[0] == 0x10 && v[len(v)-1] == 0x22 {
+			uval, n := binary.Uvarint(v[1 : len(v)-1])
+			if n > 0 && 1+n == len(v)-1 {
+				return int64(uval), true, ""
+			}
 		}
 		return 0, false, fmt.Sprintf("expr:%x", v)
 	default:

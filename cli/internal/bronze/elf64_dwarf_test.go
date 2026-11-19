@@ -1213,3 +1213,191 @@ func TestExtractELF64_DisabledFormatExtractorStillPopulatesStringsAndMeta(t *tes
 		t.Fatalf("unexpected meta when elf64.format disabled: %+v", meta)
 	}
 }
+
+func TestResolveDWARFMemberLayout_BitfieldsAndLocations(t *testing.T) {
+	mkEntry := func(fields ...dwarf.Field) *dwarf.Entry {
+		return &dwarf.Entry{Tag: dwarf.TagMember, Field: fields}
+	}
+
+	cases := []struct {
+		name           string
+		entry          *dwarf.Entry
+		parentTag      dwarf.Tag
+		memberTypeSize int64
+		byteOrder      binary.ByteOrder
+		wantByteOff    int64
+		wantHasByteOff bool
+		wantBitOff     int
+		wantBitSize    int
+	}{
+		// Real attila_64 CA::Pixel1555 (16-bit LE bitfields using legacy DW_AT_bit_offset):
+		// MASK_BLUE=0x001f (bits 0..4), MASK_GREEN=0x03e0 (bits 5..9),
+		// MASK_RED=0x7c00 (bits 10..14), MASK_ALPHA=0x8000 (bit 15).
+		{
+			name: "pixel1555_blue",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrByteSize, Val: int64(2)},
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(5)},
+				dwarf.Field{Attr: dwarf.AttrBitOffset, Val: int64(11)},
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(0)},
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 2, byteOrder: binary.LittleEndian,
+			wantByteOff: 0, wantHasByteOff: true, wantBitOff: 0, wantBitSize: 5,
+		},
+		{
+			name: "pixel1555_green",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrByteSize, Val: int64(2)},
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(5)},
+				dwarf.Field{Attr: dwarf.AttrBitOffset, Val: int64(6)},
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(0)},
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 2, byteOrder: binary.LittleEndian,
+			wantByteOff: 0, wantHasByteOff: true, wantBitOff: 5, wantBitSize: 5,
+		},
+		{
+			name: "pixel1555_red",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrByteSize, Val: int64(2)},
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(5)},
+				dwarf.Field{Attr: dwarf.AttrBitOffset, Val: int64(1)},
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(0)},
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 2, byteOrder: binary.LittleEndian,
+			wantByteOff: 1, wantHasByteOff: true, wantBitOff: 2, wantBitSize: 5,
+		},
+		{
+			name: "pixel1555_opacity",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrByteSize, Val: int64(2)},
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(1)},
+				dwarf.Field{Attr: dwarf.AttrBitOffset, Val: int64(0)},
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(0)},
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 2, byteOrder: binary.LittleEndian,
+			wantByteOff: 1, wantHasByteOff: true, wantBitOff: 7, wantBitSize: 1,
+		},
+		// Go debug/dwarf doc 4-byte int bitfield example: struct S { int q; int j:5; int k:6; int m:5; int n:8; }.
+		{
+			name: "int32_bitfield_m_cross_byte",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrByteSize, Val: int64(4)},
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(5)},
+				dwarf.Field{Attr: dwarf.AttrBitOffset, Val: int64(16)},
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(4)},
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 4, byteOrder: binary.LittleEndian,
+			// lsb = 32 - 16 - 5 = 11 -> byte 4 + 1 = 5, bit 3 (total bit 43 == DW_AT_data_bit_offset 43)
+			wantByteOff: 5, wantHasByteOff: true, wantBitOff: 3, wantBitSize: 5,
+		},
+		// Fallback to memberTypeSize when DW_AT_byte_size is omitted.
+		{
+			name: "bit_offset_fallback_to_member_type_size",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(3)},
+				dwarf.Field{Attr: dwarf.AttrBitOffset, Val: int64(29)},
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(8)},
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 4, byteOrder: binary.LittleEndian,
+			wantByteOff: 8, wantHasByteOff: true, wantBitOff: 0, wantBitSize: 3,
+		},
+		// GCC 4.x non-bitfield quirk (attila_64 EMPIRE::EMPIRE_APP_MODULE::m_app_window):
+		// DW_AT_byte_size=0, DW_AT_bit_size=320, DW_AT_bit_offset=0xfffffffffffffec0 (-320), loc=8.
+		{
+			name: "gcc_zero_byte_size_negative_bit_offset_quirk",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrByteSize, Val: int64(0)},
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(320)},
+				dwarf.Field{Attr: dwarf.AttrBitOffset, Val: uint64(0xfffffffffffffec0)},
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(8)},
+			),
+			parentTag: dwarf.TagClassType, memberTypeSize: 40, byteOrder: binary.LittleEndian,
+			wantByteOff: 8, wantHasByteOff: true, wantBitOff: 0, wantBitSize: 0,
+		},
+		// DWARF4 DW_AT_data_bit_offset combined with DW_AT_data_member_location must compute exact byte+bit.
+		{
+			name: "dwarf4_data_bit_offset_with_member_loc",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(20)},
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(1)},
+				dwarf.Field{Attr: dwarf.AttrDataBitOffset, Val: int64(171)}, // byte 21, bit 3
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 4, byteOrder: binary.LittleEndian,
+			wantByteOff: 21, wantHasByteOff: true, wantBitOff: 3, wantBitSize: 1,
+		},
+		// Union member omitting DW_AT_data_member_location legitimately lives at offset 0.
+		{
+			name: "union_omitted_location_defaults_to_zero",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrName, Val: "as_int"},
+			),
+			parentTag: dwarf.TagUnionType, memberTypeSize: 4, byteOrder: binary.LittleEndian,
+			wantByteOff: 0, wantHasByteOff: true, wantBitOff: 0, wantBitSize: 0,
+		},
+		// Struct member with unrecognized complex DW_AT_data_member_location must preserve NULL (HasByteOffset=false).
+		{
+			name: "struct_unparsed_location_expr_is_null",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: []byte{0x12, 0x06}}, // DW_OP_dup; DW_OP_deref
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 8, byteOrder: binary.LittleEndian,
+			wantByteOff: 0, wantHasByteOff: false, wantBitOff: 0, wantBitSize: 0,
+		},
+		// Struct member with DW_OP_const1u/2u/4u/constu + DW_OP_plus.
+		{
+			name: "struct_const1u_plus",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: []byte{0x08, 0x40, 0x22}},
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 4, byteOrder: binary.LittleEndian,
+			wantByteOff: 64, wantHasByteOff: true, wantBitOff: 0, wantBitSize: 0,
+		},
+		{
+			name: "struct_const2u_plus",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: []byte{0x0a, 0x10, 0x01, 0x22}}, // 0x0110 = 272
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 4, byteOrder: binary.LittleEndian,
+			wantByteOff: 272, wantHasByteOff: true, wantBitOff: 0, wantBitSize: 0,
+		},
+		{
+			name: "struct_const4u_plus",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: []byte{0x0c, 0x00, 0x00, 0x01, 0x00, 0x22}}, // 0x10000 = 65536
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 4, byteOrder: binary.LittleEndian,
+			wantByteOff: 65536, wantHasByteOff: true, wantBitOff: 0, wantBitSize: 0,
+		},
+		{
+			name: "struct_constu_plus",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: []byte{0x10, 0x80, 0x02, 0x22}}, // ULEB128 256
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 4, byteOrder: binary.LittleEndian,
+			wantByteOff: 256, wantHasByteOff: true, wantBitOff: 0, wantBitSize: 0,
+		},
+		// Big-endian DW_AT_bit_offset.
+		{
+			name: "big_endian_bit_offset",
+			entry: mkEntry(
+				dwarf.Field{Attr: dwarf.AttrByteSize, Val: int64(4)},
+				dwarf.Field{Attr: dwarf.AttrBitSize, Val: int64(5)},
+				dwarf.Field{Attr: dwarf.AttrBitOffset, Val: int64(11)},
+				dwarf.Field{Attr: dwarf.AttrDataMemberLoc, Val: int64(4)},
+			),
+			parentTag: dwarf.TagStructType, memberTypeSize: 4, byteOrder: binary.BigEndian,
+			wantByteOff: 5, wantHasByteOff: true, wantBitOff: 3, wantBitSize: 5,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			byteOff, hasByteOff, bitOff, bitSize := resolveDWARFMemberLayout(tc.entry, tc.parentTag, tc.memberTypeSize, tc.byteOrder)
+			if byteOff != tc.wantByteOff || hasByteOff != tc.wantHasByteOff || bitOff != tc.wantBitOff || bitSize != tc.wantBitSize {
+				t.Fatalf("resolveDWARFMemberLayout() = (byteOff=%d, hasByteOff=%v, bitOff=%d, bitSize=%d), want (%d, %v, %d, %d)",
+					byteOff, hasByteOff, bitOff, bitSize,
+					tc.wantByteOff, tc.wantHasByteOff, tc.wantBitOff, tc.wantBitSize)
+			}
+		})
+	}
+}

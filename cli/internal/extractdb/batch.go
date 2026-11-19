@@ -146,12 +146,14 @@ func (m *MultiStmtTxBatcher) Flush() error {
 			m.stmts[i] = nil
 		}
 	}
-	if err := m.tx.Commit(); err != nil && firstErr == nil {
-		firstErr = err
-	}
+	tx := m.tx
 	m.tx = nil
 	m.count = 0
-	return firstErr
+	if firstErr != nil {
+		_ = tx.Rollback()
+		return firstErr
+	}
+	return tx.Commit()
 }
 
 func (m *MultiStmtTxBatcher) Close() error {

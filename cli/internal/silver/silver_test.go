@@ -569,6 +569,132 @@ func TestDecompAspect_CancelsExportOnBatchWriterError(t *testing.T) {
 	}
 }
 
+func TestDecompAspect_CancelsExportOnBatchWriterError_WithOnBytesOverBuffer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	silverPath := filepath.Join(t.TempDir(), "silver_ida.sqlite")
+	store, err := extractdb.OpenSilverStore(ctx, silverPath, "attila_32", "ida", "sha_fail_onbytes", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().ExecContext(ctx, `
+		CREATE TRIGGER fail_decomp_insert BEFORE INSERT ON decomp_funcs
+		BEGIN
+			SELECT RAISE(ABORT, 'simulated batch write error');
+		END;
+	`); err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	const totalFuncs = 6000 // exceeds outCh buffer (4096) with OnBytes enabled
+	funcs := make([]SilverFunc, 0, totalFuncs)
+	for i := 0; i < totalFuncs; i++ {
+		ea := uint64(0x10000 + i*0x20)
+		funcs = append(funcs, SilverFunc{EA: ea, Size: 16, Name: fmt.Sprintf("fn_%d", i)})
+	}
+
+	var sawBytes uint64
+	_, err = extractWithHooks(ctx, Options{
+		Target:       workspace.TargetAttila32,
+		Engine:       workspace.DecompilerIDA,
+		BinarySHA256: "sha_fail_onbytes",
+		SilverDBPath: silverPath,
+		BatchSize:    10,
+		OnBytes: func(done, total uint64) {
+			sawBytes = done
+		},
+	},
+		func(_ context.Context, _ Options, _ []EnrichScript, _, _ string) ([]SilverFunc, error) {
+			return funcs, nil
+		},
+		func(dCtx context.Context, _ Options, _ []EnrichScript, pending []extractdb.FuncSpec, outCh chan<- extractdb.DecompRecord) (uint64, error) {
+			for _, sp := range pending {
+				rec := extractdb.DecompRecord{
+					FuncEA:   sp.EA,
+					FuncSize: sp.Size,
+					FuncName: sp.Name,
+					RawC:     "void f(void) {}",
+					Status:   extractdb.DecompStatusOK,
+				}
+				if !sendDecompRecord(dCtx, outCh, rec) {
+					return 0, dCtx.Err()
+				}
+			}
+			return 0, nil
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "simulated batch write error") {
+		t.Fatalf("expected simulated batch write error without deadlock, got: %v", err)
+	}
+	if sawBytes == 0 {
+		t.Fatalf("expected OnBytes callback to receive progress before writer error")
+	}
+}
+
+func TestDecompAspect_CancelWithSlowProducerAndOnBytes_NoDeadlock(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	silverPath := filepath.Join(t.TempDir(), "silver_ida_cancel.sqlite")
+	const totalFuncs = 5000 // exceeds outCh buffer (4096)
+	funcs := make([]SilverFunc, 0, totalFuncs)
+	for i := 0; i < totalFuncs; i++ {
+		ea := uint64(0x20000 + i*0x20)
+		funcs = append(funcs, SilverFunc{EA: ea, Size: 16, Name: fmt.Sprintf("fn_%d", i)})
+	}
+
+	doneCh := make(chan error, 1)
+	go func() {
+		_, err := extractWithHooks(ctx, Options{
+			Target:       workspace.TargetAttila32,
+			Engine:       workspace.DecompilerIDA,
+			BinarySHA256: "sha_cancel_slow",
+			SilverDBPath: silverPath,
+			BatchSize:    50,
+			OnBytes:      func(_, _ uint64) {},
+		},
+			func(_ context.Context, _ Options, _ []EnrichScript, _, _ string) ([]SilverFunc, error) {
+				return funcs, nil
+			},
+			func(dCtx context.Context, _ Options, _ []EnrichScript, pending []extractdb.FuncSpec, outCh chan<- extractdb.DecompRecord) (uint64, error) {
+				for i, sp := range pending {
+					if i == 100 {
+						cancel()
+						// Exceed silverDrainTimeout (1s) to prove RunBatchWriter exiting early never deadlocks OnBytes/producer.
+						time.Sleep(1150 * time.Millisecond)
+					}
+					rec := extractdb.DecompRecord{
+						FuncEA:   sp.EA,
+						FuncSize: sp.Size,
+						FuncName: sp.Name,
+						RawC:     "void f(void) {}",
+						Status:   extractdb.DecompStatusOK,
+					}
+					if !sendDecompRecord(dCtx, outCh, rec) {
+						return 0, dCtx.Err()
+					}
+				}
+				return 0, nil
+			},
+		)
+		doneCh <- err
+	}()
+
+	select {
+	case err := <-doneCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got: %v", err)
+		}
+	case <-time.After(6 * time.Second):
+		t.Fatal("deadlock waiting for cancelled decompAspect.Run with OnBytes and slow producer")
+	}
+}
+
 func TestDriveIDAWorkerShardWithWatchdog_ZeroProgressFails(t *testing.T) {
 	workerDir := t.TempDir()
 	stagedI64 := filepath.Join(workerDir, "attila_32.i64")

@@ -944,6 +944,37 @@ func TestTxStmtBatcher_FlushRollbackOnStmtCloseError(t *testing.T) {
 	}
 }
 
+func TestMultiStmtTxBatcher_FlushRollbackOnStmtCloseError(t *testing.T) {
+	wantErr := errors.New("multi stmt close failed")
+	committed := false
+	rolledBack := false
+	db := sql.OpenDB(&failingCloseStmtConnector{
+		closeErr:   wantErr,
+		committed:  &committed,
+		rolledBack: &rolledBack,
+	})
+	defer db.Close()
+
+	b := NewMultiStmtTxBatcher(context.Background(), db, "INSERT INTO t1 VALUES (1)", "INSERT INTO t2 VALUES (2)")
+	defer func() { _ = b.Close() }()
+	if err := b.Exec(0); err != nil {
+		t.Fatalf("Exec(0): %v", err)
+	}
+	if err := b.Exec(1); err != nil {
+		t.Fatalf("Exec(1): %v", err)
+	}
+	err := b.Flush()
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Flush error = %v, want %v", err, wantErr)
+	}
+	if committed {
+		t.Fatalf("Flush committed transaction despite stmt.Close error")
+	}
+	if !rolledBack {
+		t.Fatalf("Flush did not rollback transaction on stmt.Close error")
+	}
+}
+
 func TestOpenSilverStore_TuningPragmas(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "silver_ghidra.sqlite")

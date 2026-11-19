@@ -417,22 +417,13 @@ func (decompAspect) Run(ctx context.Context, sess *Session, store *extractdb.Sil
 	defer cancelDecomp()
 
 	outCh := make(chan extractdb.DecompRecord, 4096)
-	writerIn := (<-chan extractdb.DecompRecord)(outCh)
-	var byteTapDone chan struct{}
+	var onRecord func(extractdb.DecompRecord)
 	if sess.Opts.OnBytes != nil && totalBytes > 0 {
-		tappedCh := make(chan extractdb.DecompRecord, 4096)
-		byteTapDone = make(chan struct{})
-		writerIn = tappedCh
-		go func() {
-			defer close(byteTapDone)
-			defer close(tappedCh)
-			var doneBytes uint64
-			for rec := range outCh {
-				doneBytes += rec.FuncSize
-				sess.Opts.OnBytes(doneBytes, totalBytes)
-				tappedCh <- rec
-			}
-		}()
+		var doneBytes uint64
+		onRecord = func(rec extractdb.DecompRecord) {
+			doneBytes += rec.FuncSize
+			sess.Opts.OnBytes(doneBytes, totalBytes)
+		}
 	}
 
 	type writerOut struct {
@@ -441,18 +432,13 @@ func (decompAspect) Run(ctx context.Context, sess *Session, store *extractdb.Sil
 	}
 	writerDone := make(chan writerOut, 1)
 	go func() {
-		n, wErr := store.RunBatchWriter(ctx, writerIn, sess.Opts.BatchSize, 0)
-		if wErr != nil {
-			cancelDecomp()
-		}
+		n, wErr := store.RunBatchWriterWithCallback(ctx, outCh, sess.Opts.BatchSize, 0, onRecord)
+		cancelDecomp()
 		writerDone <- writerOut{written: n, err: wErr}
 	}()
 
 	peakMem, runErr := sess.exportDecomp(decompCtx, sess.Opts, sess.Enrichers, pending, outCh)
 	close(outCh)
-	if byteTapDone != nil {
-		<-byteTapDone
-	}
 	wRes := <-writerDone
 	if wRes.err != nil {
 		if runErr != nil && !errors.Is(runErr, context.Canceled) {

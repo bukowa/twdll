@@ -810,6 +810,10 @@ func decompRecordPayloadBytes(r DecompRecord) int {
 }
 
 func (s *SilverStore) RunBatchWriter(ctx context.Context, in <-chan DecompRecord, batchSize int, flushInterval time.Duration) (int, error) {
+	return s.RunBatchWriterWithCallback(ctx, in, batchSize, flushInterval, nil)
+}
+
+func (s *SilverStore) RunBatchWriterWithCallback(ctx context.Context, in <-chan DecompRecord, batchSize int, flushInterval time.Duration, onRecord func(DecompRecord)) (int, error) {
 	if batchSize <= 0 {
 		batchSize = defaultSilverBatchSize
 	}
@@ -840,6 +844,9 @@ func (s *SilverStore) RunBatchWriter(ctx context.Context, in <-chan DecompRecord
 	}
 
 	appendRecord := func(rec DecompRecord) error {
+		if onRecord != nil {
+			onRecord(rec)
+		}
 		batch = append(batch, rec)
 		batchBytes += decompRecordPayloadBytes(rec)
 		if len(batch) >= batchSize || batchBytes >= defaultSilverBatchBytes {

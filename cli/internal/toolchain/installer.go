@@ -59,6 +59,17 @@ func EnsureTool(ctx context.Context, env InstallEnv, tool ToolDef) error {
 		}
 		return nil
 	}
+	if env.Paths.HasExternalToolsDir() {
+		expected := filepath.ToSlash(filepath.Join(env.Paths.ToolDir(tool.ID), filepath.FromSlash(tool.MarkerRel)))
+		return &term.DiagnosticError{
+			Message:  fmt.Sprintf("%s %s is missing from external read-only tools directory %s", tool.Name, tool.Version, filepath.ToSlash(env.Paths.ToolsDir)),
+			Expected: expected,
+			Help: []string{
+				"pre-populate the external TWDLL_TOOLS_DIR (e.g., via `twdll init` in the owning workspace)",
+				"or unset TWDLL_TOOLS_DIR to download tools into the local workspace",
+			},
+		}
+	}
 	if err := os.MkdirAll(env.Paths.ToolsDir, 0o755); err != nil {
 		return fmt.Errorf("ensure tools dir %s: %w", env.Paths.ToolsDir, err)
 	}
@@ -245,6 +256,17 @@ func ProvisionXWin(ctx context.Context, paths workspace.Paths, ui *term.UI) erro
 			ui.Success("MSVC SDK (xwin x86) ready")
 		}
 		return nil
+	}
+	if paths.HasExternalToolsDir() {
+		xwinDir := paths.ToolDir(workspace.ToolXwin)
+		return &term.DiagnosticError{
+			Message:  fmt.Sprintf("MSVC SDK (xwin x86) is missing from external read-only tools directory %s", filepath.ToSlash(paths.ToolsDir)),
+			Expected: filepath.ToSlash(filepath.Join(xwinDir, "sdk", "crt", "lib", "x86", "libcmt.lib")),
+			Help: []string{
+				"provision the xwin SDK in the owning workspace before reusing TWDLL_TOOLS_DIR",
+				"or unset TWDLL_TOOLS_DIR to provision into the local workspace",
+			},
+		}
 	}
 	xwinDir := paths.ToolDir(workspace.ToolXwin)
 	xwinBin := filepath.Join(xwinDir, "xwin"+workspace.ExeSuffix())
