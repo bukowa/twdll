@@ -134,6 +134,10 @@ unowned DLC.</td>
 	<td class="summary">Saves the active campaign game to disk.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#SetCustomBattleDefaultMap">SetCustomBattleDefaultMap ([mapname])</a></td>
+	<td class="summary">Sets which campaign map the custom battle screen selects when it opens.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#SetMaxTraits">SetMaxTraits ([val])</a></td>
 	<td class="summary">Sets the maximum number of traits a character can hold simultaneously.</td>
 	</tr>
@@ -549,6 +553,43 @@ campaign's Lua state is torn down; call it again on every campaign load.
     <h3>Usage:</h3>
     <ul>
         <pre class="example"><span class="keyword">local</span> success = twdll.world.<span class="function-name">SaveGame</span>(<span class="string">"my_checkpoint"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetCustomBattleDefaultMap"></a>
+    <strong>SetCustomBattleDefaultMap ([mapname])</strong>
+    </dt>
+    <dd>
+    Sets which campaign map the custom battle screen selects when it opens.  The game
+pre-selects the <code>campaign_map_playable_areas</code> row whose <code>mapname</code> is <code>&quot;main_attila_map&quot;</code>;
+this changes that name. Call it from the frontend (main menu) script. If no
+custom-battle row has the given mapname, the game falls back to its normal behaviour.
+A custom mapname (not main/bel/cha) also needs <code>AllowCustomCampaignKeys()</code>, otherwise
+the map is shown as locked DLC. Restored on Lua teardown.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">mapname</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         <code>mapname</code> of a <code>campaign_map_playable_areas</code> row (max 63 characters), or nil to restore <code>&quot;main_attila_map&quot;</code>
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">nil</span></span>
+        the mapname now selected by default, or nil if the code was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.world.<span class="function-name">SetCustomBattleDefaultMap</span>(<span class="string">"rom_third_age_map"</span>)</pre>
     </ul>
 
 </dd>

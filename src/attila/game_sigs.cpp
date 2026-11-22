@@ -50,6 +50,10 @@
 #define GIFT_REGION_AVAILABILITY_SIG "83 EC 1C 53 56 8B 74 24 2C 33 DB 57 8B 7C 24 2C 89 5C 24 0C 38 9F 4C 08 00 00 74 4D 8B CF E8 ? ? ? ? 84 C0 ? ? 8B CE E8 ? ? ? ? 84 C0 ? ? 8B CE E8 ? ? ? ? 84 C0 ? ? 8B 8F 24 08 00 00 56 E8 ? ? ? ? 8B 40 10 39 58 10 74 18 56 8D 44 24 20 8B CF 50 E8 ? ? ? ? BB 01 00 00 00 83 78 04 00 75 55 80 BE 4C 08 00 00 00 74 53 8B CE E8 ? ? ? ? 84 C0 ? ? 8B CF E8 ? ? ? ? 84 C0 ? ? 8B CF E8 ? ? ? ? 84 C0 ? ? 8B 8E"
 // Inside the giftable-region list builder: "receiver given? then only its listed regions".
 #define GIFT_REGION_LIST_FILTER_SIG "8B BE 28 01 00 00 8D 4F 5C E8 ? ? ? ? 85 C0 75 6E 8D 4F 7C E8 ? ? ? ? 85 C0 75 62 8B 54 24 20 85 D2 ? ?"
+// Custom battle setup: selects the default campaign map with
+//   mov eax,[edi+0x80] / lea ecx,[esp+8] / push offset "main_attila_map" / mov esi,[eax+0x184] / call String ctor / ... / call select
+// The pushed string address (+0x0B) is a wildcard so a repointed immediate still matches.
+#define CUSTOM_BATTLE_DEFAULT_MAP_SIG "8B 87 80 00 00 00 8D 4C 24 08 68 ? ? ? ? 8B B0 84 01 00 00 E8 ? ? ? ? 8D 44 24 08 8B CE 50 E8"
 #define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG "A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
@@ -75,6 +79,7 @@ uintptr_t          g_battle_health_bar_on_update_pulse_addr = 0;
 uintptr_t          g_campaign_key_content_tail_addr = 0;
 uintptr_t          g_gift_region_availability_addr = 0;
 uintptr_t          g_gift_region_list_filter_addr = 0;
+uintptr_t          g_custom_battle_default_map_addr = 0;
 static uintptr_t   g_max_units_init_insn_addr = 0;
 static int*        g_max_units_in_army = nullptr;
 static int*        g_max_units_in_navy = nullptr;
@@ -178,5 +183,6 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"campaign_key_to_content_flag (tail)",                (void**)&g_campaign_key_content_tail_addr, CAMPAIGN_KEY_CONTENT_TAIL_SIG},
     {"diplomacy gift_region availability",                 (void**)&g_gift_region_availability_addr, GIFT_REGION_AVAILABILITY_SIG},
     {"diplomacy gift_region list filter",                  (void**)&g_gift_region_list_filter_addr, GIFT_REGION_LIST_FILTER_SIG},
+    {"custom battle default campaign map",                 (void**)&g_custom_battle_default_map_addr, CUSTOM_BATTLE_DEFAULT_MAP_SIG},
     {nullptr, nullptr, nullptr}
 };

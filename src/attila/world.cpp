@@ -734,7 +734,104 @@ static int GetGiftRegionState(lua_State* L) {
     return 1;
 }
 
+// ---- Custom battle default campaign map ---------------------------------------
+// When the custom battle screen opens, the engine pre-selects the campaign map whose
+// campaign_map_playable_areas mapname is the hard-coded string "main_attila_map".
+// The selection code pushes that string's address; SetCustomBattleDefaultMap
+// repoints the pushed address to a string owned by this (pinned) DLL. If no row has
+// the requested mapname the game keeps its normal fallback. Restored on Lua teardown.
+namespace {
+constexpr size_t kDefaultMapImmOffset = 0x0B;    // imm32 of "push offset main_attila_map"
+const char*      g_vanilla_default_map = nullptr; // the game's own string, read on first use
+char             g_custom_default_map[64] = {};
+bool             g_default_map_written = false;
+
+uint32_t* default_map_imm() {
+    return g_custom_battle_default_map_addr
+        ? reinterpret_cast<uint32_t*>(g_custom_battle_default_map_addr + kDefaultMapImmOffset)
+        : nullptr;
+}
+
+bool write_default_map_imm(const char* str) {
+    uint32_t* imm = default_map_imm();
+    DWORD old_protect = 0;
+    if (!VirtualProtect(imm, 4, PAGE_EXECUTE_READWRITE, &old_protect)) return false;
+    *imm = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(str));
+    VirtualProtect(imm, 4, old_protect, &old_protect);
+    FlushInstructionCache(GetCurrentProcess(), imm, 4);
+    return true;
+}
+
+// Reads the string the selection code currently uses; null if unreadable.
+const char* current_default_map() {
+    uint32_t* imm = default_map_imm();
+    if (!imm) return nullptr;
+    const char* s = reinterpret_cast<const char*>(static_cast<uintptr_t>(*imm));
+    if (s == g_custom_default_map) return s;
+    MEMORY_BASIC_INFORMATION mbi = {};
+    if (!VirtualQuery(s, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT) return nullptr;
+    return s;
+}
+} // namespace
+
+static void restore_custom_battle_default_map() {
+    if (g_default_map_written && g_vanilla_default_map) {
+        write_default_map_imm(g_vanilla_default_map);
+        Log("[twdll] SetCustomBattleDefaultMap: restored '%s'", g_vanilla_default_map);
+    }
+    g_default_map_written = false;
+}
+
+/***
+Sets which campaign map the custom battle screen selects when it opens. The game
+pre-selects the `campaign_map_playable_areas` row whose `mapname` is `"main_attila_map"`;
+this changes that name. Call it from the frontend (main menu) script. If no
+custom-battle row has the given mapname, the game falls back to its normal behaviour.
+A custom mapname (not main/bel/cha) also needs `AllowCustomCampaignKeys()`, otherwise
+the map is shown as locked DLC. Restored on Lua teardown.
+@function SetCustomBattleDefaultMap
+@tparam[opt] string mapname `mapname` of a `campaign_map_playable_areas` row (max 63 characters), or nil to restore `"main_attila_map"`
+@treturn string|nil the mapname now selected by default, or nil if the code was not found in this game build
+@usage
+twdll.world.SetCustomBattleDefaultMap("rom_third_age_map")
+*/
+static int SetCustomBattleDefaultMap(lua_State* L) {
+    const char* cur = current_default_map();
+    if (!cur) {
+        Log("[twdll] SetCustomBattleDefaultMap: code not found (other game build?)");
+        l_pushnil(L);
+        return 1;
+    }
+    if (!g_vanilla_default_map) {
+        if (cur == g_custom_default_map || strcmp(cur, "main_attila_map") != 0) {
+            Log("[twdll] SetCustomBattleDefaultMap: unexpected default '%.63s' - not patched", cur);
+            l_pushnil(L);
+            return 1;
+        }
+        g_vanilla_default_map = cur;
+    }
+
+    size_t len = 0;
+    const char* want = l_type(L, 1) == LUA_TSTRING ? l_checklstring(L, 1, &len) : nullptr;
+    if (!want || len == 0 || strcmp(want, g_vanilla_default_map) == 0) {
+        restore_custom_battle_default_map();
+    } else if (len >= sizeof(g_custom_default_map)) {
+        Log("[twdll] SetCustomBattleDefaultMap: mapname too long (%u)", static_cast<unsigned>(len));
+    } else {
+        // Point the code at the vanilla string while the buffer changes, then at the buffer.
+        if (g_default_map_written) write_default_map_imm(g_vanilla_default_map);
+        memcpy(g_custom_default_map, want, len + 1);
+        if (write_default_map_imm(g_custom_default_map)) {
+            g_default_map_written = true;
+            Log("[twdll] SetCustomBattleDefaultMap: '%s'", g_custom_default_map);
+        }
+    }
+    l_pushstring(L, current_default_map());
+    return 1;
+}
+
 extern const luaL_Reg world_functions[] = {
+    {"SetCustomBattleDefaultMap",   SetCustomBattleDefaultMap},
     {"AllowGiftRegion",             AllowGiftRegion},
     {"GetGiftRegionState",          GetGiftRegionState},
     {"AllowCustomCampaignKeys",     AllowCustomCampaignKeys},
@@ -780,6 +877,7 @@ void uninstall_world_hook() {
     }
     set_reinforcement_cap(true, 0);
     restore_gift_region();
+    restore_custom_battle_default_map();
 
     if (world_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(world_ctor_addr));

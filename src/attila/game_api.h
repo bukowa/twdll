@@ -146,6 +146,7 @@ extern uintptr_t g_battle_health_bar_on_update_pulse_addr;
 extern uintptr_t g_campaign_key_content_tail_addr;
 extern uintptr_t g_gift_region_availability_addr;
 extern uintptr_t g_gift_region_list_filter_addr;
+extern uintptr_t g_custom_battle_default_map_addr;
 
 int* get_max_units_in_army();
 int* get_max_units_in_navy();
