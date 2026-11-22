@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+set -eu
+
+REPO_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+UV_ROOT="$REPO_ROOT/.twdll/uv"
+UV_BIN_DIR="$UV_ROOT/bin"
+UV_BIN="$UV_BIN_DIR/uv"
+UV_VERSION="0.13.9"
+
+if [ ! -x "$UV_BIN" ]; then
+    mkdir -p "$UV_BIN_DIR"
+    ARCH="$(uname -m)"
+    case "$ARCH" in
+        x86_64|amd64) UV_TARGET="x86_64-unknown-linux-gnu" ;;
+        aarch64|arm64) UV_TARGET="aarch64-unknown-linux-gnu" ;;
+        *)
+            echo "Unsupported architecture for portable uv: $ARCH" >&2
+            exit 1
+            ;;
+    esac
+    UV_URL="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${UV_TARGET}.tar.gz"
+    TMP_ARCHIVE="$UV_ROOT/uv.tar.gz"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$UV_URL" -o "$TMP_ARCHIVE"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO "$TMP_ARCHIVE" "$UV_URL"
+    else
+        echo "Neither curl nor wget found to bootstrap portable uv." >&2
+        exit 1
+    fi
+    tar -xzf "$TMP_ARCHIVE" -C "$UV_BIN_DIR" --strip-components=1
+    rm -f "$TMP_ARCHIVE"
+    chmod +x "$UV_BIN"
+fi
+
+export UV_CACHE_DIR="$UV_ROOT/cache"
+export UV_PYTHON_INSTALL_DIR="$UV_ROOT/python"
+export UV_PROJECT_ENVIRONMENT="$UV_ROOT/venv"
+export UV_NO_CONFIG=1
+
+exec "$UV_BIN" run --quiet --project "$REPO_ROOT/cli" twdll "$@"

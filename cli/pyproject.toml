@@ -1,0 +1,116 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "twdll"
+version = "0.1.0"
+description = "Cross-platform reverse-engineering CLI for Warscape Total War"
+requires-python = ">=3.12"
+dependencies = [
+    "pyghidra>=2.0.0",
+    "typer>=0.15.0",
+    "vdf>=3.4",
+]
+
+[project.scripts]
+twdll = "twdll.cli:main"
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.27.0",
+    "import-linter>=2.1",
+    "pytest>=8.3.0",
+    "ruff>=0.9.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/twdll"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "PTH",
+    "PT",
+    "RUF",
+    "C4",
+    "C90",
+    "PIE",
+    "RET",
+    "TID",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-branches = 8
+max-args = 5
+max-statements = 30
+
+[tool.basedpyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+include = ["src", "tests"]
+extraPaths = ["src"]
+venvPath = "../.twdll/uv"
+venv = "venv"
+reportMissingTypeStubs = false
+reportUnusedCallResult = false
+reportAny = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config"]
+
+[tool.importlinter]
+root_package = "twdll"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Strict one-way domain layers"
+type = "layers"
+layers = [
+    "twdll.cli",
+    "twdll.init",
+    "twdll.database",
+    "twdll.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only database module may import sqlite3"
+type = "forbidden"
+source_modules = [
+    "twdll.cli",
+    "twdll.init",
+    "twdll.domain",
+]
+forbidden_modules = [
+    "sqlite3",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only cli module may import typer"
+type = "forbidden"
+source_modules = [
+    "twdll.init",
+    "twdll.database",
+    "twdll.domain",
+]
+forbidden_modules = [
+    "typer",
+]

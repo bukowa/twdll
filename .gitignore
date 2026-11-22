@@ -38,3 +38,7 @@ config.ld.*.generated
 todo.md
 __pycache__/
 *.pyc
+.twdll/
+twdll.toml
+.pytest_cache/
+.ruff_cache/
