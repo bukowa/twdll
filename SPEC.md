@@ -161,6 +161,10 @@ cli/
    - Use `pathlib.Path` everywhere (no hardcoded `/` or `\`, no `shell=True`).
    - Pass `filter="data"` when extracting tar archives so Python 3.13/3.14 emits zero deprecation warnings.
    - Parametrize unit tests across `[HostOS.LINUX, HostOS.WINDOWS]`.
+5. **Explicit `WorkspaceContext` & LLM / MCP-Ready Command Boundaries**:
+   - **Never extract context inside step functions**: Step functions (`analyze.analyze`, `extract.extract`, `derive.derive`, `query.search`, `query.show`, `query.sql`) never take raw `root: Path`, `decompiler: Decompiler | None`, or `host_os: HostOS | None`, and never parse `twdll.toml` themselves.
+   - **`WorkspaceContext` in `domain.py`**: Encapsulates `paths: WorkspacePaths`, `config: WorkspaceConfig` (loaded from `twdll.toml` via `WorkspaceContext.from_root(root)`), and `host_os: HostOS` (`ctx.root`, `ctx.decompiler`), using standard library `dataclasses.replace` for CLI/test overrides.
+   - **Root Context vs. Action Arguments**: The root `twdll` command (`@app.callback()`) builds `WorkspaceContext` (handling workspace-level overrides such as `--decompiler`) and passes `ctx` into subcommands. Step functions take `ctx: WorkspaceContext` + typed `domain.py` parameters (`StrEnum`s, multi-binary `binaries: Sequence[BinaryName] = ()`, or typed query objects) and return frozen `@dataclass` results with `.to_dict()`, so every entrypoint maps 1-to-1 to both Typer CLI subcommands and MCP tool schemas without duplicate definitions.
 
 ---
 
@@ -201,9 +205,10 @@ cli/
 - `WorkspacePaths(root: Path)`: deterministic properties/methods built strictly from `WorkspaceName`, `StepName`, and `FileSuffix` for `config_file`, `data_dir`, `uv_dir`, `step_dir(step)`, `init_dir`, `tools_dir`, `binaries_dir`, `staged_binary_path(binary)`, `analyze_dir`, `analyze_stem(decompiler, binary)`, `ghidra_gpr_path(binary)`, `ghidra_rep_dir(binary)`, `ida_db_path(binary)`, `extract_dir`, `extract_db_path(decompiler, binary)`, `derive_dir`, `derive_db_path(decompiler)`.
 
 ### 5.3 Typed Domain Models & SQLite Row Dataclasses
-- **Setup (`init`, `status`, `clean`)**:
+- **Setup & Context (`init`, `status`, `clean`, `WorkspaceContext`)**:
   - `ToolchainConfig(ghidra_dir: Path | None = None, java_home: Path | None = None, ida_dir: Path | None = None)`
   - `WorkspaceConfig(decompiler: Decompiler = Decompiler.GHIDRA, binaries: dict[BinaryName, Path | None], toolchain: ToolchainConfig)`
+  - `WorkspaceContext(paths: WorkspacePaths, config: WorkspaceConfig, host_os: HostOS)` (`WorkspaceContext.from_root(root)`, `ctx.root`, `ctx.decompiler`)
   - `ToolLocation(name: ToolName, ready: bool, path: Path | None, source: ToolSource)`
   - `ToolchainStatus(decompiler: Decompiler, ready: bool, tools: tuple[ToolLocation, ...])`
   - `BinaryStatus(name: BinaryName, arch: BinaryArch, staged: bool, staged_path: Path | None, discovered_path: Path | None, source: BinarySource, valid_header: bool)`
@@ -282,19 +287,19 @@ cli/
 
 ## 7. Closed CLI Command & Flag Surface
 
-Every command runs against the current working directory (`Path.cwd()`) and supports `--json` for deterministic machine-readable output (re-running any step from scratch uses `twdll clean <step>`):
+Root `twdll` callback builds `WorkspaceContext` from `Path.cwd()` (`twdll.toml`) with optional root-level context overrides (`twdll [--decompiler ghidra|ida] <command> ...`). Every subcommand receives `ctx: WorkspaceContext` and supports `--json` for deterministic machine-readable output (re-running any step from scratch uses `twdll clean <step>`):
 
 | Group | Command | Arguments & Options | Entrypoint | Output / Side Effect |
 | :--- | :--- | :--- | :--- | :--- |
 | **Setup** | `twdll init` | `[--decompiler ghidra\|ida] [--no-toolchain] [--no-binaries] [--json]` | `init.init` | Creates/updates `twdll.toml`, provisions `.twdll/init/tools/`, stages discovered binaries flat into `.twdll/init/binaries/` |
 | **Setup** | `twdll status` | `[--json]` | `init.status` | Read-only inspection of `twdll.toml`, toolchain, staged/discovered binaries, and `.twdll/<step>/` directories |
 | **Setup** | `twdll clean` | `<init\|analyze\|extract\|derive\|all> [--json]` | `init.clean` | Removes the corresponding `.twdll/<step>/` directory (`shutil.rmtree`); preserves `.twdll/uv/` and `twdll.toml` |
-| **Analyze** | `twdll analyze` | `[binary] [--decompiler ghidra\|ida] [--json]` | `analyze.analyze` | Runs single-process `pyghidra` decompiler analysis on staged binary(ies) into `.twdll/analyze/<decompiler>_<binary>.gpr` |
-| **Extract** | `twdll extract` | `[binary] [--decompiler ghidra\|ida] [--json]` | `extract.extract` | Extracts verified facts from `.twdll/analyze/<decompiler>_<binary>.gpr` into `.twdll/extract/<decompiler>_<binary>.sqlite` with `meta` completion + SHA-256 proof |
-| **Derive** | `twdll derive` | `[--decompiler ghidra\|ida] [--json]` | `derive.derive` | Computes callgraphs, vtables, and cross-binary function matches into `.twdll/derive/<decompiler>.sqlite` |
-| **Query** | `twdll search` | `<pattern> [--binary <name>] [--kind function\|symbol\|string\|vtable] [--decompiler ghidra\|ida] [--limit N] [--json]` | `query.search` | Pattern search across functions, symbols, strings, and vtables |
-| **Query** | `twdll show` | `<binary> <identifier> [--decompiler ghidra\|ida] [--json]` | `query.show` | Detailed view of a function/symbol by hex address or name (signature, callers, callees, strings, cross-binary matches) |
-| **Query** | `twdll sql` | `<query> [--db extract\|derive] [--decompiler ghidra\|ida] [--json]` | `query.sql` | Executes a read-only SQL query (`?mode=ro`) against extracted or derived SQLite databases |
+| **Analyze** | `twdll analyze` | `[binaries...] [--json]` | `analyze.analyze` | Runs single-process `pyghidra` decompiler analysis on selected (or all) staged binary(ies) into `.twdll/analyze/<decompiler>_<binary>.gpr` |
+| **Extract** | `twdll extract` | `[binaries...] [--json]` | `extract.extract` | Extracts verified facts from `.twdll/analyze/<decompiler>_<binary>.gpr` into `.twdll/extract/<decompiler>_<binary>.sqlite` with `meta` completion + SHA-256 proof |
+| **Derive** | `twdll derive` | `[--json]` | `derive.derive` | Computes callgraphs, vtables, and cross-binary function matches into `.twdll/derive/<decompiler>.sqlite` |
+| **Query** | `twdll search` | *(Structured multi-binary query args finalized in Slice 5 after Slice 3/4 schema verification)* | `query.search` | Pattern search across functions, symbols, strings, and vtables |
+| **Query** | `twdll show` | *(Structured multi-binary query args finalized in Slice 5 after Slice 3/4 schema verification)* | `query.show` | Detailed view of a function/symbol by hex address or name |
+| **Query** | `twdll sql` | `<query> [--json]` | `query.sql` | Executes a read-only SQL query (`?mode=ro`) against attached extracted and derived SQLite databases |
 
 ---
 
@@ -313,18 +318,17 @@ pytest cli/tests
 1. **Slice 1 — Foundation & Setup (`init`, `status`, `clean`)** *(Completed)*:
    - `cli/pyproject.toml`, `cli/src/twdll/domain.py`, `cli/src/twdll/database.py`, `cli/src/twdll/init.py`, `cli/src/twdll/cli.py`, `cli/tests/test_init.py`.
 2. **Slice 2 — Decompiler Analysis (`analyze`, Single-Process Ghidra via `pyghidra`)**:
-   - **Step 2A (`cli/pyproject.toml`, `cli/src/twdll/domain.py`, `cli/src/twdll/init.py`)**:
-     - Register `twdll.analyze` in `[tool.importlinter]` contracts (`"twdll.init | twdll.analyze"` sibling layer + forbidden `sqlite3` and `typer`/`rich` contracts).
+   - **Step 2A (`cli/src/twdll/domain.py`, `cli/src/twdll/init.py`)**:
      - Rename `AnalyzeTargetResult.project_dir` -> `project_path` in `domain.py`.
-     - Move stdlib-only config & read-only toolchain/binary header helpers (`load_config`, `verify_binary_header`, `resolve_toolchain`) into `domain.py` (re-exported in `init.py`) so `init.py` and `analyze.py` stay independent sibling modules without importing each other.
-   - **Step 2B (`cli/src/twdll/analyze.py`)**:
-     - Implement `analyze.analyze(root, binary=None, decompiler=None, on_progress=noop_progress, ghidra_runner=...) -> AnalyzeResult`.
-     - Resolve active decompiler (`twdll.toml` or `decompiler` arg), verify toolchain readiness, and select target(s) (all staged binaries when `binary is None`, or the single requested `BinaryName`).
-     - For `Decompiler.GHIDRA`: skip if both `paths.ghidra_gpr_path(target)` and `paths.ghidra_rep_dir(target)` exist; otherwise run single-process `pyghidra` (`JAVA_HOME` set to resolved JDK 25, `pyghidra.start(install_dir=ghidra_dir)`, `pyghidra.open_program(staged_binary, project_location=paths.analyze_dir, project_name=paths.analyze_stem(Decompiler.GHIDRA, target), analyze=True)`) saving flat into `.twdll/analyze/ghidra_<binary>.gpr` + `.rep/`.
+     - Move stdlib-only config & read-only toolchain/binary header helpers (`load_config`, `verify_binary_header`, `resolve_tool`, `resolve_toolchain`) into `domain.py` and add `WorkspaceContext` (`from_root`, `root`, `decompiler`).
+   - **Step 2B (`cli/src/twdll/analyze.py`, `cli/pyproject.toml`)**:
+     - Register `twdll.analyze` in `[tool.importlinter]` contracts (`"twdll.init | twdll.analyze"` sibling layer + forbidden `sqlite3` and `typer`/`rich` contracts).
+     - Implement `analyze.analyze(ctx: WorkspaceContext, binaries: Sequence[BinaryName] = (), on_progress: ProgressCallback = noop_progress, ghidra_runner: GhidraRunner | None = None) -> AnalyzeResult`.
+     - For `Decompiler.GHIDRA`: verify toolchain and staged binaries, skip targets where both `ghidra_gpr_path(target)` and `ghidra_rep_dir(target)` exist, otherwise run single-process `pyghidra` saving flat into `.twdll/analyze/ghidra_<binary>.gpr` + `.rep/`.
      - For `Decompiler.IDA`: raise `NotImplementedError` (deferred per Section 6.1).
    - **Step 2C (`cli/src/twdll/cli.py` & `cli/tests/test_analyze.py`)**:
-     - Wire `twdll analyze [binary] [--decompiler ghidra|ida] [--json]` in `cli.py` with live `rich` progress reporting.
-     - Add unit tests in `cli/tests/test_analyze.py` (target filtering, skip when `.gpr` + `.rep/` exist, injectable `ghidra_runner` execution, missing toolchain/binary errors, deferred IDA error, and CLI `--json` output) and pass all 5 quality checks.
+     - Wire root `twdll` `@app.callback()` building `WorkspaceContext` and `twdll analyze [binaries...] [--json]` in `cli.py` with live `rich` progress reporting.
+     - Add unit tests in `cli/tests/test_analyze.py` and pass all 5 quality checks.
 3. **Slice 3 — Base Fact Extraction (`extract`, Ghidra via `pyghidra`)**:
    - **Step 3A (Empirical API Verification Task)**: Run a `pyghidra` verification script against local Ghidra 12.2 to inspect and verify every candidate table and column 1-by-1 against the real decompiler API before finalizing the SQLite schema.
    - **Step 3B (`cli/src/twdll/domain.py` & `cli/src/twdll/database.py`)**: Implement the verified row dataclasses and per-binary SQLite schema/writers (`.twdll/extract/<decompiler>_<binary>.sqlite`), writing the completion proof and `binary_sha256` into `meta` only in the final commit.

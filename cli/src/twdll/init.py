@@ -7,9 +7,7 @@ from __future__ import annotations
 
 import importlib
 import shutil
-import struct
 import tarfile
-import tomllib
 import urllib.request
 import zipfile
 from collections.abc import Callable, Sequence
@@ -39,75 +37,21 @@ from twdll.domain import (
     ProgressKind,
     StepName,
     StepSummary,
-    ToolchainConfig,
     ToolchainStatus,
-    ToolLocation,
     ToolName,
-    ToolSource,
     WorkspaceConfig,
+    WorkspaceContext,
     WorkspacePaths,
     WorkspaceStatus,
-    default_ida_dirs,
     default_steam_roots,
     noop_progress,
+    optional_path,
+    resolve_toolchain,
+    verify_binary_header,
 )
 
 Downloader = Callable[[str, Path, ProgressCallback], None]
 _VdfLoads = Callable[[str], dict[str, object]]
-
-_ELF_MAGIC = b"\x7fELF"
-_ELF_CLASS_64 = 2
-_ELF_DATA_LSB = 1
-_ELF_MACHINE_X86_64 = 0x3E
-_PE_MACHINE_I386 = 0x014C
-
-
-def _optional_path(raw_value: object) -> Path | None:
-    if not isinstance(raw_value, str):
-        return None
-    stripped = raw_value.strip()
-    return Path(stripped) if stripped else None
-
-
-def _parse_decompiler(raw: dict[str, object], config_file: Path) -> Decompiler:
-    decompiler_raw = str(raw.get("decompiler", Decompiler.GHIDRA.value))
-    try:
-        return Decompiler(decompiler_raw)
-    except ValueError as exc:
-        valid = ", ".join(d.value for d in Decompiler)
-        msg = f"Invalid decompiler {decompiler_raw!r} in {config_file}; expected one of: {valid}"
-        raise ValueError(msg) from exc
-
-
-def _parse_binaries_section(raw: dict[str, object]) -> dict[BinaryName, Path | None]:
-    sec_obj = raw.get("binaries")
-    sec = cast("dict[str, object]", sec_obj) if isinstance(sec_obj, dict) else {}
-    return {name: _optional_path(sec.get(name.value)) for name in BinaryName}
-
-
-def _parse_toolchain_section(raw: dict[str, object]) -> ToolchainConfig:
-    sec_obj = raw.get("toolchain")
-    if not isinstance(sec_obj, dict):
-        return ToolchainConfig()
-    sec = cast("dict[str, object]", sec_obj)
-    return ToolchainConfig(
-        ghidra_dir=_optional_path(sec.get("ghidra_dir")),
-        java_home=_optional_path(sec.get("java_home")),
-        ida_dir=_optional_path(sec.get("ida_dir")),
-    )
-
-
-def load_config(root: Path) -> WorkspaceConfig:
-    """Load `twdll.toml` from `root`, or return defaults if it does not exist."""
-    paths = WorkspacePaths(root)
-    if not paths.config_file.is_file():
-        return WorkspaceConfig()
-    raw = tomllib.loads(paths.config_file.read_text(encoding="utf-8"))
-    return WorkspaceConfig(
-        decompiler=_parse_decompiler(raw, paths.config_file),
-        binaries=_parse_binaries_section(raw),
-        toolchain=_parse_toolchain_section(raw),
-    )
 
 
 def _escape_toml_path(path: Path | None) -> str:
@@ -148,12 +92,11 @@ def save_config(root: Path, config: WorkspaceConfig) -> Path:
     return paths.config_file
 
 
-def clean(root: Path, target: CleanTarget) -> CleanResult:
+def clean(ctx: WorkspaceContext, target: CleanTarget) -> CleanResult:
     """Remove `.twdll/<step>/` directories for `target`, keeping `.twdll/uv/` and `twdll.toml`."""
-    paths = WorkspacePaths(root)
     removed: list[Path] = []
     for step in target.steps():
-        step_dir = paths.step_dir(step)
+        step_dir = ctx.paths.step_dir(step)
         if step_dir.exists():
             shutil.rmtree(step_dir)
             removed.append(step_dir)
@@ -173,157 +116,6 @@ def inspect_step_directories(paths: WorkspacePaths) -> tuple[StepSummary, ...]:
         else:
             summaries.append(StepSummary(step=step, directory=step_dir, exists=False, entries=()))
     return tuple(summaries)
-
-
-def _is_valid_elf64(header: bytes) -> bool:
-    if len(header) < 20 or header[:4] != _ELF_MAGIC:
-        return False
-    if header[4] != _ELF_CLASS_64 or header[5] != _ELF_DATA_LSB:
-        return False
-    (e_machine,) = struct.unpack_from("<H", header, 18)
-    return int(e_machine) == _ELF_MACHINE_X86_64
-
-
-def _read_pe_signature_chunk(path: Path, header: bytes, pe_offset: int) -> bytes:
-    if pe_offset + 6 <= len(header):
-        return header[pe_offset : pe_offset + 6]
-    try:
-        with path.open("rb") as handle:
-            handle.seek(pe_offset)
-            return handle.read(6)
-    except OSError:
-        return b""
-
-
-def _is_valid_pe32(path: Path, header: bytes) -> bool:
-    if len(header) < 64 or header[:2] != b"MZ":
-        return False
-    (pe_offset,) = struct.unpack_from("<I", header, 0x3C)
-    pe_chunk = _read_pe_signature_chunk(path, header, int(pe_offset))
-    if len(pe_chunk) < 6 or pe_chunk[:4] != b"PE\x00\x00":
-        return False
-    (machine,) = struct.unpack_from("<H", pe_chunk, 4)
-    return int(machine) == _PE_MACHINE_I386
-
-
-def verify_binary_header(path: Path, expected_arch: BinaryArch) -> bool:
-    """Verify that `path` has a valid ELF64 (x86_64) or PE32 (i386) header."""
-    if not path.is_file():
-        return False
-    try:
-        with path.open("rb") as handle:
-            header = handle.read(4096)
-    except OSError:
-        return False
-
-    match expected_arch:
-        case BinaryArch.ELF64:
-            return _is_valid_elf64(header)
-        case BinaryArch.PE32:
-            return _is_valid_pe32(path, header)
-
-
-def _ida_executable(ida_dir: Path, host_os: HostOS) -> Path:
-    match host_os:
-        case HostOS.WINDOWS:
-            candidates = ("idat64.exe", "ida64.exe", "ida.exe")
-        case HostOS.LINUX:
-            candidates = ("idat64", "ida64", "ida")
-    for name in candidates:
-        candidate = ida_dir / name
-        if candidate.is_file():
-            return candidate
-    return ida_dir / candidates[0]
-
-
-def _tool_executable(tool: ToolName, tool_dir: Path, host_os: HostOS) -> Path:
-    match tool:
-        case ToolName.GHIDRA:
-            script = "analyzeHeadless.bat" if host_os is HostOS.WINDOWS else "analyzeHeadless"
-            return tool_dir / "support" / script
-        case ToolName.JAVA:
-            exe = "java.exe" if host_os is HostOS.WINDOWS else "java"
-            return tool_dir / "bin" / exe
-        case ToolName.IDA:
-            return _ida_executable(tool_dir, host_os)
-
-
-def _find_prefixed_subdirs(tools_dir: Path, prefix: str) -> tuple[Path, ...]:
-    if not tools_dir.is_dir():
-        return ()
-    return tuple(
-        sorted(
-            (c for c in tools_dir.iterdir() if c.is_dir() and c.name.startswith(prefix)),
-            key=lambda p: p.name,
-            reverse=True,
-        )
-    )
-
-
-def resolve_tool(
-    tool: ToolName,
-    configured_dir: Path | None,
-    candidate_dirs: Sequence[Path],
-    fallback_source: ToolSource,
-    host_os: HostOS,
-) -> ToolLocation:
-    """Resolve a single tool strictly from `twdll.toml` or `candidate_dirs` (never user PATH)."""
-    if configured_dir is not None:
-        ready = _tool_executable(tool, configured_dir, host_os).is_file()
-        return ToolLocation(name=tool, ready=ready, path=configured_dir, source=ToolSource.TOML)
-
-    for candidate in candidate_dirs:
-        if _tool_executable(tool, candidate, host_os).is_file():
-            return ToolLocation(name=tool, ready=True, path=candidate, source=fallback_source)
-
-    return ToolLocation(name=tool, ready=False, path=None, source=ToolSource.MISSING)
-
-
-def resolve_toolchain(
-    paths: WorkspacePaths,
-    config: WorkspaceConfig,
-    host_os: HostOS,
-    ida_dirs: Sequence[Path] | None = None,
-) -> ToolchainStatus:
-    """Resolve active decompiler toolchain without inspecting user PATH."""
-    match config.decompiler:
-        case Decompiler.GHIDRA:
-            ghidra_loc = resolve_tool(
-                tool=ToolName.GHIDRA,
-                configured_dir=config.toolchain.ghidra_dir,
-                candidate_dirs=_find_prefixed_subdirs(paths.tools_dir, "ghidra_"),
-                fallback_source=ToolSource.PORTABLE,
-                host_os=host_os,
-            )
-            java_loc = resolve_tool(
-                tool=ToolName.JAVA,
-                configured_dir=config.toolchain.java_home,
-                candidate_dirs=_find_prefixed_subdirs(paths.tools_dir, "jdk-"),
-                fallback_source=ToolSource.PORTABLE,
-                host_os=host_os,
-            )
-            tools = (ghidra_loc, java_loc)
-            return ToolchainStatus(
-                decompiler=Decompiler.GHIDRA,
-                ready=all(t.ready for t in tools),
-                tools=tools,
-            )
-        case Decompiler.IDA:
-            search_dirs = (
-                tuple(ida_dirs) if ida_dirs is not None else default_ida_dirs(host_os, Path.home())
-            )
-            ida_loc = resolve_tool(
-                tool=ToolName.IDA,
-                configured_dir=config.toolchain.ida_dir,
-                candidate_dirs=search_dirs,
-                fallback_source=ToolSource.DEFAULT_DIR,
-                host_os=host_os,
-            )
-            return ToolchainStatus(
-                decompiler=Decompiler.IDA,
-                ready=ida_loc.ready,
-                tools=(ida_loc,),
-            )
 
 
 def _default_download(
@@ -447,7 +239,7 @@ def _query_winreg_key(
     try:
         with open_key(root_key, subkey) as handle:
             raw_val, _ = query_val(handle, value_name)
-            return _optional_path(raw_val)
+            return optional_path(raw_val)
     except OSError:
         return None
 
@@ -655,68 +447,56 @@ def resolve_all_binaries(
 
 
 def status(
-    root: Path,
-    host_os: HostOS | None = None,
+    ctx: WorkspaceContext,
     steam_roots: Sequence[Path] | None = None,
     ida_dirs: Sequence[Path] | None = None,
 ) -> WorkspaceStatus:
     """Read-only workspace status inspection (`twdll status`)."""
-    resolved_os = host_os if host_os is not None else HostOS.current()
-    paths = WorkspacePaths(root)
-    config = load_config(root)
-    roots = tuple(steam_roots) if steam_roots is not None else candidate_steam_roots(resolved_os)
+    roots = tuple(steam_roots) if steam_roots is not None else candidate_steam_roots(ctx.host_os)
     steamapps_dirs = discover_steamapps_dirs(roots)
     return WorkspaceStatus(
-        root=root,
-        config_file=paths.config_file,
-        config_exists=paths.config_file.is_file(),
-        host_os=resolved_os,
-        decompiler=config.decompiler,
-        toolchain=resolve_toolchain(paths, config, resolved_os, ida_dirs=ida_dirs),
-        binaries=resolve_all_binaries(paths, config, steamapps_dirs, stage=False),
-        steps=inspect_step_directories(paths),
+        root=ctx.root,
+        config_file=ctx.paths.config_file,
+        config_exists=ctx.paths.config_file.is_file(),
+        host_os=ctx.host_os,
+        decompiler=ctx.decompiler,
+        toolchain=resolve_toolchain(ctx.paths, ctx.config, ctx.host_os, ida_dirs=ida_dirs),
+        binaries=resolve_all_binaries(ctx.paths, ctx.config, steamapps_dirs, stage=False),
+        steps=inspect_step_directories(ctx.paths),
     )
 
 
 def init(
-    root: Path,
-    decompiler: Decompiler | None = None,
+    ctx: WorkspaceContext,
+    *,
+    persist_config: bool = False,
     skip_toolchain: bool = False,
     skip_binaries: bool = False,
     on_progress: ProgressCallback = noop_progress,
 ) -> InitResult:
     """Initialize `twdll.toml`, `.twdll/init/tools/`, and `.twdll/init/binaries/` (`twdll init`)."""
-    resolved_os = HostOS.current()
-    paths = WorkspacePaths(root)
-    config_existed = paths.config_file.is_file()
-    current = load_config(root)
-    active = decompiler if decompiler is not None else current.decompiler
-    config = WorkspaceConfig(
-        decompiler=active,
-        binaries=current.binaries,
-        toolchain=current.toolchain,
-    )
-    if not config_existed or decompiler is not None:
-        save_config(root, config)
+    config_existed = ctx.paths.config_file.is_file()
+    if not config_existed or persist_config:
+        save_config(ctx.root, ctx.config)
 
-    paths.init_dir.mkdir(parents=True, exist_ok=True)
+    ctx.paths.init_dir.mkdir(parents=True, exist_ok=True)
     toolchain = (
-        resolve_toolchain(paths, config, resolved_os)
+        resolve_toolchain(ctx.paths, ctx.config, ctx.host_os)
         if skip_toolchain
-        else provision_toolchain(paths, config, resolved_os, on_progress=on_progress)
+        else provision_toolchain(ctx.paths, ctx.config, ctx.host_os, on_progress=on_progress)
     )
-    steamapps_dirs = discover_steamapps_dirs(candidate_steam_roots(resolved_os))
+    steamapps_dirs = discover_steamapps_dirs(candidate_steam_roots(ctx.host_os))
     binaries = resolve_all_binaries(
-        paths,
-        config,
+        ctx.paths,
+        ctx.config,
         steamapps_dirs,
         stage=not skip_binaries,
         on_progress=on_progress,
     )
     return InitResult(
-        config_file=paths.config_file,
+        config_file=ctx.paths.config_file,
         config_created=not config_existed,
-        decompiler=active,
+        decompiler=ctx.decompiler,
         toolchain=toolchain,
         binaries=binaries,
     )

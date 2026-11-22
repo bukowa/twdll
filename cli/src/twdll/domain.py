@@ -6,8 +6,10 @@ directly by the CLI, PyGhidra, IDAPython, and derivation scripts.
 
 from __future__ import annotations
 
+import struct
 import sys
-from collections.abc import Callable
+import tomllib
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -434,6 +436,29 @@ class ToolchainStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkspaceContext:
+    paths: WorkspacePaths
+    config: WorkspaceConfig = field(default_factory=WorkspaceConfig)
+    host_os: HostOS = field(default_factory=HostOS.current)
+
+    @property
+    def root(self) -> Path:
+        return self.paths.root
+
+    @property
+    def decompiler(self) -> Decompiler:
+        return self.config.decompiler
+
+    @classmethod
+    def from_root(cls, root: Path) -> WorkspaceContext:
+        return cls(
+            paths=WorkspacePaths(root),
+            config=load_config(root),
+            host_os=HostOS.current(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class BinaryStatus:
     name: BinaryName
     arch: BinaryArch
@@ -492,7 +517,7 @@ class CleanResult:
 class AnalyzeTargetResult:
     binary: BinaryName
     decompiler: Decompiler
-    project_dir: Path
+    project_path: Path
     analyzed: bool
     skipped: bool
 
@@ -649,3 +674,209 @@ class SqlQueryResult:
 
     def to_dict(self) -> dict[str, object]:
         return to_dict(self)
+
+
+_ELF_MAGIC = b"\x7fELF"
+_ELF_CLASS_64 = 2
+_ELF_DATA_LSB = 1
+_ELF_MACHINE_X86_64 = 0x3E
+_PE_MACHINE_I386 = 0x014C
+
+
+def optional_path(raw_value: object) -> Path | None:
+    if not isinstance(raw_value, str):
+        return None
+    stripped = raw_value.strip()
+    return Path(stripped) if stripped else None
+
+
+def _parse_decompiler(raw: dict[str, object], config_file: Path) -> Decompiler:
+    decompiler_raw = str(raw.get("decompiler", Decompiler.GHIDRA.value))
+    try:
+        return Decompiler(decompiler_raw)
+    except ValueError as exc:
+        valid = ", ".join(d.value for d in Decompiler)
+        msg = f"Invalid decompiler {decompiler_raw!r} in {config_file}; expected one of: {valid}"
+        raise ValueError(msg) from exc
+
+
+def _parse_binaries_section(raw: dict[str, object]) -> dict[BinaryName, Path | None]:
+    sec_obj = raw.get("binaries")
+    sec = cast("dict[str, object]", sec_obj) if isinstance(sec_obj, dict) else {}
+    return {name: optional_path(sec.get(name.value)) for name in BinaryName}
+
+
+def _parse_toolchain_section(raw: dict[str, object]) -> ToolchainConfig:
+    sec_obj = raw.get("toolchain")
+    if not isinstance(sec_obj, dict):
+        return ToolchainConfig()
+    sec = cast("dict[str, object]", sec_obj)
+    return ToolchainConfig(
+        ghidra_dir=optional_path(sec.get("ghidra_dir")),
+        java_home=optional_path(sec.get("java_home")),
+        ida_dir=optional_path(sec.get("ida_dir")),
+    )
+
+
+def load_config(root: Path) -> WorkspaceConfig:
+    """Load `twdll.toml` from `root`, or return defaults if it does not exist."""
+    paths = WorkspacePaths(root)
+    if not paths.config_file.is_file():
+        return WorkspaceConfig()
+    raw = tomllib.loads(paths.config_file.read_text(encoding="utf-8"))
+    return WorkspaceConfig(
+        decompiler=_parse_decompiler(raw, paths.config_file),
+        binaries=_parse_binaries_section(raw),
+        toolchain=_parse_toolchain_section(raw),
+    )
+
+
+def _is_valid_elf64(header: bytes) -> bool:
+    if len(header) < 20 or header[:4] != _ELF_MAGIC:
+        return False
+    if header[4] != _ELF_CLASS_64 or header[5] != _ELF_DATA_LSB:
+        return False
+    (e_machine,) = struct.unpack_from("<H", header, 18)
+    return int(e_machine) == _ELF_MACHINE_X86_64
+
+
+def _read_pe_signature_chunk(path: Path, header: bytes, pe_offset: int) -> bytes:
+    if pe_offset + 6 <= len(header):
+        return header[pe_offset : pe_offset + 6]
+    try:
+        with path.open("rb") as handle:
+            handle.seek(pe_offset)
+            return handle.read(6)
+    except OSError:
+        return b""
+
+
+def _is_valid_pe32(path: Path, header: bytes) -> bool:
+    if len(header) < 64 or header[:2] != b"MZ":
+        return False
+    (pe_offset,) = struct.unpack_from("<I", header, 0x3C)
+    pe_chunk = _read_pe_signature_chunk(path, header, int(pe_offset))
+    if len(pe_chunk) < 6 or pe_chunk[:4] != b"PE\x00\x00":
+        return False
+    (machine,) = struct.unpack_from("<H", pe_chunk, 4)
+    return int(machine) == _PE_MACHINE_I386
+
+
+def verify_binary_header(path: Path, expected_arch: BinaryArch) -> bool:
+    """Verify that `path` has a valid ELF64 (x86_64) or PE32 (i386) header."""
+    if not path.is_file():
+        return False
+    try:
+        with path.open("rb") as handle:
+            header = handle.read(4096)
+    except OSError:
+        return False
+
+    match expected_arch:
+        case BinaryArch.ELF64:
+            return _is_valid_elf64(header)
+        case BinaryArch.PE32:
+            return _is_valid_pe32(path, header)
+
+
+def _ida_executable(ida_dir: Path, host_os: HostOS) -> Path:
+    match host_os:
+        case HostOS.WINDOWS:
+            candidates = ("idat64.exe", "ida64.exe", "ida.exe")
+        case HostOS.LINUX:
+            candidates = ("idat64", "ida64", "ida")
+    for name in candidates:
+        candidate = ida_dir / name
+        if candidate.is_file():
+            return candidate
+    return ida_dir / candidates[0]
+
+
+def _tool_executable(tool: ToolName, tool_dir: Path, host_os: HostOS) -> Path:
+    match tool:
+        case ToolName.GHIDRA:
+            script = "analyzeHeadless.bat" if host_os is HostOS.WINDOWS else "analyzeHeadless"
+            return tool_dir / "support" / script
+        case ToolName.JAVA:
+            exe = "java.exe" if host_os is HostOS.WINDOWS else "java"
+            return tool_dir / "bin" / exe
+        case ToolName.IDA:
+            return _ida_executable(tool_dir, host_os)
+
+
+def _find_prefixed_subdirs(tools_dir: Path, prefix: str) -> tuple[Path, ...]:
+    if not tools_dir.is_dir():
+        return ()
+    return tuple(
+        sorted(
+            (c for c in tools_dir.iterdir() if c.is_dir() and c.name.startswith(prefix)),
+            key=lambda p: p.name,
+            reverse=True,
+        )
+    )
+
+
+def resolve_tool(
+    tool: ToolName,
+    configured_dir: Path | None,
+    candidate_dirs: Sequence[Path],
+    fallback_source: ToolSource,
+    host_os: HostOS,
+) -> ToolLocation:
+    """Resolve a single tool strictly from `twdll.toml` or `candidate_dirs` (never user PATH)."""
+    if configured_dir is not None:
+        ready = _tool_executable(tool, configured_dir, host_os).is_file()
+        return ToolLocation(name=tool, ready=ready, path=configured_dir, source=ToolSource.TOML)
+
+    for candidate in candidate_dirs:
+        if _tool_executable(tool, candidate, host_os).is_file():
+            return ToolLocation(name=tool, ready=True, path=candidate, source=fallback_source)
+
+    return ToolLocation(name=tool, ready=False, path=None, source=ToolSource.MISSING)
+
+
+def resolve_toolchain(
+    paths: WorkspacePaths,
+    config: WorkspaceConfig,
+    host_os: HostOS,
+    ida_dirs: Sequence[Path] | None = None,
+) -> ToolchainStatus:
+    """Resolve active decompiler toolchain without inspecting user PATH."""
+    match config.decompiler:
+        case Decompiler.GHIDRA:
+            ghidra_loc = resolve_tool(
+                tool=ToolName.GHIDRA,
+                configured_dir=config.toolchain.ghidra_dir,
+                candidate_dirs=_find_prefixed_subdirs(paths.tools_dir, "ghidra_"),
+                fallback_source=ToolSource.PORTABLE,
+                host_os=host_os,
+            )
+            java_loc = resolve_tool(
+                tool=ToolName.JAVA,
+                configured_dir=config.toolchain.java_home,
+                candidate_dirs=_find_prefixed_subdirs(paths.tools_dir, "jdk-"),
+                fallback_source=ToolSource.PORTABLE,
+                host_os=host_os,
+            )
+            tools = (ghidra_loc, java_loc)
+            return ToolchainStatus(
+                decompiler=Decompiler.GHIDRA,
+                ready=all(t.ready for t in tools),
+                tools=tools,
+            )
+        case Decompiler.IDA:
+            search_dirs = (
+                tuple(ida_dirs) if ida_dirs is not None else default_ida_dirs(host_os, Path.home())
+            )
+            ida_loc = resolve_tool(
+                tool=ToolName.IDA,
+                configured_dir=config.toolchain.ida_dir,
+                candidate_dirs=search_dirs,
+                fallback_source=ToolSource.DEFAULT_DIR,
+                host_os=host_os,
+            )
+            return ToolchainStatus(
+                decompiler=Decompiler.IDA,
+                ready=ida_loc.ready,
+                tools=(ida_loc,),
+            )

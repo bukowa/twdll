@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import Generator, Sequence
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated
 
@@ -34,6 +35,7 @@ from twdll.domain import (
     ProgressKind,
     StepSummary,
     ToolchainStatus,
+    WorkspaceContext,
     noop_progress,
 )
 from twdll.init import clean, init, status
@@ -48,6 +50,48 @@ app = typer.Typer(
 
 def _resolve_root() -> Path:
     return Path.cwd().resolve()
+
+
+def _get_context(cli_ctx: typer.Context) -> WorkspaceContext:
+    if isinstance(cli_ctx.obj, WorkspaceContext):
+        return cli_ctx.obj
+    return WorkspaceContext.from_root(_resolve_root())
+
+
+@app.callback()
+def main_callback(
+    cli_ctx: typer.Context,
+    decompiler: Annotated[
+        Decompiler | None,
+        typer.Option("--decompiler", help="Override active decompiler ('ghidra' or 'ida')."),
+    ] = None,
+    ghidra_dir: Annotated[
+        Path | None,
+        typer.Option("--ghidra-dir", help="Override Ghidra installation directory."),
+    ] = None,
+    java_home: Annotated[
+        Path | None,
+        typer.Option("--java-home", help="Override JDK installation directory (JAVA_HOME)."),
+    ] = None,
+    ida_dir: Annotated[
+        Path | None,
+        typer.Option("--ida-dir", help="Override IDA 9.5 installation directory."),
+    ] = None,
+) -> None:
+    """Build WorkspaceContext from twdll.toml and root CLI overrides."""
+    ctx = WorkspaceContext.from_root(_resolve_root())
+    toolchain = replace(
+        ctx.config.toolchain,
+        ghidra_dir=ghidra_dir if ghidra_dir is not None else ctx.config.toolchain.ghidra_dir,
+        java_home=java_home if java_home is not None else ctx.config.toolchain.java_home,
+        ida_dir=ida_dir if ida_dir is not None else ctx.config.toolchain.ida_dir,
+    )
+    config = replace(
+        ctx.config,
+        decompiler=decompiler if decompiler is not None else ctx.config.decompiler,
+        toolchain=toolchain,
+    )
+    cli_ctx.obj = replace(ctx, config=config)
 
 
 def _format_progress_units(event: ProgressEvent) -> str:
@@ -138,6 +182,7 @@ def _print_steps(steps: Sequence[StepSummary]) -> None:
 
 @app.command("init")
 def init_command(
+    cli_ctx: typer.Context,
     decompiler: Annotated[
         Decompiler | None,
         typer.Option("--decompiler", help="Active decompiler to configure ('ghidra' or 'ida')."),
@@ -156,10 +201,13 @@ def init_command(
     ] = False,
 ) -> None:
     """Initialize twdll.toml, provision .twdll/init/tools/, and stage discovered game binaries."""
+    ctx = _get_context(cli_ctx)
+    if decompiler is not None:
+        ctx = replace(ctx, config=replace(ctx.config, decompiler=decompiler))
     with _cli_progress(enabled=not json_output) as on_progress:
         result = init(
-            root=_resolve_root(),
-            decompiler=decompiler,
+            ctx=ctx,
+            persist_config=decompiler is not None,
             skip_toolchain=no_toolchain,
             skip_binaries=no_binaries,
             on_progress=on_progress,
@@ -176,13 +224,14 @@ def init_command(
 
 @app.command("status")
 def status_command(
+    cli_ctx: typer.Context,
     json_output: Annotated[
         bool,
         typer.Option("--json", help="Emit machine-readable JSON output."),
     ] = False,
 ) -> None:
     """Show read-only status of workspace, toolchain, staged/discovered binaries, and steps."""
-    result = status(root=_resolve_root())
+    result = status(ctx=_get_context(cli_ctx))
     if json_output:
         typer.echo(json.dumps(result.to_dict(), indent=2))
         return
@@ -198,6 +247,7 @@ def status_command(
 
 @app.command("clean")
 def clean_command(
+    cli_ctx: typer.Context,
     target: Annotated[
         CleanTarget,
         typer.Argument(help="Step directory to clean: init, analyze, extract, derive, or all."),
@@ -208,7 +258,7 @@ def clean_command(
     ] = False,
 ) -> None:
     """Delete .twdll/<step>/ artifacts created by a pipeline step (or all steps)."""
-    result = clean(root=_resolve_root(), target=target)
+    result = clean(ctx=_get_context(cli_ctx), target=target)
     if json_output:
         typer.echo(json.dumps(result.to_dict(), indent=2))
         return

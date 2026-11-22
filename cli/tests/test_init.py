@@ -6,6 +6,7 @@ import json
 import struct
 import tarfile
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -28,19 +29,20 @@ from twdll.domain import (
     ToolchainConfig,
     ToolSource,
     WorkspaceConfig,
+    WorkspaceContext,
     WorkspacePaths,
+    load_config,
+    resolve_toolchain,
+    verify_binary_header,
 )
 from twdll.init import (
     candidate_steam_roots,
     clean,
     discover_steamapps_dirs,
-    load_config,
     provision_toolchain,
     resolve_all_binaries,
-    resolve_toolchain,
     save_config,
     status,
-    verify_binary_header,
 )
 
 runner = CliRunner()
@@ -226,8 +228,7 @@ def test_toolchain_provisioning_and_resolution_without_path(
     assert ida_status.tools[0].path == ida_default_dir
 
     ws_status = status(
-        paths.root,
-        host_os=host_os,
+        replace(WorkspaceContext.from_root(paths.root), host_os=host_os),
         steam_roots=(),
         ida_dirs=(ida_default_dir,),
     )
@@ -235,7 +236,8 @@ def test_toolchain_provisioning_and_resolution_without_path(
 
 
 def test_step_directory_clean_mapping(tmp_path: Path) -> None:
-    paths = WorkspacePaths(tmp_path)
+    ctx = WorkspaceContext.from_root(tmp_path)
+    paths = ctx.paths
     save_config(tmp_path, WorkspaceConfig())
 
     (paths.uv_dir / "bin").mkdir(parents=True)
@@ -244,7 +246,7 @@ def test_step_directory_clean_mapping(tmp_path: Path) -> None:
         step_dir.mkdir(parents=True)
         (step_dir / "marker.txt").write_text(step.value, encoding="utf-8")
 
-    res_analyze = clean(tmp_path, CleanTarget.ANALYZE)
+    res_analyze = clean(ctx, CleanTarget.ANALYZE)
     assert res_analyze.removed_directories == (paths.analyze_dir,)
     assert not paths.analyze_dir.exists()
     assert paths.init_dir.exists()
@@ -252,12 +254,32 @@ def test_step_directory_clean_mapping(tmp_path: Path) -> None:
     assert paths.derive_dir.exists()
     assert paths.uv_dir.exists()
 
-    res_all = clean(tmp_path, CleanTarget.ALL)
+    res_all = clean(ctx, CleanTarget.ALL)
     assert len(res_all.removed_directories) == 3
     for step in StepName:
         assert not paths.step_dir(step).exists()
     assert paths.uv_dir.exists()
     assert paths.config_file.is_file()
+
+
+def test_workspace_context_from_root_and_cli_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ctx = WorkspaceContext.from_root(tmp_path)
+    assert ctx.root == tmp_path
+    assert ctx.decompiler is Decompiler.GHIDRA
+
+    ida_ctx = replace(ctx, config=replace(ctx.config, decompiler=Decompiler.IDA))
+    assert ida_ctx.decompiler is Decompiler.IDA
+
+    monkeypatch.chdir(tmp_path)
+    override_out = runner.invoke(
+        app,
+        ["--decompiler", Decompiler.IDA.value, "status", "--json"],
+    )
+    assert override_out.exit_code == 0
+    payload = cast("dict[str, object]", json.loads(override_out.stdout))
+    assert payload["decompiler"] == Decompiler.IDA.value
 
 
 def test_cli_init_status_clean_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
