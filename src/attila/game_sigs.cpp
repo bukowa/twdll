@@ -44,7 +44,7 @@
 // Bytes 4-5 ("xor eax,eax", the "unknown key" result) are wildcards so an already
 // patched game file (EB 10) is matched too.
 #define CAMPAIGN_KEY_CONTENT_TAIL_SIG "84 C0 75 04 ? ? 5E C3 B8 80 00 00 00 5E C3 B8 20 00 00 00 5E C3 B8 01 00 00 00 5E C3"
-#define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG"A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
+#define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG "A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
