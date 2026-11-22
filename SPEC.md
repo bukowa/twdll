@@ -212,9 +212,9 @@ cli/
   - `InitResult(config_file: Path, config_created: bool, decompiler: Decompiler, toolchain: ToolchainStatus, binaries: tuple[BinaryStatus, ...])`
   - `CleanResult(target: CleanTarget, removed_directories: tuple[Path, ...])`
 - **Analyze (`analyze`)**:
-  - `AnalyzeTargetResult(binary: BinaryName, decompiler: Decompiler, project_dir: Path, analyzed: bool, skipped: bool)`
+  - `AnalyzeTargetResult(binary: BinaryName, decompiler: Decompiler, project_path: Path, analyzed: bool, skipped: bool)`
   - `AnalyzeResult(decompiler: Decompiler, targets: tuple[AnalyzeTargetResult, ...])`
-- **Extract (`extract`) — SQLite Row Dataclasses (`.twdll/extract/<decompiler>.sqlite`)**:
+- **Extract (`extract`) — SQLite Row Dataclasses (`.twdll/extract/<decompiler>_<binary>.sqlite`)**:
   - `ExtractedBinaryRow(binary: BinaryName, arch: BinaryArch, decompiler: Decompiler, image_base: Address, analyzed_at: str)`
   - `FunctionRow(binary: BinaryName, address: Address, name: str, demangled_name: str | None, size: int, signature: str | None, is_thunk: bool)`
   - `SymbolRow(binary: BinaryName, address: Address, name: str, demangled_name: str | None, kind: SymbolKind)`
@@ -312,11 +312,23 @@ pytest cli/tests
 
 1. **Slice 1 — Foundation & Setup (`init`, `status`, `clean`)** *(Completed)*:
    - `cli/pyproject.toml`, `cli/src/twdll/domain.py`, `cli/src/twdll/database.py`, `cli/src/twdll/init.py`, `cli/src/twdll/cli.py`, `cli/tests/test_init.py`.
-2. **Slice 2 — Decompiler Analysis (`analyze`, Ghidra via `pyghidra`)**:
-   - `cli/src/twdll/analyze.py`, `cli/src/twdll/cli.py` (`analyze` command), `cli/tests/test_analyze.py`.
+2. **Slice 2 — Decompiler Analysis (`analyze`, Single-Process Ghidra via `pyghidra`)**:
+   - **Step 2A (`cli/pyproject.toml`, `cli/src/twdll/domain.py`, `cli/src/twdll/init.py`)**:
+     - Register `twdll.analyze` in `[tool.importlinter]` contracts (`"twdll.init | twdll.analyze"` sibling layer + forbidden `sqlite3` and `typer`/`rich` contracts).
+     - Rename `AnalyzeTargetResult.project_dir` -> `project_path` in `domain.py`.
+     - Move stdlib-only config & read-only toolchain/binary header helpers (`load_config`, `verify_binary_header`, `resolve_toolchain`) into `domain.py` (re-exported in `init.py`) so `init.py` and `analyze.py` stay independent sibling modules without importing each other.
+   - **Step 2B (`cli/src/twdll/analyze.py`)**:
+     - Implement `analyze.analyze(root, binary=None, decompiler=None, on_progress=noop_progress, ghidra_runner=...) -> AnalyzeResult`.
+     - Resolve active decompiler (`twdll.toml` or `decompiler` arg), verify toolchain readiness, and select target(s) (all staged binaries when `binary is None`, or the single requested `BinaryName`).
+     - For `Decompiler.GHIDRA`: skip if both `paths.ghidra_gpr_path(target)` and `paths.ghidra_rep_dir(target)` exist; otherwise run single-process `pyghidra` (`JAVA_HOME` set to resolved JDK 25, `pyghidra.start(install_dir=ghidra_dir)`, `pyghidra.open_program(staged_binary, project_location=paths.analyze_dir, project_name=paths.analyze_stem(Decompiler.GHIDRA, target), analyze=True)`) saving flat into `.twdll/analyze/ghidra_<binary>.gpr` + `.rep/`.
+     - For `Decompiler.IDA`: raise `NotImplementedError` (deferred per Section 6.1).
+   - **Step 2C (`cli/src/twdll/cli.py` & `cli/tests/test_analyze.py`)**:
+     - Wire `twdll analyze [binary] [--decompiler ghidra|ida] [--json]` in `cli.py` with live `rich` progress reporting.
+     - Add unit tests in `cli/tests/test_analyze.py` (target filtering, skip when `.gpr` + `.rep/` exist, injectable `ghidra_runner` execution, missing toolchain/binary errors, deferred IDA error, and CLI `--json` output) and pass all 5 quality checks.
 3. **Slice 3 — Base Fact Extraction (`extract`, Ghidra via `pyghidra`)**:
-   - Step 3A (Verification Task): Empirically verify candidate `extract` tables and columns 1-by-1 against Ghidra 12.2 `pyghidra` APIs.
-   - Step 3B (Implementation): `cli/src/twdll/domain.py`, `cli/src/twdll/database.py`, `cli/src/twdll/extract.py`, `cli/src/twdll/cli.py` (`extract` command), `cli/tests/test_extract.py`.
+   - **Step 3A (Empirical API Verification Task)**: Run a `pyghidra` verification script against local Ghidra 12.2 to inspect and verify every candidate table and column 1-by-1 against the real decompiler API before finalizing the SQLite schema.
+   - **Step 3B (`cli/src/twdll/domain.py` & `cli/src/twdll/database.py`)**: Implement the verified row dataclasses and per-binary SQLite schema/writers (`.twdll/extract/<decompiler>_<binary>.sqlite`), writing the completion proof and `binary_sha256` into `meta` only in the final commit.
+   - **Step 3C (`cli/src/twdll/extract.py`, `cli/src/twdll/cli.py`, `cli/tests/test_extract.py`)**: Implement `extract.extract(...)`, wire `twdll extract [binary] [--decompiler ghidra|ida] [--json]`, and verify all 5 quality checks.
 4. **Slice 4 — Derivations (`derive`)** *(Deferred until Slices 2 & 3 complete)*:
    - `cli/src/twdll/derive.py`, `cli/src/twdll/cli.py` (`derive` command), `cli/tests/test_derive.py`.
 5. **Slice 5 — Query Commands (`search`, `show`, `sql`)** *(Deferred until Slices 2 & 3 complete)*:
