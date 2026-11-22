@@ -77,6 +77,11 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#AllowCustomCampaignKeys">AllowCustomCampaignKeys ([enabled=true])</a></td>
+	<td class="summary">Makes the game treat campaigns with custom keys as base-game content instead of
+unowned DLC.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#ExitGame">ExitGame ()</a></td>
 	<td class="summary">Requests the engine to cleanly exit the game process to Windows.</td>
 	</tr>
@@ -107,6 +112,10 @@
 	<tr>
 	<td class="name" nowrap><a href="#GetReinforcementCap">GetReinforcementCap ()</a></td>
 	<td class="summary">Returns the currently applied reinforcement cap override, or nil if the game default is in effect.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#IsCustomCampaignKeysAllowed">IsCustomCampaignKeysAllowed ()</a></td>
+	<td class="summary">Returns whether campaigns with custom keys are currently treated as base-game content.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#LoadGame">LoadGame (filename)</a></td>
@@ -142,6 +151,46 @@ after this call.</td>
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
+    <dt>
+    <a name = "AllowCustomCampaignKeys"></a>
+    <strong>AllowCustomCampaignKeys ([enabled=true])</strong>
+    </dt>
+    <dd>
+    Makes the game treat campaigns with custom keys as base-game content instead of
+unowned DLC.  Without it, a mod campaign whose key is not <code>main_attila</code>/<code>main_attila_map</code>
+(or a DLC key) is shown as locked DLC, missing from multiplayer map lists and refused
+when joining a multiplayer campaign. Vanilla and DLC campaigns are unaffected.</p>
+
+<p>Call it from the frontend (main menu) script so it is in place before campaign
+selection and the multiplayer lobby; every multiplayer player needs it. It stays in
+effect until disabled or the game exits (it is not rolled back on Lua teardown).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to allow custom keys, false to restore the vanilla check
+         (<em>default</em> true)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true if custom keys are now allowed, false if not, nil if the check was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In the frontend script:
+</span>twdll.world.<span class="function-name">AllowCustomCampaignKeys</span>()</pre>
+    </ul>
+
+</dd>
     <dt>
     <a name = "ExitGame"></a>
     <strong>ExitGame ()</strong>
@@ -334,6 +383,30 @@ after this call.</td>
 <span class="keyword">if</span> cap <span class="keyword">then</span>
     <span class="comment">-- An override is currently active
 </span><span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "IsCustomCampaignKeysAllowed"></a>
+    <strong>IsCustomCampaignKeysAllowed ()</strong>
+    </dt>
+    <dd>
+    Returns whether campaigns with custom keys are currently treated as base-game content.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true if allowed, false if the vanilla check is active, nil if the check was not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> twdll.world.<span class="function-name">IsCustomCampaignKeysAllowed</span>() <span class="keyword">then</span> ... <span class="keyword">end</span></pre>
     </ul>
 
 </dd>

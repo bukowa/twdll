@@ -482,7 +482,98 @@ static int ExitGame(lua_State* L) {
     return 1;
 }
 
+// ---- Custom campaign keys ---------------------------------------------------
+// The engine maps a campaign key to a content flag with hard-coded string compares:
+// main_attila(_map) -> 1 (base game), bel_attila(_map) -> 0x20, cha_attila(_map) -> 0x80,
+// anything else -> 0. Flag 0 means "DLC not owned": a mod campaign with its own key is
+// shown as locked DLC (purchase dialog), is filtered out of multiplayer map lists and
+// refused when joining a multiplayer campaign. Patching the final "xor eax,eax" (33 C0)
+// into "jmp +0x10" (EB 10) makes unknown keys return 1, the base-game flag. Vanilla
+// keys keep their flags, so vanilla and DLC campaigns behave exactly as before.
+//
+// Unlike other twdll patches this one is NOT rolled back on Lua teardown: the
+// ownership checks run while the game moves between Lua states (frontend lobby ->
+// campaign load), and rolling back in between would lock the campaign mid-load.
+// It stays until AllowCustomCampaignKeys(false) or the process exits.
+namespace {
+constexpr size_t  kKeyPatchOffset = 4;
+constexpr uint8_t kKeyOrig[2]  = {0x33, 0xC0}; // xor eax, eax  -> return 0 (locked)
+constexpr uint8_t kKeyPatch[2] = {0xEB, 0x10}; // jmp +0x10     -> return 1 (base game)
+} // namespace
+
+// Returns 1 if unknown keys are treated as base game, 0 if not, -1 if the code was not found.
+static int campaign_key_patch_state() {
+    if (!g_campaign_key_content_tail_addr) return -1;
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(g_campaign_key_content_tail_addr + kKeyPatchOffset);
+    if (memcmp(p, kKeyPatch, 2) == 0) return 1;
+    if (memcmp(p, kKeyOrig, 2) == 0) return 0;
+    return -1;
+}
+
+static bool set_campaign_key_patch(bool enable) {
+    const int state = campaign_key_patch_state();
+    if (state < 0) {
+        Log("[twdll] AllowCustomCampaignKeys: campaign key check not found (other game build?) - not patched");
+        return false;
+    }
+    if (state == (enable ? 1 : 0)) return true;
+    uint8_t* p = reinterpret_cast<uint8_t*>(g_campaign_key_content_tail_addr + kKeyPatchOffset);
+    DWORD old_protect = 0;
+    if (!VirtualProtect(p, 2, PAGE_EXECUTE_READWRITE, &old_protect)) {
+        Log("[twdll] AllowCustomCampaignKeys: VirtualProtect failed (%lu)", GetLastError());
+        return false;
+    }
+    memcpy(p, enable ? kKeyPatch : kKeyOrig, 2);
+    VirtualProtect(p, 2, old_protect, &old_protect);
+    FlushInstructionCache(GetCurrentProcess(), p, 2);
+    Log("[twdll] AllowCustomCampaignKeys: %s at 0x%08X", enable ? "enabled" : "disabled",
+        static_cast<unsigned int>(reinterpret_cast<uintptr_t>(p)));
+    return true;
+}
+
+/***
+Makes the game treat campaigns with custom keys as base-game content instead of
+unowned DLC. Without it, a mod campaign whose key is not `main_attila`/`main_attila_map`
+(or a DLC key) is shown as locked DLC, missing from multiplayer map lists and refused
+when joining a multiplayer campaign. Vanilla and DLC campaigns are unaffected.
+
+Call it from the frontend (main menu) script so it is in place before campaign
+selection and the multiplayer lobby; every multiplayer player needs it. It stays in
+effect until disabled or the game exits (it is not rolled back on Lua teardown).
+@function AllowCustomCampaignKeys
+@tparam[opt=true] boolean enabled true to allow custom keys, false to restore the vanilla check
+@treturn boolean|nil true if custom keys are now allowed, false if not, nil if the check was not found in this game build
+@usage
+-- In the frontend script:
+twdll.world.AllowCustomCampaignKeys()
+*/
+static int AllowCustomCampaignKeys(lua_State* L) {
+    bool enable = true;
+    if (l_type(L, 1) == LUA_TBOOLEAN) enable = l_tobool(L, 1);
+    set_campaign_key_patch(enable);
+    const int state = campaign_key_patch_state();
+    if (state < 0) { l_pushnil(L); return 1; }
+    l_pushboolean(L, state == 1);
+    return 1;
+}
+
+/***
+Returns whether campaigns with custom keys are currently treated as base-game content.
+@function IsCustomCampaignKeysAllowed
+@treturn boolean|nil true if allowed, false if the vanilla check is active, nil if the check was not found
+@usage
+if twdll.world.IsCustomCampaignKeysAllowed() then ... end
+*/
+static int IsCustomCampaignKeysAllowed(lua_State* L) {
+    const int state = campaign_key_patch_state();
+    if (state < 0) { l_pushnil(L); return 1; }
+    l_pushboolean(L, state == 1);
+    return 1;
+}
+
 extern const luaL_Reg world_functions[] = {
+    {"AllowCustomCampaignKeys",     AllowCustomCampaignKeys},
+    {"IsCustomCampaignKeysAllowed", IsCustomCampaignKeysAllowed},
     {"GetMemoryAddress",    GetMemoryAddress},
     {"GetFactionCount",     GetFactionCount},
     {"GetMaxUnitsInArmy",   GetMaxUnitsInArmy},

@@ -39,7 +39,12 @@
 #define RECRUIT_CHARACTER_ENTRY_IMPL_SIG "83 EC 20 53 8B 5C 24 ? 55 56 8B F1 8B 43"
 #define KILL_INSTANT_AND_COMMANDED_UNIT_SIG "83 EC 24 56 8B F1 57 8D 8E"
 #define UPDATE_CARD_INFO_SIG "56 8B F1 57 8B 8E AC 00 00 00 E8 ? ? ? ? 8B 7C 24 0C 84 C0 75 0F 8B 86 AC 00 00 00 8B 80 04 01 00 00"
-#define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG "A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
+// Tail of the function that maps a campaign key to its content (DLC) flag:
+//   test al,al / jnz +4 / xor eax,eax / pop esi / ret / mov eax,0x80 ... / mov eax,0x20 ... / mov eax,1 / pop esi / ret
+// Bytes 4-5 ("xor eax,eax", the "unknown key" result) are wildcards so an already
+// patched game file (EB 10) is matched too.
+#define CAMPAIGN_KEY_CONTENT_TAIL_SIG "84 C0 75 04 ? ? 5E C3 B8 80 00 00 00 5E C3 B8 20 00 00 00 5E C3 B8 01 00 00 00 5E C3"
+#define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG"A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -61,6 +66,7 @@ uintptr_t          g_settlement_cb_initialize_addr = 0;
 uintptr_t          g_make_occupation_decision_addr = 0;
 uintptr_t          g_update_card_info_addr = 0;
 uintptr_t          g_battle_health_bar_on_update_pulse_addr = 0;
+uintptr_t          g_campaign_key_content_tail_addr = 0;
 static uintptr_t   g_max_units_init_insn_addr = 0;
 static int*        g_max_units_in_army = nullptr;
 static int*        g_max_units_in_navy = nullptr;
@@ -161,5 +167,6 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"CHARACTER::kill_instant_and_commanded_unit",         (void**)&g_kill_instant_and_commanded_unit, KILL_INSTANT_AND_COMMANDED_UNIT_SIG},
     {"UIDLL::BattleLandUnitCardStyle::update_information_changed", (void**)&g_update_card_info_addr, UPDATE_CARD_INFO_SIG},
     {"UIDLL::BattleHealthBar::OnUpdatePulse",              (void**)&g_battle_health_bar_on_update_pulse_addr, BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG},
+    {"campaign_key_to_content_flag (tail)",                (void**)&g_campaign_key_content_tail_addr, CAMPAIGN_KEY_CONTENT_TAIL_SIG},
     {nullptr, nullptr, nullptr}
 };
