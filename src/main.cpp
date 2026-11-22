@@ -36,6 +36,7 @@ extern void register_tweaker_methods(lua_State *L);
 extern void uninstall_tweakers();
 
 static bool g_is_initialized = false;
+static bool g_api_resolved = false;   // game/Lua function addresses, resolved once per process
 
 // Number of live Lua states that opened the runtime (frontend, campaign, battle...).
 // The game creates and destroys these independently and they can overlap, so the
@@ -103,9 +104,18 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     runtime_pin_module();
 
     if (!g_is_initialized) {
-        Log("[twdll] First load: initializing Game API and hooks");
-        initialize_lua_api();
-        initialize_game_api();
+        // Signature scanning walks the whole game image once per signature (~0.9 s for
+        // ~57 signatures). empire.retail.dll never moves or changes while the process
+        // runs and nothing clears the resolved addresses on uninstall, so resolve them
+        // once per process; later re-installs (new campaign, post-battle reload) only
+        // re-install the hooks.
+        if (!g_api_resolved) {
+            Log("[twdll] First load: resolving Game API");
+            initialize_lua_api();
+            initialize_game_api();
+            g_api_resolved = true;
+        }
+        Log("[twdll] Installing hooks");
         install_campaign_hooks();
         g_is_initialized = true;
     }

@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - Engine hooks and tweakers now stay active while any Lua state that loaded twdll is alive (frontend, campaign or battle) and are rolled back when the last one closes; previously closing the first state that loaded the DLL removed them for every other state. The DLL also pins itself in memory so it is never unloaded while hooks point into it.
+- Faster start-up: game function addresses are resolved once per game process instead of on every hook re-install (new campaign, post-battle reload), and the signature, string and `push` reference scans skip ahead to candidate bytes instead of testing every offset (about 0.9 s down to about 0.3 s for the first load on Attila).
 - `luaopen_twdll` now returns `nil` plus a reason instead of installing a second set of hooks when another twdll module is already active in the game process.
 
 ### Fixed
