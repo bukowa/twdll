@@ -82,6 +82,10 @@
 unowned DLC.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#AllowGiftRegion">AllowGiftRegion ([enabled=true[, options]])</a></td>
+	<td class="summary">Offers the vanilla "Gift Region" diplomacy option between any factions, not only to hordes.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#ExitGame">ExitGame ()</a></td>
 	<td class="summary">Requests the engine to cleanly exit the game process to Windows.</td>
 	</tr>
@@ -92,6 +96,10 @@ unowned DLC.</td>
 	<tr>
 	<td class="name" nowrap><a href="#GetFactionCount">GetFactionCount ()</a></td>
 	<td class="summary">Gets the total number of factions existing in the current campaign world.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetGiftRegionState">GetGiftRegionState ()</a></td>
+	<td class="summary">Returns which Gift Region unlocks are active.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetMaxTraits">GetMaxTraits ()</a></td>
@@ -192,6 +200,53 @@ effect until disabled or the game exits (it is not rolled back on Lua teardown).
 
 </dd>
     <dt>
+    <a name = "AllowGiftRegion"></a>
+    <strong>AllowGiftRegion ([enabled=true[, options]])</strong>
+    </dt>
+    <dd>
+    Offers the vanilla "Gift Region" diplomacy option between any factions, not only to hordes.
+By default it opens the option for the faction proposing the deal (the in-game tested
+case). Options add the reverse direction (the other side may give regions) and let
+hordes be givers; these two are not tested in game yet. A faction capital still cannot
+be gifted. Every multiplayer player must apply the same settings. Rolled back when the
+campaign's Lua state is torn down; call it again on every campaign load.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to allow, false to restore the vanilla checks
+         (<em>default</em> true)
+        </li>
+        <li><span class="parameter">options</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+         <code>{ reverse = bool, horde_givers = bool }</code>
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true if applied, false if it could not be applied, nil if the code was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In the campaign script:
+</span>twdll.world.<span class="function-name">AllowGiftRegion</span>()
+<span class="comment">-- Also let the other side offer regions, and hordes give them:
+</span>twdll.world.<span class="function-name">AllowGiftRegion</span>(<span class="keyword">true</span>, { reverse = <span class="keyword">true</span>, horde_givers = <span class="keyword">true</span> })
+<span class="comment">-- Back to vanilla:
+</span>twdll.world.<span class="function-name">AllowGiftRegion</span>(<span class="keyword">false</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "ExitGame"></a>
     <strong>ExitGame ()</strong>
     </dt>
@@ -260,6 +315,31 @@ effect until disabled or the game exits (it is not rolled back on Lua teardown).
     <h3>Usage:</h3>
     <ul>
         <pre class="example"><span class="keyword">local</span> total_factions = twdll.world.<span class="function-name">GetFactionCount</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetGiftRegionState"></a>
+    <strong>GetGiftRegionState ()</strong>
+    </dt>
+    <dd>
+    Returns which Gift Region unlocks are active.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a> or <span class="type">nil</span></span>
+        <code>{ any = bool, reverse = bool, horde_givers = bool }</code>, or nil if the code was not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> s = twdll.world.<span class="function-name">GetGiftRegionState</span>()
+<span class="keyword">if</span> s <span class="keyword">and</span> s.any <span class="keyword">then</span> ... <span class="keyword">end</span></pre>
     </ul>
 
 </dd>

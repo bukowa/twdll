@@ -571,7 +571,172 @@ static int IsCustomCampaignKeysAllowed(lua_State* L) {
     return 1;
 }
 
+// ---- Gift Region diplomacy ---------------------------------------------------
+// Vanilla offers "Gift Region" only to hordes: the availability check (called with
+// the two factions of a negotiation) requires, for each direction, a giver that is
+// not a horde and a receiver that is a horde passing a second horde test. The
+// giftable-region list builder then keeps only regions on the receiver's own list.
+// Patching those conditional jumps opens the option to every faction.
+//
+//   group kCore (tested in game): direction 1 receiver checks + region list filter
+//   group kReverse: the same receiver checks for the other direction
+//   group kHordeGivers: lets a horde be the giver (both directions)
+//
+// Rolled back with the other world patches when the last Lua state closes; the
+// campaign script re-applies it on every load.
+namespace {
+enum GiftGroup : int { kCore = 1, kReverse = 2, kHordeGivers = 4 };
+
+struct GiftPatch {
+    uintptr_t* base;
+    size_t     offset;
+    uint8_t    orig[2];
+    uint8_t    patched[2];
+    int        group;
+    bool       written;   // true if twdll changed these bytes (restore only those)
+};
+
+GiftPatch g_gift_patches[] = {
+    {&g_gift_region_availability_addr, 0x30, {0x74, 0x37}, {0x90, 0x90}, kCore,        false}, // receiver must be a horde
+    {&g_gift_region_availability_addr, 0x3B, {0x74, 0x2C}, {0x90, 0x90}, kCore,        false}, // receiver second horde test
+    {&g_gift_region_list_filter_addr,  0x24, {0x74, 0x44}, {0xEB, 0x44}, kCore,        false}, // only receiver-listed regions
+    {&g_gift_region_availability_addr, 0x86, {0x74, 0x3D}, {0x90, 0x90}, kReverse,     false},
+    {&g_gift_region_availability_addr, 0x91, {0x74, 0x32}, {0x90, 0x90}, kReverse,     false},
+    {&g_gift_region_availability_addr, 0x25, {0x75, 0x42}, {0x90, 0x90}, kHordeGivers, false}, // giver must not be a horde
+    {&g_gift_region_availability_addr, 0x7B, {0x75, 0x48}, {0x90, 0x90}, kHordeGivers, false},
+};
+
+// 1 = patched, 0 = original, -1 = not resolved or unexpected bytes
+int gift_patch_state(const GiftPatch& gp) {
+    if (!*gp.base) return -1;
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(*gp.base + gp.offset);
+    if (memcmp(p, gp.patched, 2) == 0) return 1;
+    if (memcmp(p, gp.orig, 2) == 0) return 0;
+    return -1;
+}
+
+bool gift_patch_write(GiftPatch& gp, bool patch) {
+    uint8_t* p = reinterpret_cast<uint8_t*>(*gp.base + gp.offset);
+    DWORD old_protect = 0;
+    if (!VirtualProtect(p, 2, PAGE_EXECUTE_READWRITE, &old_protect)) return false;
+    memcpy(p, patch ? gp.patched : gp.orig, 2);
+    VirtualProtect(p, 2, old_protect, &old_protect);
+    FlushInstructionCache(GetCurrentProcess(), p, 2);
+    gp.written = patch;
+    return true;
+}
+
+// Applies (wanted groups) and removes (other groups) atomically: nothing is written
+// unless every site involved has the expected bytes.
+bool set_gift_region_groups(int groups) {
+    for (const GiftPatch& gp : g_gift_patches) {
+        if (gift_patch_state(gp) < 0) {
+            Log("[twdll] AllowGiftRegion: code not found or unexpected bytes (other game build?) - nothing patched");
+            return false;
+        }
+    }
+    for (GiftPatch& gp : g_gift_patches) {
+        const bool want = (groups & gp.group) != 0;
+        const int  state = gift_patch_state(gp);
+        if (want && state == 0) {
+            if (!gift_patch_write(gp, true)) return false;
+        } else if (!want && state == 1 && gp.written) {
+            // only undo what twdll wrote; a pre-patched process/file is left alone
+            if (!gift_patch_write(gp, false)) return false;
+        }
+    }
+    Log("[twdll] AllowGiftRegion: groups = 0x%X", groups);
+    return true;
+}
+
+int active_gift_region_groups() {
+    int active = kCore | kReverse | kHordeGivers;
+    for (const GiftPatch& gp : g_gift_patches) {
+        if (gift_patch_state(gp) != 1) active &= ~gp.group;
+    }
+    return active;
+}
+
+bool opt_bool(lua_State* L, int table_idx, const char* key) {
+    if (l_type(L, table_idx) != LUA_TTABLE) return false;
+    l_getfield(L, table_idx, key);
+    const bool v = l_type(L, -1) == LUA_TBOOLEAN && l_tobool(L, -1);
+    l_pop(L, 1);
+    return v;
+}
+} // namespace
+
+// Restores the Gift Region bytes twdll changed (called from uninstall_world_hook).
+static void restore_gift_region() {
+    bool any = false;
+    for (GiftPatch& gp : g_gift_patches) {
+        if (gp.written && gift_patch_state(gp) == 1) {
+            gift_patch_write(gp, false);
+            any = true;
+        }
+        gp.written = false;
+    }
+    if (any) Log("[twdll] AllowGiftRegion: restored vanilla diplomacy checks");
+}
+
+/***
+Offers the vanilla "Gift Region" diplomacy option between any factions, not only to hordes.
+By default it opens the option for the faction proposing the deal (the in-game tested
+case). Options add the reverse direction (the other side may give regions) and let
+hordes be givers; these two are not tested in game yet. A faction capital still cannot
+be gifted. Every multiplayer player must apply the same settings. Rolled back when the
+campaign's Lua state is torn down; call it again on every campaign load.
+@function AllowGiftRegion
+@tparam[opt=true] boolean enabled true to allow, false to restore the vanilla checks
+@tparam[opt] table options `{ reverse = bool, horde_givers = bool }`
+@treturn boolean|nil true if applied, false if it could not be applied, nil if the code was not found in this game build
+@usage
+-- In the campaign script:
+twdll.world.AllowGiftRegion()
+-- Also let the other side offer regions, and hordes give them:
+twdll.world.AllowGiftRegion(true, { reverse = true, horde_givers = true })
+-- Back to vanilla:
+twdll.world.AllowGiftRegion(false)
+*/
+static int AllowGiftRegion(lua_State* L) {
+    bool enable = true;
+    if (l_type(L, 1) == LUA_TBOOLEAN) enable = l_tobool(L, 1);
+    int groups = 0;
+    if (enable) {
+        groups = kCore;
+        if (opt_bool(L, 2, "reverse")) groups |= kReverse;
+        if (opt_bool(L, 2, "horde_givers")) groups |= kHordeGivers;
+    }
+    if (!g_gift_region_availability_addr || !g_gift_region_list_filter_addr) {
+        Log("[twdll] AllowGiftRegion: signatures not resolved");
+        l_pushnil(L);
+        return 1;
+    }
+    l_pushboolean(L, set_gift_region_groups(groups));
+    return 1;
+}
+
+/***
+Returns which Gift Region unlocks are active.
+@function GetGiftRegionState
+@treturn table|nil `{ any = bool, reverse = bool, horde_givers = bool }`, or nil if the code was not found
+@usage
+local s = twdll.world.GetGiftRegionState()
+if s and s.any then ... end
+*/
+static int GetGiftRegionState(lua_State* L) {
+    if (!g_gift_region_availability_addr || !g_gift_region_list_filter_addr) { l_pushnil(L); return 1; }
+    const int active = active_gift_region_groups();
+    l_createtable(L, 0, 3);
+    l_pushboolean(L, (active & kCore) != 0);         l_setfield(L, -2, "any");
+    l_pushboolean(L, (active & kReverse) != 0);      l_setfield(L, -2, "reverse");
+    l_pushboolean(L, (active & kHordeGivers) != 0);  l_setfield(L, -2, "horde_givers");
+    return 1;
+}
+
 extern const luaL_Reg world_functions[] = {
+    {"AllowGiftRegion",             AllowGiftRegion},
+    {"GetGiftRegionState",          GetGiftRegionState},
     {"AllowCustomCampaignKeys",     AllowCustomCampaignKeys},
     {"IsCustomCampaignKeysAllowed", IsCustomCampaignKeysAllowed},
     {"GetMemoryAddress",    GetMemoryAddress},
@@ -614,6 +779,7 @@ void uninstall_world_hook() {
         g_orig_max_traits = -1;
     }
     set_reinforcement_cap(true, 0);
+    restore_gift_region();
 
     if (world_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(world_ctor_addr));
