@@ -6,6 +6,7 @@
 #include "common/runtime.h"
 
 #include <string>
+#include <cstring>
 
 extern const luaL_Reg unit_functions[];
 extern const luaL_Reg character_functions[];
@@ -57,15 +58,22 @@ static int l_twdll_gc_cleanup(lua_State*) {
     return 0;
 }
 
-// Registers a function table as global <namespace>[_suffix] and leaves it on the stack.
-static void register_ns(lua_State* L, const char* suffix, const luaL_Reg* fns) {
-    std::string name = TWDLL_NAMESPACE;
-    if (suffix) {
-        name += "_";
-        name += suffix;
-    }
-    l_register(L, name.c_str(), fns);
+// Global table names are written as "twdll" / "twdll_<module>" (as upstream does) and
+// mapped to "<namespace>" / "<namespace>_<module>" here, so namespaced builds need no
+// change to the registration lines in luaopen_twdll and new modules are covered too.
+static std::string ns_global_name(const char* name) {
+    static const char kDefault[] = "twdll";
+    const size_t n = sizeof(kDefault) - 1;
+    if (strncmp(name, kDefault, n) == 0 && (name[n] == '\0' || name[n] == '_'))
+        return std::string(TWDLL_NAMESPACE) + (name + n);
+    return name;
 }
+
+static void register_ns(lua_State* L, const char* name, const luaL_Reg* fns) {
+    g_game_luaL_register(L, ns_global_name(name).c_str(), fns);
+}
+#undef l_register
+#define l_register register_ns
 
 static const char* dll_reason_name(DWORD reason) {
     switch (reason) {
@@ -145,51 +153,51 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     ++g_lua_state_count;
     Log("[twdll] luaopen_twdll: new Lua state, %d state(s) now using the runtime", g_lua_state_count);
 
-    register_ns(L, nullptr, twdll_core);
+    l_register(L, "twdll", twdll_core);
     l_setfield(L, -2, "core");
 
-    register_ns(L, "character", character_functions);
+    l_register(L, "twdll_character", character_functions);
     l_setfield(L, -2, "character");
     register_character_methods(L);
     register_art_set_methods(L);
 
-    register_ns(L, "unit", unit_functions);
+    l_register(L, "twdll_unit", unit_functions);
     l_setfield(L, -2, "unit");
     register_unit_methods(L);
 
-    register_ns(L, "faction", faction_functions);
+    l_register(L, "twdll_faction", faction_functions);
     l_setfield(L, -2, "faction");
     register_faction_methods(L);
     register_political_party_methods(L);
     register_political_party_list_methods(L);
 
-    register_ns(L, "military_force", military_force_functions);
+    l_register(L, "twdll_military_force", military_force_functions);
     l_setfield(L, -2, "military_force");
     register_military_force_methods(L);
 
-    register_ns(L, "region", region_functions);
+    l_register(L, "twdll_region", region_functions);
     l_setfield(L, -2, "region");
     register_region_methods(L);
     register_slot_methods(L);
     register_religion_methods(L);
     register_religion_list_methods(L);
 
-    register_ns(L, "model", model_functions);
+    l_register(L, "twdll_model", model_functions);
     l_setfield(L, -2, "model");
 
-    register_ns(L, "world", world_functions);
+    l_register(L, "twdll_world", world_functions);
     l_setfield(L, -2, "world");
 
-    register_ns(L, "battle", battle_functions);
+    l_register(L, "twdll_battle", battle_functions);
     l_setfield(L, -2, "battle");
 
-    register_ns(L, "campaign_ui", campaign_ui_functions);
+    l_register(L, "twdll_campaign_ui", campaign_ui_functions);
     l_setfield(L, -2, "campaign_ui");
 
-    register_ns(L, "cai", cai_functions_export);
+    l_register(L, "twdll_cai", cai_functions_export);
     l_setfield(L, -2, "cai");
 
-    register_ns(L, "tweakers", tweaker_functions);
+    l_register(L, "twdll_tweakers", tweaker_functions);
     register_tweaker_methods(L);
     l_setfield(L, -2, "tweakers");
 
