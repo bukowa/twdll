@@ -6,7 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Extended the game's military force interface (`MILITARY_FORCE_SCRIPT_INTERFACE`) with `AppointCharacter(character, [options])` — assigns a character as the commanding general of the army, creating their bodyguard unit (supports `{ bodyguard_key = string }`) and returning the previous general to the faction court.
+- Added `twdll.core.GetApiVersion()`, `twdll.core.GetNamespace()` and `twdll.core.GetModulePath()` — return the DLL's Lua API version (currently `2`), the namespace it was built with and the full path of the loaded DLL file.
+- Added `twdll.core.CleanupOldFiles()` (namespaced builds only) — deletes older `<namespace>_*.dll` files left next to the running DLL and returns an array of the deleted file names, or `nil` plus a reason.
+- Added the `TWDLL_NAMESPACE` build option — mods that bundle their own build can rename the global tables (`<ns>`, `<ns>_character`, ...), the Lua registry key and the log file (`<ns>.log`) so they cannot collide with another mod's twdll.
 - Added `twdll.battle.EnableSmeHealthBars([enabled=true])` — updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.
+
+### Changed
+- Engine hooks and tweakers now stay active while any Lua state that loaded twdll is alive (frontend, campaign or battle) and are rolled back when the last one closes; previously closing the first state that loaded the DLL removed them for every other state. The DLL also pins itself in memory so it is never unloaded while hooks point into it.
+- `luaopen_twdll` now returns `nil` plus a reason instead of installing a second set of hooks when another twdll module is already active in the game process.
 
 ### Fixed
 - Fixed `twdll.tweakers.SetInt(name, val)` returning `true` when setting non-existent tweaker names, properly returning `false` on unresolved names matching `SetFloat` and `SetBool`.

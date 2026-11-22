@@ -2,7 +2,7 @@
 
 #include <string>
 
-// Logs a formatted message to twdll.log
+// Logs a formatted message to <namespace>.log (twdll.log by default)
 void Log(const char* format, ...);
 
 // Logs a simple string

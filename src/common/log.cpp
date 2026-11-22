@@ -5,9 +5,11 @@
 #include <mutex>
 #include <windows.h>
 #include <share.h>
+#include "runtime.h"
 
 static std::mutex g_log_mutex;
-static const char* LOG_FILE = "twdll.log";
+// <namespace>.log in the working directory (twdll.log for the public build).
+static const char* LOG_FILE = TWDLL_NAMESPACE ".log";
 
 void Log(const char* format, ...) {
     std::lock_guard<std::mutex> lock(g_log_mutex);

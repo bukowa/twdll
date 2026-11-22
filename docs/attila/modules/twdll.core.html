@@ -77,16 +77,34 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#CleanupOldFiles">CleanupOldFiles ()</a></td>
+	<td class="summary">Deletes older builds of this DLL that a mod left next to it: every
+ <code>&lt;namespace&gt;_*.dll</code> in the DLL's folder except the running file.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GameBuild">GameBuild ()</a></td>
 	<td class="summary">Returns the target game build name (e.g.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetApiVersion">GetApiVersion ()</a></td>
+	<td class="summary">Returns the Lua API version of this DLL.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetBuildSha">GetBuildSha ()</a></td>
 	<td class="summary">Returns the git commit SHA hash from which the DLL was compiled.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#GetModulePath">GetModulePath ()</a></td>
+	<td class="summary">Returns the full path of the loaded DLL file.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetNamespace">GetNamespace ()</a></td>
+	<td class="summary">Returns the namespace this DLL was built with: the name of its global tables,
+ its Lua registry key and its log file (<code>&quot;twdll&quot;</code> for the public build).</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#Log">Log (...)</a></td>
-	<td class="summary">Log a message or arbitrary values to <code>twdll.log</code>.</td>
+	<td class="summary">Log a message or arbitrary values to <code>twdll.log</code> (<code>&lt;namespace&gt;.log</code> for namespaced builds).</td>
 	</tr>
 </table>
 
@@ -97,6 +115,33 @@
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
+    <dt>
+    <a name = "CleanupOldFiles"></a>
+    <strong>CleanupOldFiles ()</strong>
+    </dt>
+    <dd>
+    Deletes older builds of this DLL that a mod left next to it: every
+ <code>&lt;namespace&gt;_*.dll</code> in the DLL's folder except the running file.  Files still in
+ use (for example by another running game) are skipped. Only available in
+ namespaced builds, so the public build can never delete another mod's DLL.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a> or <span class="type">nil</span></span>
+        array of deleted file names, or nil plus a reason
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> deleted = tdd_twdll.core.<span class="function-name">CleanupOldFiles</span>()</pre>
+    </ul>
+
+</dd>
     <dt>
     <a name = "GameBuild"></a>
     <strong>GameBuild ()</strong>
@@ -118,6 +163,31 @@
     <h3>Usage:</h3>
     <ul>
         <pre class="example"><span class="keyword">local</span> game_name = twdll.core.<span class="function-name">GameBuild</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetApiVersion"></a>
+    <strong>GetApiVersion ()</strong>
+    </dt>
+    <dd>
+    Returns the Lua API version of this DLL.  It increases whenever functions are
+ added or changed in a way a caller may need to check for.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span></span>
+        API version
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> twdll.core.<span class="function-name">GetApiVersion</span>() &lt; <span class="number">2</span> <span class="keyword">then</span> ... <span class="keyword">end</span></pre>
     </ul>
 
 </dd>
@@ -146,11 +216,60 @@
 
 </dd>
     <dt>
+    <a name = "GetModulePath"></a>
+    <strong>GetModulePath ()</strong>
+    </dt>
+    <dd>
+    Returns the full path of the loaded DLL file.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        absolute path (UTF-8)
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.core.<span class="function-name">Log</span>(<span class="string">"loaded from"</span>, twdll.core.<span class="function-name">GetModulePath</span>())</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetNamespace"></a>
+    <strong>GetNamespace ()</strong>
+    </dt>
+    <dd>
+    Returns the namespace this DLL was built with: the name of its global tables,
+ its Lua registry key and its log file (<code>&quot;twdll&quot;</code> for the public build).
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        namespace
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> ns = twdll.core.<span class="function-name">GetNamespace</span>() <span class="comment">-- "twdll"</span></pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "Log"></a>
     <strong>Log (...)</strong>
     </dt>
     <dd>
-    Log a message or arbitrary values to <code>twdll.log</code>.
+    Log a message or arbitrary values to <code>twdll.log</code> (<code>&lt;namespace&gt;.log</code> for namespaced builds).
  Accepts any number of arguments of any type, converting them via Lua tostring.
 
 

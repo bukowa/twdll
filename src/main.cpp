@@ -3,6 +3,9 @@
 #include "common/campaign_hooks.h"
 #include "common/game_api.h"
 #include "attila/security.h"
+#include "common/runtime.h"
+
+#include <string>
 
 extern const luaL_Reg unit_functions[];
 extern const luaL_Reg character_functions[];
@@ -34,14 +37,33 @@ extern void uninstall_tweakers();
 
 static bool g_is_initialized = false;
 
+// Number of live Lua states that opened the runtime (frontend, campaign, battle...).
+// The game creates and destroys these independently and they can overlap, so the
+// engine hooks are installed when the first state opens and rolled back only when
+// the last one is collected. Tying them to "whichever state loaded first" would
+// let one state's teardown silently disable the hooks another state still uses.
+static int g_lua_state_count = 0;
+
 static int l_twdll_gc_cleanup(lua_State*) {
-    if (g_is_initialized) {
-        Log("[twdll] GC destroying Lua state — uninstalling campaign hooks and tweakers");
+    if (g_lua_state_count > 0) --g_lua_state_count;
+    Log("[twdll] GC destroying Lua state — %d state(s) still using the runtime", g_lua_state_count);
+    if (g_lua_state_count == 0 && g_is_initialized) {
+        Log("[twdll] Last Lua state closed — uninstalling campaign hooks and tweakers");
         uninstall_tweakers();
         uninstall_campaign_hooks();
         g_is_initialized = false;
     }
     return 0;
+}
+
+// Registers a function table as global <namespace>[_suffix] and leaves it on the stack.
+static void register_ns(lua_State* L, const char* suffix, const luaL_Reg* fns) {
+    std::string name = TWDLL_NAMESPACE;
+    if (suffix) {
+        name += "_";
+        name += suffix;
+    }
+    l_register(L, name.c_str(), fns);
 }
 
 static const char* dll_reason_name(DWORD reason) {
@@ -57,6 +79,7 @@ static const char* dll_reason_name(DWORD reason) {
 BOOL APIENTRY DllMain(const HMODULE hModule, const DWORD reason, LPVOID) {
     Log("DllMain() called, reason=%u (%s)", reason, dll_reason_name(reason));
     if (reason == DLL_PROCESS_ATTACH) {
+        runtime_set_module(hModule);
         Log("DllMain() PROCESS_ATTACH: disabling thread attach/detach calls");
         DisableThreadLibraryCalls(hModule);
     }
@@ -69,7 +92,15 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
         return 0;
     }
 
-    Log("[twdll] luaopen_twdll: called");
+    Log("[twdll] luaopen_twdll: called (namespace '%s', api %d)", TWDLL_NAMESPACE, TWDLL_API_VERSION);
+
+    std::string refusal;
+    if (!runtime_claim_owner(refusal)) {
+        l_pushnil(L);
+        l_pushstring(L, refusal.c_str());
+        return 2;
+    }
+    runtime_pin_module();
 
     if (!g_is_initialized) {
         Log("[twdll] First load: initializing Game API and hooks");
@@ -80,7 +111,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     }
 
     // Check if twdll table instance already exists in this Lua state's registry
-    l_getfield(L, LUA_REGISTRYINDEX, "twdll");
+    l_getfield(L, LUA_REGISTRYINDEX, TWDLL_NAMESPACE);
     if (l_type(L, -1) == LUA_TTABLE) {
         Log("[twdll] luaopen_twdll: returning existing twdll table instance from registry");
         return 1;
@@ -93,7 +124,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     // Save table instance in Lua registry for future loadlib calls in this session
     l_pushvalue(L, -1);
-    l_setfield(L, LUA_REGISTRYINDEX, "twdll");
+    l_setfield(L, LUA_REGISTRYINDEX, TWDLL_NAMESPACE);
 
     l_newuserdata(L, 1);
     l_createtable(L, 0, 1);
@@ -101,52 +132,54 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     l_setfield(L, -2, "__gc");
     l_setmetatable(L, -2);
     l_setfield(L, -2, "__cleanup_proxy");
+    ++g_lua_state_count;
+    Log("[twdll] luaopen_twdll: new Lua state, %d state(s) now using the runtime", g_lua_state_count);
 
-    l_register(L, "twdll", twdll_core);
+    register_ns(L, nullptr, twdll_core);
     l_setfield(L, -2, "core");
 
-    l_register(L, "twdll_character", character_functions);
+    register_ns(L, "character", character_functions);
     l_setfield(L, -2, "character");
     register_character_methods(L);
     register_art_set_methods(L);
 
-    l_register(L, "twdll_unit", unit_functions);
+    register_ns(L, "unit", unit_functions);
     l_setfield(L, -2, "unit");
     register_unit_methods(L);
 
-    l_register(L, "twdll_faction", faction_functions);
+    register_ns(L, "faction", faction_functions);
     l_setfield(L, -2, "faction");
     register_faction_methods(L);
     register_political_party_methods(L);
     register_political_party_list_methods(L);
 
-    l_register(L, "twdll_military_force", military_force_functions);
+    register_ns(L, "military_force", military_force_functions);
     l_setfield(L, -2, "military_force");
     register_military_force_methods(L);
 
-    l_register(L, "twdll_region", region_functions);
+    register_ns(L, "region", region_functions);
     l_setfield(L, -2, "region");
     register_region_methods(L);
     register_slot_methods(L);
     register_religion_methods(L);
     register_religion_list_methods(L);
 
-    l_register(L, "twdll_model", model_functions);
+    register_ns(L, "model", model_functions);
     l_setfield(L, -2, "model");
 
-    l_register(L, "twdll_world", world_functions);
+    register_ns(L, "world", world_functions);
     l_setfield(L, -2, "world");
 
-    l_register(L, "twdll_battle", battle_functions);
+    register_ns(L, "battle", battle_functions);
     l_setfield(L, -2, "battle");
 
-    l_register(L, "twdll_campaign_ui", campaign_ui_functions);
+    register_ns(L, "campaign_ui", campaign_ui_functions);
     l_setfield(L, -2, "campaign_ui");
 
-    l_register(L, "twdll_cai", cai_functions_export);
+    register_ns(L, "cai", cai_functions_export);
     l_setfield(L, -2, "cai");
 
-    l_register(L, "twdll_tweakers", tweaker_functions);
+    register_ns(L, "tweakers", tweaker_functions);
     register_tweaker_methods(L);
     l_setfield(L, -2, "tweakers");
 
