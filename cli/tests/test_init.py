@@ -30,8 +30,6 @@ from twdll.domain import (
     ToolSource,
     WorkspaceConfig,
     WorkspaceContext,
-    WorkspacePaths,
-    load_config,
     resolve_toolchain,
     verify_binary_header,
 )
@@ -125,8 +123,9 @@ def test_steam_discovery_and_staging_across_os(tmp_path: Path, host_os: HostOS) 
     roots = candidate_steam_roots(host_os, home_dir=home_dir, extra_roots=extra)
     steamapps_dirs = discover_steamapps_dirs(roots)
 
-    paths = WorkspacePaths(workspace_root)
-    binaries = resolve_all_binaries(paths, WorkspaceConfig(), steamapps_dirs, stage=True)
+    ctx = replace(WorkspaceContext.from_root(workspace_root), host_os=host_os)
+    paths = ctx.paths
+    binaries = resolve_all_binaries(ctx, steamapps_dirs, stage=True)
     by_name = {b.name: b for b in binaries}
 
     for found in (
@@ -183,7 +182,11 @@ def _write_fake_tool_archive(
 def test_toolchain_provisioning_and_resolution_without_path(
     tmp_path: Path, host_os: HostOS
 ) -> None:
-    paths = WorkspacePaths(tmp_path / "workspace")
+    ghidra_ctx = replace(
+        WorkspaceContext.from_root(tmp_path / "workspace"),
+        config=WorkspaceConfig(decompiler=Decompiler.GHIDRA),
+        host_os=host_os,
+    )
     events: list[ProgressEvent] = []
 
     def downloader(url: str, destination: Path, on_progress: ProgressCallback) -> None:
@@ -199,9 +202,7 @@ def test_toolchain_provisioning_and_resolution_without_path(
         _write_fake_tool_archive(url, destination, host_os, tmp_path)
 
     ghidra_status = provision_toolchain(
-        paths=paths,
-        config=WorkspaceConfig(decompiler=Decompiler.GHIDRA),
-        host_os=host_os,
+        ctx=ghidra_ctx,
         downloader=downloader,
         on_progress=events.append,
     )
@@ -217,10 +218,12 @@ def test_toolchain_provisioning_and_resolution_without_path(
     ida_bin = "idat64.exe" if host_os is HostOS.WINDOWS else "idat64"
     (ida_default_dir / ida_bin).write_text("fake ida", encoding="utf-8")
 
-    ida_status = resolve_toolchain(
-        paths=paths,
+    ida_ctx = replace(
+        ghidra_ctx,
         config=WorkspaceConfig(decompiler=Decompiler.IDA, toolchain=ToolchainConfig()),
-        host_os=host_os,
+    )
+    ida_status = resolve_toolchain(
+        ctx=ida_ctx,
         ida_dirs=(ida_default_dir,),
     )
     assert ida_status.ready is True
@@ -228,7 +231,7 @@ def test_toolchain_provisioning_and_resolution_without_path(
     assert ida_status.tools[0].path == ida_default_dir
 
     ws_status = status(
-        replace(WorkspaceContext.from_root(paths.root), host_os=host_os),
+        ghidra_ctx,
         steam_roots=(),
         ida_dirs=(ida_default_dir,),
     )
@@ -238,7 +241,7 @@ def test_toolchain_provisioning_and_resolution_without_path(
 def test_step_directory_clean_mapping(tmp_path: Path) -> None:
     ctx = WorkspaceContext.from_root(tmp_path)
     paths = ctx.paths
-    save_config(tmp_path, WorkspaceConfig())
+    save_config(ctx)
 
     (paths.uv_dir / "bin").mkdir(parents=True)
     for step in StepName:
@@ -297,7 +300,7 @@ def test_cli_init_status_clean_json(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     init_payload = cast("dict[str, object]", json.loads(init_out.stdout))
     assert init_payload["config_created"] is True
     assert init_payload["decompiler"] == Decompiler.GHIDRA.value
-    assert load_config(tmp_path).decompiler is Decompiler.GHIDRA
+    assert WorkspaceContext.from_root(tmp_path).decompiler is Decompiler.GHIDRA
 
     status_out = runner.invoke(
         app,

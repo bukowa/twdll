@@ -453,7 +453,7 @@ class WorkspaceContext:
     def from_root(cls, root: Path) -> WorkspaceContext:
         return cls(
             paths=WorkspacePaths(root),
-            config=load_config(root),
+            config=_load_config(root),
             host_os=HostOS.current(),
         )
 
@@ -718,7 +718,7 @@ def _parse_toolchain_section(raw: dict[str, object]) -> ToolchainConfig:
     )
 
 
-def load_config(root: Path) -> WorkspaceConfig:
+def _load_config(root: Path) -> WorkspaceConfig:
     """Load `twdll.toml` from `root`, or return defaults if it does not exist."""
     paths = WorkspacePaths(root)
     if not paths.config_file.is_file():
@@ -836,27 +836,25 @@ def resolve_tool(
 
 
 def resolve_toolchain(
-    paths: WorkspacePaths,
-    config: WorkspaceConfig,
-    host_os: HostOS,
+    ctx: WorkspaceContext,
     ida_dirs: Sequence[Path] | None = None,
 ) -> ToolchainStatus:
     """Resolve active decompiler toolchain without inspecting user PATH."""
-    match config.decompiler:
+    match ctx.decompiler:
         case Decompiler.GHIDRA:
             ghidra_loc = resolve_tool(
                 tool=ToolName.GHIDRA,
-                configured_dir=config.toolchain.ghidra_dir,
-                candidate_dirs=_find_prefixed_subdirs(paths.tools_dir, "ghidra_"),
+                configured_dir=ctx.config.toolchain.ghidra_dir,
+                candidate_dirs=_find_prefixed_subdirs(ctx.paths.tools_dir, "ghidra_"),
                 fallback_source=ToolSource.PORTABLE,
-                host_os=host_os,
+                host_os=ctx.host_os,
             )
             java_loc = resolve_tool(
                 tool=ToolName.JAVA,
-                configured_dir=config.toolchain.java_home,
-                candidate_dirs=_find_prefixed_subdirs(paths.tools_dir, "jdk-"),
+                configured_dir=ctx.config.toolchain.java_home,
+                candidate_dirs=_find_prefixed_subdirs(ctx.paths.tools_dir, "jdk-"),
                 fallback_source=ToolSource.PORTABLE,
-                host_os=host_os,
+                host_os=ctx.host_os,
             )
             tools = (ghidra_loc, java_loc)
             return ToolchainStatus(
@@ -866,14 +864,16 @@ def resolve_toolchain(
             )
         case Decompiler.IDA:
             search_dirs = (
-                tuple(ida_dirs) if ida_dirs is not None else default_ida_dirs(host_os, Path.home())
+                tuple(ida_dirs)
+                if ida_dirs is not None
+                else default_ida_dirs(ctx.host_os, Path.home())
             )
             ida_loc = resolve_tool(
                 tool=ToolName.IDA,
-                configured_dir=config.toolchain.ida_dir,
+                configured_dir=ctx.config.toolchain.ida_dir,
                 candidate_dirs=search_dirs,
                 fallback_source=ToolSource.DEFAULT_DIR,
-                host_os=host_os,
+                host_os=ctx.host_os,
             )
             return ToolchainStatus(
                 decompiler=Decompiler.IDA,

@@ -41,7 +41,6 @@ from twdll.domain import (
     ToolName,
     WorkspaceConfig,
     WorkspaceContext,
-    WorkspacePaths,
     WorkspaceStatus,
     default_steam_roots,
     noop_progress,
@@ -85,11 +84,10 @@ def format_config_toml(config: WorkspaceConfig) -> str:
     return "\n".join(lines)
 
 
-def save_config(root: Path, config: WorkspaceConfig) -> Path:
-    """Write `twdll.toml` to `root`."""
-    paths = WorkspacePaths(root)
-    paths.config_file.write_text(format_config_toml(config), encoding="utf-8")
-    return paths.config_file
+def save_config(ctx: WorkspaceContext) -> Path:
+    """Write `twdll.toml` to `ctx.paths.config_file`."""
+    ctx.paths.config_file.write_text(format_config_toml(ctx.config), encoding="utf-8")
+    return ctx.paths.config_file
 
 
 def clean(ctx: WorkspaceContext, target: CleanTarget) -> CleanResult:
@@ -103,11 +101,11 @@ def clean(ctx: WorkspaceContext, target: CleanTarget) -> CleanResult:
     return CleanResult(target=target, removed_directories=tuple(removed))
 
 
-def inspect_step_directories(paths: WorkspacePaths) -> tuple[StepSummary, ...]:
+def inspect_step_directories(ctx: WorkspaceContext) -> tuple[StepSummary, ...]:
     """Summarize each `.twdll/<step>/` directory for `twdll status`."""
     summaries: list[StepSummary] = []
     for step in StepName:
-        step_dir = paths.step_dir(step)
+        step_dir = ctx.paths.step_dir(step)
         if step_dir.is_dir():
             entries = tuple(sorted(child.name for child in step_dir.iterdir()))
             summaries.append(
@@ -203,24 +201,27 @@ def _download_and_extract(
 
 
 def provision_toolchain(
-    paths: WorkspacePaths,
-    config: WorkspaceConfig,
-    host_os: HostOS,
+    ctx: WorkspaceContext,
     downloader: Downloader = _default_download,
     on_progress: ProgressCallback = noop_progress,
 ) -> ToolchainStatus:
     """Provision missing portable Ghidra 12.2 + JDK 25 into `.twdll/init/tools/`."""
-    current = resolve_toolchain(paths=paths, config=config, host_os=host_os)
-    if current.ready or config.decompiler is not Decompiler.GHIDRA:
+    current = resolve_toolchain(ctx)
+    if current.ready or ctx.decompiler is not Decompiler.GHIDRA:
         return current
 
     by_name = {tool.name: tool for tool in current.tools}
-    if not by_name[ToolName.GHIDRA].ready and config.toolchain.ghidra_dir is None:
-        _download_and_extract(GHIDRA_PORTABLE_SPEC, paths.tools_dir, downloader, on_progress)
-    if not by_name[ToolName.JAVA].ready and config.toolchain.java_home is None:
-        _download_and_extract(JDK_PORTABLE_SPECS[host_os], paths.tools_dir, downloader, on_progress)
+    if not by_name[ToolName.GHIDRA].ready and ctx.config.toolchain.ghidra_dir is None:
+        _download_and_extract(GHIDRA_PORTABLE_SPEC, ctx.paths.tools_dir, downloader, on_progress)
+    if not by_name[ToolName.JAVA].ready and ctx.config.toolchain.java_home is None:
+        _download_and_extract(
+            JDK_PORTABLE_SPECS[ctx.host_os],
+            ctx.paths.tools_dir,
+            downloader,
+            on_progress,
+        )
 
-    return resolve_toolchain(paths=paths, config=config, host_os=host_os)
+    return resolve_toolchain(ctx)
 
 
 def _query_winreg_key(
@@ -429,8 +430,7 @@ def stage_binary(
 
 
 def resolve_all_binaries(
-    paths: WorkspacePaths,
-    config: WorkspaceConfig,
+    ctx: WorkspaceContext,
     steamapps_dirs: Sequence[Path],
     stage: bool,
     on_progress: ProgressCallback = noop_progress,
@@ -438,8 +438,8 @@ def resolve_all_binaries(
     """Resolve all 4 Warscape binaries and optionally stage discovered ones."""
     results: list[BinaryStatus] = []
     for name, spec in BINARY_SPECS.items():
-        staged_path = paths.staged_binary_path(name)
-        item = resolve_binary(spec, config.binaries.get(name), staged_path, steamapps_dirs)
+        staged_path = ctx.paths.staged_binary_path(name)
+        item = resolve_binary(spec, ctx.config.binaries.get(name), staged_path, steamapps_dirs)
         if stage:
             item = stage_binary(item, staged_path, spec.arch, on_progress=on_progress)
         results.append(item)
@@ -460,9 +460,9 @@ def status(
         config_exists=ctx.paths.config_file.is_file(),
         host_os=ctx.host_os,
         decompiler=ctx.decompiler,
-        toolchain=resolve_toolchain(ctx.paths, ctx.config, ctx.host_os, ida_dirs=ida_dirs),
-        binaries=resolve_all_binaries(ctx.paths, ctx.config, steamapps_dirs, stage=False),
-        steps=inspect_step_directories(ctx.paths),
+        toolchain=resolve_toolchain(ctx, ida_dirs=ida_dirs),
+        binaries=resolve_all_binaries(ctx, steamapps_dirs, stage=False),
+        steps=inspect_step_directories(ctx),
     )
 
 
@@ -477,18 +477,17 @@ def init(
     """Initialize `twdll.toml`, `.twdll/init/tools/`, and `.twdll/init/binaries/` (`twdll init`)."""
     config_existed = ctx.paths.config_file.is_file()
     if not config_existed or persist_config:
-        save_config(ctx.root, ctx.config)
+        save_config(ctx)
 
     ctx.paths.init_dir.mkdir(parents=True, exist_ok=True)
     toolchain = (
-        resolve_toolchain(ctx.paths, ctx.config, ctx.host_os)
+        resolve_toolchain(ctx)
         if skip_toolchain
-        else provision_toolchain(ctx.paths, ctx.config, ctx.host_os, on_progress=on_progress)
+        else provision_toolchain(ctx, on_progress=on_progress)
     )
     steamapps_dirs = discover_steamapps_dirs(candidate_steam_roots(ctx.host_os))
     binaries = resolve_all_binaries(
-        ctx.paths,
-        ctx.config,
+        ctx,
         steamapps_dirs,
         stage=not skip_binaries,
         on_progress=on_progress,

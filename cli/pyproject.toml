@@ -63,6 +63,10 @@ max-branches = 8
 max-args = 5
 max-statements = 30
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"twdll.domain.WorkspacePaths".msg = "Pass WorkspaceContext (ctx.paths) instead of importing WorkspacePaths outside domain.py."
+"twdll.domain.load_config".msg = "Use WorkspaceContext.from_root(root) instead of calling load_config directly."
+
 [tool.basedpyright]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
