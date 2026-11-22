@@ -9,6 +9,7 @@ description = "Cross-platform reverse-engineering CLI for Warscape Total War"
 requires-python = ">=3.12"
 dependencies = [
     "pyghidra>=2.0.0",
+    "rich>=14.0.0",
     "typer>=0.15.0",
     "vdf>=3.4",
 ]
@@ -104,7 +105,7 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Only cli module may import typer"
+name = "Only cli module may import typer or rich"
 type = "forbidden"
 source_modules = [
     "twdll.init",
@@ -112,5 +113,6 @@ source_modules = [
     "twdll.domain",
 ]
 forbidden_modules = [
+    "rich",
     "typer",
 ]

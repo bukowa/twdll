@@ -21,6 +21,9 @@ from twdll.domain import (
     CleanTarget,
     Decompiler,
     HostOS,
+    ProgressCallback,
+    ProgressEvent,
+    ProgressKind,
     StepName,
     ToolchainConfig,
     ToolSource,
@@ -164,8 +167,18 @@ def test_toolchain_provisioning_and_resolution_without_path(
     tmp_path: Path, host_os: HostOS
 ) -> None:
     paths = WorkspacePaths(tmp_path / "workspace")
+    events: list[ProgressEvent] = []
 
-    def downloader(url: str, destination: Path) -> None:
+    def downloader(url: str, destination: Path, on_progress: ProgressCallback) -> None:
+        on_progress(
+            ProgressEvent(
+                kind=ProgressKind.DOWNLOAD,
+                task_key=f"download:{destination.name}",
+                label=f"Downloading {destination.name}",
+                completed=1024,
+                total=1024,
+            )
+        )
         _write_fake_tool_archive(url, destination, host_os, tmp_path)
 
     ghidra_status = provision_toolchain(
@@ -173,8 +186,11 @@ def test_toolchain_provisioning_and_resolution_without_path(
         config=WorkspaceConfig(decompiler=Decompiler.GHIDRA),
         host_os=host_os,
         downloader=downloader,
+        on_progress=events.append,
     )
     assert ghidra_status.ready is True
+    assert any(e.kind is ProgressKind.DOWNLOAD for e in events)
+    assert any(e.kind is ProgressKind.EXTRACT_ARCHIVE for e in events)
     for tool in ghidra_status.tools:
         assert tool.ready is True
         assert tool.source is ToolSource.PORTABLE

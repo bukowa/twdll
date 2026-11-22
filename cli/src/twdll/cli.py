@@ -1,19 +1,41 @@
 """Typer CLI entrypoint for twdll (`cli/src/twdll/cli.py`).
 
 By architectural contract (enforced via import-linter), this is the ONLY module
-in twdll allowed to import `typer`.
+in twdll allowed to import `typer` or `rich`.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
-from twdll.domain import BinaryStatus, CleanTarget, Decompiler, StepSummary, ToolchainStatus
+from twdll.domain import (
+    BinaryStatus,
+    CleanTarget,
+    Decompiler,
+    ProgressCallback,
+    ProgressEvent,
+    ProgressKind,
+    StepSummary,
+    ToolchainStatus,
+    noop_progress,
+)
 from twdll.init import clean, init, status
 
 app = typer.Typer(
@@ -26,6 +48,59 @@ app = typer.Typer(
 
 def _resolve_root(workspace: Path | None) -> Path:
     return (workspace if workspace is not None else Path.cwd()).resolve()
+
+
+def _format_progress_units(event: ProgressEvent) -> str:
+    if event.kind is ProgressKind.DOWNLOAD:
+        done_mb = event.completed / (1024 * 1024)
+        if event.total is not None and event.total > 0:
+            total_mb = event.total / (1024 * 1024)
+            return f"{done_mb:6.1f}/{total_mb:.1f} MB"
+        return f"{done_mb:6.1f} MB"
+    if event.total is not None:
+        return f"{event.completed}/{event.total}"
+    return ""
+
+
+@contextmanager
+def _cli_progress(enabled: bool) -> Generator[ProgressCallback]:
+    if not enabled:
+        yield noop_progress
+        return
+
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TextColumn("[cyan]{task.fields[units]}"),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=Console(stderr=True),
+    )
+    tasks: dict[str, TaskID] = {}
+
+    def report(event: ProgressEvent) -> None:
+        units = _format_progress_units(event)
+        task_id = tasks.get(event.task_key)
+        if task_id is None:
+            tasks[event.task_key] = progress.add_task(
+                event.label,
+                total=event.total,
+                completed=event.completed,
+                units=units,
+            )
+            return
+        progress.update(
+            task_id,
+            description=event.label,
+            total=event.total,
+            completed=event.completed,
+            units=units,
+        )
+
+    with progress:
+        yield report
 
 
 def _print_toolchain(toolchain: ToolchainStatus) -> None:
@@ -85,12 +160,14 @@ def init_command(
     ] = None,
 ) -> None:
     """Initialize twdll.toml, provision .twdll/init/tools/, and stage discovered game binaries."""
-    result = init(
-        root=_resolve_root(workspace),
-        decompiler=decompiler,
-        skip_toolchain=no_toolchain,
-        skip_binaries=no_binaries,
-    )
+    with _cli_progress(enabled=not json_output) as on_progress:
+        result = init(
+            root=_resolve_root(workspace),
+            decompiler=decompiler,
+            skip_toolchain=no_toolchain,
+            skip_binaries=no_binaries,
+            on_progress=on_progress,
+        )
     if json_output:
         typer.echo(json.dumps(result.to_dict(), indent=2))
         return

@@ -7,6 +7,7 @@ directly by the CLI, PyGhidra, IDAPython, and derivation scripts.
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field, fields, is_dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -136,6 +137,29 @@ class SearchKind(StrEnum):
 class DatabaseTarget(StrEnum):
     EXTRACT = "extract"
     DERIVE = "derive"
+
+
+class ProgressKind(StrEnum):
+    DOWNLOAD = "download"
+    EXTRACT_ARCHIVE = "extract_archive"
+    STAGE_BINARY = "stage_binary"
+    STEP = "step"
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressEvent:
+    kind: ProgressKind
+    task_key: str
+    label: str
+    completed: int
+    total: int | None
+
+
+ProgressCallback = Callable[[ProgressEvent], None]
+
+
+def noop_progress(_event: ProgressEvent) -> None:
+    """No-op progress callback used when terminal progress display is disabled."""
 
 
 @dataclass(frozen=True, slots=True)

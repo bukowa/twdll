@@ -34,6 +34,9 @@ from twdll.domain import (
     HostOS,
     InitResult,
     PortableArchiveSpec,
+    ProgressCallback,
+    ProgressEvent,
+    ProgressKind,
     StepName,
     StepSummary,
     ToolchainConfig,
@@ -46,9 +49,10 @@ from twdll.domain import (
     WorkspaceStatus,
     default_ida_dirs,
     default_steam_roots,
+    noop_progress,
 )
 
-Downloader = Callable[[str, Path], None]
+Downloader = Callable[[str, Path, ProgressCallback], None]
 _VdfLoads = Callable[[str], dict[str, object]]
 
 _ELF_MAGIC = b"\x7fELF"
@@ -322,32 +326,85 @@ def resolve_toolchain(
             )
 
 
-def _default_download(url: str, destination: Path) -> None:
+def _default_download(
+    url: str,
+    destination: Path,
+    on_progress: ProgressCallback = noop_progress,
+) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
+    task_key = f"download:{destination.name}"
+    label = f"Downloading {destination.name}"
     with urllib.request.urlopen(url) as response, destination.open("wb") as out_file:
-        shutil.copyfileobj(response, out_file)
+        raw_len = response.headers.get("Content-Length")
+        total = int(raw_len) if raw_len is not None and raw_len.isdigit() else None
+        completed = 0
+        on_progress(ProgressEvent(ProgressKind.DOWNLOAD, task_key, label, 0, total))
+        while chunk := response.read(64 * 1024):
+            out_file.write(chunk)
+            completed += len(chunk)
+            on_progress(ProgressEvent(ProgressKind.DOWNLOAD, task_key, label, completed, total))
 
 
-def unpack_portable_archive(archive_path: Path, tools_dir: Path) -> None:
-    """Extract `.tar.gz` (with `filter='data'`) or `.zip` into `tools_dir`."""
-    if archive_path.name.endswith(".tar.gz"):
-        with tarfile.open(archive_path, "r:gz") as tar:
-            tar.extractall(tools_dir, filter="data")
-        return
+def _unpack_tar_gz(archive_path: Path, tools_dir: Path, on_progress: ProgressCallback) -> None:
+    task_key = f"extract:{archive_path.name}"
+    label = f"Extracting {archive_path.name}"
+    with tarfile.open(archive_path, "r:gz") as tar:
+        members = tar.getmembers()
+        total = len(members)
+        on_progress(ProgressEvent(ProgressKind.EXTRACT_ARCHIVE, task_key, label, 0, total))
+        for idx, member in enumerate(members, start=1):
+            tar.extract(member, tools_dir, set_attrs=True, filter="data")
+            if idx == total or idx % 50 == 0:
+                on_progress(
+                    ProgressEvent(ProgressKind.EXTRACT_ARCHIVE, task_key, label, idx, total)
+                )
+
+
+def _extract_zip_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, tools_dir: Path) -> None:
+    extracted = Path(zf.extract(info, tools_dir))
+    unix_mode = (info.external_attr >> 16) & 0o777
+    if unix_mode and extracted.is_file():
+        extracted.chmod(unix_mode)
+
+
+def _unpack_zip(archive_path: Path, tools_dir: Path, on_progress: ProgressCallback) -> None:
+    task_key = f"extract:{archive_path.name}"
+    label = f"Extracting {archive_path.name}"
     with zipfile.ZipFile(archive_path, "r") as zf:
-        zf.extractall(tools_dir)
+        members = zf.infolist()
+        total = len(members)
+        on_progress(ProgressEvent(ProgressKind.EXTRACT_ARCHIVE, task_key, label, 0, total))
+        for idx, info in enumerate(members, start=1):
+            _extract_zip_member(zf, info, tools_dir)
+            if idx == total or idx % 50 == 0:
+                on_progress(
+                    ProgressEvent(ProgressKind.EXTRACT_ARCHIVE, task_key, label, idx, total)
+                )
+
+
+def unpack_portable_archive(
+    archive_path: Path,
+    tools_dir: Path,
+    on_progress: ProgressCallback = noop_progress,
+) -> None:
+    """Extract `.tar.gz` (with `filter='data'`) or `.zip` into `tools_dir` with progress."""
+    if archive_path.name.endswith(".tar.gz"):
+        _unpack_tar_gz(archive_path, tools_dir, on_progress)
+        return
+    _unpack_zip(archive_path, tools_dir, on_progress)
 
 
 def _download_and_extract(
     spec: PortableArchiveSpec,
     tools_dir: Path,
     downloader: Downloader,
+    on_progress: ProgressCallback,
 ) -> None:
     tools_dir.mkdir(parents=True, exist_ok=True)
     archive_path = tools_dir / spec.archive_name
-    downloader(spec.url, archive_path)
+    downloader(spec.url, archive_path, on_progress)
     try:
-        unpack_portable_archive(archive_path, tools_dir)
+        unpack_portable_archive(archive_path, tools_dir, on_progress)
     finally:
         if archive_path.is_file():
             archive_path.unlink()
@@ -358,6 +415,7 @@ def provision_toolchain(
     config: WorkspaceConfig,
     host_os: HostOS,
     downloader: Downloader = _default_download,
+    on_progress: ProgressCallback = noop_progress,
 ) -> ToolchainStatus:
     """Provision missing portable Ghidra 12.2 + JDK 25 into `.twdll/init/tools/`."""
     current = resolve_toolchain(paths=paths, config=config, host_os=host_os)
@@ -366,9 +424,9 @@ def provision_toolchain(
 
     by_name = {tool.name: tool for tool in current.tools}
     if not by_name[ToolName.GHIDRA].ready and config.toolchain.ghidra_dir is None:
-        _download_and_extract(GHIDRA_PORTABLE_SPEC, paths.tools_dir, downloader)
+        _download_and_extract(GHIDRA_PORTABLE_SPEC, paths.tools_dir, downloader, on_progress)
     if not by_name[ToolName.JAVA].ready and config.toolchain.java_home is None:
-        _download_and_extract(JDK_PORTABLE_SPECS[host_os], paths.tools_dir, downloader)
+        _download_and_extract(JDK_PORTABLE_SPECS[host_os], paths.tools_dir, downloader, on_progress)
 
     return resolve_toolchain(paths=paths, config=config, host_os=host_os)
 
@@ -550,14 +608,23 @@ def resolve_binary(
     )
 
 
-def stage_binary(binary_status: BinaryStatus, target_path: Path, arch: BinaryArch) -> BinaryStatus:
+def stage_binary(
+    binary_status: BinaryStatus,
+    target_path: Path,
+    arch: BinaryArch,
+    on_progress: ProgressCallback = noop_progress,
+) -> BinaryStatus:
     """Copy a discovered valid binary into `.twdll/init/binaries/<name>/` and return status."""
     if binary_status.discovered_path is None:
         return binary_status
+    task_key = f"stage:{binary_status.name.value}"
+    label = f"Staging {binary_status.name.value} ({target_path.name})"
+    on_progress(ProgressEvent(ProgressKind.STAGE_BINARY, task_key, label, 0, 1))
     target_path.parent.mkdir(parents=True, exist_ok=True)
     if not target_path.exists() or target_path.resolve() != binary_status.discovered_path.resolve():
         shutil.copy2(binary_status.discovered_path, target_path)
     staged_ok = verify_binary_header(target_path, arch)
+    on_progress(ProgressEvent(ProgressKind.STAGE_BINARY, task_key, label, 1, 1))
     return BinaryStatus(
         name=binary_status.name,
         arch=binary_status.arch,
@@ -574,6 +641,7 @@ def resolve_all_binaries(
     config: WorkspaceConfig,
     steamapps_dirs: Sequence[Path],
     stage: bool,
+    on_progress: ProgressCallback = noop_progress,
 ) -> tuple[BinaryStatus, ...]:
     """Resolve all 4 Warscape binaries and optionally stage discovered ones."""
     results: list[BinaryStatus] = []
@@ -581,7 +649,7 @@ def resolve_all_binaries(
         staged_path = paths.staged_binary_path(name)
         item = resolve_binary(spec, config.binaries.get(name), staged_path, steamapps_dirs)
         if stage:
-            item = stage_binary(item, staged_path, spec.arch)
+            item = stage_binary(item, staged_path, spec.arch, on_progress=on_progress)
         results.append(item)
     return tuple(results)
 
@@ -615,7 +683,7 @@ def init(
     decompiler: Decompiler | None = None,
     skip_toolchain: bool = False,
     skip_binaries: bool = False,
-    downloader: Downloader = _default_download,
+    on_progress: ProgressCallback = noop_progress,
 ) -> InitResult:
     """Initialize `twdll.toml`, `.twdll/init/tools/`, and `.twdll/init/binaries/` (`twdll init`)."""
     resolved_os = HostOS.current()
@@ -635,10 +703,16 @@ def init(
     toolchain = (
         resolve_toolchain(paths, config, resolved_os)
         if skip_toolchain
-        else provision_toolchain(paths, config, resolved_os, downloader=downloader)
+        else provision_toolchain(paths, config, resolved_os, on_progress=on_progress)
     )
     steamapps_dirs = discover_steamapps_dirs(candidate_steam_roots(resolved_os))
-    binaries = resolve_all_binaries(paths, config, steamapps_dirs, stage=not skip_binaries)
+    binaries = resolve_all_binaries(
+        paths,
+        config,
+        steamapps_dirs,
+        stage=not skip_binaries,
+        on_progress=on_progress,
+    )
     return InitResult(
         config_file=paths.config_file,
         config_created=not config_existed,
