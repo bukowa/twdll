@@ -127,15 +127,30 @@ def test_steam_discovery_and_staging_across_os(tmp_path: Path, host_os: HostOS) 
     binaries = resolve_all_binaries(paths, WorkspaceConfig(), steamapps_dirs, stage=True)
     by_name = {b.name: b for b in binaries}
 
-    for found in (BinaryName.ATTILA_64, BinaryName.ATTILA_32, BinaryName.ROME2_32):
+    for found in (
+        BinaryName.ATTILA_LINUX_64,
+        BinaryName.ATTILA_WINDOWS_32,
+        BinaryName.ROME2_WINDOWS_32,
+    ):
         assert by_name[found].staged is True
         assert by_name[found].source is BinarySource.STEAM
 
-    assert by_name[BinaryName.TOB_32].staged is False
-    assert by_name[BinaryName.TOB_32].source is BinarySource.MISSING
-    assert verify_binary_header(paths.staged_binary_path(BinaryName.ATTILA_64), BinaryArch.ELF64)
-    assert verify_binary_header(paths.staged_binary_path(BinaryName.ATTILA_32), BinaryArch.PE32)
-    assert verify_binary_header(paths.staged_binary_path(BinaryName.ROME2_32), BinaryArch.PE32)
+    assert by_name[BinaryName.TOB_WINDOWS_32].staged is False
+    assert by_name[BinaryName.TOB_WINDOWS_32].source is BinarySource.MISSING
+    assert verify_binary_header(
+        paths.staged_binary_path(BinaryName.ATTILA_LINUX_64),
+        BinaryArch.ELF64,
+    )
+    assert verify_binary_header(
+        paths.staged_binary_path(BinaryName.ATTILA_WINDOWS_32),
+        BinaryArch.PE32,
+    )
+    assert verify_binary_header(
+        paths.staged_binary_path(BinaryName.ROME2_WINDOWS_32),
+        BinaryArch.PE32,
+    )
+    assert paths.staged_binary_path(BinaryName.ATTILA_LINUX_64).parent == paths.binaries_dir
+    assert paths.staged_binary_path(BinaryName.ATTILA_WINDOWS_32).parent == paths.binaries_dir
 
 
 def _write_fake_tool_archive(
@@ -245,7 +260,8 @@ def test_step_directory_clean_mapping(tmp_path: Path) -> None:
     assert paths.config_file.is_file()
 
 
-def test_cli_init_status_clean_json(tmp_path: Path) -> None:
+def test_cli_init_status_clean_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
     init_out = runner.invoke(
         app,
         [
@@ -253,19 +269,17 @@ def test_cli_init_status_clean_json(tmp_path: Path) -> None:
             "--no-toolchain",
             "--no-binaries",
             "--json",
-            "--workspace",
-            str(tmp_path),
         ],
     )
     assert init_out.exit_code == 0
     init_payload = cast("dict[str, object]", json.loads(init_out.stdout))
     assert init_payload["config_created"] is True
-    assert init_payload["decompiler"] == "ghidra"
+    assert init_payload["decompiler"] == Decompiler.GHIDRA.value
     assert load_config(tmp_path).decompiler is Decompiler.GHIDRA
 
     status_out = runner.invoke(
         app,
-        ["status", "--json", "--workspace", str(tmp_path)],
+        ["status", "--json"],
     )
     assert status_out.exit_code == 0
     status_payload = cast("dict[str, object]", json.loads(status_out.stdout))
@@ -273,11 +287,11 @@ def test_cli_init_status_clean_json(tmp_path: Path) -> None:
 
     clean_out = runner.invoke(
         app,
-        ["clean", "init", "--json", "--workspace", str(tmp_path)],
+        ["clean", CleanTarget.INIT.value, "--json"],
     )
     assert clean_out.exit_code == 0
     clean_payload = cast("dict[str, object]", json.loads(clean_out.stdout))
-    assert clean_payload["target"] == "init"
+    assert clean_payload["target"] == CleanTarget.INIT.value
     removed = cast("list[str]", clean_payload["removed_directories"])
     assert len(removed) == 1
     assert list_sqlite_tables(tmp_path / "nonexistent.sqlite") == ()

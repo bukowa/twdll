@@ -23,10 +23,10 @@ class Decompiler(StrEnum):
 
 
 class BinaryName(StrEnum):
-    ATTILA_64 = "attila_64"
-    ATTILA_32 = "attila_32"
-    ROME2_32 = "rome2_32"
-    TOB_32 = "tob_32"
+    ATTILA_LINUX_64 = "attila_linux_64"
+    ATTILA_WINDOWS_32 = "attila_windows_32"
+    ROME2_WINDOWS_32 = "rome2_windows_32"
+    TOB_WINDOWS_32 = "tob_windows_32"
 
 
 class BinaryArch(StrEnum):
@@ -50,6 +50,22 @@ class StepName(StrEnum):
     ANALYZE = "analyze"
     EXTRACT = "extract"
     DERIVE = "derive"
+
+
+class WorkspaceName(StrEnum):
+    CONFIG_FILE = "twdll.toml"
+    DATA_DIR = ".twdll"
+    UV_DIR = "uv"
+    TOOLS_DIR = "tools"
+    BINARIES_DIR = "binaries"
+
+
+class FileSuffix(StrEnum):
+    DLL = ".dll"
+    SQLITE = ".sqlite"
+    GHIDRA_GPR = ".gpr"
+    GHIDRA_REP = ".rep"
+    IDA_I64 = ".i64"
 
 
 class CleanTarget(StrEnum):
@@ -168,36 +184,41 @@ class BinarySpec:
     steam_app_id: SteamAppId
     default_install_dir: str
     file_name: str
+    staged_file_name: str
     arch: BinaryArch
 
 
 BINARY_SPECS: dict[BinaryName, BinarySpec] = {
-    BinaryName.ATTILA_64: BinarySpec(
-        name=BinaryName.ATTILA_64,
+    BinaryName.ATTILA_LINUX_64: BinarySpec(
+        name=BinaryName.ATTILA_LINUX_64,
         steam_app_id=SteamAppId("325610"),
         default_install_dir="Total War Attila",
         file_name="Attila",
+        staged_file_name=BinaryName.ATTILA_LINUX_64.value,
         arch=BinaryArch.ELF64,
     ),
-    BinaryName.ATTILA_32: BinarySpec(
-        name=BinaryName.ATTILA_32,
+    BinaryName.ATTILA_WINDOWS_32: BinarySpec(
+        name=BinaryName.ATTILA_WINDOWS_32,
         steam_app_id=SteamAppId("325610"),
         default_install_dir="Total War Attila",
         file_name="empire.retail.dll",
+        staged_file_name=f"{BinaryName.ATTILA_WINDOWS_32.value}{FileSuffix.DLL.value}",
         arch=BinaryArch.PE32,
     ),
-    BinaryName.ROME2_32: BinarySpec(
-        name=BinaryName.ROME2_32,
+    BinaryName.ROME2_WINDOWS_32: BinarySpec(
+        name=BinaryName.ROME2_WINDOWS_32,
         steam_app_id=SteamAppId("214950"),
         default_install_dir="Total War Rome II",
         file_name="empire.retail.dll",
+        staged_file_name=f"{BinaryName.ROME2_WINDOWS_32.value}{FileSuffix.DLL.value}",
         arch=BinaryArch.PE32,
     ),
-    BinaryName.TOB_32: BinarySpec(
-        name=BinaryName.TOB_32,
+    BinaryName.TOB_WINDOWS_32: BinarySpec(
+        name=BinaryName.TOB_WINDOWS_32,
         steam_app_id=SteamAppId("712100"),
         default_install_dir="Total War Saga Thrones of Britannia",
         file_name="empire.retail.dll",
+        staged_file_name=f"{BinaryName.TOB_WINDOWS_32.value}{FileSuffix.DLL.value}",
         arch=BinaryArch.PE32,
     ),
 }
@@ -279,15 +300,15 @@ class WorkspacePaths:
 
     @property
     def config_file(self) -> Path:
-        return self.root / "twdll.toml"
+        return self.root / WorkspaceName.CONFIG_FILE.value
 
     @property
     def data_dir(self) -> Path:
-        return self.root / ".twdll"
+        return self.root / WorkspaceName.DATA_DIR.value
 
     @property
     def uv_dir(self) -> Path:
-        return self.data_dir / "uv"
+        return self.data_dir / WorkspaceName.UV_DIR.value
 
     def step_dir(self, step: StepName) -> Path:
         return self.data_dir / step.value
@@ -298,46 +319,56 @@ class WorkspacePaths:
 
     @property
     def tools_dir(self) -> Path:
-        return self.init_dir / "tools"
+        return self.init_dir / WorkspaceName.TOOLS_DIR.value
 
     @property
     def binaries_dir(self) -> Path:
-        return self.init_dir / "binaries"
-
-    def staged_binary_dir(self, binary: BinaryName) -> Path:
-        return self.binaries_dir / binary.value
+        return self.init_dir / WorkspaceName.BINARIES_DIR.value
 
     def staged_binary_path(self, binary: BinaryName) -> Path:
         spec = BINARY_SPECS[binary]
-        return self.staged_binary_dir(binary) / spec.file_name
+        return self.binaries_dir / spec.staged_file_name
 
     @property
     def analyze_dir(self) -> Path:
         return self.step_dir(StepName.ANALYZE)
 
-    def decompiler_analyze_dir(self, decompiler: Decompiler, binary: BinaryName) -> Path:
-        return self.analyze_dir / decompiler.value / binary.value
+    def analyze_stem(self, decompiler: Decompiler, binary: BinaryName) -> str:
+        return f"{decompiler.value}_{binary.value}"
+
+    def ghidra_gpr_path(self, binary: BinaryName) -> Path:
+        stem = self.analyze_stem(Decompiler.GHIDRA, binary)
+        return self.analyze_dir / f"{stem}{FileSuffix.GHIDRA_GPR.value}"
+
+    def ghidra_rep_dir(self, binary: BinaryName) -> Path:
+        stem = self.analyze_stem(Decompiler.GHIDRA, binary)
+        return self.analyze_dir / f"{stem}{FileSuffix.GHIDRA_REP.value}"
+
+    def ida_db_path(self, binary: BinaryName) -> Path:
+        stem = self.analyze_stem(Decompiler.IDA, binary)
+        return self.analyze_dir / f"{stem}{FileSuffix.IDA_I64.value}"
+
+    def analyze_artifact_path(self, decompiler: Decompiler, binary: BinaryName) -> Path:
+        match decompiler:
+            case Decompiler.GHIDRA:
+                return self.ghidra_gpr_path(binary)
+            case Decompiler.IDA:
+                return self.ida_db_path(binary)
 
     @property
     def extract_dir(self) -> Path:
         return self.step_dir(StepName.EXTRACT)
 
-    def extract_db_path(self, decompiler: Decompiler) -> Path:
-        return self.extract_dir / f"{decompiler.value}.sqlite"
+    def extract_db_path(self, decompiler: Decompiler, binary: BinaryName) -> Path:
+        stem = self.analyze_stem(decompiler, binary)
+        return self.extract_dir / f"{stem}{FileSuffix.SQLITE.value}"
 
     @property
     def derive_dir(self) -> Path:
         return self.step_dir(StepName.DERIVE)
 
     def derive_db_path(self, decompiler: Decompiler) -> Path:
-        return self.derive_dir / f"{decompiler.value}.sqlite"
-
-    def database_path(self, target: DatabaseTarget, decompiler: Decompiler) -> Path:
-        match target:
-            case DatabaseTarget.EXTRACT:
-                return self.extract_db_path(decompiler)
-            case DatabaseTarget.DERIVE:
-                return self.derive_db_path(decompiler)
+        return self.derive_dir / f"{decompiler.value}{FileSuffix.SQLITE.value}"
 
 
 def serialize_value(value: object) -> object:

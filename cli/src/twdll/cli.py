@@ -46,8 +46,8 @@ app = typer.Typer(
 )
 
 
-def _resolve_root(workspace: Path | None) -> Path:
-    return (workspace if workspace is not None else Path.cwd()).resolve()
+def _resolve_root() -> Path:
+    return Path.cwd().resolve()
 
 
 def _format_progress_units(event: ProgressEvent) -> str:
@@ -154,15 +154,11 @@ def init_command(
         bool,
         typer.Option("--json", help="Emit machine-readable JSON output."),
     ] = False,
-    workspace: Annotated[
-        Path | None,
-        typer.Option("--workspace", help="Workspace root directory (defaults to current dir)."),
-    ] = None,
 ) -> None:
     """Initialize twdll.toml, provision .twdll/init/tools/, and stage discovered game binaries."""
     with _cli_progress(enabled=not json_output) as on_progress:
         result = init(
-            root=_resolve_root(workspace),
+            root=_resolve_root(),
             decompiler=decompiler,
             skip_toolchain=no_toolchain,
             skip_binaries=no_binaries,
@@ -184,13 +180,9 @@ def status_command(
         bool,
         typer.Option("--json", help="Emit machine-readable JSON output."),
     ] = False,
-    workspace: Annotated[
-        Path | None,
-        typer.Option("--workspace", help="Workspace root directory (defaults to current dir)."),
-    ] = None,
 ) -> None:
     """Show read-only status of workspace, toolchain, staged/discovered binaries, and steps."""
-    result = status(root=_resolve_root(workspace))
+    result = status(root=_resolve_root())
     if json_output:
         typer.echo(json.dumps(result.to_dict(), indent=2))
         return
@@ -214,13 +206,9 @@ def clean_command(
         bool,
         typer.Option("--json", help="Emit machine-readable JSON output."),
     ] = False,
-    workspace: Annotated[
-        Path | None,
-        typer.Option("--workspace", help="Workspace root directory (defaults to current dir)."),
-    ] = None,
 ) -> None:
     """Delete .twdll/<step>/ artifacts created by a pipeline step (or all steps)."""
-    result = clean(root=_resolve_root(workspace), target=target)
+    result = clean(root=_resolve_root(), target=target)
     if json_output:
         typer.echo(json.dumps(result.to_dict(), indent=2))
         return
