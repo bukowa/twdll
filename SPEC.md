@@ -117,9 +117,11 @@ cli/
 │       ├── extract.py          # Layer 2: Base fact extraction into .twdll/extract/<decompiler>.sqlite
 │       ├── derive.py           # Layer 2: Pure-Python derivations into .twdll/derive/<decompiler>.sqlite
 │       ├── query.py            # Layer 2: Read-only search, show, and sql queries
+│       ├── mcp.py              # Layer 3: MCP stdio server adapter (only module importing `mcp`)
 │       └── cli.py              # Layer 3: Typer CLI commands and output formatting
 └── tests/
     ├── test_init.py
+    ├── test_mcp.py
     ├── test_analyze.py
     ├── test_extract.py
     ├── test_derive.py
@@ -130,12 +132,14 @@ cli/
 1. `include_external_packages = true` at `[tool.importlinter]` root.
 2. **Strict one-way layers**:
    - `twdll.cli`
+   - `twdll.mcp`
    - `twdll.init`, `twdll.analyze`, `twdll.extract`, `twdll.derive`, `twdll.query` (independent sibling step modules)
    - `twdll.database`
    - `twdll.domain`
 3. **Centralized SQLite**: Only `twdll.database` may import `sqlite3`.
-4. **CLI separation**: Only `twdll.cli` may import `typer`.
-5. **Stdlib-only core**: `twdll.domain` and `twdll.database` may only import Python standard library modules so PyGhidra and IDAPython scripts can import them directly.
+4. **CLI separation**: Only `twdll.cli` may import `typer` or `rich`.
+5. **MCP separation**: Only `twdll.mcp` may import `mcp` (`allow_indirect_imports = true` so `twdll.cli` may invoke `twdll.mcp.serve_mcp`).
+6. **Stdlib-only core**: `twdll.domain` and `twdll.database` may only import Python standard library modules so PyGhidra and IDAPython scripts can import them directly.
 
 ---
 
@@ -164,7 +168,7 @@ cli/
 5. **Explicit `WorkspaceContext` & LLM / MCP-Ready Command Boundaries**:
    - **Never extract context inside step functions**: Step functions (`analyze.analyze`, `extract.extract`, `derive.derive`, `query.search`, `query.show`, `query.sql`) never take raw `root: Path`, `decompiler: Decompiler | None`, or `host_os: HostOS | None`, and never parse `twdll.toml` themselves.
    - **`WorkspaceContext` in `domain.py`**: Encapsulates `paths: WorkspacePaths`, `config: WorkspaceConfig` (loaded from `twdll.toml` via `WorkspaceContext.from_root(root)`), and `host_os: HostOS` (`ctx.root`, `ctx.decompiler`), using standard library `dataclasses.replace` for CLI/test overrides.
-   - **Root Context vs. Action Arguments**: The root `twdll` command (`@app.callback()`) builds `WorkspaceContext` (handling workspace-level overrides such as `--decompiler`) and passes `ctx` into subcommands. Step functions take `ctx: WorkspaceContext` + typed `domain.py` parameters (`StrEnum`s, multi-binary `binaries: Sequence[BinaryName] = ()`, or typed query objects) and return frozen `@dataclass` results with `.to_dict()`, so every entrypoint maps 1-to-1 to both Typer CLI subcommands and MCP tool schemas without duplicate definitions.
+   - **Root Context vs. Action Arguments**: Workspace/context overrides (`--decompiler`, `--ghidra-dir`, `--java-home`, `--ida-dir`) live **exclusively** on the root `twdll` callback (`@app.callback()`)—never duplicated on subcommands. Step functions take `ctx: WorkspaceContext` + typed `domain.py` parameters (`StrEnum`s, multi-binary `binaries: Sequence[BinaryName] = ()`, or typed query objects) and return frozen `@dataclass` results. Both `cli.py` (Typer) and `mcp.py` (`MCPServer` stdio via `twdll mcp`, configured in `.agents/mcp.json`) wrap those exact entrypoints directly—returning frozen `@dataclass` results in `mcp.py` so `mcp` 2.x generates full `inputSchema` and `outputSchema` automatically.
 
 ---
 
@@ -291,9 +295,10 @@ Root `twdll` callback builds `WorkspaceContext` from `Path.cwd()` (`twdll.toml`)
 
 | Group | Command | Arguments & Options | Entrypoint | Output / Side Effect |
 | :--- | :--- | :--- | :--- | :--- |
-| **Setup** | `twdll init` | `[--decompiler ghidra\|ida] [--no-toolchain] [--no-binaries] [--json]` | `init.init` | Creates/updates `twdll.toml`, provisions `.twdll/init/tools/`, stages discovered binaries flat into `.twdll/init/binaries/` |
+| **Setup** | `twdll init` | `[--no-toolchain] [--no-binaries] [--json]` | `init.init` | Creates/updates `twdll.toml`, provisions `.twdll/init/tools/`, stages discovered binaries flat into `.twdll/init/binaries/` |
 | **Setup** | `twdll status` | `[--json]` | `init.status` | Read-only inspection of `twdll.toml`, toolchain, staged/discovered binaries, and `.twdll/<step>/` directories |
 | **Setup** | `twdll clean` | `<init\|analyze\|extract\|derive\|all> [--json]` | `init.clean` | Removes the corresponding `.twdll/<step>/` directory (`shutil.rmtree`); preserves `.twdll/uv/` and `twdll.toml` |
+| **Setup** | `twdll mcp` | *(none; uses root `WorkspaceContext`)* | `mcp.serve_mcp` | Runs the stdio MCP server exposing domain entrypoints (`.agents/mcp.json`) |
 | **Analyze** | `twdll analyze` | `[binaries...] [--json]` | `analyze.analyze` | Runs single-process `pyghidra` decompiler analysis on selected (or all) staged binary(ies) into `.twdll/analyze/<decompiler>_<binary>.gpr` |
 | **Extract** | `twdll extract` | `[binaries...] [--json]` | `extract.extract` | Extracts verified facts from `.twdll/analyze/<decompiler>_<binary>.gpr` into `.twdll/extract/<decompiler>_<binary>.sqlite` with `meta` completion + SHA-256 proof |
 | **Derive** | `twdll derive` | `[--json]` | `derive.derive` | Computes callgraphs, vtables, and cross-binary function matches into `.twdll/derive/<decompiler>.sqlite` |
@@ -332,7 +337,7 @@ pytest cli/tests
 3. **Slice 3 — Base Fact Extraction (`extract`, Ghidra via `pyghidra`)**:
    - **Step 3A (Empirical API Verification Task)**: Run a `pyghidra` verification script against local Ghidra 12.2 to inspect and verify every candidate table and column 1-by-1 against the real decompiler API before finalizing the SQLite schema.
    - **Step 3B (`cli/src/twdll/domain.py` & `cli/src/twdll/database.py`)**: Implement the verified row dataclasses and per-binary SQLite schema/writers (`.twdll/extract/<decompiler>_<binary>.sqlite`), writing the completion proof and `binary_sha256` into `meta` only in the final commit.
-   - **Step 3C (`cli/src/twdll/extract.py`, `cli/src/twdll/cli.py`, `cli/tests/test_extract.py`)**: Implement `extract.extract(...)`, wire `twdll extract [binary] [--decompiler ghidra|ida] [--json]`, and verify all 5 quality checks.
+   - **Step 3C (`cli/src/twdll/extract.py`, `cli/src/twdll/cli.py`, `cli/tests/test_extract.py`)**: Implement `extract.extract(...)`, wire `twdll extract [binaries...] [--json]`, and verify all 5 quality checks.
 4. **Slice 4 — Derivations (`derive`)** *(Deferred until Slices 2 & 3 complete)*:
    - `cli/src/twdll/derive.py`, `cli/src/twdll/cli.py` (`derive` command), `cli/tests/test_derive.py`.
 5. **Slice 5 — Query Commands (`search`, `show`, `sql`)** *(Deferred until Slices 2 & 3 complete)*:

@@ -39,6 +39,7 @@ from twdll.domain import (
     noop_progress,
 )
 from twdll.init import clean, init, status
+from twdll.mcp import serve_mcp
 
 app = typer.Typer(
     name="twdll",
@@ -183,10 +184,6 @@ def _print_steps(steps: Sequence[StepSummary]) -> None:
 @app.command("init")
 def init_command(
     cli_ctx: typer.Context,
-    decompiler: Annotated[
-        Decompiler | None,
-        typer.Option("--decompiler", help="Active decompiler to configure ('ghidra' or 'ida')."),
-    ] = None,
     no_toolchain: Annotated[
         bool,
         typer.Option("--no-toolchain", help="Skip portable toolchain download/provisioning."),
@@ -202,12 +199,9 @@ def init_command(
 ) -> None:
     """Initialize twdll.toml, provision .twdll/init/tools/, and stage discovered game binaries."""
     ctx = _get_context(cli_ctx)
-    if decompiler is not None:
-        ctx = replace(ctx, config=replace(ctx.config, decompiler=decompiler))
     with _cli_progress(enabled=not json_output) as on_progress:
         result = init(
             ctx=ctx,
-            persist_config=decompiler is not None,
             skip_toolchain=no_toolchain,
             skip_binaries=no_binaries,
             on_progress=on_progress,
@@ -269,6 +263,12 @@ def clean_command(
 
     for removed in result.removed_directories:
         typer.echo(f"Removed: {removed}")
+
+
+@app.command("mcp")
+def mcp_command(cli_ctx: typer.Context) -> None:
+    """Run the twdll Model Context Protocol (MCP) server over stdio."""
+    serve_mcp(ctx=_get_context(cli_ctx))
 
 
 def main() -> None:

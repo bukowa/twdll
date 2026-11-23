@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "twdll": {
+      "command": "./twdll",
+      "args": ["mcp"]
+    }
+  }
+}

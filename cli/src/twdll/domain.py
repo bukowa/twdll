@@ -420,7 +420,7 @@ class WorkspaceConfig:
     toolchain: ToolchainConfig = field(default_factory=ToolchainConfig)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ToolLocation:
     name: ToolName
     ready: bool
@@ -428,7 +428,7 @@ class ToolLocation:
     source: ToolSource
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ToolchainStatus:
     decompiler: Decompiler
     ready: bool
@@ -458,7 +458,7 @@ class WorkspaceContext:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class BinaryStatus:
     name: BinaryName
     arch: BinaryArch
@@ -469,7 +469,7 @@ class BinaryStatus:
     valid_header: bool
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class StepSummary:
     step: StepName
     directory: Path
@@ -477,7 +477,7 @@ class StepSummary:
     entries: tuple[str, ...]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class WorkspaceStatus:
     root: Path
     config_file: Path
@@ -492,7 +492,7 @@ class WorkspaceStatus:
         return to_dict(self)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class InitResult:
     config_file: Path
     config_created: bool
@@ -504,7 +504,7 @@ class InitResult:
         return to_dict(self)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class CleanResult:
     target: CleanTarget
     removed_directories: tuple[Path, ...]
@@ -513,7 +513,7 @@ class CleanResult:
         return to_dict(self)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AnalyzeTargetResult:
     binary: BinaryName
     decompiler: Decompiler
@@ -522,7 +522,7 @@ class AnalyzeTargetResult:
     skipped: bool
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class AnalyzeResult:
     decompiler: Decompiler
     targets: tuple[AnalyzeTargetResult, ...]

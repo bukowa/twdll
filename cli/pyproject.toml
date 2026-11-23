@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Cross-platform reverse-engineering CLI for Warscape Total War"
 requires-python = ">=3.12"
 dependencies = [
+    "mcp>=2.0.0",
     "pyghidra>=2.0.0",
     "rich>=14.0.0",
     "typer>=0.15.0",
@@ -91,6 +92,7 @@ name = "Strict one-way domain layers"
 type = "layers"
 layers = [
     "twdll.cli",
+    "twdll.mcp",
     "twdll.init",
     "twdll.database",
     "twdll.domain",
@@ -101,6 +103,7 @@ name = "Only database module may import sqlite3"
 type = "forbidden"
 source_modules = [
     "twdll.cli",
+    "twdll.mcp",
     "twdll.init",
     "twdll.domain",
 ]
@@ -112,6 +115,7 @@ forbidden_modules = [
 name = "Only cli module may import typer or rich"
 type = "forbidden"
 source_modules = [
+    "twdll.mcp",
     "twdll.init",
     "twdll.database",
     "twdll.domain",
@@ -119,4 +123,18 @@ source_modules = [
 forbidden_modules = [
     "rich",
     "typer",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only mcp module may import mcp"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "twdll.cli",
+    "twdll.init",
+    "twdll.database",
+    "twdll.domain",
+]
+forbidden_modules = [
+    "mcp",
 ]
