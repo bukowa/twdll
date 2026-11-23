@@ -12,7 +12,9 @@ from dataclasses import replace
 
 from mcp.server import MCPServer
 
+from twdll.analyze import analyze
 from twdll.domain import (
+    AnalyzeResult,
     BinaryName,
     CleanResult,
     CleanTarget,
@@ -83,6 +85,17 @@ def build_mcp_server(ctx: WorkspaceContext) -> MCPServer:
     def twdll_clean(target: CleanTarget) -> CleanResult:
         """Delete .twdll/<step>/ artifacts for a pipeline step (or all steps)."""
         return clean(ctx=_refresh_context(ctx), target=target)
+
+    @server.tool(structured_output=True)
+    def twdll_analyze(binaries: list[BinaryName] | None = None) -> AnalyzeResult:
+        """Run headless decompiler analysis on selected or all staged binaries.
+
+        Note: Full auto-analysis of large binaries can take several minutes.
+        Prefer passing a single binary at a time or instructing the user to
+        run `twdll analyze` in their terminal for a full multi-binary run.
+        """
+        targets = tuple(binaries) if binaries else ()
+        return analyze(ctx=_refresh_context(ctx), binaries=targets)
 
     return server
 

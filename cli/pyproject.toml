@@ -93,7 +93,7 @@ type = "layers"
 layers = [
     "twdll.cli",
     "twdll.mcp",
-    "twdll.init",
+    "twdll.init | twdll.analyze",
     "twdll.database",
     "twdll.domain",
 ]
@@ -105,6 +105,7 @@ source_modules = [
     "twdll.cli",
     "twdll.mcp",
     "twdll.init",
+    "twdll.analyze",
     "twdll.domain",
 ]
 forbidden_modules = [
@@ -117,6 +118,7 @@ type = "forbidden"
 source_modules = [
     "twdll.mcp",
     "twdll.init",
+    "twdll.analyze",
     "twdll.database",
     "twdll.domain",
 ]
@@ -132,6 +134,7 @@ allow_indirect_imports = true
 source_modules = [
     "twdll.cli",
     "twdll.init",
+    "twdll.analyze",
     "twdll.database",
     "twdll.domain",
 ]

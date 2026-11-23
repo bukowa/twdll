@@ -257,7 +257,12 @@ cli/
   - Runs Ghidra's standard auto-analysis sequentially (one binary at a time) with full default code, xref, switch-table, stack, and DWARF analyzers enabled—no analyzer-disabling speed workarounds that drop xrefs or control flow.
   - Saves projects flat in `.twdll/analyze/` (`ghidra_<binary>.gpr` and `ghidra_<binary>.rep/`).
 - **Skip & Clean Behavior**:
-  - Skips a target if its completed Ghidra project (`ghidra_<binary>.gpr` and `ghidra_<binary>.rep/`) already exists; re-analysis from scratch uses `twdll clean analyze`.
+  - Skips a target only if its Ghidra project (`ghidra_<binary>.gpr` and `ghidra_<binary>.rep/`) exists **and** `GhidraProgramUtilities.isAnalyzed(program)` is `True`; incomplete/corrupted projects are deleted and recreated from scratch. Full re-analysis uses `twdll clean analyze`.
+- **Verified `pyghidra` 2.x / Ghidra 12.2 API Notes** (shared by `analyze.py` and `extract.py`):
+  - `open_program()` is deprecated; use `pyghidra.open_project(dir_path, stem, create=...)` + `pyghidra.program_context(project, f"/{staged_path.name}")`.
+  - Ghidra's `ProjectLocator` forbids any path element starting with `.` (such as `.twdll`), so `open_project` must operate in a dot-free `tempfile.TemporaryDirectory()` and sync `.gpr`/`.rep/` to/from `.twdll/analyze/`.
+  - `ProgramLoader.Builder.source(...)` has ambiguous Java overloads for `Path`; always pass `str(staged_path)`.
+  - Run auto-analysis via `pyghidra.analyze(program)` (not `analyze_program`), followed by `program.save("twdll initial analysis", pyghidra.task_monitor())`.
 - **IDA 9.5 Backend (Deferred — Research Findings Recorded)**:
   - Deferred until tested on a host with IDA 9.5 installed.
   - When implemented, evaluate IDA 9.x `idalib` (`import idapro` from `<ida_dir>/idalib/python/`) first to determine whether in-process Python execution is cleaner than `idat` batch subprocesses.

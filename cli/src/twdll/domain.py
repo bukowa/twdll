@@ -576,6 +576,7 @@ class AnalyzeTargetResult:
     project_path: Path
     analyzed: bool
     skipped: bool
+    duration_seconds: float = 0.0
 
 
 @dataclass(frozen=True)

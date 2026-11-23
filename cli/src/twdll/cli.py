@@ -32,6 +32,7 @@ from rich.progress import (
 from rich.prompt import Prompt
 from rich.table import Table
 
+from twdll.analyze import analyze
 from twdll.domain import (
     BINARY_SPECS,
     REFERENCE_BINARIES,
@@ -591,6 +592,36 @@ def status_command(
     _print_binaries(result.binaries)
     _print_toolchain(result.toolchain)
     _print_steps(result.steps)
+
+
+@app.command("analyze")
+def analyze_command(
+    cli_ctx: typer.Context,
+    binaries: Annotated[
+        list[BinaryName] | None,
+        typer.Argument(help="Binaries to analyze (defaults to all staged binaries)."),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit machine-readable JSON output."),
+    ] = False,
+) -> None:
+    """Run headless decompiler analysis on staged binaries into .twdll/analyze/."""
+    ctx = _get_context(cli_ctx)
+    targets = tuple(binaries) if binaries else ()
+    with _cli_progress(enabled=not json_output) as on_progress:
+        result = analyze(ctx=ctx, binaries=targets, on_progress=on_progress)
+    if json_output:
+        typer.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    for item in result.targets:
+        state = (
+            "[yellow]skipped[/]"
+            if item.skipped
+            else f"[green]analyzed[/] ({item.duration_seconds:.2f}s)"
+        )
+        _console.print(f"{item.binary.value}: {state} -> {item.project_path}")
 
 
 @app.command("clean")

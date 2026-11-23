@@ -27,7 +27,7 @@ def test_mcp_lists_slice1_tools_with_enum_schemas(tmp_path: Path) -> None:
     tools = asyncio.run(server.list_tools())
     by_name = {tool.name: tool for tool in tools}
 
-    assert set(by_name) == {"twdll_init", "twdll_status", "twdll_clean"}
+    assert set(by_name) == {"twdll_init", "twdll_status", "twdll_clean", "twdll_analyze"}
 
     clean_schema = by_name["twdll_clean"].input_schema
     assert "properties" in clean_schema
