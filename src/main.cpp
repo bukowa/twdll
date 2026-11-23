@@ -32,6 +32,7 @@ extern void register_political_party_methods(lua_State *L);
 extern void register_political_party_list_methods(lua_State *L);
 extern void register_religion_methods(lua_State *L);
 extern void register_religion_list_methods(lua_State *L);
+extern void register_mercenary_pool_methods(lua_State *L);
 extern const luaL_Reg tweaker_functions[];
 extern void register_tweaker_methods(lua_State *L);
 extern void uninstall_tweakers();
@@ -181,6 +182,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     register_slot_methods(L);
     register_religion_methods(L);
     register_religion_list_methods(L);
+    register_mercenary_pool_methods(L);
 
     l_register(L, "twdll_model", model_functions);
     l_setfield(L, -2, "model");

@@ -26,6 +26,7 @@ if(TW_GAME STREQUAL "attila")
         "${PROJECT_SOURCE_DIR}/src/attila/political_party.cpp"      # CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE
         "${PROJECT_SOURCE_DIR}/src/attila/character.cpp"            # CHARACTER_SCRIPT_INTERFACE
         "${PROJECT_SOURCE_DIR}/src/attila/faction.cpp"              # FACTION_SCRIPT_INTERFACE
+        "${PROJECT_SOURCE_DIR}/src/attila/mercenary_pool.cpp"       # MERCENARY_POOLS (region + faction methods)
         "${PROJECT_SOURCE_DIR}/src/attila/military_force.cpp"       # MILITARY_FORCE_SCRIPT_INTERFACE
         "${PROJECT_SOURCE_DIR}/src/attila/political_party_list.cpp" # POLITICAL_PARTY_LIST_SCRIPT_INTERFACE
         "${PROJECT_SOURCE_DIR}/src/attila/region.cpp"               # REGION_SCRIPT_INTERFACE

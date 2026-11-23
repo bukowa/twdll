@@ -54,6 +54,10 @@
 //   mov eax,[edi+0x80] / lea ecx,[esp+8] / push offset "main_attila_map" / mov esi,[eax+0x184] / call String ctor / ... / call select
 // The pushed string address (+0x0B) is a wildcard so a repointed immediate still matches.
 #define CUSTOM_BATTLE_DEFAULT_MAP_SIG "8B 87 80 00 00 00 8D 4C 24 08 68 ? ? ? ? 8B B0 84 01 00 00 E8 ? ? ? ? 8D 44 24 08 8B CE 50 E8"
+// Allocates N MERCENARY_POOL_UNIT on the game heap (used by the pool vector push_back).
+#define MERC_ALLOC_UNITS_SIG "8B 44 24 04 33 C9 85 C0 6A 00 0F 49 C8 6B C1 2C 50 E8 ? ? ? ? 83 C4 08 C3"
+// Frees a block from the CA game heap (cdecl, one argument).
+#define CA_FREE_SIG "83 EC 08 56 8B 74 24 10 85 F6 74 2C 8D 44 24 04 56 50 E8 ? ? ? ? 8B 4C 24 10 83 C4 08 FF 74 24 04 E8 ? ? ? ? A1"
 #define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG "A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
@@ -80,6 +84,8 @@ uintptr_t          g_campaign_key_content_tail_addr = 0;
 uintptr_t          g_gift_region_availability_addr = 0;
 uintptr_t          g_gift_region_list_filter_addr = 0;
 uintptr_t          g_custom_battle_default_map_addr = 0;
+FnMercAllocUnits   g_merc_alloc_units = nullptr;
+FnCaFree           g_ca_free = nullptr;
 static uintptr_t   g_max_units_init_insn_addr = 0;
 static int*        g_max_units_in_army = nullptr;
 static int*        g_max_units_in_navy = nullptr;
@@ -184,5 +190,7 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"diplomacy gift_region availability",                 (void**)&g_gift_region_availability_addr, GIFT_REGION_AVAILABILITY_SIG},
     {"diplomacy gift_region list filter",                  (void**)&g_gift_region_list_filter_addr, GIFT_REGION_LIST_FILTER_SIG},
     {"custom battle default campaign map",                 (void**)&g_custom_battle_default_map_addr, CUSTOM_BATTLE_DEFAULT_MAP_SIG},
+    {"MERCENARY_POOL_UNIT allocate",                       (void**)&g_merc_alloc_units, MERC_ALLOC_UNITS_SIG},
+    {"CA heap free",                                       (void**)&g_ca_free, CA_FREE_SIG},
     {nullptr, nullptr, nullptr}
 };

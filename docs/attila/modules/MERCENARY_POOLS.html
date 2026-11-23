@@ -1,0 +1,327 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>twdll Lua API</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>twdll</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+<h2>Contents</h2>
+<ul>
+<li><a href="#Functions">Functions</a></li>
+</ul>
+
+
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/twdll.battle.html">twdll.battle</a></li>
+  <li><a href="../modules/twdll.cai.html">twdll.cai</a></li>
+  <li><a href="../modules/twdll.campaign_ui.html">twdll.campaign_ui</a></li>
+  <li><a href="../modules/twdll.core.html">twdll.core</a></li>
+  <li><a href="../modules/twdll.model.html">twdll.model</a></li>
+  <li><a href="../modules/twdll.tweakers.html">twdll.tweakers</a></li>
+  <li><a href="../modules/twdll.world.html">twdll.world</a></li>
+  <li><a href="../modules/ARTSET_SCRIPT_INTERFACE.html">ARTSET_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><strong>MERCENARY_POOLS</strong></li>
+  <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_LIST_SCRIPT_INTERFACE.html">RELIGION_LIST_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/RELIGION_SCRIPT_INTERFACE.html">RELIGION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/SLOT_SCRIPT_INTERFACE.html">SLOT_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/UNIT_SCRIPT_INTERFACE.html">UNIT_SCRIPT_INTERFACE</a></li>
+</ul>
+<h2>Topics</h2>
+<ul class="">
+  <li><a href="../topics/engine_tweakers_inventory.md.html">engine_tweakers_inventory</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>MERCENARY_POOLS</code></h1>
+<p>
+
+</p>
+<p> Mercenary pool methods on the game's region and faction objects (Attila).</p>
+
+<p> Every province has a mercenary pool and every non-rebel faction has a faction-unique
+ pool. These methods are available on <a href="../modules/REGION_SCRIPT_INTERFACE.html#">REGION_SCRIPT_INTERFACE</a> objects (the pool of the
+ region's province) and on <a href="../modules/FACTION_SCRIPT_INTERFACE.html#">FACTION_SCRIPT_INTERFACE</a> objects (the faction-unique pool):</p>
+
+
+<pre>
+region:<span class="function-name">GetMercenaryPool</span>()                faction:<span class="function-name">GetMercenaryPool</span>()
+region:<span class="function-name">AddMercenaryUnits</span>(key, n[, opts]) faction:<span class="function-name">AddMercenaryUnits</span>(key, n[, opts])
+region:<span class="function-name">RemoveMercenaryUnits</span>(key, n)      faction:<span class="function-name">RemoveMercenaryUnits</span>(key, n)
+region:<span class="function-name">SetMercenaryUnitCap</span>(key, cap)     faction:<span class="function-name">SetMercenaryUnitCap</span>(key, cap)
+region:<span class="function-name">SetMercenaryUnitReplenishment</span>(key, chance, max_per_turn)  (<span class="keyword">and</span> on faction)
+</pre>
+
+<p> Pools are part of the campaign model and are saved with the game, so changes persist.
+ At the start of each turn the engine sets every unit's current cap to
+ <code>base cap x cap modifier</code> (effects <code>mercenary_province_pool_cap_mod</code> /
+ <code>mercenary_faction_pool_cap_mod</code>), clamps the available count to it and replenishes.</p>
+
+<p> Multiplayer: call these from campaign model events that fire on every machine
+ (e.g. <code>FactionTurnStart</code>, <code>RegionTurnStart</code>), never from UI events such as clicks,
+ which only fire for one player and would desync the campaign.</p>
+
+
+<h2><a href="#Functions">Functions</a></h2>
+<table class="function_list">
+	<tr>
+	<td class="name" nowrap><a href="#AddMercenaryUnits">AddMercenaryUnits (unit_key, count[, options])</a></td>
+	<td class="summary">Adds units to the mercenary pool.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetMercenaryPool">GetMercenaryPool ()</a></td>
+	<td class="summary">Returns the units in the mercenary pool: for a region, its province's pool; for a faction,
+its faction-unique pool.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#RemoveMercenaryUnits">RemoveMercenaryUnits (unit_key, count)</a></td>
+	<td class="summary">Removes units from the mercenary pool (the count never goes below 0).</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMercenaryUnitCap">SetMercenaryUnitCap (unit_key, cap)</a></td>
+	<td class="summary">Sets a pool unit's base cap.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMercenaryUnitReplenishment">SetMercenaryUnitReplenishment (unit_key, chance, max_per_turn)</a></td>
+	<td class="summary">Sets how a pool unit replenishes at turn start: with probability <code>chance</code> (times the pool's
+replenishment modifier) it gains 1..<code>max_per_turn</code> units, up to its cap.</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "AddMercenaryUnits"></a>
+    <strong>AddMercenaryUnits (unit_key, count[, options])</strong>
+    </dt>
+    <dd>
+    Adds units to the mercenary pool.  If the unit is not in the pool yet it is added as a new
+entry (persisted in saves); <code>options</code> then sets its cap and replenishment. Existing entries
+are only raised up to their current cap; raise the cap first with <a href="../modules/MERCENARY_POOLS.html#SetMercenaryUnitCap">SetMercenaryUnitCap</a>.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         <code>main_units</code> key
+        </li>
+        <li><span class="parameter">count</span>
+            <span class="types"><span class="type">integer</span></span>
+         units to add (>= 0)
+        </li>
+        <li><span class="parameter">options</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+         for a new entry: <code>{ cap = integer (default count), replenish_chance = number (default 0), max_replenish = integer (default 0) }</code>
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        units now available, or nil on failure
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In a FactionTurnStart listener (runs on every machine in multiplayer):
+</span>region:<span class="function-name">AddMercenaryUnits</span>(<span class="string">"att_merc_ger_agathyrsi_warriors"</span>, <span class="number">2</span>, { cap = <span class="number">4</span>, replenish_chance = <span class="number">0.25</span>, max_replenish = <span class="number">1</span> })</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetMercenaryPool"></a>
+    <strong>GetMercenaryPool ()</strong>
+    </dt>
+    <dd>
+    Returns the units in the mercenary pool: for a region, its province's pool; for a faction,
+its faction-unique pool.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a> or <span class="type">nil</span></span>
+        array of <code>{ unit, count, cap, base_cap, replenish_chance, max_replenish, experience }</code>
+(<code>cap</code> is the current cap after modifiers), or nil if the pool could not be read
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">for</span> _, u <span class="keyword">in</span> <span class="global">ipairs</span>(region:<span class="function-name">GetMercenaryPool</span>() <span class="keyword">or</span> {}) <span class="keyword">do</span>
+    <span class="function-name">out</span>(u.unit .. <span class="string">" "</span> .. u.count .. <span class="string">"/"</span> .. u.cap)
+<span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "RemoveMercenaryUnits"></a>
+    <strong>RemoveMercenaryUnits (unit_key, count)</strong>
+    </dt>
+    <dd>
+    Removes units from the mercenary pool (the count never goes below 0).  The entry stays in the
+pool; set its cap to 0 to stop it replenishing.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         <code>main_units</code> key
+        </li>
+        <li><span class="parameter">count</span>
+            <span class="types"><span class="type">integer</span></span>
+         units to remove (>= 0)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        units now available, or nil if the unit is not in the pool
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">faction:<span class="function-name">RemoveMercenaryUnits</span>(<span class="string">"att_merc_ger_agathyrsi_warriors"</span>, <span class="number">1</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMercenaryUnitCap"></a>
+    <strong>SetMercenaryUnitCap (unit_key, cap)</strong>
+    </dt>
+    <dd>
+    Sets a pool unit's base cap.  The current cap keeps the existing modifier ratio until the
+engine recomputes it at the next turn start (<code>base cap x cap modifier</code> effects); the
+available count is clamped to it.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         <code>main_units</code> key
+        </li>
+        <li><span class="parameter">cap</span>
+            <span class="types"><span class="type">integer</span></span>
+         new base cap (>= 0; 0 effectively removes the unit)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">integer</span> or <span class="type">nil</span></span>
+        the current cap after the change, or nil if the unit is not in the pool
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">region:<span class="function-name">SetMercenaryUnitCap</span>(<span class="string">"att_merc_ger_agathyrsi_warriors"</span>, <span class="number">6</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMercenaryUnitReplenishment"></a>
+    <strong>SetMercenaryUnitReplenishment (unit_key, chance, max_per_turn)</strong>
+    </dt>
+    <dd>
+    Sets how a pool unit replenishes at turn start: with probability <code>chance</code> (times the pool's
+replenishment modifier) it gains 1..<code>max_per_turn</code> units, up to its cap.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">unit_key</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         <code>main_units</code> key
+        </li>
+        <li><span class="parameter">chance</span>
+            <span class="types"><span class="type">number</span></span>
+         chance per turn (0..1)
+        </li>
+        <li><span class="parameter">max_per_turn</span>
+            <span class="types"><span class="type">integer</span></span>
+         maximum units gained per turn (0 = never replenishes)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        true if changed, false if the unit is not in the pool
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">faction:<span class="function-name">SetMercenaryUnitReplenishment</span>(<span class="string">"att_merc_ger_agathyrsi_warriors"</span>, <span class="number">0.5</span>, <span class="number">1</span>)</pre>
+    </ul>
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/lunarmodules/ldoc">LDoc 1.5.0</a></i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>
