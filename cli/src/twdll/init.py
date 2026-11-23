@@ -6,12 +6,15 @@ Maps 1-to-1 to `.twdll/init/` (`tools/` and `binaries/<name>/`) and `twdll.toml`
 from __future__ import annotations
 
 import importlib
+import os
 import shutil
+import subprocess
 import tarfile
 import urllib.request
 import zipfile
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -21,6 +24,7 @@ from twdll.domain import (
     BINARY_SPECS,
     GHIDRA_PORTABLE_SPEC,
     JDK_PORTABLE_SPECS,
+    STEAM_CONSOLE_URL,
     BinaryArch,
     BinaryName,
     BinarySource,
@@ -41,6 +45,7 @@ from twdll.domain import (
     ToolName,
     WorkspaceConfig,
     WorkspaceContext,
+    WorkspaceName,
     WorkspaceStatus,
     default_steam_roots,
     noop_progress,
@@ -364,6 +369,152 @@ def find_binary_in_steam(spec: BinarySpec, steamapps_dirs: Sequence[Path]) -> Pa
     return None
 
 
+def _missing_binary_instruction(
+    spec: BinarySpec,
+    *,
+    console_opened: bool = False,
+    clipboard_copied: bool = False,
+) -> str:
+    config_name = WorkspaceName.CONFIG_FILE.value
+    if spec.depot_command is None:
+        return (
+            f"Install {spec.default_install_dir} via Steam or set "
+            f"[binaries].{spec.name.value} in {config_name}, then re-run 'twdll init'."
+        )
+    if console_opened and clipboard_copied:
+        return (
+            f"Opened Steam Console ({STEAM_CONSOLE_URL}) and copied '{spec.depot_command}' "
+            "to clipboard. Paste and run it in Steam Console, wait for download to finish, "
+            f"then re-run 'twdll init' (or set [binaries].{spec.name.value} in {config_name})."
+        )
+    if console_opened:
+        return (
+            f"Opened Steam Console ({STEAM_CONSOLE_URL}). Run '{spec.depot_command}', "
+            "wait for download to finish, then re-run 'twdll init' "
+            f"(or set [binaries].{spec.name.value} in {config_name})."
+        )
+    return (
+        f"Run '{spec.depot_command}' in Steam Console ({STEAM_CONSOLE_URL}) and "
+        f"re-run 'twdll init', or set [binaries].{spec.name.value} in {config_name}."
+    )
+
+
+def _linux_clipboard_commands() -> tuple[tuple[str, ...], ...]:
+    return (
+        ("wl-copy",),
+        ("xclip", "-selection", "clipboard"),
+        ("xsel", "--clipboard", "--input"),
+    )
+
+
+def copy_to_clipboard(text: str, host_os: HostOS) -> bool:
+    """Copy `text` to the system clipboard on Windows or Linux without raising."""
+    match host_os:
+        case HostOS.WINDOWS:
+            commands: tuple[tuple[str, ...], ...] = (("clip.exe",),)
+        case HostOS.LINUX:
+            commands = tuple(
+                cmd for cmd in _linux_clipboard_commands() if shutil.which(cmd[0]) is not None
+            )
+    for cmd in commands:
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=text,
+                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if proc.returncode == 0:
+            return True
+    return False
+
+
+def _linux_steam_console_command(url: str) -> tuple[str, ...] | None:
+    steam_bin = shutil.which("steam")
+    if steam_bin is not None:
+        return (steam_bin, "-console", url)
+    for root in candidate_steam_roots(HostOS.LINUX):
+        steam_sh = root / "steam.sh"
+        if steam_sh.is_file():
+            return (str(steam_sh), "-console", url)
+    flatpak_bin = shutil.which("flatpak")
+    flatpak_dir = Path.home() / ".var" / "app" / "com.valvesoftware.Steam"
+    if flatpak_bin is not None and flatpak_dir.is_dir():
+        return (flatpak_bin, "run", "com.valvesoftware.Steam", "-console", url)
+    return None
+
+
+def _open_windows_steam_console(url: str) -> bool:
+    startfile_obj = getattr(os, "startfile", None)
+    if callable(startfile_obj):
+        startfile = cast("Callable[[str], None]", startfile_obj)
+        try:
+            startfile(url)
+        except OSError:
+            pass
+        else:
+            return True
+    try:
+        subprocess.Popen(
+            ("rundll32.exe", "url.dll,FileProtocolHandler", url),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return False
+    return True
+
+
+def _open_linux_steam_console(url: str) -> bool:
+    cmd = _linux_steam_console_command(url)
+    if cmd is None:
+        return False
+    systemd_run = shutil.which("systemd-run")
+    try:
+        if systemd_run is not None:
+            proc = subprocess.run(
+                (systemd_run, "--user", "--collect", "--no-block", "--", *cmd),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=5,
+            )
+            return proc.returncode == 0
+        subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return True
+
+
+def open_steam_console(host_os: HostOS, url: str = STEAM_CONSOLE_URL) -> bool:
+    """Open `steam://open/console` via the Steam client directly without raising."""
+    match host_os:
+        case HostOS.WINDOWS:
+            return _open_windows_steam_console(url)
+        case HostOS.LINUX:
+            return _open_linux_steam_console(url)
+
+
+def open_depot_console(depot_command: str, host_os: HostOS) -> tuple[bool, bool]:
+    """Copy `depot_command` to clipboard and open the Steam Console."""
+    copied = copy_to_clipboard(depot_command, host_os)
+    opened = open_steam_console(host_os, STEAM_CONSOLE_URL)
+    return opened, copied
+
+
 def resolve_binary(
     spec: BinarySpec,
     configured_path: Path | None,
@@ -398,6 +549,8 @@ def resolve_binary(
         discovered_path=discovered,
         source=source,
         valid_header=header_ok or staged_ok,
+        depot_command=spec.depot_command,
+        instruction=None if staged_ok else _missing_binary_instruction(spec),
     )
 
 
@@ -418,6 +571,7 @@ def stage_binary(
         shutil.copy2(binary_status.discovered_path, target_path)
     staged_ok = verify_binary_header(target_path, arch)
     on_progress(ProgressEvent(ProgressKind.STAGE_BINARY, task_key, label, 1, 1))
+    spec = BINARY_SPECS[binary_status.name]
     return BinaryStatus(
         name=binary_status.name,
         arch=binary_status.arch,
@@ -426,7 +580,29 @@ def stage_binary(
         discovered_path=binary_status.discovered_path,
         source=binary_status.source,
         valid_header=binary_status.valid_header or staged_ok,
+        depot_command=binary_status.depot_command,
+        instruction=None if staged_ok else _missing_binary_instruction(spec),
     )
+
+
+def _launch_missing_depot_consoles(
+    binaries: Sequence[BinaryStatus],
+    host_os: HostOS,
+) -> tuple[BinaryStatus, ...]:
+    updated: list[BinaryStatus] = []
+    for item in binaries:
+        if not item.staged and item.depot_command is not None:
+            opened, copied = open_depot_console(item.depot_command, host_os)
+            spec = BINARY_SPECS[item.name]
+            instruction = _missing_binary_instruction(
+                spec,
+                console_opened=opened,
+                clipboard_copied=copied,
+            )
+            updated.append(replace(item, instruction=instruction))
+        else:
+            updated.append(item)
+    return tuple(updated)
 
 
 def resolve_all_binaries(
@@ -474,23 +650,26 @@ def init(
     skip_binaries: bool = False,
     on_progress: ProgressCallback = noop_progress,
 ) -> InitResult:
-    """Initialize `twdll.toml`, `.twdll/init/tools/`, and `.twdll/init/binaries/` (`twdll init`)."""
+    """Initialize `twdll.toml`, `.twdll/init/binaries/`, and `.twdll/init/tools/` (`twdll init`)."""
     config_existed = ctx.paths.config_file.is_file()
     if not config_existed or persist_config:
         save_config(ctx)
 
     ctx.paths.init_dir.mkdir(parents=True, exist_ok=True)
-    toolchain = (
-        resolve_toolchain(ctx)
-        if skip_toolchain
-        else provision_toolchain(ctx, on_progress=on_progress)
-    )
     steamapps_dirs = discover_steamapps_dirs(candidate_steam_roots(ctx.host_os))
     binaries = resolve_all_binaries(
         ctx,
         steamapps_dirs,
         stage=not skip_binaries,
         on_progress=on_progress,
+    )
+    if not skip_binaries:
+        binaries = _launch_missing_depot_consoles(binaries, ctx.host_os)
+
+    toolchain = (
+        resolve_toolchain(ctx)
+        if skip_toolchain
+        else provision_toolchain(ctx, on_progress=on_progress)
     )
     return InitResult(
         config_file=ctx.paths.config_file,

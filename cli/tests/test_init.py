@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import struct
+import subprocess
 import tarfile
 import zipfile
 from dataclasses import replace
@@ -13,9 +16,12 @@ from typing import cast
 import pytest
 from typer.testing import CliRunner
 
+import twdll.init as init_mod
 from twdll.cli import app
 from twdll.database import list_sqlite_tables
 from twdll.domain import (
+    BINARY_SPECS,
+    STEAM_CONSOLE_URL,
     BinaryArch,
     BinaryName,
     BinarySource,
@@ -36,7 +42,10 @@ from twdll.domain import (
 from twdll.init import (
     candidate_steam_roots,
     clean,
+    copy_to_clipboard,
     discover_steamapps_dirs,
+    init,
+    open_steam_console,
     provision_toolchain,
     resolve_all_binaries,
     save_config,
@@ -320,3 +329,149 @@ def test_cli_init_status_clean_json(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     removed = cast("list[str]", clean_payload["removed_directories"])
     assert len(removed) == 1
     assert list_sqlite_tables(tmp_path / "nonexistent.sqlite") == ()
+
+
+def test_init_launches_steam_console_and_copies_depot_command_when_attila_linux_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launched: list[tuple[str, HostOS]] = []
+
+    def fake_open_depot_console(depot_command: str, host_os: HostOS) -> tuple[bool, bool]:
+        launched.append((depot_command, host_os))
+        return True, True
+
+    def fake_steam_roots(_host_os: HostOS) -> tuple[Path, ...]:
+        return ()
+
+    monkeypatch.setattr(init_mod, "open_depot_console", fake_open_depot_console)
+    monkeypatch.setattr(init_mod, "candidate_steam_roots", fake_steam_roots)
+
+    ctx = WorkspaceContext.from_root(tmp_path)
+    res = init(ctx, skip_toolchain=True, skip_binaries=False)
+    expected_cmd = BINARY_SPECS[BinaryName.ATTILA_LINUX_64].depot_command
+    assert expected_cmd is not None
+    assert launched == [(expected_cmd, ctx.host_os)]
+
+    by_name = {b.name: b for b in res.binaries}
+    attila_linux = by_name[BinaryName.ATTILA_LINUX_64]
+    assert attila_linux.staged is False
+    assert attila_linux.depot_command == expected_cmd
+    assert attila_linux.instruction is not None
+    assert STEAM_CONSOLE_URL in attila_linux.instruction
+    assert expected_cmd in attila_linux.instruction
+    assert "copied" in attila_linux.instruction
+    assert by_name[BinaryName.TOB_WINDOWS_32].depot_command is None
+    assert by_name[BinaryName.TOB_WINDOWS_32].instruction is not None
+
+
+def test_init_stages_binaries_before_provisioning_toolchain(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order: list[str] = []
+
+    def fake_steam_roots(_host_os: HostOS) -> tuple[Path, ...]:
+        return ()
+
+    def fake_open_depot_console(_cmd: str, _host_os: HostOS) -> tuple[bool, bool]:
+        order.append("binaries")
+        return True, True
+
+    def fake_provision_toolchain(
+        ctx: WorkspaceContext,
+        on_progress: ProgressCallback = init_mod.noop_progress,
+    ) -> object:
+        _ = on_progress
+        order.append("toolchain")
+        return resolve_toolchain(ctx)
+
+    monkeypatch.setattr(init_mod, "candidate_steam_roots", fake_steam_roots)
+    monkeypatch.setattr(init_mod, "open_depot_console", fake_open_depot_console)
+    monkeypatch.setattr(init_mod, "provision_toolchain", fake_provision_toolchain)
+
+    init(WorkspaceContext.from_root(tmp_path), skip_toolchain=False, skip_binaries=False)
+    assert order == ["binaries", "toolchain"]
+
+
+def test_open_steam_console_linux_uses_systemd_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    ran: list[tuple[str, ...]] = []
+
+    def fake_which(name: str) -> str | None:
+        mapping = {"steam": "/usr/bin/steam", "systemd-run": "/usr/bin/systemd-run"}
+        return mapping.get(name)
+
+    def fake_run(cmd: tuple[str, ...], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        ran.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert open_steam_console(HostOS.LINUX) is True
+    assert ran == [
+        (
+            "/usr/bin/systemd-run",
+            "--user",
+            "--collect",
+            "--no-block",
+            "--",
+            "/usr/bin/steam",
+            "-console",
+            STEAM_CONSOLE_URL,
+        )
+    ]
+
+
+def test_open_steam_console_windows_uses_startfile(monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[str] = []
+
+    def fake_startfile(url: str) -> None:
+        started.append(url)
+
+    monkeypatch.setattr(os, "startfile", fake_startfile, raising=False)
+
+    assert open_steam_console(HostOS.WINDOWS) is True
+    assert started == [STEAM_CONSOLE_URL]
+
+
+@pytest.mark.parametrize(
+    ("host_os", "expected_cmd"),
+    [
+        (HostOS.LINUX, ("xclip", "-selection", "clipboard")),
+        (HostOS.WINDOWS, ("clip.exe",)),
+    ],
+)
+def test_copy_to_clipboard_across_os(
+    monkeypatch: pytest.MonkeyPatch,
+    host_os: HostOS,
+    expected_cmd: tuple[str, ...],
+) -> None:
+    calls: list[tuple[tuple[str, ...], object, object, object]] = []
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/bin/xclip" if name == "xclip" else None
+
+    def fake_run(
+        cmd: tuple[str, ...],
+        *,
+        input: str,
+        stdout: object,
+        stderr: object,
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((cmd, input, stdout, stderr))
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    assert copy_to_clipboard("download_depot 325610 325624 3804137149572368482", host_os) is True
+    assert calls == [
+        (
+            expected_cmd,
+            "download_depot 325610 325624 3804137149572368482",
+            subprocess.DEVNULL,
+            subprocess.DEVNULL,
+        )
+    ]

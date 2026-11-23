@@ -180,6 +180,9 @@ def noop_progress(_event: ProgressEvent) -> None:
     """No-op progress callback used when terminal progress display is disabled."""
 
 
+STEAM_CONSOLE_URL = "steam://open/console"
+
+
 @dataclass(frozen=True, slots=True)
 class BinarySpec:
     name: BinaryName
@@ -188,6 +191,7 @@ class BinarySpec:
     file_name: str
     staged_file_name: str
     arch: BinaryArch
+    depot_command: str | None = None
 
 
 BINARY_SPECS: dict[BinaryName, BinarySpec] = {
@@ -198,6 +202,7 @@ BINARY_SPECS: dict[BinaryName, BinarySpec] = {
         file_name="Attila",
         staged_file_name=BinaryName.ATTILA_LINUX_64.value,
         arch=BinaryArch.ELF64,
+        depot_command="download_depot 325610 325624 3804137149572368482",
     ),
     BinaryName.ATTILA_WINDOWS_32: BinarySpec(
         name=BinaryName.ATTILA_WINDOWS_32,
@@ -467,6 +472,8 @@ class BinaryStatus:
     discovered_path: Path | None
     source: BinarySource
     valid_header: bool
+    depot_command: str | None = None
+    instruction: str | None = None
 
 
 @dataclass(frozen=True)

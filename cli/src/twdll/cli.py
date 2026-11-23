@@ -39,7 +39,6 @@ from twdll.domain import (
     noop_progress,
 )
 from twdll.init import clean, init, status
-from twdll.mcp import serve_mcp
 
 app = typer.Typer(
     name="twdll",
@@ -172,6 +171,8 @@ def _print_binaries(binaries: Sequence[BinaryStatus]) -> None:
             f"  - {binary.name.value} ({binary.arch.value}): {state} "
             f"({binary.source.value}) [{loc}]"
         )
+        if binary.instruction is not None:
+            typer.echo(f"      -> {binary.instruction}")
 
 
 def _print_steps(steps: Sequence[StepSummary]) -> None:
@@ -212,8 +213,8 @@ def init_command(
 
     action = "Created" if result.config_created else "Loaded"
     typer.echo(f"{action} config: {result.config_file} (decompiler={result.decompiler.value})")
-    _print_toolchain(result.toolchain)
     _print_binaries(result.binaries)
+    _print_toolchain(result.toolchain)
 
 
 @app.command("status")
@@ -268,6 +269,8 @@ def clean_command(
 @app.command("mcp")
 def mcp_command(cli_ctx: typer.Context) -> None:
     """Run the twdll Model Context Protocol (MCP) server over stdio."""
+    from twdll.mcp import serve_mcp
+
     serve_mcp(ctx=_get_context(cli_ctx))
 
 
