@@ -77,6 +77,22 @@ def test_mcp_calls_init_status_clean(tmp_path: Path, monkeypatch: pytest.MonkeyP
         BinaryName.ROME2_WINDOWS_32.value,
     ]
 
+    # External edits to twdll.toml should be reflected immediately on subsequent MCP calls.
+    config_file = WorkspaceContext.from_root(tmp_path).paths.config_file
+    config_file.write_text(
+        config_file.read_text(encoding="utf-8").replace(
+            f'targets = ["{BinaryName.ROME2_WINDOWS_32.value}"]',
+            f'targets = ["{BinaryName.TOB_WINDOWS_32.value}"]',
+        ),
+        encoding="utf-8",
+    )
+    reloaded_payload = _call_tool(server, "twdll_status", {})
+    reloaded_bins = cast("list[dict[str, object]]", reloaded_payload["binaries"])
+    assert [b["name"] for b in reloaded_bins] == [
+        BinaryName.ATTILA_LINUX_64.value,
+        BinaryName.TOB_WINDOWS_32.value,
+    ]
+
     clean_payload = _call_tool(server, "twdll_clean", {"target": CleanTarget.INIT.value})
     assert clean_payload["target"] == CleanTarget.INIT.value
     removed = cast("list[str]", clean_payload["removed_directories"])

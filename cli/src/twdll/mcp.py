@@ -25,6 +25,12 @@ from twdll.domain import (
 from twdll.init import clean, init, status
 
 
+def _refresh_context(base_ctx: WorkspaceContext) -> WorkspaceContext:
+    if not base_ctx.paths.config_file.is_file():
+        return base_ctx
+    return replace(WorkspaceContext.from_root(base_ctx.root), host_os=base_ctx.host_os)
+
+
 def _apply_init_overrides(
     ctx: WorkspaceContext,
     decompiler: Decompiler | None,
@@ -43,7 +49,6 @@ def _apply_init_overrides(
 def build_mcp_server(ctx: WorkspaceContext) -> MCPServer:
     """Create an `MCPServer` exposing twdll domain entrypoints bound to `ctx`."""
     server = MCPServer("twdll")
-    active_ctx = ctx
 
     @server.tool(structured_output=True)
     def twdll_init(
@@ -52,12 +57,18 @@ def build_mcp_server(ctx: WorkspaceContext) -> MCPServer:
         skip_toolchain: bool = False,
         skip_binaries: bool = False,
     ) -> InitResult:
-        """Initialize twdll.toml, stage active binaries, and provision .twdll/init/tools/."""
-        nonlocal active_ctx
-        updated_ctx, persist = _apply_init_overrides(active_ctx, decompiler, targets)
-        active_ctx = updated_ctx
+        """Initialize twdll.toml, stage active binaries, and provision .twdll/init/tools/.
+
+        Reloads twdll.toml before running so external edits to [binaries] or [toolchain] apply.
+        `attila_linux_64` (reference binary) is always included alongside `targets` (1+ 32-bit
+        targets). When `skip_binaries=False`, missing binaries trigger Steam Console + clipboard
+        copy for the first missing depot command. When `skip_toolchain=False`, missing portable
+        Ghidra 12.2 + JDK 25 are downloaded into `.twdll/init/tools/`.
+        """
+        current_ctx = _refresh_context(ctx)
+        updated_ctx, persist = _apply_init_overrides(current_ctx, decompiler, targets)
         return init(
-            ctx=active_ctx,
+            ctx=updated_ctx,
             persist_config=persist,
             skip_toolchain=skip_toolchain,
             skip_binaries=skip_binaries,
@@ -65,13 +76,13 @@ def build_mcp_server(ctx: WorkspaceContext) -> MCPServer:
 
     @server.tool(structured_output=True)
     def twdll_status() -> WorkspaceStatus:
-        """Show read-only status of workspace, toolchain, binaries, and pipeline steps."""
-        return status(ctx=active_ctx)
+        """Show read-only status of workspace, toolchain, active binaries, and pipeline steps."""
+        return status(ctx=_refresh_context(ctx))
 
     @server.tool(structured_output=True)
     def twdll_clean(target: CleanTarget) -> CleanResult:
         """Delete .twdll/<step>/ artifacts for a pipeline step (or all steps)."""
-        return clean(ctx=active_ctx, target=target)
+        return clean(ctx=_refresh_context(ctx), target=target)
 
     return server
 

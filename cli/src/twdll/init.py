@@ -551,14 +551,17 @@ def _binary_instruction(
     spec: BinarySpec,
     *,
     staged_ok: bool,
+    source: BinarySource,
     digest: str | None,
     sha256_match: bool | None,
 ) -> str | None:
-    if not staged_ok:
-        return _missing_binary_instruction(spec)
     if sha256_match is False and digest is not None:
         return _sha256_mismatch_warning(spec, digest)
-    return None
+    if staged_ok:
+        return None
+    if source in (BinarySource.STEAM, BinarySource.TOML):
+        return f"Discovered via {source.value}; run 'twdll init' to stage."
+    return _missing_binary_instruction(spec)
 
 
 def resolve_binary(
@@ -601,6 +604,7 @@ def resolve_binary(
         instruction=_binary_instruction(
             spec,
             staged_ok=staged_ok,
+            source=source,
             digest=digest,
             sha256_match=sha256_match,
         ),
@@ -657,6 +661,7 @@ def stage_binary(
         instruction=_binary_instruction(
             spec,
             staged_ok=staged_ok,
+            source=binary_status.source,
             digest=digest,
             sha256_match=sha256_match,
         ),

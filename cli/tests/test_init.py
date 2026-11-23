@@ -603,3 +603,14 @@ def test_stage_binary_skips_copy_when_unchanged(
     res = init_mod.stage_binary(second_status, dst, spec.arch)
     assert res.staged is True
     assert copy_calls == []
+
+
+def test_discovered_unstaged_binary_instruction_prompts_staging(tmp_path: Path) -> None:
+    src = make_fake_pe32(tmp_path / "src" / "empire.retail.dll")
+    actual_sha = compute_file_sha256(src)
+    assert actual_sha is not None
+    spec = replace(BINARY_SPECS[BinaryName.ROME2_WINDOWS_32], expected_sha256=actual_sha)
+    unstaged_status = init_mod.resolve_binary(spec, src, tmp_path / "missing_staged.dll", ())
+    assert unstaged_status.staged is False
+    assert unstaged_status.discovered_path == src
+    assert unstaged_status.instruction == "Discovered via twdll.toml; run 'twdll init' to stage."

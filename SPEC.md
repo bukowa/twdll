@@ -176,7 +176,7 @@ cli/
 
 ## 5. Domain Model (`domain.py`)
 
-`domain.py` is the single source of truth for all `NewType`s, `StrEnum`s, declarative tables, path builders, configuration/status models, and SQLite row dataclasses. All dataclasses use `@dataclass(frozen=True, slots=True)`.
+`domain.py` is the single source of truth for all `NewType`s, `StrEnum`s, declarative tables, path builders, configuration/status models, and SQLite row dataclasses. High-volume SQLite row and core config dataclasses use `@dataclass(frozen=True, slots=True)`; command result/status dataclasses use `@dataclass(frozen=True)` (omitting `slots=True`) so `mcp` 2.x/Pydantic generates full `outputSchema` definitions automatically.
 
 ### 5.1 Domain `NewType`s & `StrEnum`s
 - `Address = NewType("Address", int)`
