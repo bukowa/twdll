@@ -38,6 +38,7 @@ from twdll.domain import (
     WorkspaceConfig,
     WorkspaceContext,
     active_binaries,
+    compute_file_sha256,
     normalize_targets,
     resolve_toolchain,
     verify_binary_header,
@@ -364,7 +365,7 @@ def test_init_launches_steam_console_and_copies_depot_command_when_attila_linux_
     assert STEAM_CONSOLE_URL in attila_linux.instruction
     assert expected_cmd in attila_linux.instruction
     assert "copied" in attila_linux.instruction
-    assert by_name[BinaryName.TOB_WINDOWS_32].depot_command is None
+    assert by_name[BinaryName.TOB_WINDOWS_32].depot_command is not None
     assert by_name[BinaryName.TOB_WINDOWS_32].instruction is not None
 
 
@@ -544,3 +545,29 @@ def test_wizard_parse_target_selection() -> None:
     )
     assert parse_target_selection(BinaryName.ATTILA_LINUX_64.value, defaults) is None
     assert parse_target_selection("99", defaults) is None
+
+
+def test_binary_sha256_verification_and_mismatch_warning(tmp_path: Path) -> None:
+    elf_file = make_fake_elf64(tmp_path / "Attila")
+    actual_sha = compute_file_sha256(elf_file)
+    assert actual_sha is not None
+
+    base_spec = BINARY_SPECS[BinaryName.ATTILA_LINUX_64]
+    matched_spec = replace(base_spec, expected_sha256=actual_sha)
+    staged_path = tmp_path / "staged_attila"
+    staged_path.write_bytes(elf_file.read_bytes())
+
+    ok_status = init_mod.resolve_binary(matched_spec, None, staged_path, ())
+    assert ok_status.staged is True
+    assert ok_status.sha256 == actual_sha
+    assert ok_status.sha256_match is True
+    assert ok_status.instruction is None
+
+    mismatch_spec = replace(base_spec, expected_sha256="0" * 64)
+    bad_status = init_mod.resolve_binary(mismatch_spec, None, staged_path, ())
+    assert bad_status.staged is True
+    assert bad_status.sha256 == actual_sha
+    assert bad_status.sha256_match is False
+    assert bad_status.instruction is not None
+    assert "SHA-256 mismatch" in bad_status.instruction
+    assert "updated" in bad_status.instruction

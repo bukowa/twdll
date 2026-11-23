@@ -6,6 +6,7 @@ directly by the CLI, PyGhidra, IDAPython, and derivation scripts.
 
 from __future__ import annotations
 
+import hashlib
 import struct
 import sys
 import tomllib
@@ -192,6 +193,7 @@ class BinarySpec:
     staged_file_name: str
     arch: BinaryArch
     depot_command: str | None = None
+    expected_sha256: str | None = None
     is_reference: bool = False
 
 
@@ -204,6 +206,7 @@ BINARY_SPECS: dict[BinaryName, BinarySpec] = {
         staged_file_name=BinaryName.ATTILA_LINUX_64.value,
         arch=BinaryArch.ELF64,
         depot_command="download_depot 325610 325624 3804137149572368482",
+        expected_sha256="217e14350c26d5edfd4e4205516b3498e45e4b6c675923c0e0b0df7190fd8784",
         is_reference=True,
     ),
     BinaryName.ATTILA_WINDOWS_32: BinarySpec(
@@ -213,6 +216,8 @@ BINARY_SPECS: dict[BinaryName, BinarySpec] = {
         file_name="empire.retail.dll",
         staged_file_name=f"{BinaryName.ATTILA_WINDOWS_32.value}{FileSuffix.DLL.value}",
         arch=BinaryArch.PE32,
+        depot_command="download_depot 325610 325612 4239124750842070752",
+        expected_sha256="8a40cbcff108e1cba14cc7eb6c7f4dfb054c7745b236d1bfc0fde5c85e2a353d",
     ),
     BinaryName.ROME2_WINDOWS_32: BinarySpec(
         name=BinaryName.ROME2_WINDOWS_32,
@@ -221,6 +226,8 @@ BINARY_SPECS: dict[BinaryName, BinarySpec] = {
         file_name="empire.retail.dll",
         staged_file_name=f"{BinaryName.ROME2_WINDOWS_32.value}{FileSuffix.DLL.value}",
         arch=BinaryArch.PE32,
+        depot_command="download_depot 214950 214952 7498603388646092391",
+        expected_sha256="07cb2215b80591224a5f8889963344d560492f09c4d22696c988b957ca49b2b7",
     ),
     BinaryName.TOB_WINDOWS_32: BinarySpec(
         name=BinaryName.TOB_WINDOWS_32,
@@ -229,6 +236,8 @@ BINARY_SPECS: dict[BinaryName, BinarySpec] = {
         file_name="empire.retail.dll",
         staged_file_name=f"{BinaryName.TOB_WINDOWS_32.value}{FileSuffix.DLL.value}",
         arch=BinaryArch.PE32,
+        depot_command="download_depot 712100 712101 5977806763661092520",
+        expected_sha256="89b7d958d2f8906d301b4be3cbe7b36fe7a544c90ce5c92c7fbaa319c1427a03",
     ),
 }
 
@@ -512,6 +521,8 @@ class BinaryStatus:
     valid_header: bool
     depot_command: str | None = None
     instruction: str | None = None
+    sha256: str | None = None
+    sha256_match: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -842,6 +853,17 @@ def verify_binary_header(path: Path, expected_arch: BinaryArch) -> bool:
             return _is_valid_elf64(header)
         case BinaryArch.PE32:
             return _is_valid_pe32(path, header)
+
+
+def compute_file_sha256(path: Path) -> str | None:
+    """Compute lowercase SHA-256 hex digest of `path`, or `None` if unreadable."""
+    if not path.is_file():
+        return None
+    try:
+        with path.open("rb") as handle:
+            return hashlib.file_digest(handle, "sha256").hexdigest()
+    except OSError:
+        return None
 
 
 def _ida_executable(ida_dir: Path, host_os: HostOS) -> Path:

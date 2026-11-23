@@ -202,7 +202,7 @@ cli/
 
 ### 5.2 Declarative Specs & Workspace Paths
 - `STEAM_CONSOLE_URL = "steam://open/console"`
-- `BinarySpec(name: BinaryName, steam_app_id: SteamAppId, default_install_dir: str, file_name: str, staged_file_name: str, arch: BinaryArch, depot_command: str | None = None, is_reference: bool = False)`
+- `BinarySpec(name: BinaryName, steam_app_id: SteamAppId, default_install_dir: str, file_name: str, staged_file_name: str, arch: BinaryArch, depot_command: str | None = None, expected_sha256: str | None = None, is_reference: bool = False)`
 - `BINARY_SPECS: dict[BinaryName, BinarySpec]`, `REFERENCE_BINARIES: tuple[BinaryName, ...]`, `SELECTABLE_TARGETS: tuple[BinaryName, ...]`
 - `PortableArchiveSpec(tool: ToolName, url: str, archive_name: str, extracted_prefix: str)`
 - `GHIDRA_PORTABLE_SPEC: PortableArchiveSpec`
@@ -218,7 +218,7 @@ cli/
   - `WorkspaceContext(paths: WorkspacePaths, config: WorkspaceConfig, host_os: HostOS)` (`WorkspaceContext.from_root(root)`, `ctx.root`, `ctx.decompiler`)
   - `ToolLocation(name: ToolName, ready: bool, path: Path | None, source: ToolSource)`
   - `ToolchainStatus(decompiler: Decompiler, ready: bool, tools: tuple[ToolLocation, ...])`
-  - `BinaryStatus(name: BinaryName, arch: BinaryArch, staged: bool, staged_path: Path | None, discovered_path: Path | None, source: BinarySource, valid_header: bool, depot_command: str | None = None, instruction: str | None = None)`
+  - `BinaryStatus(name: BinaryName, arch: BinaryArch, staged: bool, staged_path: Path | None, discovered_path: Path | None, source: BinarySource, valid_header: bool, depot_command: str | None = None, instruction: str | None = None, sha256: str | None = None, sha256_match: bool | None = None)`
   - `StepSummary(step: StepName, directory: Path, exists: bool, entries: tuple[str, ...])`
   - `WorkspaceStatus(root: Path, config_file: Path, config_exists: bool, host_os: HostOS, decompiler: Decompiler, toolchain: ToolchainStatus, binaries: tuple[BinaryStatus, ...], steps: tuple[StepSummary, ...])`
   - `InitResult(config_file: Path, config_created: bool, decompiler: Decompiler, toolchain: ToolchainStatus, binaries: tuple[BinaryStatus, ...])`

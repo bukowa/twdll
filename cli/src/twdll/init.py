@@ -48,6 +48,7 @@ from twdll.domain import (
     WorkspaceName,
     WorkspaceStatus,
     active_binaries,
+    compute_file_sha256,
     default_steam_roots,
     default_steamapps_subdirs,
     noop_progress,
@@ -528,6 +529,38 @@ def open_depot_console(depot_command: str, host_os: HostOS) -> tuple[bool, bool]
     return opened, copied
 
 
+def _evaluate_sha256(spec: BinarySpec, path: Path | None) -> tuple[str | None, bool | None]:
+    if path is None:
+        return None, None
+    digest = compute_file_sha256(path)
+    if digest is None or spec.expected_sha256 is None:
+        return digest, None
+    return digest, digest.lower() == spec.expected_sha256.lower()
+
+
+def _sha256_mismatch_warning(spec: BinarySpec, digest: str) -> str:
+    expected = spec.expected_sha256 or ""
+    return (
+        f"SHA-256 mismatch (got {digest[:12]}..., expected {expected[:12]}...). "
+        "The game may have been updated; twdll targets a specific build and may need "
+        "its expected SHA-256 and offsets updated."
+    )
+
+
+def _binary_instruction(
+    spec: BinarySpec,
+    *,
+    staged_ok: bool,
+    digest: str | None,
+    sha256_match: bool | None,
+) -> str | None:
+    if not staged_ok:
+        return _missing_binary_instruction(spec)
+    if sha256_match is False and digest is not None:
+        return _sha256_mismatch_warning(spec, digest)
+    return None
+
+
 def resolve_binary(
     spec: BinarySpec,
     configured_path: Path | None,
@@ -554,6 +587,8 @@ def resolve_binary(
     if staged_ok and source is BinarySource.MISSING:
         source = BinarySource.STAGED
 
+    hash_target = staged_path if staged_ok else discovered
+    digest, sha256_match = _evaluate_sha256(spec, hash_target)
     return BinaryStatus(
         name=spec.name,
         arch=spec.arch,
@@ -563,7 +598,14 @@ def resolve_binary(
         source=source,
         valid_header=header_ok or staged_ok,
         depot_command=spec.depot_command,
-        instruction=None if staged_ok else _missing_binary_instruction(spec),
+        instruction=_binary_instruction(
+            spec,
+            staged_ok=staged_ok,
+            digest=digest,
+            sha256_match=sha256_match,
+        ),
+        sha256=digest,
+        sha256_match=sha256_match,
     )
 
 
@@ -585,6 +627,10 @@ def stage_binary(
     staged_ok = verify_binary_header(target_path, arch)
     on_progress(ProgressEvent(ProgressKind.STAGE_BINARY, task_key, label, 1, 1))
     spec = BINARY_SPECS[binary_status.name]
+    digest, sha256_match = _evaluate_sha256(
+        spec,
+        target_path if staged_ok else binary_status.discovered_path,
+    )
     return BinaryStatus(
         name=binary_status.name,
         arch=binary_status.arch,
@@ -594,7 +640,14 @@ def stage_binary(
         source=binary_status.source,
         valid_header=binary_status.valid_header or staged_ok,
         depot_command=binary_status.depot_command,
-        instruction=None if staged_ok else _missing_binary_instruction(spec),
+        instruction=_binary_instruction(
+            spec,
+            staged_ok=staged_ok,
+            digest=digest,
+            sha256_match=sha256_match,
+        ),
+        sha256=digest,
+        sha256_match=sha256_match,
     )
 
 
@@ -603,9 +656,11 @@ def _launch_missing_depot_consoles(
     host_os: HostOS,
 ) -> tuple[BinaryStatus, ...]:
     updated: list[BinaryStatus] = []
+    launched = False
     for item in binaries:
-        if not item.staged and item.depot_command is not None:
+        if not launched and not item.staged and item.depot_command is not None:
             opened, copied = open_depot_console(item.depot_command, host_os)
+            launched = True
             spec = BINARY_SPECS[item.name]
             instruction = _missing_binary_instruction(
                 spec,

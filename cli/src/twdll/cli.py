@@ -49,6 +49,7 @@ from twdll.domain import (
     StepSummary,
     ToolchainStatus,
     WorkspaceContext,
+    active_binaries,
     noop_progress,
     normalize_targets,
     resolve_toolchain,
@@ -176,6 +177,8 @@ def _cli_progress(enabled: bool) -> Generator[ProgressCallback]:
 
 def _binary_state_badge(binary: BinaryStatus) -> str:
     if binary.staged:
+        if binary.sha256_match is False:
+            return "[bold yellow]staged (sha256 mismatch)[/]"
         return "[bold green]staged[/]"
     if binary.discovered_path is not None:
         return "[bold yellow]discovered[/]"
@@ -228,7 +231,8 @@ def _print_binaries(binaries: Sequence[BinaryStatus]) -> None:
     _console.print(table)
     for binary in binaries:
         if binary.instruction is not None:
-            _console.print(f"  [cyan]-> {binary.name.value}:[/] {binary.instruction}")
+            color = "yellow" if binary.staged and binary.sha256_match is False else "cyan"
+            _console.print(f"  [{color}]-> {binary.name.value}:[/] {binary.instruction}")
 
 
 def _print_steps(steps: Sequence[StepSummary]) -> None:
@@ -342,41 +346,6 @@ def _prompt_targets(
         _console.print("[red]Invalid selection. Choose at least one valid 32-bit target.[/]")
 
 
-def _prompt_missing_target_paths(
-    ctx: WorkspaceContext,
-    steamapps_dirs: Sequence[Path],
-) -> dict[BinaryName, Path | None]:
-    binaries = dict(ctx.config.binaries)
-    for name in ctx.config.targets:
-        spec = BINARY_SPECS[name]
-        current = resolve_binary(
-            spec,
-            binaries.get(name),
-            ctx.paths.staged_binary_path(name),
-            steamapps_dirs,
-        )
-        if current.staged or current.discovered_path is not None:
-            continue
-        binaries[name] = _prompt_single_binary_path(spec, binaries.get(name))
-    return binaries
-
-
-def _prompt_single_binary_path(spec: BinarySpec, existing: Path | None) -> Path | None:
-    prompt_msg = (
-        f"[yellow]{spec.name.value}[/] ({spec.file_name}) not found in Steam. "
-        "Enter file path (Enter to skip)"
-    )
-    while True:
-        raw = Prompt.ask(prompt_msg, default=str(existing or ""), console=_console).strip()
-        if not raw:
-            return None
-        candidate = Path(raw).expanduser()
-        if verify_binary_header(candidate, spec.arch):
-            _console.print(f"  [green]Verified {spec.arch.value} header:[/] {candidate}")
-            return candidate
-        _console.print(f"  [red]Invalid {spec.arch.value} binary:[/] {candidate}")
-
-
 def _poll_stable_depot_binary(
     spec: BinarySpec,
     host_os: HostOS,
@@ -428,34 +397,37 @@ def _start_stdin_reader() -> queue.Queue[str]:
     return input_queue
 
 
-def _wait_for_reference_depot(
-    ctx: WorkspaceContext,
-    binaries: dict[BinaryName, Path | None],
-    steamapps_dirs: Sequence[Path],
-) -> dict[BinaryName, Path | None]:
-    updated = dict(binaries)
-    for name in REFERENCE_BINARIES:
-        spec = BINARY_SPECS[name]
-        current = resolve_binary(
-            spec,
-            updated.get(name),
-            ctx.paths.staged_binary_path(name),
-            steamapps_dirs,
-        )
-        if current.staged or current.discovered_path is not None or spec.depot_command is None:
-            continue
-        custom_path = _watch_steam_depot(spec, spec.depot_command, ctx.host_os)
-        if custom_path is not None:
-            updated[name] = custom_path
-    return updated
+def _prompt_local_binary_path(spec: BinarySpec) -> Path | None:
+    _console.print(
+        f"[yellow]Steam client not detected for {spec.name.value} ({spec.file_name}).[/]"
+    )
+    while True:
+        raw = Prompt.ask(
+            f"[bold]Local path to {spec.file_name}[/] (Enter to skip)",
+            default="",
+            console=_console,
+        ).strip()
+        if not raw:
+            return None
+        candidate = Path(raw).expanduser()
+        if verify_binary_header(candidate, spec.arch):
+            _console.print(f"[green]Verified {spec.arch.value} binary:[/] {candidate}")
+            return candidate
+        _console.print(f"[red]Invalid {spec.arch.value} binary:[/] {candidate}")
 
 
-def _watch_steam_depot(spec: BinarySpec, depot_command: str, host_os: HostOS) -> Path | None:
-    opened, copied = open_depot_console(depot_command, host_os)
+def _watch_steam_depot(
+    spec: BinarySpec,
+    depot_command: str,
+    host_os: HostOS,
+    input_queue: queue.Queue[str],
+    *,
+    clipboard_copied: bool,
+) -> Path | None:
     status_line = (
         "[green]Steam Console opened & command copied to clipboard.[/]"
-        if opened and copied
-        else f"[yellow]Open {STEAM_CONSOLE_URL} and paste the command below.[/]"
+        if clipboard_copied
+        else f"[yellow]Steam Console opened ({STEAM_CONSOLE_URL}). Paste the command below.[/]"
     )
     _console.print(
         Panel(
@@ -463,14 +435,13 @@ def _watch_steam_depot(spec: BinarySpec, depot_command: str, host_os: HostOS) ->
             f"[bold cyan]{depot_command}[/]\n\n"
             "[dim]Waiting for Steam depot download (auto-checking every 1s). "
             "Press Enter to check now, paste a custom path, or type 'skip'.[/]",
-            title=f"Reference Binary Required: {spec.name.value}",
+            title=f"Binary Required: {spec.name.value} ({spec.default_install_dir})",
             border_style="cyan",
         )
     )
-    input_queue = _start_stdin_reader()
     prev_size: int | None = None
     try:
-        with _console.status("[cyan]Waiting for Steam depot download...[/]"):
+        with _console.status(f"[cyan]Waiting for {spec.name.value} download...[/]"):
             while True:
                 found, prev_size = _poll_stable_depot_binary(spec, host_os, prev_size)
                 if found is not None:
@@ -484,8 +455,54 @@ def _watch_steam_depot(spec: BinarySpec, depot_command: str, host_os: HostOS) ->
                 if done:
                     return custom_path
     except KeyboardInterrupt:
-        _console.print("[yellow]Skipping wait—re-run 'twdll init' once download finishes.[/]")
+        _console.print(f"[yellow]Skipping wait for {spec.name.value}.[/]")
         return None
+
+
+def _find_missing_active_specs(
+    ctx: WorkspaceContext,
+    binaries: dict[BinaryName, Path | None],
+    steamapps_dirs: Sequence[Path],
+) -> list[BinarySpec]:
+    missing: list[BinarySpec] = []
+    for name in active_binaries(ctx.config):
+        spec = BINARY_SPECS[name]
+        current = resolve_binary(
+            spec,
+            binaries.get(name),
+            ctx.paths.staged_binary_path(name),
+            steamapps_dirs,
+        )
+        if not current.staged and current.discovered_path is None:
+            missing.append(spec)
+    return missing
+
+
+def _resolve_missing_binaries(
+    ctx: WorkspaceContext,
+    steamapps_dirs: Sequence[Path],
+) -> dict[BinaryName, Path | None]:
+    updated = dict(ctx.config.binaries)
+    missing = _find_missing_active_specs(ctx, updated, steamapps_dirs)
+    input_queue: queue.Queue[str] | None = None
+    for spec in missing:
+        if spec.depot_command is None:
+            continue
+        opened, copied = open_depot_console(spec.depot_command, ctx.host_os)
+        if not opened and input_queue is None:
+            custom_path = _prompt_local_binary_path(spec)
+        else:
+            input_queue = input_queue if input_queue is not None else _start_stdin_reader()
+            custom_path = _watch_steam_depot(
+                spec,
+                spec.depot_command,
+                ctx.host_os,
+                input_queue,
+                clipboard_copied=copied,
+            )
+        if custom_path is not None:
+            updated[spec.name] = custom_path
+    return updated
 
 
 def _run_init_wizard(ctx: WorkspaceContext, *, skip_binaries: bool) -> WorkspaceContext:
@@ -499,8 +516,7 @@ def _run_init_wizard(ctx: WorkspaceContext, *, skip_binaries: bool) -> Workspace
     updated_ctx = replace(updated_ctx, config=replace(updated_ctx.config, targets=targets))
     if skip_binaries:
         return updated_ctx
-    binaries = _prompt_missing_target_paths(updated_ctx, steamapps_dirs)
-    binaries = _wait_for_reference_depot(updated_ctx, binaries, steamapps_dirs)
+    binaries = _resolve_missing_binaries(updated_ctx, steamapps_dirs)
     return replace(updated_ctx, config=replace(updated_ctx.config, binaries=binaries))
 
 
