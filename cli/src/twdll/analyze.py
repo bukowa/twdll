@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
-import importlib
+import hashlib
+import json
 import os
 import shutil
 import tempfile
 import time
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
+from twdll._ghidra import (
+    analyze_and_save_project,
+    make_task_monitor,
+    remove_ghidra_project,
+    require_ghidra_toolchain,
+    start_ghidra,
+)
 from twdll.domain import (
     BINARY_SPECS,
     AnalyzeResult,
@@ -20,131 +29,12 @@ from twdll.domain import (
     ProgressCallback,
     ProgressEvent,
     ProgressKind,
-    ToolName,
     WorkspaceContext,
+    active_binaries,
     noop_progress,
-    resolve_toolchain,
 )
 
-
-class _GhidraProgressMonitor:
-    """Forwards Ghidra `TaskMonitor` updates to `ProgressCallback`."""
-
-    def __init__(self, binary: BinaryName, on_progress: ProgressCallback) -> None:
-        self._binary = binary
-        self._on_progress = on_progress
-        self._message = "initializing..."
-        self._maximum = 0
-        self._progress = 0
-        self._indeterminate = False
-        self._cancelled = False
-        self._cancel_enabled = False
-        self._last_emit = 0.0
-
-    def _emit(self, *, force: bool = False) -> None:
-        now = time.monotonic()
-        if not force and (now - self._last_emit) < 0.25:
-            return
-        self._last_emit = now
-        total = self._maximum if (self._maximum > 0 and not self._indeterminate) else None
-        completed = min(self._progress, total) if total is not None else self._progress
-        self._on_progress(
-            ProgressEvent(
-                kind=ProgressKind.STEP,
-                task_key="analyze_detail",
-                label=f"{self._binary.value}: {self._message}",
-                completed=completed,
-                total=total,
-            )
-        )
-
-    def isCancelled(self) -> bool:
-        return self._cancelled
-
-    def setShowProgressValue(self, _show: bool) -> None:
-        pass
-
-    def setMessage(self, message: object) -> None:
-        text = str(message).strip() if message is not None else ""
-        if text and text != self._message:
-            self._message = text
-            self._emit(force=True)
-
-    def getMessage(self) -> str:
-        return self._message
-
-    def initialize(self, max_value: int, message: object = None) -> None:
-        self._maximum = max(0, int(max_value))
-        self._progress = 0
-        if message is not None:
-            text = str(message).strip()
-            if text:
-                self._message = text
-        self._emit(force=True)
-
-    def setMaximum(self, max_value: int) -> None:
-        self._maximum = max(0, int(max_value))
-        self._emit()
-
-    def getMaximum(self) -> int:
-        return self._maximum
-
-    def setIndeterminate(self, indeterminate: bool) -> None:
-        self._indeterminate = bool(indeterminate)
-        self._emit(force=True)
-
-    def isIndeterminate(self) -> bool:
-        return self._indeterminate
-
-    def setProgress(self, value: int) -> None:
-        self._progress = max(0, int(value))
-        self._emit()
-
-    def getProgress(self) -> int:
-        return self._progress
-
-    def incrementProgress(self, amount: int = 1) -> None:
-        self._progress += int(amount)
-        self._emit()
-
-    def increment(self, amount: int = 1) -> None:
-        self._progress += int(amount)
-        self._emit()
-
-    def checkCancelled(self) -> None:
-        pass
-
-    def cancel(self) -> None:
-        self._cancelled = True
-
-    def addCancelledListener(self, _listener: object) -> None:
-        pass
-
-    def removeCancelledListener(self, _listener: object) -> None:
-        pass
-
-    def setCancelEnabled(self, enabled: bool) -> None:
-        self._cancel_enabled = bool(enabled)
-
-    def isCancelEnabled(self) -> bool:
-        return self._cancel_enabled
-
-    def clearCancelled(self) -> None:
-        self._cancelled = False
-
-
-def _make_task_monitor(binary: BinaryName, on_progress: ProgressCallback) -> Any:
-    try:
-        import jpype
-
-        return jpype.JProxy(
-            "ghidra.util.task.TaskMonitor",
-            inst=_GhidraProgressMonitor(binary, on_progress),
-        )
-    except Exception:
-        import pyghidra
-
-        return cast(Any, pyghidra).task_monitor()
+_META_SCHEMA_VERSION = 1
 
 
 def _emit(
@@ -165,17 +55,12 @@ def _emit(
     )
 
 
-def _require_ghidra_toolchain(ctx: WorkspaceContext) -> tuple[Path, Path]:
-    tools = {tool.name: tool.path for tool in resolve_toolchain(ctx).tools}
-    ghidra_dir = tools.get(ToolName.GHIDRA)
-    if ghidra_dir is None or not ghidra_dir.is_dir():
-        raise FileNotFoundError(
-            "Ghidra installation not found; run 'twdll init' or set ghidra_dir."
-        )
-    java_home = tools.get(ToolName.JAVA)
-    if java_home is None or not java_home.is_dir():
-        raise FileNotFoundError("JDK installation not found; run 'twdll init' or set java_home.")
-    return ghidra_dir, java_home
+def _binary_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _resolve_targets(
@@ -192,9 +77,10 @@ def _resolve_targets(
                 unique.append(binary)
         return tuple(unique)
 
+    configured = active_binaries(ctx.config)
     staged_targets = tuple(
         sorted(
-            (binary for binary in BinaryName if ctx.paths.staged_binary_path(binary).is_file()),
+            (binary for binary in configured if ctx.paths.staged_binary_path(binary).is_file()),
             key=lambda binary: 0 if BINARY_SPECS[binary].arch == BinaryArch.PE32 else 1,
         )
     )
@@ -205,73 +91,77 @@ def _resolve_targets(
     return staged_targets
 
 
-def _remove_ghidra_project(gpr_path: Path, rep_dir: Path) -> None:
-    gpr_path.unlink(missing_ok=True)
-    if rep_dir.exists():
-        shutil.rmtree(rep_dir)
-
-
-def _is_program_analyzed(program: Any) -> bool:
-    util = cast(Any, importlib.import_module("ghidra.program.util"))
-    return bool(util.GhidraProgramUtilities.isAnalyzed(program))
-
-
-def _check_existing_project(
-    ctx: WorkspaceContext,
-    binary: BinaryName,
-    gpr_path: Path,
-    rep_dir: Path,
-) -> bool:
-    if not (gpr_path.is_file() and rep_dir.is_dir()):
+def _is_meta_valid(meta_path: Path, binary: BinaryName, expected_sha256: str) -> bool:
+    if not meta_path.is_file():
         return False
-
-    import pyghidra
-
-    pyg = cast(Any, pyghidra)
-    staged_path = ctx.paths.staged_binary_path(binary)
-    stem = ctx.paths.analyze_stem(Decompiler.GHIDRA, binary)
     try:
-        with tempfile.TemporaryDirectory(prefix="twdll_ghidra_") as tmp_str:
-            tmp_dir = Path(tmp_str)
-            shutil.copy2(gpr_path, tmp_dir / gpr_path.name)
-            shutil.copytree(rep_dir, tmp_dir / rep_dir.name)
-            with (
-                pyg.open_project(tmp_dir, stem, create=False) as project,
-                pyg.program_context(project, f"/{staged_path.name}") as program,
-            ):
-                return _is_program_analyzed(program)
-    except Exception:
+        raw: object = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
         return False
+    if not isinstance(raw, dict):
+        return False
+    data = cast(dict[str, object], raw)
+    return (
+        data.get("schema_version") == _META_SCHEMA_VERSION
+        and data.get("decompiler") == Decompiler.GHIDRA.value
+        and data.get("binary") == binary.value
+        and data.get("binary_sha256") == expected_sha256
+    )
+
+
+def _write_meta_atomic(meta_path: Path, binary: BinaryName, binary_sha256: str) -> None:
+    payload = {
+        "schema_version": _META_SCHEMA_VERSION,
+        "decompiler": Decompiler.GHIDRA.value,
+        "binary": binary.value,
+        "binary_sha256": binary_sha256,
+        "analyzed_at": datetime.now(UTC).isoformat(),
+    }
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=meta_path.parent,
+        prefix=f"{meta_path.stem}_",
+        suffix=".tmp",
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+        tmp_path.replace(meta_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
+def _can_skip_target(ctx: WorkspaceContext, binary: BinaryName, expected_sha256: str) -> bool:
+    gpr_path = ctx.paths.ghidra_gpr_path(binary)
+    rep_dir = ctx.paths.ghidra_rep_dir(binary)
+    meta_path = ctx.paths.analyze_meta_path(Decompiler.GHIDRA, binary)
+    return (
+        gpr_path.is_file()
+        and rep_dir.is_dir()
+        and _is_meta_valid(meta_path, binary, expected_sha256)
+    )
 
 
 def _analyze_single_binary(
     ctx: WorkspaceContext,
     binary: BinaryName,
-    index: int,
-    total: int,
+    expected_sha256: str,
+    progress_pos: tuple[int, int],
     on_progress: ProgressCallback,
 ) -> AnalyzeTargetResult:
-    import pyghidra
-
-    pyg = cast(Any, pyghidra)
+    index, total = progress_pos
     prefix = f"[{index}/{total}] {binary.value}"
     gpr_path = ctx.paths.ghidra_gpr_path(binary)
     rep_dir = ctx.paths.ghidra_rep_dir(binary)
+    meta_path = ctx.paths.analyze_meta_path(Decompiler.GHIDRA, binary)
 
-    if _check_existing_project(ctx, binary, gpr_path, rep_dir):
-        _emit(on_progress, f"{prefix}: skipped (already analyzed)", completed=index, total=total)
-        return AnalyzeTargetResult(
-            binary=binary,
-            decompiler=Decompiler.GHIDRA,
-            project_path=gpr_path,
-            analyzed=True,
-            skipped=True,
-            duration_seconds=0.0,
-        )
-
-    if gpr_path.exists() or rep_dir.exists():
+    if gpr_path.exists() or rep_dir.exists() or meta_path.exists():
         _emit(on_progress, f"{prefix}: incomplete project found, recreating...")
-        _remove_ghidra_project(gpr_path, rep_dir)
+        remove_ghidra_project(gpr_path, rep_dir)
+        meta_path.unlink(missing_ok=True)
 
     ctx.paths.analyze_dir.mkdir(parents=True, exist_ok=True)
     staged_path = ctx.paths.staged_binary_path(binary)
@@ -283,16 +173,11 @@ def _analyze_single_binary(
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="twdll_ghidra_") as tmp_str:
         tmp_dir = Path(tmp_str)
-        with pyg.open_project(tmp_dir, stem, create=True) as project:
-            loader = pyg.program_loader().project(project).source(str(staged_path))
-            with loader.load() as load_results:
-                load_results.save(pyg.task_monitor())
-            with pyg.program_context(project, f"/{staged_path.name}") as program:
-                monitor = _make_task_monitor(binary, on_progress)
-                pyg.analyze(program, monitor=monitor)
-                program.save("twdll initial analysis", pyg.task_monitor())
+        monitor = make_task_monitor(binary, on_progress, task_key="analyze_detail")
+        analyze_and_save_project(tmp_dir, staged_path, stem, monitor)
         shutil.move(str(tmp_dir / gpr_path.name), str(gpr_path))
         shutil.move(str(tmp_dir / rep_dir.name), str(rep_dir))
+    _write_meta_atomic(meta_path, binary, expected_sha256)
     duration = round(time.monotonic() - started, 2)
     _emit(on_progress, f"{prefix}: done ({duration:.2f}s)", completed=index, total=total)
 
@@ -306,31 +191,51 @@ def _analyze_single_binary(
     )
 
 
+def _skipped_result(ctx: WorkspaceContext, binary: BinaryName) -> AnalyzeTargetResult:
+    return AnalyzeTargetResult(
+        binary=binary,
+        decompiler=Decompiler.GHIDRA,
+        project_path=ctx.paths.ghidra_gpr_path(binary),
+        analyzed=True,
+        skipped=True,
+        duration_seconds=0.0,
+    )
+
+
 def analyze(
     ctx: WorkspaceContext,
     binaries: tuple[BinaryName, ...] = (),
     on_progress: ProgressCallback = noop_progress,
 ) -> AnalyzeResult:
-    """Run headless decompiler analysis on selected or all staged binaries."""
+    """Run headless decompiler analysis on selected or active staged binaries."""
     match ctx.decompiler:
         case Decompiler.IDA:
             raise NotImplementedError("IDA analysis is not implemented yet.")
         case Decompiler.GHIDRA:
             pass
 
-    ghidra_dir, java_home = _require_ghidra_toolchain(ctx)
+    require_ghidra_toolchain(ctx)
     targets = _resolve_targets(ctx, binaries)
+    hashes = {binary: _binary_sha256(ctx.paths.staged_binary_path(binary)) for binary in targets}
+    skippable = {binary: _can_skip_target(ctx, binary, hashes[binary]) for binary in targets}
 
-    os.environ["JAVA_HOME"] = str(java_home)
-    os.environ["JAVA_HOME_OVERRIDE"] = str(java_home)
-    import pyghidra
-
-    _emit(on_progress, f"Starting Ghidra ({ghidra_dir})...")
-    pyghidra.start(install_dir=ghidra_dir)
+    if not all(skippable.values()):
+        ghidra_dir = start_ghidra(ctx)
+        _emit(on_progress, f"Starting Ghidra ({ghidra_dir})...")
 
     total = len(targets)
-    results = tuple(
-        _analyze_single_binary(ctx, binary, idx, total, on_progress)
-        for idx, binary in enumerate(targets, start=1)
-    )
-    return AnalyzeResult(decompiler=ctx.decompiler, targets=results)
+    results: list[AnalyzeTargetResult] = []
+    for idx, binary in enumerate(targets, start=1):
+        if skippable[binary]:
+            _emit(
+                on_progress,
+                f"[{idx}/{total}] {binary.value}: skipped (already analyzed)",
+                completed=idx,
+                total=total,
+            )
+            results.append(_skipped_result(ctx, binary))
+            continue
+        results.append(
+            _analyze_single_binary(ctx, binary, hashes[binary], (idx, total), on_progress)
+        )
+    return AnalyzeResult(decompiler=ctx.decompiler, targets=tuple(results))

@@ -267,11 +267,10 @@ def test_step_directory_clean_mapping(tmp_path: Path) -> None:
     assert not paths.analyze_dir.exists()
     assert paths.init_dir.exists()
     assert paths.extract_dir.exists()
-    assert paths.derive_dir.exists()
     assert paths.uv_dir.exists()
 
     res_all = clean(ctx, CleanTarget.ALL)
-    assert len(res_all.removed_directories) == 3
+    assert len(res_all.removed_directories) == len(StepName) - 1
     for step in StepName:
         assert not paths.step_dir(step).exists()
     assert paths.uv_dir.exists()

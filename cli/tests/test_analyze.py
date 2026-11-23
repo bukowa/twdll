@@ -166,18 +166,22 @@ def test_analyze_fresh_and_skip_when_analyzed(
     assert first.targets[0].analyzed is True
     assert first.targets[0].skipped is False
     assert first.targets[0].project_path == ctx.paths.ghidra_gpr_path(BinaryName.ATTILA_LINUX_64)
+    assert ctx.paths.analyze_meta_path(Decompiler.GHIDRA, BinaryName.ATTILA_LINUX_64).is_file()
     assert start_mock.call_count == 1
+    assert len(calls) == 1
     assert calls[-1][3] is True
 
     second = analyze(ctx)
     assert len(second.targets) == 1
     assert second.targets[0].analyzed is True
     assert second.targets[0].skipped is True
-    assert calls[-1][3] is False
+    # O(1) .meta.json skip check must not start Ghidra or open the project.
+    assert start_mock.call_count == 1
+    assert len(calls) == 1
 
 
 @pytest.mark.parametrize("host_os", [HostOS.LINUX, HostOS.WINDOWS])
-def test_analyze_recreates_incomplete_project(
+def test_analyze_recreates_incomplete_or_corrupt_meta_project(
     tmp_path: Path,
     host_os: HostOS,
     monkeypatch: pytest.MonkeyPatch,
@@ -186,10 +190,12 @@ def test_analyze_recreates_incomplete_project(
     _stage_binary(ctx, BinaryName.ATTILA_LINUX_64)
     gpr = ctx.paths.ghidra_gpr_path(BinaryName.ATTILA_LINUX_64)
     rep = ctx.paths.ghidra_rep_dir(BinaryName.ATTILA_LINUX_64)
+    meta = ctx.paths.analyze_meta_path(Decompiler.GHIDRA, BinaryName.ATTILA_LINUX_64)
     gpr.parent.mkdir(parents=True, exist_ok=True)
     gpr.write_text("stale", encoding="utf-8")
     rep.mkdir(parents=True, exist_ok=True)
     (rep / "stale.txt").write_text("stale", encoding="utf-8")
+    meta.write_text("{corrupt-json", encoding="utf-8")
 
     _, calls = _install_fake_pyghidra(monkeypatch, analyzed_state=False)
     result = analyze(ctx)
@@ -198,7 +204,24 @@ def test_analyze_recreates_incomplete_project(
     assert result.targets[0].analyzed is True
     assert result.targets[0].skipped is False
     assert not (rep / "stale.txt").exists()
-    assert [c[3] for c in calls] == [False, True]
+    assert meta.is_file()
+    assert [c[3] for c in calls] == [True]
+
+
+@pytest.mark.parametrize("host_os", [HostOS.LINUX, HostOS.WINDOWS])
+def test_analyze_filters_by_active_binaries(
+    tmp_path: Path,
+    host_os: HostOS,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _make_ctx(tmp_path, host_os=host_os)
+    _stage_binary(ctx, BinaryName.ATTILA_LINUX_64)
+    _stage_binary(ctx, BinaryName.ATTILA_WINDOWS_32)
+    _install_fake_pyghidra(monkeypatch, analyzed_state=True)
+
+    # _make_ctx configures targets=(ATTILA_LINUX_64,), so ATTILA_WINDOWS_32 is not active.
+    result = analyze(ctx)
+    assert [target.binary for target in result.targets] == [BinaryName.ATTILA_LINUX_64]
 
 
 def test_cli_analyze_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -7,7 +7,7 @@ from pathlib import Path
 _CLI_DIR = Path(__file__).resolve().parent.parent
 _SRC_DIR = _CLI_DIR / "src" / "twdll"
 _TESTS_DIR = _CLI_DIR / "tests"
-_EXECUTION_STEP_MODULES = ("analyze.py", "extract.py", "derive.py")
+_EXECUTION_STEP_MODULES = ("analyze.py", "extract.py", "_ghidra.py")
 
 
 def test_no_type_ignore_comments_in_src_or_tests() -> None:

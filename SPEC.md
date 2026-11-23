@@ -1,9 +1,11 @@
 # `twdll` Reverse-Engineering CLI Specification
 
+`twdll` is a cross-platform (Linux and Windows) Python 3.12+ reverse-engineering CLI and stdio MCP (Model Context Protocol) server for Warscape Total War binaries. It analyzes the 64-bit Linux reference binary (`attila_linux_64`, Total War: Attila, which includes DWARF debug symbols) and maps functions, strings, and types to stripped 32-bit Windows retail binaries (`attila_windows_32` — Total War: Attila, `rome2_windows_32` — Total War: Rome II, and `tob_windows_32` — Total War Saga: Thrones of Britannia).
+
 ## 1. Core Architectural Principles
 
-1. **Conceptual Alignment**: Folder names, module names, CLI commands, and entrypoint function names must mirror the problem domain 1-to-1:
-   - Data flows strictly in one direction: **`init` -> `analyze` -> `extract` -> `derive` -> `query` (`search`, `show`, `sql`)**.
+1. **Conceptual Alignment**: Folder names, module names, CLI commands, and entrypoint function names mirror the problem domain 1-to-1:
+   - Data flows strictly in one direction: **`init` -> `analyze` -> `extract` -> `sql`**.
    - Every pipeline step owns its matching `.twdll/<step>/` directory and its flat `cli/src/twdll/<step>.py` module:
 
    | CLI Command | Step Directory | Python Module | Entrypoint Function | Return Type (`domain.py`) |
@@ -11,38 +13,28 @@
    | `twdll init` | `.twdll/init/` | `twdll/init.py` | `init.init(...)` | `InitResult` |
    | `twdll status` | *(reads `.twdll/*`)* | `twdll/init.py` | `init.status(...)` | `WorkspaceStatus` |
    | `twdll clean` | `.twdll/<target>/` | `twdll/init.py` | `init.clean(...)` | `CleanResult` |
+   | `twdll mcp` | *(stdio server)* | `twdll/mcp.py` | `mcp.serve_mcp(...)` | `None` |
    | `twdll analyze` | `.twdll/analyze/` | `twdll/analyze.py` | `analyze.analyze(...)` | `AnalyzeResult` |
    | `twdll extract` | `.twdll/extract/` | `twdll/extract.py` | `extract.extract(...)` | `ExtractResult` |
-   | `twdll derive` | `.twdll/derive/` | `twdll/derive.py` | `derive.derive(...)` | `DeriveResult` |
-   | `twdll search` | *(reads `extract`/`derive`)* | `twdll/query.py` | `query.search(...)` | `tuple[SearchHit, ...]` |
-   | `twdll show` | *(reads `extract`/`derive`)* | `twdll/query.py` | `query.show(...)` | `FunctionDetail` |
-   | `twdll sql` | *(reads `extract`/`derive`)* | `twdll/query.py` | `query.sql(...)` | `SqlQueryResult` |
+   | `twdll sql` | *(reads `extract`)* | `twdll/query.py` | `query.sql(...)` | `SqlQueryResult` |
 
-2. **Explicit Intent & Single-Point Path/Naming Constants (No Primitive Obsession)**:
+2. **Explicit Intent & Single-Point Path/Naming Constants**:
    - Never use raw `str` or untyped `int` where a domain concept exists.
-   - Represent all finite domain states, directory names, and file extensions with `StrEnum` (`Decompiler`, `BinaryName`, `BinaryArch`, `HostOS`, `StepName`, `CleanTarget`, `WorkspaceName`, `FileSuffix`, `ToolName`, `ToolSource`, `BinarySource`, `SymbolKind`, `XrefKind`, `StringEncoding`, `MatchMethod`, `SearchKind`, `DatabaseTarget`, `ProgressKind`).
-   - Represent virtual memory addresses and external identifiers with `typing.NewType` (`Address = NewType("Address", int)`, `SteamAppId = NewType("SteamAppId", str)`).
-   - Represent all filesystem locations in domain models with `pathlib.Path` (`Path | None` when optional—never `""` sentinel strings). Conversion to/from strings happens exclusively at serialization boundaries (TOML, JSON, SQLite).
-   - **Single-Point Path & Naming Rule**: Outside `domain.py`, no step module, CLI command, or test may hardcode workspace directory names (`".twdll"`, `"binaries"`, `"tools"`), target names (`"attila_linux_64"`), or artifact suffixes (`".sqlite"`, `".gpr"`, `".i64"`). Every module and test must reference `domain.py` enums and `WorkspacePaths` so any future naming change is a single-point edit in `domain.py`.
+   - Represent finite domain states, directory names, and file extensions with `StrEnum`, virtual addresses and external IDs with `typing.NewType`, and filesystem locations with `pathlib.Path` (`Path | None` when optional, never `""`).
+   - **Single-Point Path & Naming Rule**: Outside `domain.py`, no step module, CLI command, or test may hardcode workspace directory names (`".twdll"`, `"binaries"`, `"tools"`), target names (`"attila_linux_64"`), or artifact suffixes (`".sqlite"`, `".gpr"`, `".i64"`, `".meta.json"`). Every module and test must reference `domain.py` enums and `WorkspacePaths`.
 
-3. **The Data Quality Chain (`analyze` -> `extract` -> `derive` -> `query`)**:
-   - **`analyze` discovers the truth inside the binary (if `analyze` misses it, every later step is blind)**:
-     - A game binary on disk is just raw bytes. `extract` cannot find functions, strings, or call links by itself—it only copies what `analyze` already discovered inside the decompiler project.
-     - Therefore, **`analyze` must always prioritize complete, accurate discovery over speed shortcuts**: every function boundary (including switch jump-tables), every cross-reference (`xref`: who calls which function, who uses which string, who points to which vtable or global variable), and every stack frame, calling convention, and debug symbol/type.
-     - **Rule**: Never disable decompiler analyzers or add "speed workarounds" in `analyze` (such as turning off constant reference, switch table, or stack analyzers) that lose functions, xrefs, strings, types, or decompiled C quality downstream.
-   - **`extract` exports 100% verified facts into SQLite (no guessing, no unverified columns)**:
-     - `extract` opens the finished decompiler project (and in future iterations, dedicated lossless binary/DWARF parsers like `ddbug` / `gimli`) and writes its findings to SQLite (`.twdll/extract/`).
-     - **Rule**: Every table and column in `extract` must be empirically verified 1-by-1 against the real decompiler API (`pyghidra` / IDAPython) before implementation so we only store genuine facts the tool natively provides, never invented or approximated columns.
-   - **`derive` connects the dots across games**:
-     - Uses the strings, callgraphs, and vtables from `extract` to match unnamed 32-bit Windows functions (`rome2_windows_32`, `attila_windows_32`, `tob_windows_32`) to the named 64-bit Linux reference functions (`attila_linux_64`). The higher the fidelity of `analyze` and `extract`, the more functions `derive` can automatically name and match.
-   - **`query` (`search`, `show`, `sql`) gives the modder & AI agent the complete picture**:
-     - Lets a modder or AI agent look up any function, struct, vtable, string, disassembly, or decompiled C code to build C++ hooks without opening Ghidra or IDA.
+3. **Pipeline Data Quality Chain (`analyze` -> `extract` -> `sql`)**:
+   - **`analyze`**: Produces decompiler projects containing discovered function boundaries, switch jump-tables, cross-references (`xrefs`), strings, stack frames, and calling conventions, paired with an atomic `.meta.json` completion marker. On DWARF-bearing ELF64 targets (`attila_linux_64`), Ghidra's built-in `DWARF` analyzer is disabled to prevent heap exhaustion on 242.78 MB `.debug_info` while retaining `.symtab`, demangling, control flow, and xrefs. Do not disable other default decompiler analyzers if doing so drops xrefs or control flow.
+   - **`extract`**: Runs in two ordered sub-steps for DWARF-bearing targets:
+     1. **DWARF extraction first (backend-neutral)**: Extracts complete DWARF facts from `attila_linux_64` out-of-process via `ddbug_parser` (cross-checked against `llvm-dwarfdump` where needed) into SQLite (`dwarf_*` tables) independently of Ghidra or IDA.
+     2. **Decompiler fact & pseudocode extraction**: Copies empirically verified fields from the decompiler API (`pyghidra` / IDAPython) into per-binary SQLite databases (`.twdll/extract/`), using the `dwarf_*` tables for selective type/signature injection (pointer-cutoff stubs, SysV `this` param 0, `sret` check) when generating C pseudocode. Every table, column, and join key must be empirically verified (Step 3A) before schema lock.
+   - **`sql`**: Exposes completed per-binary extracted SQLite databases for read-only cross-binary SQL inspection via an `:memory:` connection.
 
 ---
 
 ## 2. Workspace & Flat 1-to-1 Directory Layout
 
-All local state lives in `twdll.toml` and `.twdll/` at the workspace root. Every pipeline step owns its matching `.twdll/<step>/` directory with flat, uniformly named files (no per-binary or per-decompiler subdirectories in `binaries/`, `analyze/`, or `extract/`):
+All local state lives in `twdll.toml` and `.twdll/` at the workspace root. Every pipeline step owns its matching `.twdll/<step>/` directory with flat, uniformly named files:
 
 ```text
 <workspace>/
@@ -63,18 +55,15 @@ All local state lives in `twdll.toml` and `.twdll/` at the workspace root. Every
     │       ├── rome2_windows_32.dll
     │       └── tob_windows_32.dll
     ├── analyze/                # Step 2 (`twdll analyze` / `twdll clean analyze`)
-    │   ├── ghidra_attila_linux_64.gpr (+ ghidra_attila_linux_64.rep/)
-    │   ├── ghidra_attila_windows_32.gpr (+ ghidra_attila_windows_32.rep/)
+    │   ├── ghidra_attila_linux_64.gpr (+ .rep/ + ghidra_attila_linux_64.meta.json)
+    │   ├── ghidra_attila_windows_32.gpr (+ .rep/ + ghidra_attila_windows_32.meta.json)
     │   ├── ida_attila_linux_64.i64
     │   └── ida_attila_windows_32.i64
-    ├── extract/                # Step 3 (`twdll extract` / `twdll clean extract`)
-    │   ├── ghidra_attila_linux_64.sqlite
-    │   ├── ghidra_attila_windows_32.sqlite
-    │   ├── ida_attila_linux_64.sqlite
-    │   └── ida_attila_windows_32.sqlite
-    └── derive/                 # Step 4 (`twdll derive` / `twdll clean derive`)
-        ├── ghidra.sqlite       # Derived callgraphs, vtables, and cross-binary matches
-        └── ida.sqlite          # Derived callgraphs, vtables, and cross-binary matches
+    └── extract/                # Step 3 (`twdll extract` / `twdll clean extract`)
+        ├── ghidra_attila_linux_64.sqlite
+        ├── ghidra_attila_windows_32.sqlite
+        ├── ida_attila_linux_64.sqlite
+        └── ida_attila_windows_32.sqlite
 ```
 
 - **Windows safety**: `.twdll/uv/` is separate from `.twdll/init/` so `twdll clean init` or `twdll clean all` never attempts to delete the running `python.exe` inside `.twdll/uv/venv/`.
@@ -103,7 +92,7 @@ All local state lives in `twdll.toml` and `.twdll/` at the workspace root. Every
 
 ## 3. Flat 1-to-1 Python Module Layout & Layer Contracts
 
-All CLI code lives under `cli/src/twdll/` with a flat 1-to-1 module layout (no nested `steps/` subpackage and no separate `workspace.py`):
+All CLI code lives under `cli/src/twdll/` with a flat 1-to-1 module layout:
 
 ```text
 cli/
@@ -112,241 +101,184 @@ cli/
 │   └── twdll/
 │       ├── __init__.py
 │       ├── py.typed
-│       ├── domain.py           # Layer 0: All enums, NewTypes, constants, paths, and dataclasses (stdlib-only)
-│       ├── database.py         # Layer 1: All sqlite3 schemas, writers, and queries (stdlib-only)
+│       ├── domain.py           # Layer 0: Enums, NewTypes, constants, paths, dataclasses (stdlib-only)
+│       ├── database.py         # Layer 1: SQLite schemas, writers, and read-only SQL executor (stdlib-only)
+│       ├── _ghidra.py          # Layer 1: Shared internal PyGhidra/JVM lifecycle & project helpers
 │       ├── init.py             # Layer 2: Config, toolchain, Steam discovery, staging, status, clean
 │       ├── analyze.py          # Layer 2: Headless Ghidra / IDA project analysis
-│       ├── extract.py          # Layer 2: Base fact extraction into .twdll/extract/<decompiler>.sqlite
-│       ├── derive.py           # Layer 2: Pure-Python derivations into .twdll/derive/<decompiler>.sqlite
-│       ├── query.py            # Layer 2: Read-only search, show, and sql queries
+│       ├── extract.py          # Layer 2: Per-binary fact extraction into .twdll/extract/<decompiler>_<binary>.sqlite
+│       ├── query.py            # Layer 2: Read-only sql query entrypoint
 │       ├── mcp.py              # Layer 3: MCP stdio server adapter (only module importing `mcp`)
 │       └── cli.py              # Layer 3: Typer CLI commands and output formatting
 └── tests/
+    ├── test_architecture.py
     ├── test_init.py
     ├── test_mcp.py
     ├── test_analyze.py
     ├── test_extract.py
-    ├── test_derive.py
     └── test_query.py
 ```
 
-### `import-linter` Architectural Contracts (`cli/pyproject.toml`)
+### 3.1 `import-linter` Architectural Contracts (`cli/pyproject.toml`)
 1. `include_external_packages = true` at `[tool.importlinter]` root.
 2. **Strict one-way layers**:
    - `twdll.cli`
    - `twdll.mcp`
-   - `twdll.init`, `twdll.analyze`, `twdll.extract`, `twdll.derive`, `twdll.query` (independent sibling step modules)
-   - `twdll.database`
+   - `twdll.init | twdll.analyze | twdll.extract | twdll.query` (independent sibling step modules)
+   - `twdll._ghidra | twdll.database` (independent shared infrastructure modules)
    - `twdll.domain`
-3. **Centralized SQLite**: Only `twdll.database` may import `sqlite3`.
-4. **CLI separation**: Only `twdll.cli` may import `typer` or `rich`.
-5. **MCP separation**: Only `twdll.mcp` may import `mcp` (`allow_indirect_imports = true` so `twdll.cli` may invoke `twdll.mcp.serve_mcp`).
-6. **Stdlib-only core**: `twdll.domain` and `twdll.database` may only import Python standard library modules so PyGhidra and IDAPython scripts can import them directly.
+3. **Centralized Ghidra/JVM**: Only `twdll._ghidra` may import `pyghidra` or `jpype`.
+4. **Centralized SQLite**: Only `twdll.database` may import `sqlite3`.
+5. **CLI separation**: Only `twdll.cli` may import `typer` or `rich`.
+6. **MCP separation**: Only `twdll.mcp` may import `mcp` (`allow_indirect_imports = true` so `twdll.cli` may invoke `twdll.mcp.serve_mcp`).
+7. **Stdlib-only core**: `twdll.domain` and `twdll.database` may only import Python standard library modules so PyGhidra and IDAPython scripts can import them directly.
 
 ---
 
-## 4. LLM-Friendly Code Rules & Quality Guardrails
+## 4. Architectural & Code Quality Rules
 
-1. **No Deep `if / else` Chains — Use `match / case` & Declarative Tables**:
+1. **Declarative Tables & Exhaustive `match / case`**:
    - Store per-enum configuration in declarative lookup tables in `domain.py` (`BINARY_SPECS`, `GHIDRA_PORTABLE_SPEC`, `JDK_PORTABLE_SPECS`).
-   - Use Python 3.12 `match / case` when dispatching on `StrEnum` (`Decompiler`, `BinaryName`, `BinaryArch`, `HostOS`, `StepName`, `CleanTarget`, `ToolName`, `DatabaseTarget`, `SearchKind`). Omit wildcard `case _:` on enum matches so `basedpyright` (strict) enforces compile-time exhaustiveness.
-   - Use flat early-return guard clauses (`if not path.is_file(): return False`) for simple precondition checks.
-2. **Small, Single-Purpose Functions (Enforced by Ruff)**:
+   - Use Python 3.12 `match / case` when dispatching on `StrEnum`; omit wildcard `case _:` on enum matches so `basedpyright` enforces compile-time exhaustiveness.
+   - Use flat early-return guard clauses for simple precondition checks.
+2. **Small, Single-Purpose Functions**:
    - Separate pure data parsing/resolution from disk/network I/O side effects.
    - Never use boolean mode flags that mix read-only inspection with disk mutation.
-   - Never drill 6–9 mock parameters through top-level functions; keep helper functions small so unit tests call them directly on `tmp_path`.
-   - Ruff lint rules in `cli/pyproject.toml` enforce function size mechanically:
-     - `C901`: `max-complexity = 8`
-     - `PLR0912`: `max-branches = 8`
-     - `PLR0913`: `max-args = 5`
-     - `PLR0915`: `max-statements = 30`
+   - Complexity limits are enforced mechanically via Ruff in `cli/pyproject.toml` (`C901 <= 8`, `PLR0912 <= 8`, `PLR0913 <= 6`, `PLR0915 <= 35`).
 3. **Strict Typing & Zero Suppression Comments**:
-   - `basedpyright` runs in `strict` mode with `venvPath = "../.twdll/uv"` and `venv = "venv"`.
-   - Zero `# noqa` and zero `# type: ignore` anywhere in the codebase. For Windows-only `winreg`, use `importlib.import_module("winreg")` inside a helper returning `ModuleType | None`.
+   - `basedpyright` runs in `strict` mode; `ruff` and `test_architecture.py` enforce zero `# noqa`, zero `# type: ignore`, and zero `# pyright: ignore` comments across `cli/src/` and `cli/tests/`.
+   - Execution modules (`analyze.py`, `extract.py`, `_ghidra.py`) must always resolve tools via `resolve_toolchain(ctx)` rather than reading `ctx.config.toolchain` directly.
 4. **Cross-Platform Path & Archive Handling**:
    - Use `pathlib.Path` everywhere (no hardcoded `/` or `\`, no `shell=True`).
-   - Pass `filter="data"` when extracting tar archives so Python 3.13/3.14 emits zero deprecation warnings.
    - Parametrize unit tests across `[HostOS.LINUX, HostOS.WINDOWS]`.
-5. **Explicit `WorkspaceContext` & LLM / MCP-Ready Command Boundaries**:
-   - **Never extract context inside step functions**: Step functions (`analyze.analyze`, `extract.extract`, `derive.derive`, `query.search`, `query.show`, `query.sql`) never take raw `root: Path`, `decompiler: Decompiler | None`, or `host_os: HostOS | None`, and never parse `twdll.toml` themselves.
-   - **`WorkspaceContext` in `domain.py`**: Encapsulates `paths: WorkspacePaths`, `config: WorkspaceConfig` (loaded from `twdll.toml` via `WorkspaceContext.from_root(root)`), and `host_os: HostOS` (`ctx.root`, `ctx.decompiler`), using standard library `dataclasses.replace` for CLI/test overrides.
-   - **Root Context vs. Action Arguments**: Workspace/context overrides (`--decompiler`, `--ghidra-dir`, `--java-home`, `--ida-dir`) live **exclusively** on the root `twdll` callback (`@app.callback()`)—never duplicated on subcommands. Step functions take `ctx: WorkspaceContext` + typed `domain.py` parameters (`StrEnum`s, multi-binary `binaries: Sequence[BinaryName] = ()`, or typed query objects) and return frozen `@dataclass` results. Both `cli.py` (Typer) and `mcp.py` (`MCPServer` stdio via `twdll mcp`, configured in `.agents/mcp.json`) wrap those exact entrypoints directly—returning frozen `@dataclass` results in `mcp.py` so `mcp` 2.x generates full `inputSchema` and `outputSchema` automatically.
+5. **Explicit `WorkspaceContext` & Command Boundaries**:
+   - **Never extract context inside step functions**: Step functions (`init.init`, `init.status`, `init.clean`, `analyze.analyze`, `extract.extract`, `query.sql`) never take raw `root: Path`, `decompiler: Decompiler | None`, or `host_os: HostOS | None`, and never parse `twdll.toml` themselves.
+   - **`WorkspaceContext` in `domain.py`**: Encapsulates `paths: WorkspacePaths`, `config: WorkspaceConfig`, and `host_os: HostOS` (`WorkspaceContext.from_root(root)`, `ctx.root`, `ctx.decompiler`), using `dataclasses.replace` for CLI/test overrides.
+   - **Root Context vs. Action Arguments**: Workspace overrides (`--decompiler`, `--ghidra-dir`, `--java-home`, `--ida-dir`) live **exclusively** on the root `twdll` callback. Step functions take `ctx: WorkspaceContext` + typed `domain.py` parameters and return frozen `@dataclass` results. Both `cli.py` (Typer) and `mcp.py` (`MCPServer` stdio via `twdll mcp`, configured in `.agents/mcp.json`) wrap those exact entrypoints directly.
 
 ---
 
 ## 5. Domain Model (`domain.py`)
 
-`domain.py` is the single source of truth for all `NewType`s, `StrEnum`s, declarative tables, path builders, configuration/status models, and SQLite row dataclasses. High-volume SQLite row and core config dataclasses use `@dataclass(frozen=True, slots=True)`; command result/status dataclasses use `@dataclass(frozen=True)` (omitting `slots=True`) so `mcp` 2.x/Pydantic generates full `outputSchema` definitions automatically.
+`domain.py` is the single source of truth for all `NewType`s, `StrEnum`s, declarative tables, path builders, and configuration/status/result dataclasses. High-volume SQLite row and core config dataclasses use `@dataclass(frozen=True, slots=True)`; command result/status dataclasses returned by `mcp.py` omit `slots=True` so `mcp` 2.x/Pydantic generates full `outputSchema` definitions automatically.
 
 ### 5.1 Domain `NewType`s & `StrEnum`s
-- `Address = NewType("Address", int)`
+- `Address = NewType("Address", int)` *(decompiler-assigned virtual address; paired with per-binary `image_base`)*
 - `SteamAppId = NewType("SteamAppId", str)`
 - `Decompiler(StrEnum)`: `GHIDRA = "ghidra"`, `IDA = "ida"`
 - `BinaryName(StrEnum)`: `ATTILA_LINUX_64 = "attila_linux_64"`, `ATTILA_WINDOWS_32 = "attila_windows_32"`, `ROME2_WINDOWS_32 = "rome2_windows_32"`, `TOB_WINDOWS_32 = "tob_windows_32"`
 - `BinaryArch(StrEnum)`: `ELF64 = "elf64"`, `PE32 = "pe32"`
 - `HostOS(StrEnum)`: `LINUX = "linux"`, `WINDOWS = "windows"` (`HostOS.current()`)
-- `StepName(StrEnum)`: `INIT = "init"`, `ANALYZE = "analyze"`, `EXTRACT = "extract"`, `DERIVE = "derive"`
-- `CleanTarget(StrEnum)`: `INIT = "init"`, `ANALYZE = "analyze"`, `EXTRACT = "extract"`, `DERIVE = "derive"`, `ALL = "all"` (`CleanTarget.steps() -> tuple[StepName, ...]`)
+- `StepName(StrEnum)`: `INIT = "init"`, `ANALYZE = "analyze"`, `EXTRACT = "extract"`
+- `CleanTarget(StrEnum)`: `INIT = "init"`, `ANALYZE = "analyze"`, `EXTRACT = "extract"`, `ALL = "all"` (`CleanTarget.steps() -> tuple[StepName, ...]`)
 - `WorkspaceName(StrEnum)`: `CONFIG_FILE = "twdll.toml"`, `DATA_DIR = ".twdll"`, `UV_DIR = "uv"`, `TOOLS_DIR = "tools"`, `BINARIES_DIR = "binaries"`
-- `FileSuffix(StrEnum)`: `DLL = ".dll"`, `SQLITE = ".sqlite"`, `GHIDRA_GPR = ".gpr"`, `GHIDRA_REP = ".rep"`, `IDA_I64 = ".i64"`
+- `FileSuffix(StrEnum)`: `DLL = ".dll"`, `SQLITE = ".sqlite"`, `GHIDRA_GPR = ".gpr"`, `GHIDRA_REP = ".rep"`, `IDA_I64 = ".i64"`, `META_JSON = ".meta.json"`
 - `ToolName(StrEnum)`: `GHIDRA = "ghidra"`, `JAVA = "java"`, `IDA = "ida"`
 - `ToolSource(StrEnum)`: `TOML = "twdll.toml"`, `PORTABLE = ".twdll/init/tools"`, `DEFAULT_DIR = "default_install_dir"`, `MISSING = "missing"`
 - `BinarySource(StrEnum)`: `TOML = "twdll.toml"`, `TOML_INVALID = "twdll.toml (invalid)"`, `STEAM = "steam"`, `STAGED = "staged"`, `MISSING = "missing"`
-- `SymbolKind(StrEnum)`: `FUNCTION = "function"`, `DATA = "data"`, `IMPORT = "import"`, `EXPORT = "export"`, `LABEL = "label"`
-- `XrefKind(StrEnum)`: `CALL = "call"`, `DATA_READ = "data_read"`, `DATA_WRITE = "data_write"`, `OFFSET = "offset"`
-- `StringEncoding(StrEnum)`: `ASCII = "ascii"`, `UTF8 = "utf8"`, `UTF16_LE = "utf16_le"`
-- `MatchMethod(StrEnum)`: `EXACT_SYMBOL = "exact_symbol"`, `UNIQUE_STRING = "unique_string"`, `CALLGRAPH_NEIGHBOR = "callgraph_neighbor"`, `VTABLE_SLOT = "vtable_slot"`
-- `SearchKind(StrEnum)`: `FUNCTION = "function"`, `SYMBOL = "symbol"`, `STRING = "string"`, `VTABLE = "vtable"`
-- `DatabaseTarget(StrEnum)`: `EXTRACT = "extract"`, `DERIVE = "derive"`
 - `ProgressKind(StrEnum)`: `DOWNLOAD = "download"`, `EXTRACT_ARCHIVE = "extract_archive"`, `STAGE_BINARY = "stage_binary"`, `STEP = "step"`
 
-### 5.2 Declarative Specs & Workspace Paths
+### 5.2 Declarative Specs, Progress & Workspace Paths
 - `STEAM_CONSOLE_URL = "steam://open/console"`
-- `BinarySpec(name: BinaryName, steam_app_id: SteamAppId, default_install_dir: str, file_name: str, staged_file_name: str, arch: BinaryArch, depot_command: str | None = None, expected_sha256: str | None = None, is_reference: bool = False)`
-- `BINARY_SPECS: dict[BinaryName, BinarySpec]`, `REFERENCE_BINARIES: tuple[BinaryName, ...]`, `SELECTABLE_TARGETS: tuple[BinaryName, ...]`
-- `PortableArchiveSpec(tool: ToolName, url: str, archive_name: str, extracted_prefix: str)`
-- `GHIDRA_PORTABLE_SPEC: PortableArchiveSpec`
-- `JDK_PORTABLE_SPECS: dict[HostOS, PortableArchiveSpec]`
-- `default_ida_dirs(host_os: HostOS, home_dir: Path) -> tuple[Path, ...]`
-- `default_steam_roots(host_os: HostOS, home_dir: Path) -> tuple[Path, ...]`
-- `WorkspacePaths(root: Path)`: deterministic properties/methods built strictly from `WorkspaceName`, `StepName`, and `FileSuffix` for `config_file`, `data_dir`, `uv_dir`, `step_dir(step)`, `init_dir`, `tools_dir`, `binaries_dir`, `staged_binary_path(binary)`, `analyze_dir`, `analyze_stem(decompiler, binary)`, `ghidra_gpr_path(binary)`, `ghidra_rep_dir(binary)`, `ida_db_path(binary)`, `extract_dir`, `extract_db_path(decompiler, binary)`, `derive_dir`, `derive_db_path(decompiler)`.
+- `BinarySpec(...)`, `BINARY_SPECS: dict[BinaryName, BinarySpec]`, `REFERENCE_BINARIES`, `SELECTABLE_TARGETS`
+- `PortableArchiveSpec(...)`, `GHIDRA_PORTABLE_SPEC`, `JDK_PORTABLE_SPECS`
+- `ProgressEvent(kind: ProgressKind, task_key: str, label: str, completed: int, total: int | None)`, `ProgressCallback = Callable[[ProgressEvent], None]`, `noop_progress`
+- `default_ida_dirs(...)`, `default_steam_roots(...)`, `default_steamapps_subdirs(...)`
+- `WorkspacePaths(root: Path)`: deterministic properties/methods built from `WorkspaceName`, `StepName`, and `FileSuffix` (`config_file`, `data_dir`, `uv_dir`, `step_dir`, `init_dir`, `tools_dir`, `binaries_dir`, `staged_binary_path`, `analyze_dir`, `analyze_stem`, `analyze_artifact_path`, `analyze_meta_path`, `ghidra_gpr_path`, `ghidra_rep_dir`, `ida_db_path`, `extract_dir`, `extract_db_path`).
 
-### 5.3 Typed Domain Models & SQLite Row Dataclasses
+### 5.3 Typed Domain Models
 - **Setup & Context (`init`, `status`, `clean`, `WorkspaceContext`)**:
-  - `ToolchainConfig(ghidra_dir: Path | None = None, java_home: Path | None = None, ida_dir: Path | None = None)`
-  - `WorkspaceConfig(decompiler: Decompiler = Decompiler.GHIDRA, targets: tuple[BinaryName, ...] = SELECTABLE_TARGETS, binaries: dict[BinaryName, Path | None], toolchain: ToolchainConfig)` (`normalize_targets`, `active_binaries`)
-  - `WorkspaceContext(paths: WorkspacePaths, config: WorkspaceConfig, host_os: HostOS)` (`WorkspaceContext.from_root(root)`, `ctx.root`, `ctx.decompiler`)
-  - `ToolLocation(name: ToolName, ready: bool, path: Path | None, source: ToolSource)`
-  - `ToolchainStatus(decompiler: Decompiler, ready: bool, tools: tuple[ToolLocation, ...])`
-  - `BinaryStatus(name: BinaryName, arch: BinaryArch, staged: bool, staged_path: Path | None, discovered_path: Path | None, source: BinarySource, valid_header: bool, depot_command: str | None = None, instruction: str | None = None, sha256: str | None = None, sha256_match: bool | None = None)`
-  - `StepSummary(step: StepName, directory: Path, exists: bool, entries: tuple[str, ...])`
-  - `WorkspaceStatus(root: Path, config_file: Path, config_exists: bool, host_os: HostOS, decompiler: Decompiler, toolchain: ToolchainStatus, binaries: tuple[BinaryStatus, ...], steps: tuple[StepSummary, ...])`
-  - `InitResult(config_file: Path, config_created: bool, decompiler: Decompiler, toolchain: ToolchainStatus, binaries: tuple[BinaryStatus, ...])`
-  - `CleanResult(target: CleanTarget, removed_directories: tuple[Path, ...])`
+  - `ToolchainConfig`, `WorkspaceConfig` (`normalize_targets`), `active_binaries(config)`, `WorkspaceContext` (`from_root`, `root`, `decompiler`)
+  - `ToolLocation`, `ToolchainStatus`, `BinaryStatus`, `StepSummary`, `WorkspaceStatus`, `InitResult`, `CleanResult`
 - **Analyze (`analyze`)**:
-  - `AnalyzeTargetResult(binary: BinaryName, decompiler: Decompiler, project_path: Path, analyzed: bool, skipped: bool)`
+  - `AnalyzeTargetResult(binary: BinaryName, decompiler: Decompiler, project_path: Path, analyzed: bool, skipped: bool, duration_seconds: float = 0.0)`
   - `AnalyzeResult(decompiler: Decompiler, targets: tuple[AnalyzeTargetResult, ...])`
-- **Extract (`extract`) — SQLite Row Dataclasses (`.twdll/extract/<decompiler>_<binary>.sqlite`)**:
-  - `ExtractedBinaryRow(binary: BinaryName, arch: BinaryArch, decompiler: Decompiler, image_base: Address, analyzed_at: str)`
-  - `FunctionRow(binary: BinaryName, address: Address, name: str, demangled_name: str | None, size: int, signature: str | None, is_thunk: bool)`
-  - `SymbolRow(binary: BinaryName, address: Address, name: str, demangled_name: str | None, kind: SymbolKind)`
-  - `StringRow(binary: BinaryName, address: Address, value: str, encoding: StringEncoding)`
-  - `XrefRow(binary: BinaryName, from_address: Address, to_address: Address, kind: XrefKind)`
-  - `ExtractTargetResult(binary: BinaryName, functions_count: int, symbols_count: int, strings_count: int, xrefs_count: int)`
-  - `ExtractResult(decompiler: Decompiler, db_path: Path, targets: tuple[ExtractTargetResult, ...])`
-- **Derive (`derive`) — SQLite Row Dataclasses (`.twdll/derive/<decompiler>.sqlite`)**:
-  - `CallEdgeRow(binary: BinaryName, caller_address: Address, callee_address: Address)`
-  - `VtableRow(binary: BinaryName, address: Address, class_name: str, entry_count: int)`
-  - `VtableEntryRow(binary: BinaryName, vtable_address: Address, slot_index: int, target_address: Address)`
-  - `FunctionMatchRow(source_binary: BinaryName, source_address: Address, target_binary: BinaryName, target_address: Address, confidence: float, method: MatchMethod)`
-  - `DeriveResult(decompiler: Decompiler, db_path: Path, call_edges_count: int, vtables_count: int, matches_count: int)`
-- **Query (`search`, `show`, `sql`)**:
-  - `SearchHit(binary: BinaryName, kind: SearchKind, address: Address, name: str, detail: str | None)`
-  - `FunctionDetail(function: FunctionRow, callers: tuple[Address, ...], callees: tuple[Address, ...], strings: tuple[StringRow, ...], matches: tuple[FunctionMatchRow, ...])`
-  - `SqlQueryResult(columns: tuple[str, ...], rows: tuple[tuple[int | float | str | bytes | None, ...], ...])`
-- **Boundary JSON Serialization (`to_dict(obj) -> dict[str, object]`)**:
-  - A single pure serialization helper in `domain.py` converts dataclasses containing `Path`, `StrEnum`, and `NewType` values into JSON-serializable primitives (`Path -> str`, `StrEnum -> str`) at the CLI output boundary.
+- **Extract (`extract`) & Query (`sql`)** *(Result models must omit `slots=True` for MCP `outputSchema`; row schemas finalized after Step 3A)*:
+  - `ExtractTargetResult(binary: BinaryName, db_path: Path, skipped: bool, duration_seconds: float = 0.0)`
+  - `ExtractResult(decompiler: Decompiler, targets: tuple[ExtractTargetResult, ...])`
+  - `SqlScalar = int | float | str | None`, `SqlRow = tuple[SqlScalar, ...]`
+  - `SqlQueryResult(columns: tuple[str, ...], rows: tuple[SqlRow, ...], truncated: bool)`
 
 ---
 
-## 6. Decompiler Analysis (`analyze.py`) & Extraction (`extract.py` / `database.py`)
+## 6. Pipeline Steps: Analysis, Extraction, MCP & Query
 
-### 6.1 Step 2 — Decompiler Analysis (`twdll analyze`)
-- **Single-Process Ghidra Execution via `pyghidra`**:
-  - Drives Ghidra 12.2 directly in-process from Python via `pyghidra` (setting `JAVA_HOME` to the resolved JDK 25 directory) without spawning `analyzeHeadless` (`.sh` / `.bat`), external `.java` pre-scripts, or multi-worker subprocess schedulers.
-  - Runs Ghidra's standard auto-analysis sequentially (one binary at a time) with full default code, xref, switch-table, stack, and DWARF analyzers enabled—no analyzer-disabling speed workarounds that drop xrefs or control flow.
+### 6.1 Step 2 — Decompiler Analysis (`twdll analyze` & `twdll._ghidra`)
+- **Shared Ghidra Lifecycle (`twdll._ghidra`)**:
+  - Centralizes `_GhidraProgressMonitor`, `_require_ghidra_toolchain`, `pyghidra.start(install_dir=...)` (setting `JAVA_HOME` and `JAVA_HOME_OVERRIDE` so `PATH` is never consulted), `tempfile.TemporaryDirectory()` staging, and Ghidra project open/save helpers.
+  - Runs standard auto-analysis sequentially (32-bit `PE32` binaries first, then 64-bit `ELF64`) with all default analyzers enabled, filtering targets via `active_binaries(ctx.config)`.
   - Saves projects flat in `.twdll/analyze/` (`ghidra_<binary>.gpr` and `ghidra_<binary>.rep/`).
-- **Skip & Clean Behavior**:
-  - Skips a target only if its Ghidra project (`ghidra_<binary>.gpr` and `ghidra_<binary>.rep/`) exists **and** `GhidraProgramUtilities.isAnalyzed(program)` is `True`; incomplete/corrupted projects are deleted and recreated from scratch. Full re-analysis uses `twdll clean analyze`.
-- **Verified `pyghidra` 2.x / Ghidra 12.2 API Notes** (shared by `analyze.py` and `extract.py`):
-  - `open_program()` is deprecated; use `pyghidra.open_project(dir_path, stem, create=...)` + `pyghidra.program_context(project, f"/{staged_path.name}")`.
-  - Ghidra's `ProjectLocator` forbids any path element starting with `.` (such as `.twdll`), so `open_project` must operate in a dot-free `tempfile.TemporaryDirectory()` and sync `.gpr`/`.rep/` to/from `.twdll/analyze/`.
-  - `ProgramLoader.Builder.source(...)` has ambiguous Java overloads for `Path`; always pass `str(staged_path)`.
-  - Run auto-analysis via `pyghidra.analyze(program)` (not `analyze_program`), followed by `program.save("twdll initial analysis", pyghidra.task_monitor())`.
-- **IDA 9.5 Backend (Deferred — Research Findings Recorded)**:
-  - Deferred until tested on a host with IDA 9.5 installed.
-  - When implemented, evaluate IDA 9.x `idalib` (`import idapro` from `<ida_dir>/idalib/python/`) first to determine whether in-process Python execution is cleaner than `idat` batch subprocesses.
-  - Preserve empirical IDA 9.5 DWARF/PE32 rules from commit `9049ef9`:
-    1. On `attila_linux_64`, clear `AF_STKARG | AF_REGARG` in `INF_AF` (`(get_inf_attr(INF_AF) & ~(AF_STKARG | AF_REGARG)) | AF_DODATA | AF_FINAL`) to avoid the IDA 9.5 type-propagation hang across 168,382 DWARF functions (keep `AF_STKARG | AF_REGARG` enabled on 32-bit stripped PE targets).
-    2. Pass `-Opdb:off` on stripped 32-bit PE targets (`rome2_windows_32`, `attila_windows_32`, `tob_windows_32`) to avoid symbol-server stalls.
-    3. Never pass `-Odwarf:lazy_types=1` (degrades forward-declared C++ structs into `gap0` byte arrays) and never clear `AF2_DOEH` (fragments `.eh_frame` functions).
+- **Direct Skip Checks via `.meta.json`**:
+  - `analyze` writes `<decompiler>_<binary>.meta.json` atomically (`os.replace`) after saving the Ghidra project (`decompiler`, `binary`, `binary_sha256`, `analyzed_at`, `schema_version`).
+  - Subsequent runs verify both `.meta.json` (valid JSON with matching `binary_sha256`) and existence of `.gpr`/`.rep/` before skipping, without starting a JVM or copying `.rep/` directories. Missing, malformed, or stale `.meta.json` triggers clean re-analysis. Full re-analysis uses `twdll clean analyze`.
+- **Verified `pyghidra` 2.x / Ghidra 12.2 API Notes**:
+  - Use `pyghidra.open_project(dir_path, stem, create=...)` + `pyghidra.program_context(project, f"/{staged_path.name}")` (`open_program()` is deprecated).
+  - Ghidra's `ProjectLocator` forbids path elements starting with `.` (such as `.twdll`), so `open_project` operates in a dot-free `tempfile.TemporaryDirectory()` and syncs `.gpr`/`.rep/` to/from `.twdll/analyze/`.
+  - `ProgramLoader.Builder.source(...)` requires `str(staged_path)` to avoid ambiguous Java overloads; run analysis via `pyghidra.analyze(program, monitor=...)` and save via `program.save(...)`.
+- **IDA 9.5 Backend (Deferred)**:
+  - Raises `NotImplementedError` until tested on a host with IDA 9.5 installed.
 
-### 6.2 Step 3 — Fact Extraction (`twdll extract` & `database.py`)
-`database.py` is the only module allowed to import `sqlite3`. It translates between SQLite storage primitives (`TEXT`, `INTEGER`, `REAL`) and the typed `domain.py` row dataclasses.
+### 6.2 MCP Subprocess Isolation (`twdll.mcp`)
+- `twdll_init`, `twdll_status`, and `twdll_clean` execute in-process against `_refresh_context(ctx)`.
+- JVM-bound tools (`twdll_analyze`, `twdll_extract`) spawn a short-lived worker subprocess (`sys.executable -m twdll.cli ... --json`, `cwd=ctx.root`, `stdin=subprocess.DEVNULL`, `stdout=subprocess.PIPE`, `stderr=subprocess.PIPE`) in an isolated process group (`start_new_session=True` on POSIX; process-tree termination on Windows) so timeouts/cancellations terminate child JVMs.
+- Only explicit startup CLI overrides (`--decompiler`, `--ghidra-dir`, `--java-home`, `--ida-dir`) are forwarded to workers so `twdll.toml` edits take effect on every MCP call; target filters are passed as repeated `--binary` options, and non-zero exits, timeouts, or non-JSON `stderr` map to clean MCP tool errors.
 
+### 6.3 Step 3 — Fact & DWARF Extraction (`twdll extract` & `database.py`)
+`database.py` is the only module allowed to import `sqlite3`.
+
+- **Pre-Implementation Empirical Gate (Step 3A)**:
+  - Before locking the `extract` and `dwarf_*` SQLite schemas and join keys, run two empirical checks:
+    1. Inspect `ddbug_parser v0.6.0` fields on `attila_linux_64` (benchmarked at 26.56s / 2.88 GiB peak RSS, 0 errors across 469 CUs) and cross-check any missing raw attributes with `llvm-dwarfdump` (1.64 GiB peak RSS) to finalize the exact `dwarf_*` tables and cross-binary mapping keys.
+    2. Inspect Ghidra 12.2's Python API (`Function`, `Symbol`, `Data`, `Reference`, `MemoryBlock`, `DecompInterface` with selective pointer-cutoff type injection) to finalize decompiler-extracted tables and decide whether bulk C pseudocode and FTS5 indexing are viable.
+- **Ordered Extraction Pipeline**:
+  1. **DWARF-first step (`attila_linux_64`)**: Extract DWARF structs, inheritance, member offsets, functions, parameters, local variable locations, inlined call sites, and source paths out-of-process via `ddbug_parser` into backend-neutral SQLite tables—usable by both Ghidra (now) and IDA 9.5 (later).
+  2. **Decompiler step**: Extract verified structural facts (and C pseudocode if approved by Step 3A, injecting per-function DWARF signatures + pointer-cutoff struct closures on Ghidra) into `.twdll/extract/<decompiler>_<binary>.sqlite`.
 - **Flat Per-Binary Extracted Databases (`.twdll/extract/<decompiler>_<binary>.sqlite`)**:
-  - Mirrors `.twdll/analyze/<decompiler>_<binary>.gpr|.i64` 1-to-1 in a flat directory.
-- **Completion Proof in SQLite (`meta` Table)**:
-  - Mere file existence does not prove extraction completed. Each `.twdll/extract/<decompiler>_<binary>.sqlite` includes a `meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)` table where the completion marker and the staged binary's `binary_sha256` are written **only in the final commit** after all extraction tables finish writing.
-  - `twdll extract` skips a binary only if its SQLite `meta` table confirms completion for the current binary's SHA-256 (re-extraction from scratch uses `twdll clean extract`).
-- **Pre-Implementation Column Verification Gate**:
-  - Before locking or implementing the final SQLite schema for `.twdll/extract/<decompiler>_<binary>.sqlite`, run an empirical `pyghidra` verification task against Ghidra 12.2 to verify every candidate table and column 1-by-1 against the real decompiler API (confirming exact API method, return type, semantics, and column name without workarounds).
-  - Baseline tables (`functions`, `symbols`, `strings`, `xrefs`, plus verified disassembly, decompiled C, and variables) are expanded strictly from verified decompiler outputs.
-- **Future Dedicated Lossless DWARF Extraction (`ddbug` / `gimli`)**:
-  - Decompiler DWARF importers (`Ghidra` and `IDA`) force C++ DWARF DIE trees into C-centric internal type systems and can drop or flatten templates, virtual/multiple inheritance, inlined functions (`DW_TAG_inlined_subroutine`), and complex variable locations.
-  - Keep `.twdll/extract/<decompiler>_<binary>.sqlite` focused strictly on decompiler outputs, reserving an orthogonal decompiler-agnostic slot under `.twdll/extract/` for a dedicated lossless DWARF parser (such as `ddbug` / `gimli`) in a future iteration.
+  - Mirrors `.twdll/analyze/<decompiler>_<binary>.gpr|.i64` 1-to-1, using integer addresses paired with `image_base` and backend-neutral table names.
+  - Written to `.sqlite.staging` in `.twdll/extract/`, recording `"completed"` and `binary_sha256` in `meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)` in the final transaction, closing all SQLite connections, and atomically renaming via `os.replace()`.
+  - `twdll extract` skips a binary only if its `meta` table confirms `"completed"` and `binary_sha256` matches the current staged binary (unless `--force` is passed), and fails clearly if a target binary has not been analyzed.
 
-### 6.3 Step 4 — Derived Database Schema (`.twdll/derive/<decompiler>.sqlite`, Deferred Until `analyze` & `extract` Complete)
-- `call_edges (binary TEXT NOT NULL, caller_address INTEGER NOT NULL, callee_address INTEGER NOT NULL, PRIMARY KEY (binary, caller_address, callee_address))`
-- `vtables (binary TEXT NOT NULL, address INTEGER NOT NULL, class_name TEXT NOT NULL, entry_count INTEGER NOT NULL, PRIMARY KEY (binary, address))`
-- `vtable_entries (binary TEXT NOT NULL, vtable_address INTEGER NOT NULL, slot_index INTEGER NOT NULL, target_address INTEGER NOT NULL, PRIMARY KEY (binary, vtable_address, slot_index))`
-- `function_matches (source_binary TEXT NOT NULL, source_address INTEGER NOT NULL, target_binary TEXT NOT NULL, target_address INTEGER NOT NULL, confidence REAL NOT NULL, method TEXT NOT NULL, PRIMARY KEY (source_binary, source_address, target_binary))`
-
-### 6.4 Read-Only Enforcement for `twdll sql`
-- Arbitrary user queries executed via `twdll sql` open the target SQLite file using read-only URI mode (`file:<path>?mode=ro` with `uri=True`) so `twdll sql` can never mutate extracted or derived databases.
+### 6.4 Step 3C — Safe Read-Only SQL (`twdll sql`)
+- `twdll.query.sql(ctx, query, limit=200, timeout_ms=5000)` validates `limit > 0` and `timeout_ms > 0` and delegates to `twdll.database`.
+- `twdll.database` opens `sqlite3.connect(":memory:", uri=True)` with `PRAGMA query_only = ON` and attaches all completed `.twdll/extract/<decompiler>_<binary>.sqlite` files for `ctx.decompiler` via `f"{db_path.resolve().as_uri()}?mode=ro"` under `<binary>` aliases (failing fast with an actionable error if zero completed databases exist).
+- After attaching databases, `twdll.database` installs an allowlist `set_authorizer` (permitting only `SQLITE_SELECT`, `SQLITE_READ`, `SQLITE_FUNCTION`, `SQLITE_RECURSIVE`, blocking `PRAGMA`, `ATTACH`, `DETACH`, and all writes/DDL), installs `set_progress_handler(..., 1000)` for `timeout_ms` (mapping `OperationalError: interrupted` to a timeout error), caps returned rows with `truncated: bool`, and hex-serializes `bytes` values.
 
 ---
 
 ## 7. Closed CLI Command & Flag Surface
 
-Root `twdll` callback builds `WorkspaceContext` from `Path.cwd()` (`twdll.toml`) with optional root-level context overrides (`twdll [--decompiler ghidra|ida] <command> ...`). Every subcommand receives `ctx: WorkspaceContext` and supports `--json` for deterministic machine-readable output (re-running any step from scratch uses `twdll clean <step>`):
+Root `twdll` callback builds `WorkspaceContext` from `Path.cwd()` (`twdll.toml`) with optional root-level context overrides:
+`twdll [--decompiler ghidra|ida] [--ghidra-dir PATH] [--java-home PATH] [--ida-dir PATH] <command> ...`
+
+Data and action subcommands receive `ctx: WorkspaceContext` and support `--json` for structured JSON output (`twdll mcp` runs stdio JSON-RPC and has no `--json` flag).
 
 | Group | Command | Arguments & Options | Entrypoint | Output / Side Effect |
 | :--- | :--- | :--- | :--- | :--- |
-| **Setup** | `twdll init` | `[--no-toolchain] [--no-binaries] [--json]` | `init.init` | Creates/updates `twdll.toml`, provisions `.twdll/init/tools/`, stages discovered binaries flat into `.twdll/init/binaries/` |
+| **Setup** | `twdll init` | `[--no-toolchain] [--no-binaries] [--json]` | `init.init` | Creates/updates `twdll.toml` (preserving existing overrides unless run interactively), provisions `.twdll/init/tools/`, stages discovered binaries flat into `.twdll/init/binaries/` |
 | **Setup** | `twdll status` | `[--json]` | `init.status` | Read-only inspection of `twdll.toml`, toolchain, staged/discovered binaries, and `.twdll/<step>/` directories |
-| **Setup** | `twdll clean` | `<init\|analyze\|extract\|derive\|all> [--json]` | `init.clean` | Removes the corresponding `.twdll/<step>/` directory (`shutil.rmtree`); preserves `.twdll/uv/` and `twdll.toml` |
-| **Setup** | `twdll mcp` | *(none; uses root `WorkspaceContext`)* | `mcp.serve_mcp` | Runs the stdio MCP server exposing domain entrypoints (`.agents/mcp.json`) |
-| **Analyze** | `twdll analyze` | `[binaries...] [--json]` | `analyze.analyze` | Runs single-process `pyghidra` decompiler analysis on selected (or all) staged binary(ies) into `.twdll/analyze/<decompiler>_<binary>.gpr` |
-| **Extract** | `twdll extract` | `[binaries...] [--json]` | `extract.extract` | Extracts verified facts from `.twdll/analyze/<decompiler>_<binary>.gpr` into `.twdll/extract/<decompiler>_<binary>.sqlite` with `meta` completion + SHA-256 proof |
-| **Derive** | `twdll derive` | `[--json]` | `derive.derive` | Computes callgraphs, vtables, and cross-binary function matches into `.twdll/derive/<decompiler>.sqlite` |
-| **Query** | `twdll search` | *(Structured multi-binary query args finalized in Slice 5 after Slice 3/4 schema verification)* | `query.search` | Pattern search across functions, symbols, strings, and vtables |
-| **Query** | `twdll show` | *(Structured multi-binary query args finalized in Slice 5 after Slice 3/4 schema verification)* | `query.show` | Detailed view of a function/symbol by hex address or name |
-| **Query** | `twdll sql` | `<query> [--json]` | `query.sql` | Executes a read-only SQL query (`?mode=ro`) against attached extracted and derived SQLite databases |
+| **Setup** | `twdll clean` | `<init\|analyze\|extract\|all> [--json]` | `init.clean` | Removes the corresponding `.twdll/<step>/` directory (`shutil.rmtree`); preserves `.twdll/uv/` and `twdll.toml` |
+| **MCP** | `twdll mcp` | *(none; uses root `WorkspaceContext`)* | `mcp.serve_mcp` | Runs the stdio MCP server (`.agents/mcp.json`); isolates JVM tools (`twdll_analyze`, `twdll_extract`) in worker subprocesses |
+| **Analyze** | `twdll analyze` | `[binaries...] [--json]` | `analyze.analyze` | Runs decompiler analysis on selected (or active) staged binary(ies) into `.twdll/analyze/<decompiler>_<binary>.gpr|.i64` + `.meta.json` |
+| **Extract** | `twdll extract` | `[--binary NAME]... [--force] [--json]` | `extract.extract` | Extracts verified facts from `.twdll/analyze/<decompiler>_<binary>.gpr|.i64` into `.twdll/extract/<decompiler>_<binary>.sqlite` |
+| **Query** | `twdll sql` | `<query> [--limit N] [--timeout-ms MS] [--json]` | `query.sql` | Executes a read-only SQL query against attached completed extracted SQLite databases |
 
 ---
 
 ## 8. Incremental Implementation Plan & Quality Gate
 
-Each slice is implemented and reviewed step-by-step (announcing the exact file(s) before writing and waiting for user approval) and must pass all 5 verification commands with zero errors and zero warnings:
+Each step is implemented and reviewed incrementally (announcing the exact file(s) before writing and waiting for user approval) and must pass all 5 verification commands with zero errors and zero warnings:
 
 ```bash
-ruff format --check cli
-ruff check cli
-basedpyright -p cli
-lint-imports cli/pyproject.toml
-pytest cli/tests
+uv run ruff format --check
+uv run ruff check
+uv run basedpyright
+uv run lint-imports
+uv run pytest
 ```
 
-1. **Slice 1 — Foundation & Setup (`init`, `status`, `clean`)** *(Completed)*:
-   - `cli/pyproject.toml`, `cli/src/twdll/domain.py`, `cli/src/twdll/database.py`, `cli/src/twdll/init.py`, `cli/src/twdll/cli.py`, `cli/tests/test_init.py`.
-2. **Slice 2 — Decompiler Analysis (`analyze`, Single-Process Ghidra via `pyghidra`)**:
-   - **Step 2A (`cli/src/twdll/domain.py`, `cli/src/twdll/init.py`)**:
-     - Rename `AnalyzeTargetResult.project_dir` -> `project_path` in `domain.py`.
-     - Move stdlib-only config & read-only toolchain/binary header helpers (`load_config`, `verify_binary_header`, `resolve_tool`, `resolve_toolchain`) into `domain.py` and add `WorkspaceContext` (`from_root`, `root`, `decompiler`).
-   - **Step 2B (`cli/src/twdll/analyze.py`, `cli/pyproject.toml`)**:
-     - Register `twdll.analyze` in `[tool.importlinter]` contracts (`"twdll.init | twdll.analyze"` sibling layer + forbidden `sqlite3` and `typer`/`rich` contracts).
-     - Implement `analyze.analyze(ctx: WorkspaceContext, binaries: Sequence[BinaryName] = (), on_progress: ProgressCallback = noop_progress, ghidra_runner: GhidraRunner | None = None) -> AnalyzeResult`.
-     - For `Decompiler.GHIDRA`: verify toolchain and staged binaries, skip targets where both `ghidra_gpr_path(target)` and `ghidra_rep_dir(target)` exist, otherwise run single-process `pyghidra` saving flat into `.twdll/analyze/ghidra_<binary>.gpr` + `.rep/`.
-     - For `Decompiler.IDA`: raise `NotImplementedError` (deferred per Section 6.1).
-   - **Step 2C (`cli/src/twdll/cli.py` & `cli/tests/test_analyze.py`)**:
-     - Wire root `twdll` `@app.callback()` building `WorkspaceContext` and `twdll analyze [binaries...] [--json]` in `cli.py` with live `rich` progress reporting.
-     - Add unit tests in `cli/tests/test_analyze.py` and pass all 5 quality checks.
-3. **Slice 3 — Base Fact Extraction (`extract`, Ghidra via `pyghidra`)**:
-   - **Step 3A (Empirical API Verification Task)**: Run a `pyghidra` verification script against local Ghidra 12.2 to inspect and verify every candidate table and column 1-by-1 against the real decompiler API before finalizing the SQLite schema.
-   - **Step 3B (`cli/src/twdll/domain.py` & `cli/src/twdll/database.py`)**: Implement the verified row dataclasses and per-binary SQLite schema/writers (`.twdll/extract/<decompiler>_<binary>.sqlite`), writing the completion proof and `binary_sha256` into `meta` only in the final commit.
-   - **Step 3C (`cli/src/twdll/extract.py`, `cli/src/twdll/cli.py`, `cli/tests/test_extract.py`)**: Implement `extract.extract(...)`, wire `twdll extract [binaries...] [--json]`, and verify all 5 quality checks.
-4. **Slice 4 — Derivations (`derive`)** *(Deferred until Slices 2 & 3 complete)*:
-   - `cli/src/twdll/derive.py`, `cli/src/twdll/cli.py` (`derive` command), `cli/tests/test_derive.py`.
-5. **Slice 5 — Query Commands (`search`, `show`, `sql`)** *(Deferred until Slices 2 & 3 complete)*:
-   - `cli/src/twdll/query.py`, `cli/src/twdll/cli.py` (`search`, `show`, `sql` commands), `cli/tests/test_query.py`.
+1. **Slice 1 — Foundation & Setup (`init`, `status`, `clean`, `mcp`)** *(Completed)*
+2. **Slice 2 — Decompiler Analysis (`analyze`, `twdll._ghidra`, MCP Subprocess Isolation)** *(Completed + Rework)*
+3. **Slice 3 — Extraction & Read-Only SQL (`extract`, `sql`)**:
+   - **Step 3A (Empirical Gate)**: Run inspection and `DecompInterface` benchmark against analyzed `attila_linux_64` and `attila_windows_32` Ghidra 12.2 projects.
+   - **Step 3B (`extract` + `database.py`)**: Implement verified per-binary SQLite schema, `.sqlite.staging` atomic write, `twdll.extract`, `twdll extract`, and `twdll_extract`.
+   - **Step 3C (`sql` + `query.py` + `database.py`)**: Implement `:memory:` `uri=True` read-only attachment, allowlist `set_authorizer`, `set_progress_handler`, `twdll.query.sql`, `twdll sql`, and `twdll_sql`.

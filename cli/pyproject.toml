@@ -94,7 +94,7 @@ layers = [
     "twdll.cli",
     "twdll.mcp",
     "twdll.init | twdll.analyze",
-    "twdll.database",
+    "twdll._ghidra | twdll.database",
     "twdll.domain",
 ]
 
@@ -106,10 +106,28 @@ source_modules = [
     "twdll.mcp",
     "twdll.init",
     "twdll.analyze",
+    "twdll._ghidra",
     "twdll.domain",
 ]
 forbidden_modules = [
     "sqlite3",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only _ghidra module may import pyghidra or jpype"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "twdll.cli",
+    "twdll.mcp",
+    "twdll.init",
+    "twdll.analyze",
+    "twdll.database",
+    "twdll.domain",
+]
+forbidden_modules = [
+    "pyghidra",
+    "jpype",
 ]
 
 [[tool.importlinter.contracts]]
@@ -119,6 +137,7 @@ source_modules = [
     "twdll.mcp",
     "twdll.init",
     "twdll.analyze",
+    "twdll._ghidra",
     "twdll.database",
     "twdll.domain",
 ]
@@ -135,6 +154,7 @@ source_modules = [
     "twdll.cli",
     "twdll.init",
     "twdll.analyze",
+    "twdll._ghidra",
     "twdll.database",
     "twdll.domain",
 ]

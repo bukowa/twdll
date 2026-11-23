@@ -52,7 +52,6 @@ class StepName(StrEnum):
     INIT = "init"
     ANALYZE = "analyze"
     EXTRACT = "extract"
-    DERIVE = "derive"
 
 
 class WorkspaceName(StrEnum):
@@ -69,13 +68,13 @@ class FileSuffix(StrEnum):
     GHIDRA_GPR = ".gpr"
     GHIDRA_REP = ".rep"
     IDA_I64 = ".i64"
+    META_JSON = ".meta.json"
 
 
 class CleanTarget(StrEnum):
     INIT = "init"
     ANALYZE = "analyze"
     EXTRACT = "extract"
-    DERIVE = "derive"
     ALL = "all"
 
     def steps(self) -> tuple[StepName, ...]:
@@ -86,14 +85,11 @@ class CleanTarget(StrEnum):
                 return (StepName.ANALYZE,)
             case CleanTarget.EXTRACT:
                 return (StepName.EXTRACT,)
-            case CleanTarget.DERIVE:
-                return (StepName.DERIVE,)
             case CleanTarget.ALL:
                 return (
                     StepName.INIT,
                     StepName.ANALYZE,
                     StepName.EXTRACT,
-                    StepName.DERIVE,
                 )
 
 
@@ -116,46 +112,6 @@ class BinarySource(StrEnum):
     STEAM = "steam"
     STAGED = "staged"
     MISSING = "missing"
-
-
-class SymbolKind(StrEnum):
-    FUNCTION = "function"
-    DATA = "data"
-    IMPORT = "import"
-    EXPORT = "export"
-    LABEL = "label"
-
-
-class XrefKind(StrEnum):
-    CALL = "call"
-    DATA_READ = "data_read"
-    DATA_WRITE = "data_write"
-    OFFSET = "offset"
-
-
-class StringEncoding(StrEnum):
-    ASCII = "ascii"
-    UTF8 = "utf8"
-    UTF16_LE = "utf16_le"
-
-
-class MatchMethod(StrEnum):
-    EXACT_SYMBOL = "exact_symbol"
-    UNIQUE_STRING = "unique_string"
-    CALLGRAPH_NEIGHBOR = "callgraph_neighbor"
-    VTABLE_SLOT = "vtable_slot"
-
-
-class SearchKind(StrEnum):
-    FUNCTION = "function"
-    SYMBOL = "symbol"
-    STRING = "string"
-    VTABLE = "vtable"
-
-
-class DatabaseTarget(StrEnum):
-    EXTRACT = "extract"
-    DERIVE = "derive"
 
 
 class ProgressKind(StrEnum):
@@ -393,6 +349,10 @@ class WorkspacePaths:
             case Decompiler.IDA:
                 return self.ida_db_path(binary)
 
+    def analyze_meta_path(self, decompiler: Decompiler, binary: BinaryName) -> Path:
+        stem = self.analyze_stem(decompiler, binary)
+        return self.analyze_dir / f"{stem}{FileSuffix.META_JSON.value}"
+
     @property
     def extract_dir(self) -> Path:
         return self.step_dir(StepName.EXTRACT)
@@ -400,13 +360,6 @@ class WorkspacePaths:
     def extract_db_path(self, decompiler: Decompiler, binary: BinaryName) -> Path:
         stem = self.analyze_stem(decompiler, binary)
         return self.extract_dir / f"{stem}{FileSuffix.SQLITE.value}"
-
-    @property
-    def derive_dir(self) -> Path:
-        return self.step_dir(StepName.DERIVE)
-
-    def derive_db_path(self, decompiler: Decompiler) -> Path:
-        return self.derive_dir / f"{decompiler.value}{FileSuffix.SQLITE.value}"
 
 
 def serialize_value(value: object) -> object:
@@ -588,146 +541,32 @@ class AnalyzeResult:
         return to_dict(self)
 
 
-@dataclass(frozen=True, slots=True)
-class ExtractedBinaryRow:
-    binary: BinaryName
-    arch: BinaryArch
-    decompiler: Decompiler
-    image_base: Address
-    analyzed_at: str
-
-
-@dataclass(frozen=True, slots=True)
-class FunctionRow:
-    binary: BinaryName
-    address: Address
-    name: str
-    demangled_name: str | None
-    size: int
-    signature: str | None
-    is_thunk: bool
-
-
-@dataclass(frozen=True, slots=True)
-class SymbolRow:
-    binary: BinaryName
-    address: Address
-    name: str
-    demangled_name: str | None
-    kind: SymbolKind
-
-
-@dataclass(frozen=True, slots=True)
-class StringRow:
-    binary: BinaryName
-    address: Address
-    value: str
-    encoding: StringEncoding
-
-
-@dataclass(frozen=True, slots=True)
-class XrefRow:
-    binary: BinaryName
-    from_address: Address
-    to_address: Address
-    kind: XrefKind
-
-
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ExtractTargetResult:
     binary: BinaryName
-    functions_count: int
-    symbols_count: int
-    strings_count: int
-    xrefs_count: int
+    db_path: Path
+    skipped: bool = False
+    duration_seconds: float = 0.0
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ExtractResult:
     decompiler: Decompiler
-    db_path: Path
     targets: tuple[ExtractTargetResult, ...]
 
     def to_dict(self) -> dict[str, object]:
         return to_dict(self)
 
 
-@dataclass(frozen=True, slots=True)
-class CallEdgeRow:
-    binary: BinaryName
-    caller_address: Address
-    callee_address: Address
+SqlScalar = int | float | str | None
+SqlRow = tuple[SqlScalar, ...]
 
 
-@dataclass(frozen=True, slots=True)
-class VtableRow:
-    binary: BinaryName
-    address: Address
-    class_name: str
-    entry_count: int
-
-
-@dataclass(frozen=True, slots=True)
-class VtableEntryRow:
-    binary: BinaryName
-    vtable_address: Address
-    slot_index: int
-    target_address: Address
-
-
-@dataclass(frozen=True, slots=True)
-class FunctionMatchRow:
-    source_binary: BinaryName
-    source_address: Address
-    target_binary: BinaryName
-    target_address: Address
-    confidence: float
-    method: MatchMethod
-
-
-@dataclass(frozen=True, slots=True)
-class DeriveResult:
-    decompiler: Decompiler
-    db_path: Path
-    call_edges_count: int
-    vtables_count: int
-    matches_count: int
-
-    def to_dict(self) -> dict[str, object]:
-        return to_dict(self)
-
-
-@dataclass(frozen=True, slots=True)
-class SearchHit:
-    binary: BinaryName
-    kind: SearchKind
-    address: Address
-    name: str
-    detail: str | None
-
-    def to_dict(self) -> dict[str, object]:
-        return to_dict(self)
-
-
-@dataclass(frozen=True, slots=True)
-class FunctionDetail:
-    function: FunctionRow
-    callers: tuple[Address, ...]
-    callees: tuple[Address, ...]
-    strings: tuple[StringRow, ...]
-    matches: tuple[FunctionMatchRow, ...]
-
-    def to_dict(self) -> dict[str, object]:
-        return to_dict(self)
-
-
-SqlScalar = int | float | str | bytes | None
-
-
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class SqlQueryResult:
     columns: tuple[str, ...]
-    rows: tuple[tuple[SqlScalar, ...], ...]
+    rows: tuple[SqlRow, ...]
+    truncated: bool = False
 
     def to_dict(self) -> dict[str, object]:
         return to_dict(self)

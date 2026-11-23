@@ -14,7 +14,7 @@ from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, cast
 
 import typer
 from rich.console import Console
@@ -121,6 +121,17 @@ def main_callback(
         toolchain=toolchain,
     )
     cli_ctx.obj = replace(ctx, config=config)
+
+    overrides: list[str] = []
+    if decompiler is not None:
+        overrides.extend(["--decompiler", decompiler.value])
+    if ghidra_dir is not None:
+        overrides.extend(["--ghidra-dir", str(ghidra_dir)])
+    if java_home is not None:
+        overrides.extend(["--java-home", str(java_home)])
+    if ida_dir is not None:
+        overrides.extend(["--ida-dir", str(ida_dir)])
+    cli_ctx.meta["twdll_cli_overrides"] = tuple(overrides)
 
 
 def _format_progress_units(event: ProgressEvent) -> str:
@@ -629,7 +640,7 @@ def clean_command(
     cli_ctx: typer.Context,
     target: Annotated[
         CleanTarget,
-        typer.Argument(help="Step directory to clean: init, analyze, extract, derive, or all."),
+        typer.Argument(help="Step directory to clean: init, analyze, extract, or all."),
     ],
     json_output: Annotated[
         bool,
@@ -655,7 +666,13 @@ def mcp_command(cli_ctx: typer.Context) -> None:
     """Run the twdll Model Context Protocol (MCP) server over stdio."""
     from twdll.mcp import serve_mcp
 
-    serve_mcp(ctx=_get_context(cli_ctx))
+    raw_overrides = cli_ctx.meta.get("twdll_cli_overrides", ())
+    cli_overrides = (
+        tuple(str(item) for item in cast("tuple[object, ...]", raw_overrides))
+        if isinstance(raw_overrides, tuple)
+        else ()
+    )
+    serve_mcp(ctx=_get_context(cli_ctx), cli_overrides=cli_overrides)
 
 
 def main() -> None:

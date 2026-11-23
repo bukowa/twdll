@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import subprocess
+import sys
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from mcp.server import MCPServer
 from mcp.types import CallToolResult
 
 import twdll.init as init_mod
+import twdll.mcp as mcp_mod
 from twdll.domain import BinaryName, CleanTarget, Decompiler, HostOS, WorkspaceContext
 from twdll.mcp import build_mcp_server
 
@@ -97,3 +101,101 @@ def test_mcp_calls_init_status_clean(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert clean_payload["target"] == CleanTarget.INIT.value
     removed = cast("list[str]", clean_payload["removed_directories"])
     assert len(removed) == 1
+
+
+def test_mcp_analyze_runs_worker_subprocess_with_cwd_and_explicit_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+    expected_gpr = tmp_path / ".twdll" / "analyze" / "ghidra_attila_linux_64.gpr"
+    worker_payload = {
+        "decompiler": Decompiler.GHIDRA.value,
+        "targets": [
+            {
+                "binary": BinaryName.ATTILA_LINUX_64.value,
+                "decompiler": Decompiler.GHIDRA.value,
+                "project_path": str(expected_gpr),
+                "analyzed": True,
+                "skipped": True,
+                "duration_seconds": 0.0,
+            }
+        ],
+    }
+
+    class _FakePopen:
+        def __init__(self, cmd: list[str], **kwargs: Any) -> None:
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            self.pid = 12345
+            self.returncode = 0
+
+        def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+            captured["timeout"] = timeout
+            return json.dumps(worker_payload), ""
+
+    monkeypatch.setattr(mcp_mod.subprocess, "Popen", _FakePopen)
+    server = build_mcp_server(
+        WorkspaceContext.from_root(tmp_path),
+        cli_overrides=("--decompiler", "ghidra"),
+    )
+
+    result = _call_tool(server, "twdll_analyze", {"binaries": [BinaryName.ATTILA_LINUX_64.value]})
+    assert result["decompiler"] == Decompiler.GHIDRA.value
+    assert captured["cmd"] == [
+        sys.executable,
+        "-m",
+        "twdll.cli",
+        "--decompiler",
+        "ghidra",
+        "analyze",
+        BinaryName.ATTILA_LINUX_64.value,
+        "--json",
+    ]
+    assert captured["kwargs"]["cwd"] == tmp_path
+    assert captured["kwargs"]["stdin"] is subprocess.DEVNULL
+
+
+def test_mcp_analyze_surfaces_non_json_stderr_and_timeout_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FailingPopen:
+        def __init__(self, _cmd: list[str], **_kwargs: Any) -> None:
+            self.pid = 12345
+            self.returncode = 1
+
+        def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+            return "", "fatal: boom"
+
+    monkeypatch.setattr(mcp_mod.subprocess, "Popen", _FailingPopen)
+    server = build_mcp_server(WorkspaceContext.from_root(tmp_path))
+
+    with pytest.raises(Exception, match="Error executing tool twdll_analyze") as fail_exc:
+        _call_tool(server, "twdll_analyze", {})
+    assert "fatal: boom" in str(fail_exc.value.__cause__)
+
+    killed: list[int] = []
+
+    class _TimeoutPopen:
+        def __init__(self, _cmd: list[str], **_kwargs: Any) -> None:
+            self.pid = 99999
+            self.returncode = -15
+            self._calls = 0
+
+        def communicate(self, timeout: float | None = None) -> tuple[str, str]:
+            self._calls += 1
+            if self._calls == 1:
+                raise subprocess.TimeoutExpired(cmd="twdll", timeout=timeout or 1.0)
+            return "", ""
+
+    def _fake_terminate(proc: subprocess.Popen[str]) -> None:
+        killed.append(proc.pid)
+
+    monkeypatch.setattr(mcp_mod.subprocess, "Popen", _TimeoutPopen)
+    monkeypatch.setattr(mcp_mod, "_terminate_process_tree", _fake_terminate)
+
+    with pytest.raises(Exception, match="Error executing tool twdll_analyze") as timeout_exc:
+        _call_tool(server, "twdll_analyze", {})
+    assert "timed out" in str(timeout_exc.value.__cause__)
+    assert killed == [99999]
