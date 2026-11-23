@@ -281,6 +281,10 @@ def test_step_directory_clean_mapping(tmp_path: Path) -> None:
 def test_workspace_context_from_root_and_cli_overrides(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    def fake_steam_roots(_host_os: HostOS) -> tuple[Path, ...]:
+        return ()
+
+    monkeypatch.setattr(init_mod, "candidate_steam_roots", fake_steam_roots)
     ctx = WorkspaceContext.from_root(tmp_path)
     assert ctx.root == tmp_path
     assert ctx.decompiler is Decompiler.GHIDRA
@@ -299,6 +303,10 @@ def test_workspace_context_from_root_and_cli_overrides(
 
 
 def test_cli_init_status_clean_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_steam_roots(_host_os: HostOS) -> tuple[Path, ...]:
+        return ()
+
+    monkeypatch.setattr(init_mod, "candidate_steam_roots", fake_steam_roots)
     monkeypatch.chdir(tmp_path)
     init_out = runner.invoke(
         app,
@@ -571,3 +579,27 @@ def test_binary_sha256_verification_and_mismatch_warning(tmp_path: Path) -> None
     assert bad_status.instruction is not None
     assert "SHA-256 mismatch" in bad_status.instruction
     assert "updated" in bad_status.instruction
+
+
+def test_stage_binary_skips_copy_when_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    src = make_fake_pe32(tmp_path / "src" / "empire.retail.dll")
+    dst = tmp_path / "staged" / "rome2_windows_32.dll"
+    spec = BINARY_SPECS[BinaryName.ROME2_WINDOWS_32]
+
+    first_status = init_mod.resolve_binary(spec, src, dst, ())
+    staged = init_mod.stage_binary(first_status, dst, spec.arch)
+    assert staged.staged is True
+
+    copy_calls: list[tuple[Path, Path]] = []
+
+    def fail_copy2(s: Path, d: Path) -> None:
+        copy_calls.append((s, d))
+
+    monkeypatch.setattr(shutil, "copy2", fail_copy2)
+    second_status = init_mod.resolve_binary(spec, src, dst, ())
+    res = init_mod.stage_binary(second_status, dst, spec.arch)
+    assert res.staged is True
+    assert copy_calls == []

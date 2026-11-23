@@ -609,6 +609,15 @@ def resolve_binary(
     )
 
 
+def _is_same_file_snapshot(source: Path, target: Path) -> bool:
+    try:
+        src_stat = source.stat()
+        dst_stat = target.stat()
+    except OSError:
+        return False
+    return src_stat.st_size == dst_stat.st_size and int(src_stat.st_mtime) == int(dst_stat.st_mtime)
+
+
 def stage_binary(
     binary_status: BinaryStatus,
     target_path: Path,
@@ -617,6 +626,11 @@ def stage_binary(
 ) -> BinaryStatus:
     """Copy a discovered valid binary into `.twdll/init/binaries/<name>/` and return status."""
     if binary_status.discovered_path is None:
+        return binary_status
+    if binary_status.staged and (
+        binary_status.sha256_match is True
+        or _is_same_file_snapshot(binary_status.discovered_path, target_path)
+    ):
         return binary_status
     task_key = f"stage:{binary_status.name.value}"
     label = f"Staging {binary_status.name.value} ({target_path.name})"

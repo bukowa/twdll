@@ -6,10 +6,12 @@ import asyncio
 from pathlib import Path
 from typing import cast
 
+import pytest
 from mcp.server import MCPServer
 from mcp.types import CallToolResult
 
-from twdll.domain import BinaryName, CleanTarget, Decompiler, WorkspaceContext
+import twdll.init as init_mod
+from twdll.domain import BinaryName, CleanTarget, Decompiler, HostOS, WorkspaceContext
 from twdll.mcp import build_mcp_server
 
 
@@ -42,7 +44,11 @@ def test_mcp_lists_slice1_tools_with_enum_schemas(tmp_path: Path) -> None:
     assert "binaries" in status_out["properties"]
 
 
-def test_mcp_calls_init_status_clean(tmp_path: Path) -> None:
+def test_mcp_calls_init_status_clean(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_steam_roots(_host_os: HostOS) -> tuple[Path, ...]:
+        return ()
+
+    monkeypatch.setattr(init_mod, "candidate_steam_roots", fake_steam_roots)
     server = build_mcp_server(WorkspaceContext.from_root(tmp_path))
 
     init_payload = _call_tool(
