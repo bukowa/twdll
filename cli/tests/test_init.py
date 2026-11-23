@@ -17,10 +17,11 @@ import pytest
 from typer.testing import CliRunner
 
 import twdll.init as init_mod
-from twdll.cli import app
+from twdll.cli import app, parse_target_selection
 from twdll.database import list_sqlite_tables
 from twdll.domain import (
     BINARY_SPECS,
+    SELECTABLE_TARGETS,
     STEAM_CONSOLE_URL,
     BinaryArch,
     BinaryName,
@@ -36,6 +37,8 @@ from twdll.domain import (
     ToolSource,
     WorkspaceConfig,
     WorkspaceContext,
+    active_binaries,
+    normalize_targets,
     resolve_toolchain,
     verify_binary_header,
 )
@@ -475,3 +478,69 @@ def test_copy_to_clipboard_across_os(
             subprocess.DEVNULL,
         )
     ]
+
+
+def test_targets_config_roundtrip_and_active_binaries(tmp_path: Path) -> None:
+    ctx = replace(
+        WorkspaceContext.from_root(tmp_path),
+        config=WorkspaceConfig(targets=(BinaryName.ROME2_WINDOWS_32,)),
+    )
+    save_config(ctx)
+
+    reloaded = WorkspaceContext.from_root(tmp_path)
+    assert reloaded.config.targets == (BinaryName.ROME2_WINDOWS_32,)
+    assert active_binaries(reloaded.config) == (
+        BinaryName.ATTILA_LINUX_64,
+        BinaryName.ROME2_WINDOWS_32,
+    )
+    resolved = resolve_all_binaries(reloaded, (), stage=False)
+    assert tuple(b.name for b in resolved) == (
+        BinaryName.ATTILA_LINUX_64,
+        BinaryName.ROME2_WINDOWS_32,
+    )
+
+    with pytest.raises(ValueError, match="Select at least one target"):
+        normalize_targets((BinaryName.ATTILA_LINUX_64,))
+
+
+def test_linux_steamrt64_depot_auto_discovery(tmp_path: Path) -> None:
+    steam_root = tmp_path / "Steam"
+    depot_bin = (
+        steam_root
+        / "steamrt64"
+        / "steamapps"
+        / "content"
+        / "app_325610"
+        / "depot_325624"
+        / "Attila"
+    )
+    make_fake_elf64(depot_bin)
+
+    steamapps_dirs = discover_steamapps_dirs((steam_root,), host_os=HostOS.LINUX)
+    ctx = replace(
+        WorkspaceContext.from_root(tmp_path / "ws"),
+        config=WorkspaceConfig(targets=(BinaryName.ROME2_WINDOWS_32,)),
+        host_os=HostOS.LINUX,
+    )
+    ctx.root.mkdir()
+    resolved = resolve_all_binaries(ctx, steamapps_dirs, stage=True)
+    by_name = {b.name: b for b in resolved}
+    assert by_name[BinaryName.ATTILA_LINUX_64].staged is True
+    assert by_name[BinaryName.ATTILA_LINUX_64].source is BinarySource.STEAM
+    assert by_name[BinaryName.ATTILA_LINUX_64].discovered_path == depot_bin
+
+
+def test_wizard_parse_target_selection() -> None:
+    defaults = (BinaryName.ATTILA_WINDOWS_32,)
+    assert parse_target_selection("", defaults) == defaults
+    assert parse_target_selection("all", defaults) == SELECTABLE_TARGETS
+    assert parse_target_selection("2", defaults) == (BinaryName.ROME2_WINDOWS_32,)
+    assert parse_target_selection("1, 3", defaults) == (
+        BinaryName.ATTILA_WINDOWS_32,
+        BinaryName.TOB_WINDOWS_32,
+    )
+    assert parse_target_selection(BinaryName.ROME2_WINDOWS_32.value, defaults) == (
+        BinaryName.ROME2_WINDOWS_32,
+    )
+    assert parse_target_selection(BinaryName.ATTILA_LINUX_64.value, defaults) is None
+    assert parse_target_selection("99", defaults) is None

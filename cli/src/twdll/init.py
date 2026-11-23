@@ -47,7 +47,9 @@ from twdll.domain import (
     WorkspaceContext,
     WorkspaceName,
     WorkspaceStatus,
+    active_binaries,
     default_steam_roots,
+    default_steamapps_subdirs,
     noop_progress,
     optional_path,
     resolve_toolchain,
@@ -66,9 +68,12 @@ def _escape_toml_path(path: Path | None) -> str:
 
 def format_config_toml(config: WorkspaceConfig) -> str:
     """Serialize `WorkspaceConfig` to deterministic TOML."""
+    targets_toml = ", ".join(f'"{t.value}"' for t in config.targets)
     lines = [
         '# Active decompiler: "ghidra" or "ida"',
         f'decompiler = "{config.decompiler.value}"',
+        "# Selected 32-bit target binaries (attila_linux_64 reference is always included)",
+        f"targets = [{targets_toml}]",
         "",
         "[binaries]",
         "# Optional explicit file paths (auto-discovered from Steam if empty)",
@@ -311,12 +316,20 @@ def parse_library_folders(vdf_text: str) -> tuple[Path, ...]:
     return tuple(p for p in extracted if p is not None)
 
 
-def discover_steamapps_dirs(steam_roots: Sequence[Path]) -> tuple[Path, ...]:
+def discover_steamapps_dirs(
+    steam_roots: Sequence[Path],
+    host_os: HostOS | None = None,
+) -> tuple[Path, ...]:
     """Expand Steam root directories into existing `steamapps` directories."""
+    resolved_os = host_os if host_os is not None else HostOS.current()
+    subdirs = default_steamapps_subdirs(resolved_os)
     candidates: list[Path] = []
     for root in steam_roots:
-        candidates.append(root / "steamapps")
-        for rel in ("steamapps/libraryfolders.vdf", "config/libraryfolders.vdf"):
+        candidates.extend(root / subdir for subdir in subdirs)
+        for rel in (
+            Path("steamapps") / "libraryfolders.vdf",
+            Path("config") / "libraryfolders.vdf",
+        ):
             vdf_file = root / rel
             if vdf_file.is_file():
                 text = vdf_file.read_text(encoding="utf-8", errors="replace")
@@ -611,9 +624,10 @@ def resolve_all_binaries(
     stage: bool,
     on_progress: ProgressCallback = noop_progress,
 ) -> tuple[BinaryStatus, ...]:
-    """Resolve all 4 Warscape binaries and optionally stage discovered ones."""
+    """Resolve active Warscape binaries (reference + selected targets) and optionally stage them."""
     results: list[BinaryStatus] = []
-    for name, spec in BINARY_SPECS.items():
+    for name in active_binaries(ctx.config):
+        spec = BINARY_SPECS[name]
         staged_path = ctx.paths.staged_binary_path(name)
         item = resolve_binary(spec, ctx.config.binaries.get(name), staged_path, steamapps_dirs)
         if stage:
@@ -629,7 +643,7 @@ def status(
 ) -> WorkspaceStatus:
     """Read-only workspace status inspection (`twdll status`)."""
     roots = tuple(steam_roots) if steam_roots is not None else candidate_steam_roots(ctx.host_os)
-    steamapps_dirs = discover_steamapps_dirs(roots)
+    steamapps_dirs = discover_steamapps_dirs(roots, host_os=ctx.host_os)
     return WorkspaceStatus(
         root=ctx.root,
         config_file=ctx.paths.config_file,
@@ -656,7 +670,10 @@ def init(
         save_config(ctx)
 
     ctx.paths.init_dir.mkdir(parents=True, exist_ok=True)
-    steamapps_dirs = discover_steamapps_dirs(candidate_steam_roots(ctx.host_os))
+    steamapps_dirs = discover_steamapps_dirs(
+        candidate_steam_roots(ctx.host_os),
+        host_os=ctx.host_os,
+    )
     binaries = resolve_all_binaries(
         ctx,
         steamapps_dirs,

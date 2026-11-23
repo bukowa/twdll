@@ -82,6 +82,8 @@ All local state lives in `twdll.toml` and `.twdll/` at the workspace root. Every
   ```toml
   # Active decompiler: "ghidra" or "ida"
   decompiler = "ghidra"
+  # Selected 32-bit target binaries (attila_linux_64 reference is always included)
+  targets = ["attila_windows_32", "rome2_windows_32", "tob_windows_32"]
 
   [binaries]
   # Optional explicit file paths (auto-discovered from Steam if empty)
@@ -200,8 +202,8 @@ cli/
 
 ### 5.2 Declarative Specs & Workspace Paths
 - `STEAM_CONSOLE_URL = "steam://open/console"`
-- `BinarySpec(name: BinaryName, steam_app_id: SteamAppId, default_install_dir: str, file_name: str, staged_file_name: str, arch: BinaryArch, depot_command: str | None = None)`
-- `BINARY_SPECS: dict[BinaryName, BinarySpec]`
+- `BinarySpec(name: BinaryName, steam_app_id: SteamAppId, default_install_dir: str, file_name: str, staged_file_name: str, arch: BinaryArch, depot_command: str | None = None, is_reference: bool = False)`
+- `BINARY_SPECS: dict[BinaryName, BinarySpec]`, `REFERENCE_BINARIES: tuple[BinaryName, ...]`, `SELECTABLE_TARGETS: tuple[BinaryName, ...]`
 - `PortableArchiveSpec(tool: ToolName, url: str, archive_name: str, extracted_prefix: str)`
 - `GHIDRA_PORTABLE_SPEC: PortableArchiveSpec`
 - `JDK_PORTABLE_SPECS: dict[HostOS, PortableArchiveSpec]`
@@ -212,7 +214,7 @@ cli/
 ### 5.3 Typed Domain Models & SQLite Row Dataclasses
 - **Setup & Context (`init`, `status`, `clean`, `WorkspaceContext`)**:
   - `ToolchainConfig(ghidra_dir: Path | None = None, java_home: Path | None = None, ida_dir: Path | None = None)`
-  - `WorkspaceConfig(decompiler: Decompiler = Decompiler.GHIDRA, binaries: dict[BinaryName, Path | None], toolchain: ToolchainConfig)`
+  - `WorkspaceConfig(decompiler: Decompiler = Decompiler.GHIDRA, targets: tuple[BinaryName, ...] = SELECTABLE_TARGETS, binaries: dict[BinaryName, Path | None], toolchain: ToolchainConfig)` (`normalize_targets`, `active_binaries`)
   - `WorkspaceContext(paths: WorkspacePaths, config: WorkspaceConfig, host_os: HostOS)` (`WorkspaceContext.from_root(root)`, `ctx.root`, `ctx.decompiler`)
   - `ToolLocation(name: ToolName, ready: bool, path: Path | None, source: ToolSource)`
   - `ToolchainStatus(decompiler: Decompiler, ready: bool, tools: tuple[ToolLocation, ...])`

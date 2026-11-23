@@ -9,7 +9,7 @@ from typing import cast
 from mcp.server import MCPServer
 from mcp.types import CallToolResult
 
-from twdll.domain import CleanTarget, Decompiler, WorkspaceContext
+from twdll.domain import BinaryName, CleanTarget, Decompiler, WorkspaceContext
 from twdll.mcp import build_mcp_server
 
 
@@ -48,13 +48,28 @@ def test_mcp_calls_init_status_clean(tmp_path: Path) -> None:
     init_payload = _call_tool(
         server,
         "twdll_init",
-        {"skip_toolchain": True, "skip_binaries": True},
+        {
+            "decompiler": Decompiler.GHIDRA.value,
+            "targets": [BinaryName.ROME2_WINDOWS_32.value],
+            "skip_toolchain": True,
+            "skip_binaries": True,
+        },
     )
     assert init_payload["config_created"] is True
     assert init_payload["decompiler"] == Decompiler.GHIDRA.value
+    init_bins = cast("list[dict[str, object]]", init_payload["binaries"])
+    assert [b["name"] for b in init_bins] == [
+        BinaryName.ATTILA_LINUX_64.value,
+        BinaryName.ROME2_WINDOWS_32.value,
+    ]
 
     status_payload = _call_tool(server, "twdll_status", {})
     assert status_payload["config_exists"] is True
+    status_bins = cast("list[dict[str, object]]", status_payload["binaries"])
+    assert [b["name"] for b in status_bins] == [
+        BinaryName.ATTILA_LINUX_64.value,
+        BinaryName.ROME2_WINDOWS_32.value,
+    ]
 
     clean_payload = _call_tool(server, "twdll_clean", {"target": CleanTarget.INIT.value})
     assert clean_payload["target"] == CleanTarget.INIT.value

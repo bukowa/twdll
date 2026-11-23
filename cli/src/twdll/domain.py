@@ -192,6 +192,7 @@ class BinarySpec:
     staged_file_name: str
     arch: BinaryArch
     depot_command: str | None = None
+    is_reference: bool = False
 
 
 BINARY_SPECS: dict[BinaryName, BinarySpec] = {
@@ -203,6 +204,7 @@ BINARY_SPECS: dict[BinaryName, BinarySpec] = {
         staged_file_name=BinaryName.ATTILA_LINUX_64.value,
         arch=BinaryArch.ELF64,
         depot_command="download_depot 325610 325624 3804137149572368482",
+        is_reference=True,
     ),
     BinaryName.ATTILA_WINDOWS_32: BinarySpec(
         name=BinaryName.ATTILA_WINDOWS_32,
@@ -229,6 +231,13 @@ BINARY_SPECS: dict[BinaryName, BinarySpec] = {
         arch=BinaryArch.PE32,
     ),
 }
+
+REFERENCE_BINARIES: tuple[BinaryName, ...] = tuple(
+    name for name, spec in BINARY_SPECS.items() if spec.is_reference
+)
+SELECTABLE_TARGETS: tuple[BinaryName, ...] = tuple(
+    name for name, spec in BINARY_SPECS.items() if not spec.is_reference
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,6 +308,19 @@ def default_steam_roots(host_os: HostOS, home_dir: Path) -> tuple[Path, ...]:
                 Path("C:/Program Files (x86)/Steam"),
                 Path("C:/Program Files/Steam"),
             )
+
+
+def default_steamapps_subdirs(host_os: HostOS) -> tuple[Path, ...]:
+    """Relative `steamapps` directories under a Steam root (including Linux runtime depots)."""
+    match host_os:
+        case HostOS.LINUX:
+            return (
+                Path("steamapps"),
+                Path("steamrt64") / "steamapps",
+                Path("ubuntu12_32") / "steamapps",
+            )
+        case HostOS.WINDOWS:
+            return (Path("steamapps"),)
 
 
 @dataclass(frozen=True, slots=True)
@@ -421,8 +443,24 @@ def _default_binary_paths() -> dict[BinaryName, Path | None]:
 @dataclass(frozen=True, slots=True)
 class WorkspaceConfig:
     decompiler: Decompiler = Decompiler.GHIDRA
+    targets: tuple[BinaryName, ...] = SELECTABLE_TARGETS
     binaries: dict[BinaryName, Path | None] = field(default_factory=_default_binary_paths)
     toolchain: ToolchainConfig = field(default_factory=ToolchainConfig)
+
+
+def normalize_targets(targets: Sequence[BinaryName]) -> tuple[BinaryName, ...]:
+    """Validate and deduplicate selectable target binaries (at least one required)."""
+    selected = tuple(dict.fromkeys(t for t in targets if not BINARY_SPECS[t].is_reference))
+    if not selected:
+        valid = ", ".join(t.value for t in SELECTABLE_TARGETS)
+        msg = f"Select at least one target binary from: {valid}"
+        raise ValueError(msg)
+    return selected
+
+
+def active_binaries(config: WorkspaceConfig) -> tuple[BinaryName, ...]:
+    """Return required reference binaries followed by selected workspace targets."""
+    return tuple(dict.fromkeys((*REFERENCE_BINARIES, *config.targets)))
 
 
 @dataclass(frozen=True)
@@ -725,6 +763,25 @@ def _parse_toolchain_section(raw: dict[str, object]) -> ToolchainConfig:
     )
 
 
+def _parse_targets(raw: dict[str, object], config_file: Path) -> tuple[BinaryName, ...]:
+    targets_obj = raw.get("targets")
+    if targets_obj is None:
+        return SELECTABLE_TARGETS
+    if not isinstance(targets_obj, list):
+        msg = f"Invalid 'targets' in {config_file}; expected a list of target binary names"
+        raise ValueError(msg)
+    parsed: list[BinaryName] = []
+    raw_items = cast("list[object]", targets_obj)
+    for item in raw_items:
+        try:
+            parsed.append(BinaryName(str(item)))
+        except ValueError as exc:
+            valid = ", ".join(t.value for t in SELECTABLE_TARGETS)
+            msg = f"Invalid target {item!r} in {config_file}; expected one of: {valid}"
+            raise ValueError(msg) from exc
+    return normalize_targets(parsed)
+
+
 def _load_config(root: Path) -> WorkspaceConfig:
     """Load `twdll.toml` from `root`, or return defaults if it does not exist."""
     paths = WorkspacePaths(root)
@@ -733,6 +790,7 @@ def _load_config(root: Path) -> WorkspaceConfig:
     raw = tomllib.loads(paths.config_file.read_text(encoding="utf-8"))
     return WorkspaceConfig(
         decompiler=_parse_decompiler(raw, paths.config_file),
+        targets=_parse_targets(raw, paths.config_file),
         binaries=_parse_binaries_section(raw),
         toolchain=_parse_toolchain_section(raw),
     )
