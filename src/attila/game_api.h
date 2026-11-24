@@ -152,6 +152,10 @@ using FnMercAllocUnits = void*(__cdecl*)(int count);
 using FnCaFree = void(__cdecl*)(void* p);
 extern FnMercAllocUnits g_merc_alloc_units;
 extern FnCaFree g_ca_free;
+// Diplomacy region trade, garrison change-hands and CHARACTER::kill_instant (governor protection)
+extern uintptr_t g_region_trade_apply_addr;
+extern uintptr_t g_settlement_pre_change_hands_addr;
+extern uintptr_t g_character_kill_instant_addr;
 
 int* get_max_units_in_army();
 int* get_max_units_in_navy();

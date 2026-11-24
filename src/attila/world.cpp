@@ -6,6 +6,7 @@
 #include "tw_types.h"
 #include "../common/signature_scanner.h"
 #include <MinHook.h>
+#include <intrin.h>
 
 #include <windows.h>
 #include <cstdio>
@@ -830,7 +831,122 @@ static int SetCustomBattleDefaultMap(lua_State* L) {
     return 1;
 }
 
+// ---- Governor protection on diplomacy region trades ----------------------------------
+// A province governor lives in a settlement as the general of its garrison army. When the
+// settlement changes owner, SETTLEMENT::handle_garrison_army_and_navy_pre_change_hands
+// destroys that garrison army and calls CHARACTER::kill_instant(KILLED_IN_ACTION) on its
+// general, so gifting or trading the region the governor lives in kills him.
+// While enabled, every kill_instant call made from that change-hands step during an
+// accepted diplomacy region trade runs with the character's immortal flag set, so the
+// engine records DEATH_TYPE_CONVALESCING instead; the flag is put back to its previous
+// value right after. Captures, sacks, occupation decisions and script transfers are not
+// affected. Both detours are removed on Lua teardown.
+namespace {
+using FnRegionTradeApply = void(__fastcall*)(void* self, void* edx);
+using FnKillInstant      = void(__fastcall*)(twdll::TW_Character* self, void* edx, int death_type);
+// Length of handle_garrison_army_and_navy_pre_change_hands; both of its kill_instant
+// calls return inside it.
+constexpr uintptr_t kPreChangeHandsSize = 0x91;
+
+FnRegionTradeApply g_orig_region_trade_apply = nullptr;
+FnKillInstant      g_orig_kill_instant = nullptr;
+bool               g_governor_hooks_installed = false;
+int                g_region_trade_depth = 0;
+
+void __fastcall hooked_region_trade_apply(void* self, void* edx) {
+    ++g_region_trade_depth;
+    g_orig_region_trade_apply(self, edx);
+    --g_region_trade_depth;
+}
+
+void __fastcall hooked_kill_instant(twdll::TW_Character* self, void* edx, int death_type) {
+    const uintptr_t ret = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    if (g_region_trade_depth > 0 && self != nullptr &&
+        ret - g_settlement_pre_change_hands_addr < kPreChangeHandsSize) {
+        const bool was_immortal = self->details.m_is_immortal;
+        self->details.m_is_immortal = true;
+        g_orig_kill_instant(self, edx, death_type);
+        self->details.m_is_immortal = was_immortal;
+        Log("[twdll] ProtectGovernorsOnRegionTrade: kept garrison general 0x%08X alive (immortal flag restored to %d)",
+            reinterpret_cast<uintptr_t>(self), was_immortal ? 1 : 0);
+        return;
+    }
+    g_orig_kill_instant(self, edx, death_type);
+}
+
+void remove_governor_hooks() {
+    if (!g_governor_hooks_installed) return;
+    void* trade = reinterpret_cast<void*>(g_region_trade_apply_addr);
+    void* kill  = reinterpret_cast<void*>(g_character_kill_instant_addr);
+    MH_DisableHook(trade);
+    MH_DisableHook(kill);
+    MH_RemoveHook(trade);
+    MH_RemoveHook(kill);
+    g_orig_region_trade_apply = nullptr;
+    g_orig_kill_instant = nullptr;
+    g_region_trade_depth = 0;
+    g_governor_hooks_installed = false;
+    Log("[twdll] ProtectGovernorsOnRegionTrade: hooks removed");
+}
+
+bool install_governor_hooks() {
+    if (g_governor_hooks_installed) return true;
+    void* trade = reinterpret_cast<void*>(g_region_trade_apply_addr);
+    void* kill  = reinterpret_cast<void*>(g_character_kill_instant_addr);
+    const bool trade_created = MH_CreateHook(trade, reinterpret_cast<void*>(&hooked_region_trade_apply),
+                                             reinterpret_cast<void**>(&g_orig_region_trade_apply)) == MH_OK;
+    const bool kill_created  = MH_CreateHook(kill, reinterpret_cast<void*>(&hooked_kill_instant),
+                                             reinterpret_cast<void**>(&g_orig_kill_instant)) == MH_OK;
+    if (trade_created && kill_created &&
+        MH_EnableHook(trade) == MH_OK && MH_EnableHook(kill) == MH_OK) {
+        g_governor_hooks_installed = true;
+        Log("[twdll] ProtectGovernorsOnRegionTrade: enabled");
+        return true;
+    }
+    if (trade_created) { MH_DisableHook(trade); MH_RemoveHook(trade); }
+    if (kill_created)  { MH_DisableHook(kill);  MH_RemoveHook(kill); }
+    g_orig_region_trade_apply = nullptr;
+    g_orig_kill_instant = nullptr;
+    Log("[twdll] ProtectGovernorsOnRegionTrade: hook install failed - vanilla behaviour kept");
+    return false;
+}
+} // namespace
+
+/***
+Keeps province governors alive when the region they live in changes hands through an
+accepted diplomacy deal: the vanilla Gift Region option, and regions offered or demanded
+in any other deal. The engine normally kills the general of the settlement's garrison
+(the governor living there) on every change of owner. While this is on, it records him
+as convalescing (wounded) instead, like an immortal character, and his own immortality
+setting is left exactly as it was (a mortal governor stays mortal). Captures, sacks,
+occupation decisions and `cm:transfer_region_to_faction` are not affected. Deals run on
+every machine, so in multiplayer every player must have it on. Removed when the
+campaign's Lua state is torn down; call it again on every campaign load.
+@function ProtectGovernorsOnRegionTrade
+@tparam[opt=true] boolean enabled true to protect governors, false for vanilla behaviour
+@treturn boolean|nil true if protection is now on, false if it is off, nil if the code was not found in this game build
+@usage
+-- In the campaign script:
+twdll.world.ProtectGovernorsOnRegionTrade()
+-- Back to vanilla:
+twdll.world.ProtectGovernorsOnRegionTrade(false)
+*/
+static int ProtectGovernorsOnRegionTrade(lua_State* L) {
+    bool enable = true;
+    if (l_type(L, 1) == LUA_TBOOLEAN) enable = l_tobool(L, 1);
+    if (!g_region_trade_apply_addr || !g_settlement_pre_change_hands_addr || !g_character_kill_instant_addr) {
+        Log("[twdll] ProtectGovernorsOnRegionTrade: signatures not resolved");
+        l_pushnil(L);
+        return 1;
+    }
+    if (enable) install_governor_hooks();
+    else remove_governor_hooks();
+    l_pushboolean(L, g_governor_hooks_installed);
+    return 1;
+}
+
 extern const luaL_Reg world_functions[] = {
+    {"ProtectGovernorsOnRegionTrade", ProtectGovernorsOnRegionTrade},
     {"SetCustomBattleDefaultMap",   SetCustomBattleDefaultMap},
     {"AllowGiftRegion",             AllowGiftRegion},
     {"GetGiftRegionState",          GetGiftRegionState},
@@ -878,6 +994,7 @@ void uninstall_world_hook() {
     set_reinforcement_cap(true, 0);
     restore_gift_region();
     restore_custom_battle_default_map();
+    remove_governor_hooks();
 
     if (world_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(world_ctor_addr));

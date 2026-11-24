@@ -58,6 +58,15 @@
 #define MERC_ALLOC_UNITS_SIG "8B 44 24 04 33 C9 85 C0 6A 00 0F 49 C8 6B C1 2C 50 E8 ? ? ? ? 83 C4 08 C3"
 // Frees a block from the CA game heap (cdecl, one argument).
 #define CA_FREE_SIG "83 EC 08 56 8B 74 24 10 85 F6 74 2C 8D 44 24 04 56 50 E8 ? ? ? ? 8B 4C 24 10 83 C4 08 FF 74 24 04 E8 ? ? ? ? A1"
+// DIPLOMATIC_ACTION_TRADE_REGIONS::apply_action: carries out the regions of an accepted
+// diplomacy deal (Gift Region, regions demanded or offered) via SETTLEMENT::on_diplomacy_traded.
+#define REGION_TRADE_APPLY_SIG "51 53 55 56 8B F1 33 D2 33 DB 57 8B 4E 18 8B 6E 1C C1 E1 02 8D 04 29 C1 E9 02 3B E8 0F 47 CA 89 4C 24 10 85 C9 74 ? 8B CE E8 ? ? ? ? 8D 88 58 01 00 00"
+// SETTLEMENT::handle_garrison_army_and_navy_pre_change_hands: destroys the garrison army and
+// navy and kills their generals (the army's general is the governor living there).
+#define SETTLEMENT_PRE_CHANGE_HANDS_SIG "56 8B F1 57 8D 8E B4 00 00 00 E8 ? ? ? ? 85 C0 74 ? 53 8D 8E B4 00 00 00 E8 ? ? ? ? 8D 88 B0 00 00 00 E8 ? ? ? ? 8D 8E B4 00 00 00"
+// CHARACTER::kill_instant(death_type): an immortal character (CHARACTER+0x54C) gets
+// DEATH_TYPE_CONVALESCING instead of the requested death type.
+#define CHARACTER_KILL_INSTANT_SIG "56 8B 74 24 08 B8 08 00 00 00 57 8B F9 80 BF 4C 05 00 00 00 8D 8F ? ? ? ? 0F 45 F0 E8"
 #define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG "A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
@@ -86,6 +95,9 @@ uintptr_t          g_gift_region_list_filter_addr = 0;
 uintptr_t          g_custom_battle_default_map_addr = 0;
 FnMercAllocUnits   g_merc_alloc_units = nullptr;
 FnCaFree           g_ca_free = nullptr;
+uintptr_t          g_region_trade_apply_addr = 0;
+uintptr_t          g_settlement_pre_change_hands_addr = 0;
+uintptr_t          g_character_kill_instant_addr = 0;
 static uintptr_t   g_max_units_init_insn_addr = 0;
 static int*        g_max_units_in_army = nullptr;
 static int*        g_max_units_in_navy = nullptr;
@@ -192,5 +204,8 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"custom battle default campaign map",                 (void**)&g_custom_battle_default_map_addr, CUSTOM_BATTLE_DEFAULT_MAP_SIG},
     {"MERCENARY_POOL_UNIT allocate",                       (void**)&g_merc_alloc_units, MERC_ALLOC_UNITS_SIG},
     {"CA heap free",                                       (void**)&g_ca_free, CA_FREE_SIG},
+    {"DIPLOMATIC_ACTION_TRADE_REGIONS::apply_action",      (void**)&g_region_trade_apply_addr, REGION_TRADE_APPLY_SIG},
+    {"SETTLEMENT::handle_garrison_army_and_navy_pre_change_hands", (void**)&g_settlement_pre_change_hands_addr, SETTLEMENT_PRE_CHANGE_HANDS_SIG},
+    {"CHARACTER::kill_instant",                            (void**)&g_character_kill_instant_addr, CHARACTER_KILL_INSTANT_SIG},
     {nullptr, nullptr, nullptr}
 };

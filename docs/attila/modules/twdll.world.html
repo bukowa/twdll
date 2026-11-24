@@ -131,6 +131,12 @@ unowned DLC.</td>
 	<td class="summary">Requests the engine to load a saved game from disk at the end of the current tick.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#ProtectGovernorsOnRegionTrade">ProtectGovernorsOnRegionTrade ([enabled=true])</a></td>
+	<td class="summary">Keeps province governors alive when the region they live in changes hands through an
+accepted diplomacy deal: the vanilla Gift Region option, and regions offered or demanded
+in any other deal.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#SaveGame">SaveGame (filename)</a></td>
 	<td class="summary">Saves the active campaign game to disk.</td>
 	</tr>
@@ -523,6 +529,49 @@ campaign's Lua state is torn down; call it again on every campaign load.
     <h3>Usage:</h3>
     <ul>
         <pre class="example">twdll.world.<span class="function-name">LoadGame</span>(<span class="string">"tests.save"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "ProtectGovernorsOnRegionTrade"></a>
+    <strong>ProtectGovernorsOnRegionTrade ([enabled=true])</strong>
+    </dt>
+    <dd>
+    Keeps province governors alive when the region they live in changes hands through an
+accepted diplomacy deal: the vanilla Gift Region option, and regions offered or demanded
+in any other deal.  The engine normally kills the general of the settlement's garrison
+(the governor living there) on every change of owner. While this is on, it records him
+as convalescing (wounded) instead, like an immortal character, and his own immortality
+setting is left exactly as it was (a mortal governor stays mortal). Captures, sacks,
+occupation decisions and <code>cm:transfer_region_to_faction</code> are not affected. Deals run on
+every machine, so in multiplayer every player must have it on. Removed when the
+campaign's Lua state is torn down; call it again on every campaign load.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to protect governors, false for vanilla behaviour
+         (<em>default</em> true)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true if protection is now on, false if it is off, nil if the code was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In the campaign script:
+</span>twdll.world.<span class="function-name">ProtectGovernorsOnRegionTrade</span>()
+<span class="comment">-- Back to vanilla:
+</span>twdll.world.<span class="function-name">ProtectGovernorsOnRegionTrade</span>(<span class="keyword">false</span>)</pre>
     </ul>
 
 </dd>
