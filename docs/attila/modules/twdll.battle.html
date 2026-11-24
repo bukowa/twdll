@@ -103,6 +103,10 @@ the share of men still alive.</td>
 	<td class="name" nowrap><a href="#GetBattleInfo">GetBattleInfo ()</a></td>
 	<td class="summary">Returns live runtime telemetry and reinforcement structure about the current tactical battle.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetMeleeBreakoffDuration">SetMeleeBreakoffDuration ([seconds])</a></td>
+	<td class="summary">Sets how long a unit counts as breaking off after it is ordered out of melee.</td>
+	</tr>
 </table>
 
 <br/>
@@ -234,6 +238,48 @@ Returns nil while no battle is active (e.g. on the campaign map).</p>
         <span class="comment">-- Reinforcements are queued to enter the battlefield
 </span>    <span class="keyword">end</span>
 <span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetMeleeBreakoffDuration"></a>
+    <strong>SetMeleeBreakoffDuration ([seconds])</strong>
+    </dt>
+    <dd>
+    Sets how long a unit counts as breaking off after it is ordered out of melee.  The game
+uses 15 seconds: for that long, against every enemy unit it was touching, enemy attacks on
+its men are resolved one-sided (the hit lands at once, the man does not strike back and is
+hit from behind once he turns away), which is what makes disengaging so costly, worst for
+cavalry. A shorter time ends that state once the riders have had time to pull clear; men
+still in contact afterwards fight normally again.</p>
+
+<p>The time is counted in unit updates (10 per second), so it is rounded to 0.1 s and clamped
+to 0.1-60 s. It changes the battle simulation: in multiplayer every player must set the same
+value. Restored when the last Lua state using twdll closes.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">seconds</span>
+            <span class="types"><span class="type">number</span></span>
+         break-off time in seconds, or nil to restore the game's own 15 s
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        the break-off time now in effect in seconds, or nil if the code was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In battle_scripted.lua:
+</span>twdll.battle.<span class="function-name">SetMeleeBreakoffDuration</span>(<span class="number">3</span>)</pre>
     </ul>
 
 </dd>
