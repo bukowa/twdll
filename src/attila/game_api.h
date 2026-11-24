@@ -143,6 +143,9 @@ extern uintptr_t g_update_card_info_addr;
 
 // UIDLL::BattleHealthBar::OnUpdatePulse entry point
 extern uintptr_t g_battle_health_bar_on_update_pulse_addr;
+
+// EMPIREBATTLE::UNIT::calculate_engine_hit_points entry point
+extern uintptr_t g_unit_calc_engine_hit_points_addr;
 extern uintptr_t g_campaign_key_content_tail_addr;
 extern uintptr_t g_gift_region_availability_addr;
 extern uintptr_t g_gift_region_list_filter_addr;

@@ -95,6 +95,11 @@ twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class=
 	<td class="summary">Updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#EnableUnitCardHitPoints">EnableUnitCardHitPoints ([enabled=true])</a></td>
+	<td class="summary">Makes the health bar on battle unit cards show the unit's remaining hit points instead of
+the share of men still alive.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#GetBattleInfo">GetBattleInfo ()</a></td>
 	<td class="summary">Returns live runtime telemetry and reinforcement structure about the current tactical battle.</td>
 	</tr>
@@ -138,6 +143,53 @@ twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class=
         <pre class="example"><span class="comment">-- In battle_scripted.lua:
 </span><span class="keyword">local</span> twdll = <span class="global">package</span>.<span class="function-name">loadlib</span>(<span class="string">"twdll"</span>, <span class="string">"luaopen_twdll"</span>)()
 twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "EnableUnitCardHitPoints"></a>
+    <strong>EnableUnitCardHitPoints ([enabled=true])</strong>
+    </dt>
+    <dd>
+    Makes the health bar on battle unit cards show the unit's remaining hit points instead of
+the share of men still alive.  The number on the card (men, or artillery pieces) is unchanged.</p>
+
+<p>The bar is the unit's hit points as a share of the unit at full strength: the living men's
+hit points over their full hit points, times living men over full unit size, plus the
+artillery pieces' hit points for artillery units. Wounded men lower the bar as well as dead
+ones; a unit that starts the battle under strength starts below a full bar, as before. Mount
+hit points are not counted (the game's own hit-point bar leaves them out too). The bar's
+colour and its "Health" tooltip percentage follow the new value.</p>
+
+<p>Display only: nothing in the battle simulation changes, so it is safe in multiplayer.
+While the battle model is busy on the simulation thread the card keeps the value it shows.
+The hook is removed when the last Lua state using twdll closes.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to show hit points, false for the vanilla men bar
+         (<em>default</em> true)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true when the requested state is in place, false if the hook could not
+be installed, nil if the needed game functions were not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In battle_scripted.lua:
+</span><span class="keyword">local</span> twdll = <span class="global">package</span>.<span class="function-name">loadlib</span>(<span class="string">"twdll"</span>, <span class="string">"luaopen_twdll"</span>)()
+twdll.battle.<span class="function-name">EnableUnitCardHitPoints</span>(<span class="keyword">true</span>)</pre>
     </ul>
 
 </dd>

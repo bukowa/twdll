@@ -541,9 +541,11 @@ struct TW_BattleScriptUnit {
 // EMPIREBATTLE::BATTLE_UI_UNIT
 struct TW_BattleUIUnit {
     char           pad_00[0xC0];
-    uint32_t       m_num_men_initial; // 0xC0
-    char           pad_C4[0x18];
-    uint32_t       m_num_men;         // 0xDC
+    uint32_t       m_num_men_initial;      // 0xC0  full unit size (battle setup m_full_unit_size_xp)
+    char           pad_C4[0x8];
+    uint32_t       m_num_engines_initial;  // 0xCC
+    char           pad_D0[0xC];
+    uint32_t       m_num_men;              // 0xDC  living men
     char           pad_E0[0x58];
     TW_BattleUnit* m_unit;            // 0x138
 };
