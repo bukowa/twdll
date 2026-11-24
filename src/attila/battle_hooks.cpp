@@ -244,46 +244,6 @@ static void uninstall_card_hook() {
     uninstall_health_bar_hook();
 }
 
-// Melee break-off duration. Ordering a unit out of melee puts it in BREAKING_OFF mode
-// against every enemy unit in contact for m_melee_breakoff_timeout unit updates (the game
-// writes 150, i.e. 15 s at 10 updates per second). While that lasts, enemy attacks on its
-// men are resolved one-sided: the hit is applied at once, the man does not strike back and
-// is hit from behind once he turns. The value is an imm32 in attempt_melee_breakoff.
-namespace {
-constexpr uintptr_t kBreakoffImmOffset = 7;     // "mov dword ptr [ecx+8], imm32" -> imm32
-constexpr uint32_t  kBreakoffMinTicks  = 1;     // 0 would never mark the unit as breaking off
-constexpr uint32_t  kBreakoffMaxTicks  = 600;   // 60 s
-uint32_t g_breakoff_vanilla_ticks = 0;          // read before the first write
-bool     g_breakoff_written = false;
-
-uint32_t* breakoff_imm() {
-    return g_melee_breakoff_timeout_addr
-        ? reinterpret_cast<uint32_t*>(g_melee_breakoff_timeout_addr + kBreakoffImmOffset)
-        : nullptr;
-}
-
-bool write_breakoff_ticks(uint32_t ticks) {
-    uint32_t* imm = breakoff_imm();
-    if (!imm) return false;
-    DWORD old_protect = 0;
-    if (!VirtualProtect(imm, 4, PAGE_EXECUTE_READWRITE, &old_protect)) {
-        Log("[twdll] SetMeleeBreakoffDuration: VirtualProtect failed (%lu)", GetLastError());
-        return false;
-    }
-    *imm = ticks;
-    VirtualProtect(imm, 4, old_protect, &old_protect);
-    FlushInstructionCache(GetCurrentProcess(), imm, 4);
-    return true;
-}
-} // namespace
-
-static void restore_melee_breakoff_duration() {
-    if (g_breakoff_written && write_breakoff_ticks(g_breakoff_vanilla_ticks)) {
-        Log("[twdll] SetMeleeBreakoffDuration: restored %u updates", g_breakoff_vanilla_ticks);
-    }
-    g_breakoff_written = false;
-}
-
 // EMPIREBATTLE::MANAGER ctor/dtor signatures resolve directly to the function
 // entry points, so the hooks install straight onto the resolved addresses.
 void install_battle_hook() {
@@ -329,7 +289,6 @@ void install_battle_hook() {
 
 void uninstall_battle_hook() {
     uninstall_card_hook();
-    restore_melee_breakoff_duration();
 
     if (battle_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(battle_ctor_addr));
@@ -473,55 +432,9 @@ static int EnableUnitCardHitPoints(lua_State* L) {
     return 1;
 }
 
-/***
-Sets how long a unit counts as breaking off after it is ordered out of melee. The game
-uses 15 seconds: for that long, against every enemy unit it was touching, enemy attacks on
-its men are resolved one-sided (the hit lands at once, the man does not strike back and is
-hit from behind once he turns away), which is what makes disengaging so costly, worst for
-cavalry. A shorter time ends that state once the riders have had time to pull clear; men
-still in contact afterwards fight normally again.
-
-The time is counted in unit updates (10 per second), so it is rounded to 0.1 s and clamped
-to 0.1-60 s. It changes the battle simulation: in multiplayer every player must set the same
-value. Restored when the last Lua state using twdll closes.
-@function SetMeleeBreakoffDuration
-@tparam[opt] number seconds break-off time in seconds, or nil to restore the game's own 15 s
-@treturn number|nil the break-off time now in effect in seconds, or nil if the code was not found in this game build
-@usage
--- In battle_scripted.lua:
-twdll.battle.SetMeleeBreakoffDuration(3)
-*/
-static int SetMeleeBreakoffDuration(lua_State* L) {
-    uint32_t* imm = breakoff_imm();
-    if (!imm) {
-        Log("[twdll] SetMeleeBreakoffDuration: code not found - game break-off time kept");
-        l_pushnil(L);
-        return 1;
-    }
-    if (!g_breakoff_written) g_breakoff_vanilla_ticks = *imm;
-
-    if (l_type(L, 1) == LUA_TNONE || l_type(L, 1) == LUA_TNIL) {
-        restore_melee_breakoff_duration();
-    } else {
-        double seconds = l_tonumber(L, 1);
-        double ticks_f = seconds * 10.0 + 0.5;
-        uint32_t ticks = ticks_f < kBreakoffMinTicks ? kBreakoffMinTicks
-                       : ticks_f > kBreakoffMaxTicks ? kBreakoffMaxTicks
-                       : static_cast<uint32_t>(ticks_f);
-        if (write_breakoff_ticks(ticks)) {
-            g_breakoff_written = true;
-            Log("[twdll] SetMeleeBreakoffDuration: %u updates (%.1f s), game value %u", ticks,
-                ticks / 10.0, g_breakoff_vanilla_ticks);
-        }
-    }
-    l_pushnumber(L, static_cast<float>(*imm / 10.0));
-    return 1;
-}
-
 extern const luaL_Reg battle_functions[] = {
     {"GetBattleInfo",        GetBattleInfo},
     {"EnableSmeHealthBars",  EnableSmeHealthBars},
     {"EnableUnitCardHitPoints", EnableUnitCardHitPoints},
-    {"SetMeleeBreakoffDuration", SetMeleeBreakoffDuration},
     {nullptr, nullptr}
 };

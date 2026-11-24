@@ -19,7 +19,7 @@
 
 // Bumped whenever the Lua-visible API changes incompatibly, or gains functions a
 // caller may need to test for. Read from Lua with <ns>.core.GetApiVersion().
-#define TWDLL_API_VERSION 9
+#define TWDLL_API_VERSION 8
 
 // Called from DllMain(PROCESS_ATTACH).
 void runtime_set_module(HMODULE self);
