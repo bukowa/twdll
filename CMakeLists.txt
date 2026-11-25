@@ -28,6 +28,7 @@ set(TWDLL_COMMON_SOURCES
     src/common/lua_core.cpp
     src/common/game_api.cpp
     src/common/signature_scanner.cpp
+    src/common/runtime.cpp
 )
 
 # Game-specific sources (struct layouts, Lua signatures)
@@ -54,6 +55,21 @@ endif()
 target_compile_definitions(twdll PRIVATE
     TWDLL_BUILD_SHA="${TWDLL_BUILD_SHA}"
 )
+
+# ── Namespace ─────────────────────────────────────────────────────────────────
+# Lua registry key, global table names (<ns>, <ns>_character, ...) and log file
+# (<ns>.log). Mods that bundle their own build should set a unique namespace so
+# they cannot collide with another mod's twdll in the shared Lua state.
+set(TWDLL_NAMESPACE "twdll" CACHE STRING "Lua/global/log namespace of this build")
+if(NOT TWDLL_NAMESPACE MATCHES "^[A-Za-z_][A-Za-z0-9_]*$")
+    message(FATAL_ERROR "TWDLL_NAMESPACE must be a valid Lua identifier, got '${TWDLL_NAMESPACE}'")
+endif()
+string(LENGTH "${TWDLL_NAMESPACE}" _twdll_ns_len)
+if(_twdll_ns_len GREATER 24)
+    message(FATAL_ERROR "TWDLL_NAMESPACE must be at most 24 characters")
+endif()
+message(STATUS "twdll namespace: ${TWDLL_NAMESPACE}")
+target_compile_definitions(twdll PRIVATE TWDLL_NAMESPACE="${TWDLL_NAMESPACE}")
 
 target_include_directories(twdll PRIVATE src)
 target_link_libraries(twdll PRIVATE minhook)

@@ -3,6 +3,10 @@
 #include "common/campaign_hooks.h"
 #include "common/game_api.h"
 #include "attila/security.h"
+#include "common/runtime.h"
+
+#include <string>
+#include <cstring>
 
 extern const luaL_Reg unit_functions[];
 extern const luaL_Reg character_functions[];
@@ -28,21 +32,49 @@ extern void register_political_party_methods(lua_State *L);
 extern void register_political_party_list_methods(lua_State *L);
 extern void register_religion_methods(lua_State *L);
 extern void register_religion_list_methods(lua_State *L);
+extern void register_mercenary_pool_methods(lua_State *L);
 extern const luaL_Reg tweaker_functions[];
 extern void register_tweaker_methods(lua_State *L);
 extern void uninstall_tweakers();
 
 static bool g_is_initialized = false;
+static bool g_api_resolved = false;   // game/Lua function addresses, resolved once per process
+
+// Number of live Lua states that opened the runtime (frontend, campaign, battle...).
+// The game creates and destroys these independently and they can overlap, so the
+// engine hooks are installed when the first state opens and rolled back only when
+// the last one is collected. Tying them to "whichever state loaded first" would
+// let one state's teardown silently disable the hooks another state still uses.
+static int g_lua_state_count = 0;
 
 static int l_twdll_gc_cleanup(lua_State*) {
-    if (g_is_initialized) {
-        Log("[twdll] GC destroying Lua state — uninstalling campaign hooks and tweakers");
+    if (g_lua_state_count > 0) --g_lua_state_count;
+    Log("[twdll] GC destroying Lua state — %d state(s) still using the runtime", g_lua_state_count);
+    if (g_lua_state_count == 0 && g_is_initialized) {
+        Log("[twdll] Last Lua state closed — uninstalling campaign hooks and tweakers");
         uninstall_tweakers();
         uninstall_campaign_hooks();
         g_is_initialized = false;
     }
     return 0;
 }
+
+// Global table names are written as "twdll" / "twdll_<module>" (as upstream does) and
+// mapped to "<namespace>" / "<namespace>_<module>" here, so namespaced builds need no
+// change to the registration lines in luaopen_twdll and new modules are covered too.
+static std::string ns_global_name(const char* name) {
+    static const char kDefault[] = "twdll";
+    const size_t n = sizeof(kDefault) - 1;
+    if (strncmp(name, kDefault, n) == 0 && (name[n] == '\0' || name[n] == '_'))
+        return std::string(TWDLL_NAMESPACE) + (name + n);
+    return name;
+}
+
+static void register_ns(lua_State* L, const char* name, const luaL_Reg* fns) {
+    g_game_luaL_register(L, ns_global_name(name).c_str(), fns);
+}
+#undef l_register
+#define l_register register_ns
 
 static const char* dll_reason_name(DWORD reason) {
     switch (reason) {
@@ -57,6 +89,7 @@ static const char* dll_reason_name(DWORD reason) {
 BOOL APIENTRY DllMain(const HMODULE hModule, const DWORD reason, LPVOID) {
     Log("DllMain() called, reason=%u (%s)", reason, dll_reason_name(reason));
     if (reason == DLL_PROCESS_ATTACH) {
+        runtime_set_module(hModule);
         Log("DllMain() PROCESS_ATTACH: disabling thread attach/detach calls");
         DisableThreadLibraryCalls(hModule);
     }
@@ -69,18 +102,35 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
         return 0;
     }
 
-    Log("[twdll] luaopen_twdll: called");
+    Log("[twdll] luaopen_twdll: called (namespace '%s', api %d)", TWDLL_NAMESPACE, TWDLL_API_VERSION);
+
+    std::string refusal;
+    if (!runtime_claim_owner(refusal)) {
+        l_pushnil(L);
+        l_pushstring(L, refusal.c_str());
+        return 2;
+    }
+    runtime_pin_module();
 
     if (!g_is_initialized) {
-        Log("[twdll] First load: initializing Game API and hooks");
-        initialize_lua_api();
-        initialize_game_api();
+        // Signature scanning walks the whole game image once per signature (~0.9 s for
+        // ~57 signatures). empire.retail.dll never moves or changes while the process
+        // runs and nothing clears the resolved addresses on uninstall, so resolve them
+        // once per process; later re-installs (new campaign, post-battle reload) only
+        // re-install the hooks.
+        if (!g_api_resolved) {
+            Log("[twdll] First load: resolving Game API");
+            initialize_lua_api();
+            initialize_game_api();
+            g_api_resolved = true;
+        }
+        Log("[twdll] Installing hooks");
         install_campaign_hooks();
         g_is_initialized = true;
     }
 
     // Check if twdll table instance already exists in this Lua state's registry
-    l_getfield(L, LUA_REGISTRYINDEX, "twdll");
+    l_getfield(L, LUA_REGISTRYINDEX, TWDLL_NAMESPACE);
     if (l_type(L, -1) == LUA_TTABLE) {
         Log("[twdll] luaopen_twdll: returning existing twdll table instance from registry");
         return 1;
@@ -93,7 +143,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
 
     // Save table instance in Lua registry for future loadlib calls in this session
     l_pushvalue(L, -1);
-    l_setfield(L, LUA_REGISTRYINDEX, "twdll");
+    l_setfield(L, LUA_REGISTRYINDEX, TWDLL_NAMESPACE);
 
     l_newuserdata(L, 1);
     l_createtable(L, 0, 1);
@@ -101,6 +151,8 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     l_setfield(L, -2, "__gc");
     l_setmetatable(L, -2);
     l_setfield(L, -2, "__cleanup_proxy");
+    ++g_lua_state_count;
+    Log("[twdll] luaopen_twdll: new Lua state, %d state(s) now using the runtime", g_lua_state_count);
 
     l_register(L, "twdll", twdll_core);
     l_setfield(L, -2, "core");
@@ -130,6 +182,7 @@ extern "C" __declspec(dllexport) int luaopen_twdll(lua_State *L) {
     register_slot_methods(L);
     register_religion_methods(L);
     register_religion_list_methods(L);
+    register_mercenary_pool_methods(L);
 
     l_register(L, "twdll_model", model_functions);
     l_setfield(L, -2, "model");

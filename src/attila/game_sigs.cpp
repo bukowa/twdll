@@ -39,7 +39,45 @@
 #define RECRUIT_CHARACTER_ENTRY_IMPL_SIG "83 EC 20 53 8B 5C 24 ? 55 56 8B F1 8B 43"
 #define KILL_INSTANT_AND_COMMANDED_UNIT_SIG "83 EC 24 56 8B F1 57 8D 8E"
 #define UPDATE_CARD_INFO_SIG "56 8B F1 57 8B 8E AC 00 00 00 E8 ? ? ? ? 8B 7C 24 0C 84 C0 75 0F 8B 86 AC 00 00 00 8B 80 04 01 00 00"
+// Tail of the function that maps a campaign key to its content (DLC) flag:
+//   test al,al / jnz +4 / xor eax,eax / pop esi / ret / mov eax,0x80 ... / mov eax,0x20 ... / mov eax,1 / pop esi / ret
+// Bytes 4-5 ("xor eax,eax", the "unknown key" result) are wildcards so an already
+// patched game file (EB 10) is matched too.
+#define CAMPAIGN_KEY_CONTENT_TAIL_SIG "84 C0 75 04 ? ? 5E C3 B8 80 00 00 00 5E C3 B8 20 00 00 00 5E C3 B8 01 00 00 00 5E C3"
+// "Gift Region" diplomacy availability (both directions, called with giver/receiver factions).
+// The 2-byte conditional jumps that world.AllowGiftRegion patches are wildcards, so an already
+// patched process or file still matches.
+#define GIFT_REGION_AVAILABILITY_SIG "83 EC 1C 53 56 8B 74 24 2C 33 DB 57 8B 7C 24 2C 89 5C 24 0C 38 9F 4C 08 00 00 74 4D 8B CF E8 ? ? ? ? 84 C0 ? ? 8B CE E8 ? ? ? ? 84 C0 ? ? 8B CE E8 ? ? ? ? 84 C0 ? ? 8B 8F 24 08 00 00 56 E8 ? ? ? ? 8B 40 10 39 58 10 74 18 56 8D 44 24 20 8B CF 50 E8 ? ? ? ? BB 01 00 00 00 83 78 04 00 75 55 80 BE 4C 08 00 00 00 74 53 8B CE E8 ? ? ? ? 84 C0 ? ? 8B CF E8 ? ? ? ? 84 C0 ? ? 8B CF E8 ? ? ? ? 84 C0 ? ? 8B 8E"
+// Inside the giftable-region list builder: "receiver given? then only its listed regions".
+#define GIFT_REGION_LIST_FILTER_SIG "8B BE 28 01 00 00 8D 4F 5C E8 ? ? ? ? 85 C0 75 6E 8D 4F 7C E8 ? ? ? ? 85 C0 75 62 8B 54 24 20 85 D2 ? ?"
+// Custom battle setup: selects the default campaign map with
+//   mov eax,[edi+0x80] / lea ecx,[esp+8] / push offset "main_attila_map" / mov esi,[eax+0x184] / call String ctor / ... / call select
+// The pushed string address (+0x0B) is a wildcard so a repointed immediate still matches.
+#define CUSTOM_BATTLE_DEFAULT_MAP_SIG "8B 87 80 00 00 00 8D 4C 24 08 68 ? ? ? ? 8B B0 84 01 00 00 E8 ? ? ? ? 8D 44 24 08 8B CE 50 E8"
+// Allocates N MERCENARY_POOL_UNIT on the game heap (used by the pool vector push_back).
+#define MERC_ALLOC_UNITS_SIG "8B 44 24 04 33 C9 85 C0 6A 00 0F 49 C8 6B C1 2C 50 E8 ? ? ? ? 83 C4 08 C3"
+// Frees a block from the CA game heap (cdecl, one argument).
+#define CA_FREE_SIG "83 EC 08 56 8B 74 24 10 85 F6 74 2C 8D 44 24 04 56 50 E8 ? ? ? ? 8B 4C 24 10 83 C4 08 FF 74 24 04 E8 ? ? ? ? A1"
+// DIPLOMATIC_ACTION_TRADE_REGIONS::apply_action: carries out the regions of an accepted
+// diplomacy deal (Gift Region, regions demanded or offered) via SETTLEMENT::on_diplomacy_traded.
+#define REGION_TRADE_APPLY_SIG "51 53 55 56 8B F1 33 D2 33 DB 57 8B 4E 18 8B 6E 1C C1 E1 02 8D 04 29 C1 E9 02 3B E8 0F 47 CA 89 4C 24 10 85 C9 74 ? 8B CE E8 ? ? ? ? 8D 88 58 01 00 00"
+// SETTLEMENT::handle_garrison_army_and_navy_pre_change_hands: destroys the garrison army and
+// navy and kills their generals (the army's general is the governor living there).
+#define SETTLEMENT_PRE_CHANGE_HANDS_SIG "56 8B F1 57 8D 8E B4 00 00 00 E8 ? ? ? ? 85 C0 74 ? 53 8D 8E B4 00 00 00 E8 ? ? ? ? 8D 88 B0 00 00 00 E8 ? ? ? ? 8D 8E B4 00 00 00"
+// CHARACTER::kill_instant(death_type): an immortal character (CHARACTER+0x54C) gets
+// DEATH_TYPE_CONVALESCING instead of the requested death type.
+#define CHARACTER_KILL_INSTANT_SIG "56 8B 74 24 08 B8 08 00 00 00 57 8B F9 80 BF 4C 05 00 00 00 8D 8F ? ? ? ? 0F 45 F0 E8"
 #define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG "A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
+// EMPIREBATTLE::BUILDING_PIECE::kill_all_entities_within_killzone: picking the piece's 2D
+// collision outline by m_destruction_level_index (movzx ecx, [ebx+0x159]; cmp ecx, size;
+// jae <use AABB>; ...). Thrones of Britannia uses index - 1 (clamped at 0) here.
+#define KILLZONE_OUTLINE_INDEX_SIG "0F B6 8B 59 01 00 00 3B 8B C8 00 00 00 73 0E 8B 83 CC 00 00 00 8B 04 88 8B 70 08 EB 04 8B 74 24 5C"
+// Same function: the man-on-a-fort-wall test "distance > 10 m -> stumble, else 90 % death".
+// comiss xmm0, [10.0f] at +0x12; its m32 address at +0x15. ToB compares with 7.0.
+#define KILLZONE_WALL_RADIUS_SIG "83 7F 18 00 0F 85 ? ? ? ? 84 DB 0F 84 ? ? ? ? 0F 2F 05 ? ? ? ? 0F 86 ? ? ? ? 8B 44 24 18 85 C0 75"
+// EMPIREBATTLE::UNIT::calculate_engine_hit_points(card32& current, card32& max) (thiscall):
+// current = surviving artillery pieces' hit points, max = initial pieces x full hit points.
+#define UNIT_CALC_ENGINE_HIT_POINTS_SIG "53 8B 5C 24 08 56 8B F1 8B 46 20 8B 80 88 00 00 00 C7 03 00 00 00 00 85 C0 75 0F 8B 44 24 10 5E 5B C7 00 00 00 00 00 C2 08 00 8B 46 20 55 57 33 FF 8B 80 88 00 00 00 8B 40 44 8B 68 68 E8"
 
 FnNewFactionLeader g_new_faction_leader = nullptr;
 FnDisbandUnits     g_disband_units       = nullptr;
@@ -61,6 +99,18 @@ uintptr_t          g_settlement_cb_initialize_addr = 0;
 uintptr_t          g_make_occupation_decision_addr = 0;
 uintptr_t          g_update_card_info_addr = 0;
 uintptr_t          g_battle_health_bar_on_update_pulse_addr = 0;
+uintptr_t          g_unit_calc_engine_hit_points_addr = 0;
+uintptr_t          g_killzone_outline_index_addr = 0;
+uintptr_t          g_killzone_wall_radius_addr = 0;
+uintptr_t          g_campaign_key_content_tail_addr = 0;
+uintptr_t          g_gift_region_availability_addr = 0;
+uintptr_t          g_gift_region_list_filter_addr = 0;
+uintptr_t          g_custom_battle_default_map_addr = 0;
+FnMercAllocUnits   g_merc_alloc_units = nullptr;
+FnCaFree           g_ca_free = nullptr;
+uintptr_t          g_region_trade_apply_addr = 0;
+uintptr_t          g_settlement_pre_change_hands_addr = 0;
+uintptr_t          g_character_kill_instant_addr = 0;
 static uintptr_t   g_max_units_init_insn_addr = 0;
 static int*        g_max_units_in_army = nullptr;
 static int*        g_max_units_in_navy = nullptr;
@@ -161,5 +211,17 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"CHARACTER::kill_instant_and_commanded_unit",         (void**)&g_kill_instant_and_commanded_unit, KILL_INSTANT_AND_COMMANDED_UNIT_SIG},
     {"UIDLL::BattleLandUnitCardStyle::update_information_changed", (void**)&g_update_card_info_addr, UPDATE_CARD_INFO_SIG},
     {"UIDLL::BattleHealthBar::OnUpdatePulse",              (void**)&g_battle_health_bar_on_update_pulse_addr, BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG},
+    {"EMPIREBATTLE::UNIT::calculate_engine_hit_points",    (void**)&g_unit_calc_engine_hit_points_addr, UNIT_CALC_ENGINE_HIT_POINTS_SIG},
+    {"BUILDING_PIECE::kill_all_entities_within_killzone (outline index)", (void**)&g_killzone_outline_index_addr, KILLZONE_OUTLINE_INDEX_SIG},
+    {"BUILDING_PIECE::kill_all_entities_within_killzone (wall radius)",   (void**)&g_killzone_wall_radius_addr, KILLZONE_WALL_RADIUS_SIG},
+    {"campaign_key_to_content_flag (tail)",                (void**)&g_campaign_key_content_tail_addr, CAMPAIGN_KEY_CONTENT_TAIL_SIG},
+    {"diplomacy gift_region availability",                 (void**)&g_gift_region_availability_addr, GIFT_REGION_AVAILABILITY_SIG},
+    {"diplomacy gift_region list filter",                  (void**)&g_gift_region_list_filter_addr, GIFT_REGION_LIST_FILTER_SIG},
+    {"custom battle default campaign map",                 (void**)&g_custom_battle_default_map_addr, CUSTOM_BATTLE_DEFAULT_MAP_SIG},
+    {"MERCENARY_POOL_UNIT allocate",                       (void**)&g_merc_alloc_units, MERC_ALLOC_UNITS_SIG},
+    {"CA heap free",                                       (void**)&g_ca_free, CA_FREE_SIG},
+    {"DIPLOMATIC_ACTION_TRADE_REGIONS::apply_action",      (void**)&g_region_trade_apply_addr, REGION_TRADE_APPLY_SIG},
+    {"SETTLEMENT::handle_garrison_army_and_navy_pre_change_hands", (void**)&g_settlement_pre_change_hands_addr, SETTLEMENT_PRE_CHANGE_HANDS_SIG},
+    {"CHARACTER::kill_instant",                            (void**)&g_character_kill_instant_addr, CHARACTER_KILL_INSTANT_SIG},
     {nullptr, nullptr, nullptr}
 };

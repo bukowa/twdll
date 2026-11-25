@@ -50,6 +50,7 @@
   <li><a href="../modules/CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE.html">CAMPAIGN_POLITICAL_PARTY_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/CHARACTER_SCRIPT_INTERFACE.html">CHARACTER_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/FACTION_SCRIPT_INTERFACE.html">FACTION_SCRIPT_INTERFACE</a></li>
+  <li><a href="../modules/MERCENARY_POOLS.html">MERCENARY_POOLS</a></li>
   <li><a href="../modules/MILITARY_FORCE_SCRIPT_INTERFACE.html">MILITARY_FORCE_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/POLITICAL_PARTY_LIST_SCRIPT_INTERFACE.html">POLITICAL_PARTY_LIST_SCRIPT_INTERFACE</a></li>
   <li><a href="../modules/REGION_SCRIPT_INTERFACE.html">REGION_SCRIPT_INTERFACE</a></li>
@@ -77,6 +78,15 @@
 <h2><a href="#Functions">Functions</a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#AllowCustomCampaignKeys">AllowCustomCampaignKeys ([enabled=true])</a></td>
+	<td class="summary">Makes the game treat campaigns with custom keys as base-game content instead of
+unowned DLC.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#AllowGiftRegion">AllowGiftRegion ([enabled=true[, options]])</a></td>
+	<td class="summary">Offers the vanilla "Gift Region" diplomacy option between any factions, not only to hordes.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#ExitGame">ExitGame ()</a></td>
 	<td class="summary">Requests the engine to cleanly exit the game process to Windows.</td>
 	</tr>
@@ -87,6 +97,10 @@
 	<tr>
 	<td class="name" nowrap><a href="#GetFactionCount">GetFactionCount ()</a></td>
 	<td class="summary">Gets the total number of factions existing in the current campaign world.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#GetGiftRegionState">GetGiftRegionState ()</a></td>
+	<td class="summary">Returns which Gift Region unlocks are active.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#GetMaxTraits">GetMaxTraits ()</a></td>
@@ -109,12 +123,26 @@
 	<td class="summary">Returns the currently applied reinforcement cap override, or nil if the game default is in effect.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#IsCustomCampaignKeysAllowed">IsCustomCampaignKeysAllowed ()</a></td>
+	<td class="summary">Returns whether campaigns with custom keys are currently treated as base-game content.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#LoadGame">LoadGame (filename)</a></td>
 	<td class="summary">Requests the engine to load a saved game from disk at the end of the current tick.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#ProtectGovernorsOnRegionTrade">ProtectGovernorsOnRegionTrade ([enabled=true])</a></td>
+	<td class="summary">Keeps province governors alive when the region they live in changes hands through an
+accepted diplomacy deal: the vanilla Gift Region option, and regions offered or demanded
+in any other deal.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#SaveGame">SaveGame (filename)</a></td>
 	<td class="summary">Saves the active campaign game to disk.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#SetCustomBattleDefaultMap">SetCustomBattleDefaultMap ([mapname])</a></td>
+	<td class="summary">Sets which campaign map the custom battle screen selects when it opens.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#SetMaxTraits">SetMaxTraits ([val])</a></td>
@@ -142,6 +170,93 @@ after this call.</td>
     <h2 class="section-header "><a name="Functions"></a>Functions</h2>
 
     <dl class="function">
+    <dt>
+    <a name = "AllowCustomCampaignKeys"></a>
+    <strong>AllowCustomCampaignKeys ([enabled=true])</strong>
+    </dt>
+    <dd>
+    Makes the game treat campaigns with custom keys as base-game content instead of
+unowned DLC.  Without it, a mod campaign whose key is not <code>main_attila</code>/<code>main_attila_map</code>
+(or a DLC key) is shown as locked DLC, missing from multiplayer map lists and refused
+when joining a multiplayer campaign. Vanilla and DLC campaigns are unaffected.</p>
+
+<p>Call it from the frontend (main menu) script so it is in place before campaign
+selection and the multiplayer lobby; every multiplayer player needs it. It stays in
+effect until disabled or the game exits (it is not rolled back on Lua teardown).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to allow custom keys, false to restore the vanilla check
+         (<em>default</em> true)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true if custom keys are now allowed, false if not, nil if the check was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In the frontend script:
+</span>twdll.world.<span class="function-name">AllowCustomCampaignKeys</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "AllowGiftRegion"></a>
+    <strong>AllowGiftRegion ([enabled=true[, options]])</strong>
+    </dt>
+    <dd>
+    Offers the vanilla "Gift Region" diplomacy option between any factions, not only to hordes.
+By default it opens the option for the faction proposing the deal (the in-game tested
+case). Options add the reverse direction (the other side may give regions) and let
+hordes be givers; these two are not tested in game yet. A faction capital still cannot
+be gifted. Every multiplayer player must apply the same settings. Rolled back when the
+campaign's Lua state is torn down; call it again on every campaign load.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to allow, false to restore the vanilla checks
+         (<em>default</em> true)
+        </li>
+        <li><span class="parameter">options</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+         <code>{ reverse = bool, horde_givers = bool }</code>
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true if applied, false if it could not be applied, nil if the code was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In the campaign script:
+</span>twdll.world.<span class="function-name">AllowGiftRegion</span>()
+<span class="comment">-- Also let the other side offer regions, and hordes give them:
+</span>twdll.world.<span class="function-name">AllowGiftRegion</span>(<span class="keyword">true</span>, { reverse = <span class="keyword">true</span>, horde_givers = <span class="keyword">true</span> })
+<span class="comment">-- Back to vanilla:
+</span>twdll.world.<span class="function-name">AllowGiftRegion</span>(<span class="keyword">false</span>)</pre>
+    </ul>
+
+</dd>
     <dt>
     <a name = "ExitGame"></a>
     <strong>ExitGame ()</strong>
@@ -211,6 +326,31 @@ after this call.</td>
     <h3>Usage:</h3>
     <ul>
         <pre class="example"><span class="keyword">local</span> total_factions = twdll.world.<span class="function-name">GetFactionCount</span>()</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "GetGiftRegionState"></a>
+    <strong>GetGiftRegionState ()</strong>
+    </dt>
+    <dd>
+    Returns which Gift Region unlocks are active.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a> or <span class="type">nil</span></span>
+        <code>{ any = bool, reverse = bool, horde_givers = bool }</code>, or nil if the code was not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">local</span> s = twdll.world.<span class="function-name">GetGiftRegionState</span>()
+<span class="keyword">if</span> s <span class="keyword">and</span> s.any <span class="keyword">then</span> ... <span class="keyword">end</span></pre>
     </ul>
 
 </dd>
@@ -338,6 +478,30 @@ after this call.</td>
 
 </dd>
     <dt>
+    <a name = "IsCustomCampaignKeysAllowed"></a>
+    <strong>IsCustomCampaignKeysAllowed ()</strong>
+    </dt>
+    <dd>
+    Returns whether campaigns with custom keys are currently treated as base-game content.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true if allowed, false if the vanilla check is active, nil if the check was not found
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="keyword">if</span> twdll.world.<span class="function-name">IsCustomCampaignKeysAllowed</span>() <span class="keyword">then</span> ... <span class="keyword">end</span></pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "LoadGame"></a>
     <strong>LoadGame (filename)</strong>
     </dt>
@@ -369,6 +533,49 @@ after this call.</td>
 
 </dd>
     <dt>
+    <a name = "ProtectGovernorsOnRegionTrade"></a>
+    <strong>ProtectGovernorsOnRegionTrade ([enabled=true])</strong>
+    </dt>
+    <dd>
+    Keeps province governors alive when the region they live in changes hands through an
+accepted diplomacy deal: the vanilla Gift Region option, and regions offered or demanded
+in any other deal.  The engine normally kills the general of the settlement's garrison
+(the governor living there) on every change of owner. While this is on, it records him
+as convalescing (wounded) instead, like an immortal character, and his own immortality
+setting is left exactly as it was (a mortal governor stays mortal). Captures, sacks,
+occupation decisions and <code>cm:transfer_region_to_faction</code> are not affected. Deals run on
+every machine, so in multiplayer every player must have it on. Removed when the
+campaign's Lua state is torn down; call it again on every campaign load.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true to protect governors, false for vanilla behaviour
+         (<em>default</em> true)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true if protection is now on, false if it is off, nil if the code was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In the campaign script:
+</span>twdll.world.<span class="function-name">ProtectGovernorsOnRegionTrade</span>()
+<span class="comment">-- Back to vanilla:
+</span>twdll.world.<span class="function-name">ProtectGovernorsOnRegionTrade</span>(<span class="keyword">false</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
     <a name = "SaveGame"></a>
     <strong>SaveGame (filename)</strong>
     </dt>
@@ -396,6 +603,45 @@ after this call.</td>
     <h3>Usage:</h3>
     <ul>
         <pre class="example"><span class="keyword">local</span> success = twdll.world.<span class="function-name">SaveGame</span>(<span class="string">"my_checkpoint"</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "SetCustomBattleDefaultMap"></a>
+    <strong>SetCustomBattleDefaultMap ([mapname])</strong>
+    </dt>
+    <dd>
+    Sets which campaign map the custom battle screen selects when it opens.  The game
+pre-selects the <code>campaign_map_playable_areas</code> row whose <code>mapname</code> is <code>&quot;main_attila_map&quot;</code>;
+this changes that name. Call it from the frontend (main menu) script. If no
+custom-battle row has the given mapname, the game falls back to its normal behaviour.
+A custom mapname (not main/bel/cha) also needs <code>AllowCustomCampaignKeys()</code>, otherwise
+the map is shown as locked DLC. It stays in effect until it is changed or the game exits
+(not rolled back on Lua teardown, because the screen is rebuilt after a custom battle
+while no Lua state is loaded).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">mapname</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         <code>mapname</code> of a <code>campaign_map_playable_areas</code> row (max 63 characters), or nil to restore <code>&quot;main_attila_map&quot;</code>
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">nil</span></span>
+        the mapname now selected by default, or nil if the code was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example">twdll.world.<span class="function-name">SetCustomBattleDefaultMap</span>(<span class="string">"rom_third_age_map"</span>)</pre>
     </ul>
 
 </dd>
