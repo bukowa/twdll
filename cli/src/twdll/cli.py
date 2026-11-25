@@ -134,6 +134,14 @@ def main_callback(
     cli_ctx.meta["twdll_cli_overrides"] = tuple(overrides)
 
 
+def _format_count(value: int) -> str:
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    if value >= 100_000:
+        return f"{value / 1_000:.1f}k"
+    return str(value)
+
+
 def _format_progress_units(event: ProgressEvent) -> str:
     if event.kind is ProgressKind.DOWNLOAD:
         done_mb = event.completed / (1024 * 1024)
@@ -142,7 +150,7 @@ def _format_progress_units(event: ProgressEvent) -> str:
             return f"{done_mb:6.1f}/{total_mb:.1f} MB"
         return f"{done_mb:6.1f} MB"
     if event.total is not None:
-        return f"{event.completed}/{event.total}"
+        return f"{_format_count(event.completed)}/{_format_count(event.total)}"
     return ""
 
 
@@ -164,8 +172,10 @@ def _cli_progress(enabled: bool) -> Generator[ProgressCallback]:
         TimeElapsedColumn(),
         TimeRemainingColumn(),
         console=Console(stderr=True),
+        speed_estimate_period=300.0,
     )
     tasks: dict[str, TaskID] = {}
+    task_bounds: dict[str, tuple[int, int | None]] = {}
 
     def report(event: ProgressEvent) -> None:
         units = _format_progress_units(event)
@@ -177,14 +187,29 @@ def _cli_progress(enabled: bool) -> Generator[ProgressCallback]:
                 completed=event.completed,
                 units=units,
             )
+            task_bounds[event.task_key] = (event.completed, event.total)
             return
-        progress.update(
-            task_id,
-            description=event.label,
-            total=event.total,
-            completed=event.completed,
-            units=units,
+        prev_completed, prev_total = task_bounds.get(event.task_key, (0, None))
+        is_new_subpass = (prev_completed > 0 and event.completed < prev_completed) or (
+            prev_total is not None and event.total != prev_total
         )
+        if is_new_subpass:
+            progress.reset(
+                task_id,
+                total=event.total,
+                completed=event.completed,
+                description=event.label,
+                units=units,
+            )
+        else:
+            progress.update(
+                task_id,
+                description=event.label,
+                total=event.total,
+                completed=event.completed,
+                units=units,
+            )
+        task_bounds[event.task_key] = (event.completed, event.total)
 
     with progress:
         yield report

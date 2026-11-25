@@ -246,6 +246,7 @@ def test_make_task_monitor_wraps_jproxy_in_jobject(monkeypatch: pytest.MonkeyPat
     fake_jpype = ModuleType("jpype")
     jproxy_calls: list[tuple[str, object]] = []
     jobject_calls: list[tuple[object, str]] = []
+    seen_messages: list[str] = []
 
     def _fake_jproxy(iface: str, *, inst: object) -> object:
         jproxy_calls.append((iface, inst))
@@ -258,10 +259,17 @@ def test_make_task_monitor_wraps_jproxy_in_jobject(monkeypatch: pytest.MonkeyPat
     fake_jpype.__dict__.update({"JProxy": _fake_jproxy, "JObject": _fake_jobject})
     monkeypatch.setitem(sys.modules, "jpype", fake_jpype)
 
-    monitor = make_task_monitor(BinaryName.ATTILA_LINUX_64, lambda _e: None)
+    monitor = make_task_monitor(
+        BinaryName.ATTILA_LINUX_64,
+        lambda _e: None,
+        on_message=lambda msg: seen_messages.append(msg),
+    )
     assert len(jproxy_calls) == 1
     assert len(jobject_calls) == 1
     assert jobject_calls[0][1] == "ghidra.util.task.TaskMonitor"
+    monitor.setMessage("Disassembling Entry Points")
+    monitor.initialize(100, "Searching for Strings")
+    assert seen_messages == ["Disassembling Entry Points", "Searching for Strings"]
     assert monitor.isCancelled() is False
     monitor.cancel()
     assert monitor.isCancelled() is True

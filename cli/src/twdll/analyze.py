@@ -7,6 +7,7 @@ import os
 import shutil
 import tempfile
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -141,6 +142,50 @@ def _can_skip_target(ctx: WorkspaceContext, binary: BinaryName, expected_sha256:
     )
 
 
+_ANALYZE_STAGES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("importing binary", ("importing", "loading")),
+    ("disassembling code", ("disassembl", "call-fixup")),
+    ("non-returning functions", ("non-returning", "shared return", "external entry")),
+    ("subroutines & switch tables", ("subroutine", "decompiling", "finding function")),
+    ("function start search", ("function start", "pattern")),
+    ("constant references", ("constant", "propagat")),
+    ("operand & scalar refs", ("scalar", "reference", "operand")),
+    ("data archives & symbols", ("applying", "archive", "external symbol")),
+    ("demangling & strings", ("demangl", "string")),
+    ("saving project", ("saving project",)),
+)
+_STEPS_PER_BINARY = len(_ANALYZE_STAGES)
+
+
+def _make_stage_tracker(
+    on_progress: ProgressCallback,
+    prefix: str,
+    binary_index: int,
+    total_binaries: int,
+) -> Callable[[str], None]:
+    total_steps = total_binaries * _STEPS_PER_BINARY
+    base_step = (binary_index - 1) * _STEPS_PER_BINARY
+    current_stage = 0
+
+    def _on_message(message: str) -> None:
+        nonlocal current_stage
+        lower = message.lower()
+        for idx in range(current_stage, _STEPS_PER_BINARY):
+            stage_label, keywords = _ANALYZE_STAGES[idx]
+            if any(kw in lower for kw in keywords):
+                current_stage = idx
+                step_num = idx + 1
+                _emit(
+                    on_progress,
+                    f"{prefix} ({step_num}/{_STEPS_PER_BINARY}: {stage_label})",
+                    completed=base_step + idx,
+                    total=total_steps,
+                )
+                return
+
+    return _on_message
+
+
 def _analyze_single_binary(
     ctx: WorkspaceContext,
     binary: BinaryName,
@@ -150,6 +195,8 @@ def _analyze_single_binary(
 ) -> AnalyzeTargetResult:
     index, total = progress_pos
     prefix = f"[{index}/{total}] {binary.value}"
+    total_steps = total * _STEPS_PER_BINARY
+    base_step = (index - 1) * _STEPS_PER_BINARY
     gpr_path = ctx.paths.ghidra_gpr_path(binary)
     rep_dir = ctx.paths.ghidra_rep_dir(binary)
     meta_path = ctx.paths.analyze_meta_path(Decompiler.GHIDRA, binary)
@@ -163,13 +210,23 @@ def _analyze_single_binary(
     staged_path = ctx.paths.staged_binary_path(binary)
     stem = ctx.paths.analyze_stem(Decompiler.GHIDRA, binary)
 
+    first_stage = _ANALYZE_STAGES[0][0]
     _emit(
-        on_progress, f"{prefix}: running Ghidra auto-analysis...", completed=index - 1, total=total
+        on_progress,
+        f"{prefix} (1/{_STEPS_PER_BINARY}: {first_stage})",
+        completed=base_step,
+        total=total_steps,
     )
     started = time.monotonic()
     disable_dwarf = BINARY_SPECS[binary].arch == BinaryArch.ELF64
+    on_stage = _make_stage_tracker(on_progress, prefix, index, total)
     with ghidra_temp_dir(ctx.host_os) as tmp_dir:
-        monitor = make_task_monitor(binary, on_progress, task_key="analyze_detail")
+        monitor = make_task_monitor(
+            binary,
+            on_progress,
+            task_key="analyze_detail",
+            on_message=on_stage,
+        )
         analyze_and_save_project(
             tmp_dir,
             staged_path,
@@ -181,7 +238,12 @@ def _analyze_single_binary(
         shutil.move(str(tmp_dir / rep_dir.name), str(rep_dir))
     _write_meta_atomic(meta_path, binary, expected_sha256)
     duration = round(time.monotonic() - started, 2)
-    _emit(on_progress, f"{prefix}: done ({duration:.2f}s)", completed=index, total=total)
+    _emit(
+        on_progress,
+        f"{prefix}: done ({duration:.2f}s)",
+        completed=index * _STEPS_PER_BINARY,
+        total=total_steps,
+    )
 
     return AnalyzeTargetResult(
         binary=binary,

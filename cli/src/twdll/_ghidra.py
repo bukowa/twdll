@@ -6,7 +6,7 @@ import os
 import shutil
 import tempfile
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
@@ -31,10 +31,12 @@ class _GhidraProgressMonitor:
         binary: BinaryName,
         on_progress: ProgressCallback,
         task_key: str = "ghidra_detail",
+        on_message: Callable[[str], None] | None = None,
     ) -> None:
         self._binary = binary
         self._on_progress = on_progress
         self._task_key = task_key
+        self._on_message = on_message
         self._message = "initializing..."
         self._maximum = 0
         self._progress = 0
@@ -70,6 +72,8 @@ class _GhidraProgressMonitor:
         text = str(message).strip() if message is not None else ""
         if text and text != self._message:
             self._message = text
+            if self._on_message is not None:
+                self._on_message(text)
             self._emit(force=True)
 
     def getMessage(self) -> str:
@@ -86,6 +90,8 @@ class _GhidraProgressMonitor:
             if text and text != self._message:
                 self._message = text
                 msg_changed = True
+                if self._on_message is not None:
+                    self._on_message(text)
         self._emit(force=msg_changed or not same_max)
 
     def setMaximum(self, max_value: int) -> None:
@@ -143,6 +149,7 @@ def make_task_monitor(
     binary: BinaryName,
     on_progress: ProgressCallback,
     task_key: str = "ghidra_detail",
+    on_message: Callable[[str], None] | None = None,
 ) -> Any:
     """Create a Ghidra `TaskMonitor` proxy forwarding updates to `on_progress`."""
     try:
@@ -150,7 +157,12 @@ def make_task_monitor(
 
         proxy = jpype.JProxy(
             "ghidra.util.task.TaskMonitor",
-            inst=_GhidraProgressMonitor(binary, on_progress, task_key=task_key),
+            inst=_GhidraProgressMonitor(
+                binary,
+                on_progress,
+                task_key=task_key,
+                on_message=on_message,
+            ),
         )
         return jpype.JObject(proxy, "ghidra.util.task.TaskMonitor")
     except Exception:
@@ -248,9 +260,10 @@ def analyze_and_save_project(
         if disable_dwarf:
             loader = loader.addLoaderArg("-loader-includeOtherBlocks", "false")
         with loader.load() as load_results:
-            load_results.save(pyg.task_monitor())
+            load_results.save(monitor)
         with pyg.program_context(project, f"/{staged_path.name}") as program:
             if disable_dwarf:
                 _disable_dwarf_analyzer(program)
             pyg.analyze(program, monitor=monitor)
-            program.save("twdll initial analysis", pyg.task_monitor())
+            monitor.setMessage("Saving project...")
+            program.save("twdll initial analysis", monitor)
