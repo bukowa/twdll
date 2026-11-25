@@ -95,6 +95,11 @@ twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class=
 	<td class="summary">Updates health bars on unit cards and 3D banners in real time for 1-man units (SMEs, monsters, single heroes) based on remaining hit points.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#EnableToBCollapseKillZone">EnableToBCollapseKillZone ([enabled=true])</a></td>
+	<td class="summary">Makes the men killed around a destroyed wall or tower piece follow Thrones of Britannia instead
+of Attila.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#EnableUnitCardHitPoints">EnableUnitCardHitPoints ([enabled=true])</a></td>
 	<td class="summary">Makes the health bar on battle unit cards show the unit's remaining hit points instead of
 the share of men still alive.</td>
@@ -143,6 +148,49 @@ the share of men still alive.</td>
         <pre class="example"><span class="comment">-- In battle_scripted.lua:
 </span><span class="keyword">local</span> twdll = <span class="global">package</span>.<span class="function-name">loadlib</span>(<span class="string">"twdll"</span>, <span class="string">"luaopen_twdll"</span>)()
 twdll.battle.<span class="function-name">EnableSmeHealthBars</span>(<span class="keyword">true</span>)</pre>
+    </ul>
+
+</dd>
+    <dt>
+    <a name = "EnableToBCollapseKillZone"></a>
+    <strong>EnableToBCollapseKillZone ([enabled=true])</strong>
+    </dt>
+    <dd>
+    Makes the men killed around a destroyed wall or tower piece follow Thrones of Britannia instead
+of Attila.  When a piece is destroyed (by siege weapons, or a tower collapsing after its capture
+point is taken), the game kills men nearby. ToB changed two things in that code, and this applies
+them: men standing on a fort wall farther than 7 m from the piece only stumble (Attila: 10 m), and
+the kill area is the outline of the piece as it stood instead of the destruction level it falls
+to. Men on the piece itself (90 % chance) and men on the ground within 16.5 m still die, as in
+both games.</p>
+
+<p>Changes the battle simulation: in multiplayer every player must use the same setting.
+Restored when the last Lua state using twdll closes.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">enabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         true for ToB's rules, false for Attila's
+         (<em>default</em> true)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span> or <span class="type">nil</span></span>
+        true when the requested state is in place, false if patching failed, nil if
+the code was not found in this game build
+    </ol>
+
+
+
+    <h3>Usage:</h3>
+    <ul>
+        <pre class="example"><span class="comment">-- In battle_scripted.lua:
+</span>twdll.battle.<span class="function-name">EnableToBCollapseKillZone</span>(<span class="keyword">true</span>)</pre>
     </ul>
 
 </dd>

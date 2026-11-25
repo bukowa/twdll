@@ -14,6 +14,7 @@
 
 #include <windows.h>
 #include <cstdio>
+#include <cstring>
 
 using twdll::TW_Battle;
 using twdll::TW_ReinforcementsManager;
@@ -244,6 +245,102 @@ static void uninstall_card_hook() {
     uninstall_health_bar_hook();
 }
 
+// Thrones of Britannia's version of BUILDING_PIECE::kill_all_entities_within_killzone. When a
+// wall or tower piece is destroyed (by siege weapons, or a tower collapsing on capture) the game
+// kills men around it. ToB runs the same code with two changes, copied here:
+//  1. Men standing on a fort wall farther than 7 m (Attila: 10 m) from the piece only stumble.
+//     The compare reads a 10.0 constant that 300+ other instructions share, so its address
+//     operand is pointed at a twdll float instead.
+//  2. The kill area is the 2D collision outline of destruction level index - 1 (clamped at 0),
+//     i.e. the piece as it stood, not the outline of the level it is collapsing to. Attila's
+//     instructions are 6 bytes too short for ToB's, so the 7-byte index load jumps to a small
+//     code cave that does ToB's load and jumps back.
+// The 16.5 m radius for men on the ground and the 90 % chance are the same in both games.
+namespace {
+constexpr uintptr_t kWallRadiusOperandOffset = 0x15;   // m32 of "comiss xmm0, [10.0]"
+constexpr size_t    kOutlineLoadSize = 7;              // movzx ecx, byte ptr [ebx+0x159]
+float     g_tob_wall_radius = 7.0f;
+uint32_t  g_wall_radius_original_operand = 0;
+uint8_t   g_outline_original_bytes[kOutlineLoadSize] = {};
+uint8_t*  g_outline_cave = nullptr;
+bool      g_tob_killzone_on = false;
+
+bool write_code(void* dst, const void* src, size_t n) {
+    DWORD old_protect = 0;
+    if (!VirtualProtect(dst, n, PAGE_EXECUTE_READWRITE, &old_protect)) {
+        Log("[twdll] EnableToBCollapseKillZone: VirtualProtect failed (%lu)", GetLastError());
+        return false;
+    }
+    memcpy(dst, src, n);
+    VirtualProtect(dst, n, old_protect, &old_protect);
+    FlushInstructionCache(GetCurrentProcess(), dst, n);
+    return true;
+}
+
+bool install_tob_killzone() {
+    if (g_tob_killzone_on) return true;
+    uint8_t* load = reinterpret_cast<uint8_t*>(g_killzone_outline_index_addr);
+    uint32_t* operand = reinterpret_cast<uint32_t*>(g_killzone_wall_radius_addr + kWallRadiusOperandOffset);
+
+    // The compare must still read the game's 10.0 (guards against a different build).
+    const float* current = reinterpret_cast<const float*>(static_cast<uintptr_t>(*operand));
+    MEMORY_BASIC_INFORMATION mbi = {};
+    if (!VirtualQuery(current, &mbi, sizeof(mbi)) || mbi.State != MEM_COMMIT || *current != 10.0f) {
+        Log("[twdll] EnableToBCollapseKillZone: wall radius operand does not read 10.0 - not patched");
+        return false;
+    }
+
+    // Cave: movzx ecx, byte ptr [ebx+0x159]; sub ecx, 1; adc ecx, 0; jmp back
+    // (sub sets CF when the index was 0, adc then brings -1 back to 0: ToB's clamp).
+    uint8_t* cave = static_cast<uint8_t*>(VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+    if (!cave) {
+        Log("[twdll] EnableToBCollapseKillZone: VirtualAlloc failed (%lu)", GetLastError());
+        return false;
+    }
+    const uint8_t body[] = {0x0F, 0xB6, 0x8B, 0x59, 0x01, 0x00, 0x00,   // movzx ecx, byte ptr [ebx+0x159]
+                            0x83, 0xE9, 0x01,                           // sub ecx, 1
+                            0x83, 0xD1, 0x00};                          // adc ecx, 0
+    memcpy(cave, body, sizeof(body));
+    uint8_t* jmp_back = cave + sizeof(body);
+    jmp_back[0] = 0xE9;
+    const int32_t back_rel = static_cast<int32_t>(reinterpret_cast<intptr_t>(load + kOutlineLoadSize) -
+                                                  reinterpret_cast<intptr_t>(jmp_back + 5));
+    memcpy(jmp_back + 1, &back_rel, 4);
+    FlushInstructionCache(GetCurrentProcess(), cave, 32);
+
+    uint8_t jump[kOutlineLoadSize] = {0xE9, 0, 0, 0, 0, 0x90, 0x90};
+    const int32_t cave_rel = static_cast<int32_t>(reinterpret_cast<intptr_t>(cave) -
+                                                  reinterpret_cast<intptr_t>(load + 5));
+    memcpy(jump + 1, &cave_rel, 4);
+
+    memcpy(g_outline_original_bytes, load, kOutlineLoadSize);
+    g_wall_radius_original_operand = *operand;
+    const uint32_t radius_ptr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(&g_tob_wall_radius));
+    if (!write_code(operand, &radius_ptr, 4)) {
+        VirtualFree(cave, 0, MEM_RELEASE);
+        return false;
+    }
+    if (!write_code(load, jump, kOutlineLoadSize)) {
+        write_code(operand, &g_wall_radius_original_operand, 4);
+        VirtualFree(cave, 0, MEM_RELEASE);
+        return false;
+    }
+    g_outline_cave = cave;
+    g_tob_killzone_on = true;
+    return true;
+}
+
+void remove_tob_killzone() {
+    if (!g_tob_killzone_on) return;
+    write_code(reinterpret_cast<void*>(g_killzone_outline_index_addr), g_outline_original_bytes, kOutlineLoadSize);
+    write_code(reinterpret_cast<void*>(g_killzone_wall_radius_addr + kWallRadiusOperandOffset),
+               &g_wall_radius_original_operand, 4);
+    // The cave is left allocated: a thread could still be inside it for a few instructions.
+    g_tob_killzone_on = false;
+    Log("[twdll] EnableToBCollapseKillZone: game kill zone restored");
+}
+} // namespace
+
 // EMPIREBATTLE::MANAGER ctor/dtor signatures resolve directly to the function
 // entry points, so the hooks install straight onto the resolved addresses.
 void install_battle_hook() {
@@ -289,6 +386,7 @@ void install_battle_hook() {
 
 void uninstall_battle_hook() {
     uninstall_card_hook();
+    remove_tob_killzone();
 
     if (battle_ctor_addr) {
         MH_DisableHook(reinterpret_cast<void*>(battle_ctor_addr));
@@ -432,9 +530,50 @@ static int EnableUnitCardHitPoints(lua_State* L) {
     return 1;
 }
 
+/***
+Makes the men killed around a destroyed wall or tower piece follow Thrones of Britannia instead
+of Attila. When a piece is destroyed (by siege weapons, or a tower collapsing after its capture
+point is taken), the game kills men nearby. ToB changed two things in that code, and this applies
+them: men standing on a fort wall farther than 7 m from the piece only stumble (Attila: 10 m), and
+the kill area is the outline of the piece as it stood instead of the destruction level it falls
+to. Men on the piece itself (90 % chance) and men on the ground within 16.5 m still die, as in
+both games.
+
+Changes the battle simulation: in multiplayer every player must use the same setting.
+Restored when the last Lua state using twdll closes.
+@function EnableToBCollapseKillZone
+@tparam[opt=true] boolean enabled true for ToB's rules, false for Attila's
+@treturn boolean|nil true when the requested state is in place, false if patching failed, nil if
+the code was not found in this game build
+@usage
+-- In battle_scripted.lua:
+twdll.battle.EnableToBCollapseKillZone(true)
+*/
+static int EnableToBCollapseKillZone(lua_State* L) {
+    bool enable = true;
+    if (l_type(L, 1) != LUA_TNONE && l_type(L, 1) != LUA_TNIL) {
+        enable = l_tobool(L, 1);
+    }
+    if (!g_killzone_outline_index_addr || !g_killzone_wall_radius_addr) {
+        Log("[twdll] EnableToBCollapseKillZone: code not found - Attila kill zone kept");
+        l_pushnil(L);
+        return 1;
+    }
+    bool ok = true;
+    if (enable) {
+        ok = install_tob_killzone();
+        Log("[twdll] EnableToBCollapseKillZone: %s", ok ? "ToB rules (7 m wall radius, standing outline)" : "patch failed - Attila kill zone kept");
+    } else {
+        remove_tob_killzone();
+    }
+    l_pushboolean(L, ok ? 1 : 0);
+    return 1;
+}
+
 extern const luaL_Reg battle_functions[] = {
     {"GetBattleInfo",        GetBattleInfo},
     {"EnableSmeHealthBars",  EnableSmeHealthBars},
     {"EnableUnitCardHitPoints", EnableUnitCardHitPoints},
+    {"EnableToBCollapseKillZone", EnableToBCollapseKillZone},
     {nullptr, nullptr}
 };

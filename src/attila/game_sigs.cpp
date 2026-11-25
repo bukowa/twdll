@@ -68,6 +68,13 @@
 // DEATH_TYPE_CONVALESCING instead of the requested death type.
 #define CHARACTER_KILL_INSTANT_SIG "56 8B 74 24 08 B8 08 00 00 00 57 8B F9 80 BF 4C 05 00 00 00 8D 8F ? ? ? ? 0F 45 F0 E8"
 #define BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG "A1 ? ? ? ? 83 EC 48 8B 80 18 01 00 00 55 8B E9 80 B8 28 44 06 00 00"
+// EMPIREBATTLE::BUILDING_PIECE::kill_all_entities_within_killzone: picking the piece's 2D
+// collision outline by m_destruction_level_index (movzx ecx, [ebx+0x159]; cmp ecx, size;
+// jae <use AABB>; ...). Thrones of Britannia uses index - 1 (clamped at 0) here.
+#define KILLZONE_OUTLINE_INDEX_SIG "0F B6 8B 59 01 00 00 3B 8B C8 00 00 00 73 0E 8B 83 CC 00 00 00 8B 04 88 8B 70 08 EB 04 8B 74 24 5C"
+// Same function: the man-on-a-fort-wall test "distance > 10 m -> stumble, else 90 % death".
+// comiss xmm0, [10.0f] at +0x12; its m32 address at +0x15. ToB compares with 7.0.
+#define KILLZONE_WALL_RADIUS_SIG "83 7F 18 00 0F 85 ? ? ? ? 84 DB 0F 84 ? ? ? ? 0F 2F 05 ? ? ? ? 0F 86 ? ? ? ? 8B 44 24 18 85 C0 75"
 // EMPIREBATTLE::UNIT::calculate_engine_hit_points(card32& current, card32& max) (thiscall):
 // current = surviving artillery pieces' hit points, max = initial pieces x full hit points.
 #define UNIT_CALC_ENGINE_HIT_POINTS_SIG "53 8B 5C 24 08 56 8B F1 8B 46 20 8B 80 88 00 00 00 C7 03 00 00 00 00 85 C0 75 0F 8B 44 24 10 5E 5B C7 00 00 00 00 00 C2 08 00 8B 46 20 55 57 33 FF 8B 80 88 00 00 00 8B 40 44 8B 68 68 E8"
@@ -93,6 +100,8 @@ uintptr_t          g_make_occupation_decision_addr = 0;
 uintptr_t          g_update_card_info_addr = 0;
 uintptr_t          g_battle_health_bar_on_update_pulse_addr = 0;
 uintptr_t          g_unit_calc_engine_hit_points_addr = 0;
+uintptr_t          g_killzone_outline_index_addr = 0;
+uintptr_t          g_killzone_wall_radius_addr = 0;
 uintptr_t          g_campaign_key_content_tail_addr = 0;
 uintptr_t          g_gift_region_availability_addr = 0;
 uintptr_t          g_gift_region_list_filter_addr = 0;
@@ -203,6 +212,8 @@ const TW_GameSigInfo g_game_signatures[] = {
     {"UIDLL::BattleLandUnitCardStyle::update_information_changed", (void**)&g_update_card_info_addr, UPDATE_CARD_INFO_SIG},
     {"UIDLL::BattleHealthBar::OnUpdatePulse",              (void**)&g_battle_health_bar_on_update_pulse_addr, BATTLE_HEALTH_BAR_ON_UPDATE_PULSE_SIG},
     {"EMPIREBATTLE::UNIT::calculate_engine_hit_points",    (void**)&g_unit_calc_engine_hit_points_addr, UNIT_CALC_ENGINE_HIT_POINTS_SIG},
+    {"BUILDING_PIECE::kill_all_entities_within_killzone (outline index)", (void**)&g_killzone_outline_index_addr, KILLZONE_OUTLINE_INDEX_SIG},
+    {"BUILDING_PIECE::kill_all_entities_within_killzone (wall radius)",   (void**)&g_killzone_wall_radius_addr, KILLZONE_WALL_RADIUS_SIG},
     {"campaign_key_to_content_flag (tail)",                (void**)&g_campaign_key_content_tail_addr, CAMPAIGN_KEY_CONTENT_TAIL_SIG},
     {"diplomacy gift_region availability",                 (void**)&g_gift_region_availability_addr, GIFT_REGION_AVAILABILITY_SIG},
     {"diplomacy gift_region list filter",                  (void**)&g_gift_region_list_filter_addr, GIFT_REGION_LIST_FILTER_SIG},
