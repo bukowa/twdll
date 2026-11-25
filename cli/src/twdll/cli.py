@@ -30,7 +30,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.prompt import Prompt
-from rich.table import Table
+from rich.table import Column, Table
 
 from twdll.analyze import analyze
 from twdll.domain import (
@@ -154,8 +154,11 @@ def _cli_progress(enabled: bool) -> Generator[ProgressCallback]:
 
     progress = Progress(
         SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(),
+        TextColumn(
+            "[bold blue]{task.description}",
+            table_column=Column(min_width=48, max_width=48, no_wrap=True, overflow="ellipsis"),
+        ),
+        BarColumn(bar_width=20),
         TaskProgressColumn(),
         TextColumn("[cyan]{task.fields[units]}"),
         TimeElapsedColumn(),

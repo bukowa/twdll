@@ -183,7 +183,7 @@ def start_ghidra(ctx: WorkspaceContext) -> Path:
     launcher_cls = getattr(pyg, "HeadlessPyGhidraLauncher", None)
     if launcher_cls is not None:
         launcher = launcher_cls(install_dir=ghidra_dir)
-        launcher.add_vmargs("-XX:MaxRAMPercentage=65.0")
+        launcher.add_vmargs("-Xmx8G")
         launcher.start()
     else:
         pyg.start(install_dir=ghidra_dir)
@@ -213,12 +213,16 @@ def ghidra_temp_dir(host_os: HostOS) -> Generator[Path]:
 
 
 def _disable_dwarf_analyzer(program: Any) -> None:
-    """Disable built-in DWARF and redundant x86-64 Call Convention ID analyzers."""
-    tx_id = int(program.startTransaction("Disable ELF64 DWARF and Call Convention ID"))
+    """Disable redundant or broken ELF64 analyzers replaced by `twdll-dwarf`."""
+    tx_id = int(program.startTransaction("Configure ELF64 low-RAM DWARF-external analyzers"))
     try:
         options = program.getOptions("Analyzers")
         options.setBoolean("DWARF", False)
+        options.setBoolean("Embedded Media", False)
         options.setBoolean("Call Convention ID", False)
+        options.setBoolean("Demangler GNU.Apply Function Calling Conventions", False)
+        options.setBoolean("Create Address Tables", False)
+        options.setBoolean("Stack", False)
     finally:
         program.endTransaction(tx_id, True)
 

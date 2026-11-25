@@ -184,12 +184,19 @@ def test_analyze_fresh_and_skip_when_analyzed(
     assert (start_mock.call_count, len(calls), calls[-1][3], len(programs)) == (1, 1, True, 1)
     loader_builder.addLoaderArg.assert_called_once_with("-loader-includeOtherBlocks", "false")
     programs[0].startTransaction.assert_called_once_with(
-        "Disable ELF64 DWARF and Call Convention ID"
+        "Configure ELF64 low-RAM DWARF-external analyzers"
     )
     programs[0].getOptions.assert_called_once_with("Analyzers")
     set_bool = programs[0].getOptions.return_value.setBoolean
-    set_bool.assert_any_call("DWARF", False)
-    set_bool.assert_any_call("Call Convention ID", False)
+    for opt_name in (
+        "DWARF",
+        "Embedded Media",
+        "Call Convention ID",
+        "Demangler GNU.Apply Function Calling Conventions",
+        "Create Address Tables",
+        "Stack",
+    ):
+        set_bool.assert_any_call(opt_name, False)
     programs[0].endTransaction.assert_called_once_with(7, True)
 
     second = analyze(ctx)
