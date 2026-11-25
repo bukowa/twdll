@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
 from twdll.domain import (
     BinaryName,
+    HostOS,
     ProgressCallback,
     ProgressEvent,
     ProgressKind,
@@ -72,13 +76,17 @@ class _GhidraProgressMonitor:
         return self._message
 
     def initialize(self, max_value: int, message: object = None) -> None:
-        self._maximum = max(0, int(max_value))
+        new_max = max(0, int(max_value))
+        same_max = new_max == self._maximum and new_max > 0
+        self._maximum = new_max
         self._progress = 0
+        msg_changed = False
         if message is not None:
             text = str(message).strip()
-            if text:
+            if text and text != self._message:
                 self._message = text
-        self._emit(force=True)
+                msg_changed = True
+        self._emit(force=msg_changed or not same_max)
 
     def setMaximum(self, max_value: int) -> None:
         self._maximum = max(0, int(max_value))
@@ -171,7 +179,14 @@ def start_ghidra(ctx: WorkspaceContext) -> Path:
     os.environ["JAVA_HOME_OVERRIDE"] = str(java_home)
     import pyghidra
 
-    pyghidra.start(install_dir=ghidra_dir)
+    pyg = cast(Any, pyghidra)
+    launcher_cls = getattr(pyg, "HeadlessPyGhidraLauncher", None)
+    if launcher_cls is not None:
+        launcher = launcher_cls(install_dir=ghidra_dir)
+        launcher.add_vmargs("-XX:MaxRAMPercentage=65.0")
+        launcher.start()
+    else:
+        pyg.start(install_dir=ghidra_dir)
     return ghidra_dir
 
 
@@ -182,11 +197,39 @@ def remove_ghidra_project(gpr_path: Path, rep_dir: Path) -> None:
         shutil.rmtree(rep_dir)
 
 
+@contextmanager
+def ghidra_temp_dir(host_os: HostOS) -> Generator[Path]:
+    """Yield a dot-free temporary directory for Ghidra project staging."""
+    base_dir: Path | None = None
+    match host_os:
+        case HostOS.LINUX:
+            var_tmp = Path("/var/tmp")
+            if var_tmp.is_dir():
+                base_dir = var_tmp
+        case HostOS.WINDOWS:
+            base_dir = None
+    with tempfile.TemporaryDirectory(prefix="twdll_ghidra_", dir=base_dir) as tmp_str:
+        yield Path(tmp_str)
+
+
+def _disable_dwarf_analyzer(program: Any) -> None:
+    """Disable built-in DWARF and redundant x86-64 Call Convention ID analyzers."""
+    tx_id = int(program.startTransaction("Disable ELF64 DWARF and Call Convention ID"))
+    try:
+        options = program.getOptions("Analyzers")
+        options.setBoolean("DWARF", False)
+        options.setBoolean("Call Convention ID", False)
+    finally:
+        program.endTransaction(tx_id, True)
+
+
 def analyze_and_save_project(
     tmp_dir: Path,
     staged_path: Path,
     stem: str,
     monitor: Any,
+    *,
+    disable_dwarf: bool = False,
 ) -> None:
     """Create, load, analyze, and save a Ghidra project inside `tmp_dir`."""
     import pyghidra
@@ -194,8 +237,12 @@ def analyze_and_save_project(
     pyg = cast(Any, pyghidra)
     with pyg.open_project(tmp_dir, stem, create=True) as project:
         loader = pyg.program_loader().project(project).source(str(staged_path))
+        if disable_dwarf:
+            loader = loader.addLoaderArg("-loader-includeOtherBlocks", "false")
         with loader.load() as load_results:
             load_results.save(pyg.task_monitor())
         with pyg.program_context(project, f"/{staged_path.name}") as program:
+            if disable_dwarf:
+                _disable_dwarf_analyzer(program)
             pyg.analyze(program, monitor=monitor)
             program.save("twdll initial analysis", pyg.task_monitor())

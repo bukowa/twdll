@@ -108,7 +108,9 @@ def test_mcp_analyze_runs_worker_subprocess_with_cwd_and_explicit_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
-    expected_gpr = tmp_path / ".twdll" / "analyze" / "ghidra_attila_linux_64.gpr"
+    expected_gpr = WorkspaceContext.from_root(tmp_path).paths.ghidra_gpr_path(
+        BinaryName.ATTILA_LINUX_64,
+    )
     worker_payload = {
         "decompiler": Decompiler.GHIDRA.value,
         "targets": [

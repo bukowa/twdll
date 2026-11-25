@@ -22,12 +22,13 @@
    - Never use raw `str` or untyped `int` where a domain concept exists.
    - Represent finite domain states, directory names, and file extensions with `StrEnum`, virtual addresses and external IDs with `typing.NewType`, and filesystem locations with `pathlib.Path` (`Path | None` when optional, never `""`).
    - **Single-Point Path & Naming Rule**: Outside `domain.py`, no step module, CLI command, or test may hardcode workspace directory names (`".twdll"`, `"binaries"`, `"tools"`), target names (`"attila_linux_64"`), or artifact suffixes (`".sqlite"`, `".gpr"`, `".i64"`, `".meta.json"`). Every module and test must reference `domain.py` enums and `WorkspacePaths`.
+   - **Pre-Release Zero-Versioning Rule**: `twdll` is pre-release (unreleased). Never add schema version numbers (`schema_version`, `_META_SCHEMA_VERSION`), version-bump invalidation, or backward-compatibility migration shims to `.meta.json`, SQLite `meta` tables, or config files.
 
 3. **Pipeline Data Quality Chain (`analyze` -> `extract` -> `sql`)**:
    - **`analyze`**: Produces decompiler projects containing discovered function boundaries, switch jump-tables, cross-references (`xrefs`), strings, stack frames, and calling conventions, paired with an atomic `.meta.json` completion marker. On DWARF-bearing ELF64 targets (`attila_linux_64`), Ghidra's built-in `DWARF` analyzer is disabled to prevent heap exhaustion on 242.78 MB `.debug_info` while retaining `.symtab`, demangling, control flow, and xrefs. Do not disable other default decompiler analyzers if doing so drops xrefs or control flow.
    - **`extract`**: Runs in two ordered sub-steps for DWARF-bearing targets:
-     1. **DWARF extraction first (backend-neutral)**: Extracts complete DWARF facts from `attila_linux_64` out-of-process via `ddbug_parser` (cross-checked against `llvm-dwarfdump` where needed) into SQLite (`dwarf_*` tables) independently of Ghidra or IDA.
-     2. **Decompiler fact & pseudocode extraction**: Copies empirically verified fields from the decompiler API (`pyghidra` / IDAPython) into per-binary SQLite databases (`.twdll/extract/`), using the `dwarf_*` tables for selective type/signature injection (pointer-cutoff stubs, SysV `this` param 0, `sret` check) when generating C pseudocode. Every table, column, and join key must be empirically verified (Step 3A) before schema lock.
+     1. **DWARF extraction first (backend-neutral)**: Extracts C++ DWARF v4 facts and `.symtab` `_ZTV*` vtable slots from `attila_linux_64` out-of-process via `twdll-dwarf` (`gimli` + `object` + `libsqlite3` FFI, cross-checked against `llvm-dwarfdump` where needed) into SQLite (`dwarf_*` tables) independently of Ghidra or IDA.
+     2. **Decompiler fact & pseudocode extraction**: Copies empirically verified fields from the decompiler API (`pyghidra` / IDAPython) into per-binary SQLite databases (`.twdll/extract/`), using the `dwarf_*` tables for coarse batch type/vtable/signature population (pre-flattened structs, synthesized `<Class>_vtbl` vtables, `CUSTOM_STORAGE` SysV `this`/`sret` parameter registers, stack/register locals, and inline call comments) before generating C pseudocode. Every table, column, and join key must be empirically verified (Step 3A) before schema lock.
    - **`sql`**: Exposes completed per-binary extracted SQLite databases for read-only cross-binary SQL inspection via an `:memory:` connection.
 
 ---
@@ -209,7 +210,7 @@ cli/
   - Runs standard auto-analysis sequentially (32-bit `PE32` binaries first, then 64-bit `ELF64`) with all default analyzers enabled, filtering targets via `active_binaries(ctx.config)`.
   - Saves projects flat in `.twdll/analyze/` (`ghidra_<binary>.gpr` and `ghidra_<binary>.rep/`).
 - **Direct Skip Checks via `.meta.json`**:
-  - `analyze` writes `<decompiler>_<binary>.meta.json` atomically (`os.replace`) after saving the Ghidra project (`decompiler`, `binary`, `binary_sha256`, `analyzed_at`, `schema_version`).
+  - `analyze` writes `<decompiler>_<binary>.meta.json` atomically (`os.replace`) after saving the Ghidra project (`decompiler`, `binary`, `binary_sha256`, `analyzed_at`).
   - Subsequent runs verify both `.meta.json` (valid JSON with matching `binary_sha256`) and existence of `.gpr`/`.rep/` before skipping, without starting a JVM or copying `.rep/` directories. Missing, malformed, or stale `.meta.json` triggers clean re-analysis. Full re-analysis uses `twdll clean analyze`.
 - **Verified `pyghidra` 2.x / Ghidra 12.2 API Notes**:
   - Use `pyghidra.open_project(dir_path, stem, create=...)` + `pyghidra.program_context(project, f"/{staged_path.name}")` (`open_program()` is deprecated).
@@ -228,11 +229,11 @@ cli/
 
 - **Pre-Implementation Empirical Gate (Step 3A)**:
   - Before locking the `extract` and `dwarf_*` SQLite schemas and join keys, run two empirical checks:
-    1. Inspect `ddbug_parser v0.6.0` fields on `attila_linux_64` (benchmarked at 26.56s / 2.88 GiB peak RSS, 0 errors across 469 CUs) and cross-check any missing raw attributes with `llvm-dwarfdump` (1.64 GiB peak RSS) to finalize the exact `dwarf_*` tables and cross-binary mapping keys.
-    2. Inspect Ghidra 12.2's Python API (`Function`, `Symbol`, `Data`, `Reference`, `MemoryBlock`, `DecompInterface` with selective pointer-cutoff type injection) to finalize decompiler-extracted tables and decide whether bulk C pseudocode and FTS5 indexing are viable.
+    1. Inspect `attila_linux_64` DWARF v4 DIE attributes and `.symtab` `_ZTV*` vtables via `gimli` + `object` (benchmarked via `twdll-dwarf` at 52.04s / 2.11 GiB peak RSS across 469 CUs) and cross-check raw DIE counts with `llvm-dwarfdump` (1.64 GiB peak RSS) to finalize the exact `dwarf_*` tables and cross-binary mapping keys.
+    2. Inspect Ghidra 12.2's Python API (`Function`, `Symbol`, `Data`, `Reference`, `MemoryBlock`, and `DecompInterface` with coarse batch DWARF type/vtable/signature population) to finalize decompiler-extracted tables and decide whether bulk C pseudocode and FTS5 indexing are viable within an 8 GiB host budget.
 - **Ordered Extraction Pipeline**:
-  1. **DWARF-first step (`attila_linux_64`)**: Extract DWARF structs, inheritance, member offsets, functions, parameters, local variable locations, inlined call sites, and source paths out-of-process via `ddbug_parser` into backend-neutral SQLite tables—usable by both Ghidra (now) and IDA 9.5 (later).
-  2. **Decompiler step**: Extract verified structural facts (and C pseudocode if approved by Step 3A, injecting per-function DWARF signatures + pointer-cutoff struct closures on Ghidra) into `.twdll/extract/<decompiler>_<binary>.sqlite`.
+  1. **DWARF-first step (`attila_linux_64`)**: Extract globally deduplicated DWARF types, pre-flattened struct layouts, synthesized vtable slot tables, functions, parameters, local variable live ranges, and inlined call sites out-of-process via `twdll-dwarf` (`gimli` + `object` + `libsqlite3` FFI) into backend-neutral SQLite tables—usable by both Ghidra (now) and IDA 9.5 (later).
+  2. **Decompiler step**: Extract verified structural facts (and C pseudocode if approved by Step 3A, batch-populating DWARF types, `<Class>_vtbl` vtables, and `CUSTOM_STORAGE` function signatures on Ghidra) into `.twdll/extract/<decompiler>_<binary>.sqlite`.
 - **Flat Per-Binary Extracted Databases (`.twdll/extract/<decompiler>_<binary>.sqlite`)**:
   - Mirrors `.twdll/analyze/<decompiler>_<binary>.gpr|.i64` 1-to-1, using integer addresses paired with `image_base` and backend-neutral table names.
   - Written to `.sqlite.staging` in `.twdll/extract/`, recording `"completed"` and `binary_sha256` in `meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)` in the final transaction, closing all SQLite connections, and atomically renaming via `os.replace()`.

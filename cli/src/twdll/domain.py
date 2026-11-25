@@ -14,7 +14,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import NewType, cast
+from typing import Final, NewType, cast
 
 Address = NewType("Address", int)
 SteamAppId = NewType("SteamAppId", str)
@@ -65,6 +65,7 @@ class WorkspaceName(StrEnum):
 class FileSuffix(StrEnum):
     DLL = ".dll"
     SQLITE = ".sqlite"
+    SQLITE_STAGING = ".sqlite.staging"
     GHIDRA_GPR = ".gpr"
     GHIDRA_REP = ".rep"
     IDA_I64 = ".i64"
@@ -361,6 +362,10 @@ class WorkspacePaths:
         stem = self.analyze_stem(decompiler, binary)
         return self.extract_dir / f"{stem}{FileSuffix.SQLITE.value}"
 
+    def extract_staging_db_path(self, decompiler: Decompiler, binary: BinaryName) -> Path:
+        stem = self.analyze_stem(decompiler, binary)
+        return self.extract_dir / f"{stem}{FileSuffix.SQLITE_STAGING.value}"
+
 
 def serialize_value(value: object) -> object:
     """Convert domain objects (`Path`, `StrEnum`, dataclasses, tuples) to JSON-ready primitives."""
@@ -570,6 +575,170 @@ class SqlQueryResult:
 
     def to_dict(self) -> dict[str, object]:
         return to_dict(self)
+
+
+DWARF_EXPORTER_DIR_NAME: Final[str] = "twdll-dwarf"
+DWARF_EXPORTER_BUILD_REL_DIR: Final[tuple[str, ...]] = (
+    "tools",
+    "twdll-dwarf",
+    "target",
+    "release",
+)
+DWARF_EXPORTER_EXECUTABLES: Final[dict[HostOS, str]] = {
+    HostOS.LINUX: "twdll-dwarf",
+    HostOS.WINDOWS: "twdll-dwarf.exe",
+}
+
+
+def resolve_dwarf_exporter(ctx: WorkspaceContext) -> Path:
+    """Resolve `twdll-dwarf` executable from `.twdll/init/tools/` or repo `target/release/`."""
+    exe = DWARF_EXPORTER_EXECUTABLES[ctx.host_os]
+    candidates = (
+        ctx.paths.tools_dir / DWARF_EXPORTER_DIR_NAME / exe,
+        ctx.paths.root.joinpath(*DWARF_EXPORTER_BUILD_REL_DIR, exe),
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    searched = ", ".join(str(path) for path in candidates)
+    msg = f"twdll-dwarf binary not found; searched: {searched}"
+    raise RuntimeError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfUnitRow:
+    unit_id: int
+    name: str
+    comp_dir: str
+    producer: str
+    language: int
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfTypeRow:
+    type_id: int
+    kind: str
+    qualified_name: str
+    byte_size: int | None
+    target_type_id: int | None
+    array_count: int | None
+    containing_type_id: int | None
+    vtable_symbol: str | None
+    vtable_address: int | None
+    is_declaration: bool
+    is_non_trivial_for_calls: bool
+    is_stl_stub: bool
+    is_referenced: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfMemberRow:
+    member_id: int
+    parent_type_id: int
+    ordinal: int
+    name: str
+    member_type_id: int
+    byte_offset: int
+    byte_size: int
+    bit_offset: int | None
+    bit_size: int | None
+    is_artificial: bool
+    is_flattened_base_member: bool
+    is_layout_conflict: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfInheritanceRow:
+    inheritance_id: int
+    derived_type_id: int
+    base_type_id: int
+    byte_offset: int | None
+    vbase_vtable_offset: int | None
+    is_virtual: bool
+    is_empty_base: bool
+    has_tail_padding_overlap: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfVtableEntryRow:
+    class_type_id: int
+    slot_index: int
+    method_name: str
+    linkage_name: str | None
+    function_id: int | None
+    target_address: int | None
+    is_pure_virtual: bool
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfEnumeratorRow:
+    enum_type_id: int
+    ordinal: int
+    name: str
+    value: int
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfFunctionRow:
+    function_id: int
+    unit_id: int
+    address: int | None
+    byte_size: int | None
+    linkage_name: str | None
+    qualified_name: str
+    containing_type_id: int | None
+    return_type_id: int | None
+    vtable_slot_index: int | None
+    virtuality: int
+    is_inline: bool
+    is_declaration: bool
+    is_variadic: bool
+    has_object_pointer: bool
+    is_sret: bool
+    decl_file: str | None
+    decl_line: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfParameterRow:
+    function_id: int
+    ordinal: int
+    name: str | None
+    type_id: int
+    is_artificial: bool
+    is_object_pointer: bool
+    storage_kind: str
+    dwarf_reg: int | None
+    reg_name: str | None
+    stack_offset: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfVariableRow:
+    variable_id: int
+    function_id: int
+    name: str
+    type_id: int
+    range_index: int
+    start_address: int
+    end_address: int
+    first_use_offset: int
+    storage_kind: str
+    reg_name: str | None
+    stack_offset: int | None
+    const_value: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfInlineRow:
+    inline_id: int
+    caller_function_id: int
+    callee_function_id: int | None
+    callee_name: str
+    start_address: int
+    end_address: int
+    call_file: str | None
+    call_line: int | None
 
 
 _ELF_MAGIC = b"\x7fELF"

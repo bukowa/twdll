@@ -8,7 +8,7 @@
 
 ## Overview
 
-This design reworks [`SPEC.md`](file:///home/buk/repos/twdll/SPEC.md) and aligns the Python CLI codebase around a four-step reverse-engineering pipeline: **`init` -> `analyze` -> `extract` -> `sql`**.
+This design reworks [`SPEC.md`](../../SPEC.md) and aligns the Python CLI codebase around a four-step reverse-engineering pipeline: **`init` -> `analyze` -> `extract` -> `sql`**.
 
 `twdll` produces one read-only SQLite database per binary. AI agents and modders can query these databases directly via `twdll sql` without running a live decompiler or external agent bridge. Before locking the `extract` SQLite schema and deciding whether to include bulk-decompiled C pseudocode and full-text search, an empirical inspection and benchmark pass (**Step 3A**) measures real analyzed `attila_linux_64` and `attila_windows_32` Ghidra 12.2 projects.
 
@@ -21,7 +21,7 @@ This design reworks [`SPEC.md`](file:///home/buk/repos/twdll/SPEC.md) and aligns
 
 ## The Problem
 
-[`SPEC.md`](file:///home/buk/repos/twdll/SPEC.md) and `cli/src/twdll/domain.py` no longer match reality or support reliable end-to-end execution:
+[`SPEC.md`](../../SPEC.md) and `cli/src/twdll/domain.py` no longer match reality or support reliable end-to-end execution:
 
 1. **Speculative `extract` and post-`extract` stubs**: `domain.py` defines unverified SQLite row models and enums that were written before inspecting Ghidra 12.2 outputs on Warscape binaries. They omit required reverse-engineering fields (DWARF structs/types, memory sections, calling conventions, base-relative offsets, and containing functions on cross-references) and couple `SPEC.md` to unbuilt `derive`, `search`, and `show` commands.
 2. **Expensive `analyze` skip checks**: `analyze.py` copies large Ghidra repository directories (`.rep/`) into the system temporary directory on every skip check and every run because Ghidra's `ProjectLocator` rejects path components starting with `.` (such as `.twdll`). Without a lightweight completion marker, checking whether a binary is already analyzed is slow and disk-heavy.
@@ -123,8 +123,8 @@ Mechanical `forbidden` rules in `cli/pyproject.toml`:
 
 ### 6. Empirical Schema Discovery & Extraction (`twdll.extract`, `twdll.database`)
 
-*   **DWARF-first extraction (`attila_linux_64`)**: Because Ghidra 12.2's built-in `DWARF` analyzer unconditionally indexes all 242.78 MB of `.debug_info` in JVM heap (causing OOMs on 8 GiB hosts), `twdll analyze` disables Ghidra's built-in `DWARF` analyzer on `attila_linux_64` (retaining `.symtab`, `GnuDemanglerAnalyzer`, control flow, and xrefs). The first step of `twdll extract` always extracts DWARF debug info out-of-process via `ddbug_parser` (benchmarked at 26.56s / 2.88 GiB peak RSS across all 469 CUs, cross-checked with `llvm-dwarfdump` where needed) into backend-neutral SQLite tables (`dwarf_*`) shared by both Ghidra and future IDA 9.5 backends.
-*   **Empirical gate (Step 3A)**: Before locking the `dwarf_*` and `extract` SQLite schemas and join keys, inspect `ddbug_parser` outputs on `attila_linux_64` alongside Ghidra 12.2's Python API (`Function`, `Symbol`, `Data`, `Reference`, `MemoryBlock`, and `DecompInterface` with selective pointer-cutoff DWARF type injection) to finalize table/column contracts and benchmark C pseudocode throughput and `.sqlite` size.
+*   **DWARF-first extraction (`attila_linux_64`)**: Because Ghidra 12.2's built-in `DWARF` analyzer unconditionally indexes all 242.78 MB of `.debug_info` in JVM heap (causing OOMs on 8 GiB hosts), `twdll analyze` disables Ghidra's built-in `DWARF` analyzer on `attila_linux_64` (retaining `.symtab`, `GnuDemanglerAnalyzer`, control flow, and xrefs). The first step of `twdll extract` always extracts DWARF debug info and `.symtab` `_ZTV*` vtable slots out-of-process via `twdll-dwarf` (`gimli` + `object` + `libsqlite3` FFI, benchmarked at `52.04s` / `2.11 GiB` peak RSS across all 469 CUs, cross-checked with `llvm-dwarfdump` where needed) into backend-neutral SQLite tables (`dwarf_*`) shared by both Ghidra and future IDA 9.5 backends.
+*   **Empirical gate (Step 3A)**: Before locking the `dwarf_*` and `extract` SQLite schemas and join keys, inspect `twdll-dwarf` outputs on `attila_linux_64` alongside Ghidra 12.2's Python API (`Function`, `Symbol`, `Data`, `Reference`, `MemoryBlock`, and `DecompInterface` with pass-scoped batch DWARF type/vtable/signature population) to finalize table/column contracts and benchmark C pseudocode throughput and `.sqlite` size.
 *   **Schema & atomicity invariants**:
     1. **One database per binary**: `.twdll/extract/<decompiler>_<binary>.sqlite`.
     2. **Atomic completion**: Write into a temporary staging database, record completion metadata and `binary_sha256` after all rows are written, close all connections (preventing Windows file locks), and atomically rename to the final `.sqlite` path.
@@ -219,7 +219,7 @@ Mechanical `forbidden` rules in `cli/pyproject.toml`:
 *   **Type / Scope**: Headless Analysis Step
 *   **Proposed Changes**:
     *   Delegate JVM startup, progress monitor, `tempfile.TemporaryDirectory()` staging, and project open/save to `twdll._ghidra`.
-    *   Write `<decompiler>_<binary>.meta.json` atomically (`os.replace`) after project save with keys `decompiler`, `binary`, `binary_sha256`, `analyzed_at`, and `schema_version`.
+    *   Write `<decompiler>_<binary>.meta.json` atomically (`os.replace`) after project save with keys `decompiler`, `binary`, `binary_sha256`, and `analyzed_at` (no `schema_version`—`twdll` is pre-release).
     *   On skip checks, verify both `.meta.json` (valid JSON with matching `binary_sha256`) and existence of `.gpr`/`.rep` artifacts; re-analyze cleanly if `.meta.json` is missing, malformed, or stale.
     *   Filter target binaries using `active_binaries(ctx.config)` from `twdll.domain`.
 

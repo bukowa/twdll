@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import shutil
@@ -14,6 +13,7 @@ from typing import cast
 
 from twdll._ghidra import (
     analyze_and_save_project,
+    ghidra_temp_dir,
     make_task_monitor,
     remove_ghidra_project,
     require_ghidra_toolchain,
@@ -31,10 +31,9 @@ from twdll.domain import (
     ProgressKind,
     WorkspaceContext,
     active_binaries,
+    compute_file_sha256,
     noop_progress,
 )
-
-_META_SCHEMA_VERSION = 1
 
 
 def _emit(
@@ -55,12 +54,11 @@ def _emit(
     )
 
 
-def _binary_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def _require_sha256(path: Path) -> str:
+    digest = compute_file_sha256(path)
+    if digest is None:
+        raise FileNotFoundError(f"Unable to hash staged binary: {path}")
+    return digest
 
 
 def _resolve_targets(
@@ -102,8 +100,7 @@ def _is_meta_valid(meta_path: Path, binary: BinaryName, expected_sha256: str) ->
         return False
     data = cast(dict[str, object], raw)
     return (
-        data.get("schema_version") == _META_SCHEMA_VERSION
-        and data.get("decompiler") == Decompiler.GHIDRA.value
+        data.get("decompiler") == Decompiler.GHIDRA.value
         and data.get("binary") == binary.value
         and data.get("binary_sha256") == expected_sha256
     )
@@ -111,7 +108,6 @@ def _is_meta_valid(meta_path: Path, binary: BinaryName, expected_sha256: str) ->
 
 def _write_meta_atomic(meta_path: Path, binary: BinaryName, binary_sha256: str) -> None:
     payload = {
-        "schema_version": _META_SCHEMA_VERSION,
         "decompiler": Decompiler.GHIDRA.value,
         "binary": binary.value,
         "binary_sha256": binary_sha256,
@@ -171,10 +167,16 @@ def _analyze_single_binary(
         on_progress, f"{prefix}: running Ghidra auto-analysis...", completed=index - 1, total=total
     )
     started = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="twdll_ghidra_") as tmp_str:
-        tmp_dir = Path(tmp_str)
+    disable_dwarf = BINARY_SPECS[binary].arch == BinaryArch.ELF64
+    with ghidra_temp_dir(ctx.host_os) as tmp_dir:
         monitor = make_task_monitor(binary, on_progress, task_key="analyze_detail")
-        analyze_and_save_project(tmp_dir, staged_path, stem, monitor)
+        analyze_and_save_project(
+            tmp_dir,
+            staged_path,
+            stem,
+            monitor,
+            disable_dwarf=disable_dwarf,
+        )
         shutil.move(str(tmp_dir / gpr_path.name), str(gpr_path))
         shutil.move(str(tmp_dir / rep_dir.name), str(rep_dir))
     _write_meta_atomic(meta_path, binary, expected_sha256)
@@ -216,7 +218,7 @@ def analyze(
 
     require_ghidra_toolchain(ctx)
     targets = _resolve_targets(ctx, binaries)
-    hashes = {binary: _binary_sha256(ctx.paths.staged_binary_path(binary)) for binary in targets}
+    hashes = {binary: _require_sha256(ctx.paths.staged_binary_path(binary)) for binary in targets}
     skippable = {binary: _can_skip_target(ctx, binary, hashes[binary]) for binary in targets}
 
     if not all(skippable.values()):

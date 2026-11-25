@@ -1,0 +1,11 @@
+[package]
+name = "twdll-dwarf"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gimli = "0.34.0"
+object = "0.40.0"
+memmap2 = "0.9.12"
+fnv = "1.0.7"
+libc = "0.2.191"

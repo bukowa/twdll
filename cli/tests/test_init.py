@@ -339,7 +339,11 @@ def test_cli_init_status_clean_json(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert clean_payload["target"] == CleanTarget.INIT.value
     removed = cast("list[str]", clean_payload["removed_directories"])
     assert len(removed) == 1
-    assert list_sqlite_tables(tmp_path / "nonexistent.sqlite") == ()
+    nonexistent_db = WorkspaceContext.from_root(tmp_path).paths.extract_db_path(
+        Decompiler.GHIDRA,
+        BinaryName.ATTILA_LINUX_64,
+    )
+    assert list_sqlite_tables(nonexistent_db) == ()
 
 
 def test_init_launches_steam_console_and_copies_depot_command_when_attila_linux_missing(
@@ -585,7 +589,7 @@ def test_stage_binary_skips_copy_when_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     src = make_fake_pe32(tmp_path / "src" / "empire.retail.dll")
-    dst = tmp_path / "staged" / "rome2_windows_32.dll"
+    dst = WorkspaceContext.from_root(tmp_path).paths.staged_binary_path(BinaryName.ROME2_WINDOWS_32)
     spec = BINARY_SPECS[BinaryName.ROME2_WINDOWS_32]
 
     first_status = init_mod.resolve_binary(spec, src, dst, ())
