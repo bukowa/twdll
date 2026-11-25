@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 from typer.testing import CliRunner
 
-from twdll._ghidra import ghidra_temp_dir
+from twdll._ghidra import ghidra_temp_dir, make_task_monitor
 from twdll.analyze import analyze
 from twdll.cli import app
 from twdll.domain import (
@@ -190,11 +190,14 @@ def test_analyze_fresh_and_skip_when_analyzed(
     set_bool = programs[0].getOptions.return_value.setBoolean
     for opt_name in (
         "DWARF",
+        "GCC Exception Handlers",
         "Embedded Media",
         "Call Convention ID",
+        "Demangler GNU.Apply Function Signatures",
         "Demangler GNU.Apply Function Calling Conventions",
         "Create Address Tables",
         "Stack",
+        "Variadic Function Signature Override",
     ):
         set_bool.assert_any_call(opt_name, False)
     programs[0].endTransaction.assert_called_once_with(7, True)
@@ -237,6 +240,31 @@ def test_ghidra_temp_dir_is_dot_free(host_os: HostOS) -> None:
         assert tmp_dir.is_dir()
         assert all(not part.startswith(".") for part in tmp_dir.parts)
     assert not tmp_dir.exists()
+
+
+def test_make_task_monitor_wraps_jproxy_in_jobject(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_jpype = ModuleType("jpype")
+    jproxy_calls: list[tuple[str, object]] = []
+    jobject_calls: list[tuple[object, str]] = []
+
+    def _fake_jproxy(iface: str, *, inst: object) -> object:
+        jproxy_calls.append((iface, inst))
+        return ("proxy", inst)
+
+    def _fake_jobject(proxy: tuple[str, object], iface: str) -> object:
+        jobject_calls.append((proxy, iface))
+        return proxy[1]
+
+    fake_jpype.__dict__.update({"JProxy": _fake_jproxy, "JObject": _fake_jobject})
+    monkeypatch.setitem(sys.modules, "jpype", fake_jpype)
+
+    monitor = make_task_monitor(BinaryName.ATTILA_LINUX_64, lambda _e: None)
+    assert len(jproxy_calls) == 1
+    assert len(jobject_calls) == 1
+    assert jobject_calls[0][1] == "ghidra.util.task.TaskMonitor"
+    assert monitor.isCancelled() is False
+    monitor.cancel()
+    assert monitor.isCancelled() is True
 
 
 @pytest.mark.parametrize("host_os", [HostOS.LINUX, HostOS.WINDOWS])

@@ -148,10 +148,11 @@ def make_task_monitor(
     try:
         import jpype
 
-        return jpype.JProxy(
+        proxy = jpype.JProxy(
             "ghidra.util.task.TaskMonitor",
             inst=_GhidraProgressMonitor(binary, on_progress, task_key=task_key),
         )
+        return jpype.JObject(proxy, "ghidra.util.task.TaskMonitor")
     except Exception:
         import pyghidra
 
@@ -218,11 +219,14 @@ def _disable_dwarf_analyzer(program: Any) -> None:
     try:
         options = program.getOptions("Analyzers")
         options.setBoolean("DWARF", False)
+        options.setBoolean("GCC Exception Handlers", False)
         options.setBoolean("Embedded Media", False)
         options.setBoolean("Call Convention ID", False)
+        options.setBoolean("Demangler GNU.Apply Function Signatures", False)
         options.setBoolean("Demangler GNU.Apply Function Calling Conventions", False)
         options.setBoolean("Create Address Tables", False)
         options.setBoolean("Stack", False)
+        options.setBoolean("Variadic Function Signature Override", False)
     finally:
         program.endTransaction(tx_id, True)
 
