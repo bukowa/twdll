@@ -740,7 +740,13 @@ static int GetGiftRegionState(lua_State* L) {
 // campaign_map_playable_areas mapname is the hard-coded string "main_attila_map".
 // The selection code pushes that string's address; SetCustomBattleDefaultMap
 // repoints the pushed address to a string owned by this (pinned) DLL. If no row has
-// the requested mapname the game keeps its normal fallback. Restored on Lua teardown.
+// the requested mapname the game keeps its normal fallback.
+// Not rolled back on Lua teardown (like AllowCustomCampaignKeys): the frontend Lua state
+// closes soon after the main menu script runs, and the custom battle screen is built again
+// when a custom battle ends, so a teardown restore made the screen's minimap
+// (BattleMapLoader::OnCreate -> BattleGeneratorMap::Initialise) fall back to
+// main_attila_map while its campaign selection came back as the chosen map. The string
+// lives in this pinned DLL, so it stays valid until the game exits.
 namespace {
 constexpr size_t kDefaultMapImmOffset = 0x0B;    // imm32 of "push offset main_attila_map"
 const char*      g_vanilla_default_map = nullptr; // the game's own string, read on first use
@@ -789,7 +795,9 @@ pre-selects the `campaign_map_playable_areas` row whose `mapname` is `"main_atti
 this changes that name. Call it from the frontend (main menu) script. If no
 custom-battle row has the given mapname, the game falls back to its normal behaviour.
 A custom mapname (not main/bel/cha) also needs `AllowCustomCampaignKeys()`, otherwise
-the map is shown as locked DLC. Restored on Lua teardown.
+the map is shown as locked DLC. It stays in effect until it is changed or the game exits
+(not rolled back on Lua teardown, because the screen is rebuilt after a custom battle
+while no Lua state is loaded).
 @function SetCustomBattleDefaultMap
 @tparam[opt] string mapname `mapname` of a `campaign_map_playable_areas` row (max 63 characters), or nil to restore `"main_attila_map"`
 @treturn string|nil the mapname now selected by default, or nil if the code was not found in this game build
@@ -993,7 +1001,7 @@ void uninstall_world_hook() {
     }
     set_reinforcement_cap(true, 0);
     restore_gift_region();
-    restore_custom_battle_default_map();
+    // custom battle default map: kept on purpose, see SetCustomBattleDefaultMap
     remove_governor_hooks();
 
     if (world_ctor_addr) {

@@ -616,7 +616,9 @@ pre-selects the <code>campaign_map_playable_areas</code> row whose <code>mapname
 this changes that name. Call it from the frontend (main menu) script. If no
 custom-battle row has the given mapname, the game falls back to its normal behaviour.
 A custom mapname (not main/bel/cha) also needs <code>AllowCustomCampaignKeys()</code>, otherwise
-the map is shown as locked DLC. Restored on Lua teardown.
+the map is shown as locked DLC. It stays in effect until it is changed or the game exits
+(not rolled back on Lua teardown, because the screen is rebuilt after a custom battle
+while no Lua state is loaded).
 
 
     <h3>Parameters:</h3>
