@@ -1456,6 +1456,168 @@ fn unwrap_cv_typedef(cu_types: &FnvHashMap<usize, CuType>, mut off: usize) -> Op
     None
 }
 
+fn strip_template_args(name: &str) -> &str {
+    name.split('<').next().unwrap_or(name)
+}
+
+struct AlignedParam<'a> {
+    concrete: Option<&'a CuParam>,
+    decl: Option<&'a CuParam>,
+    mid: Option<&'a CuParam>,
+}
+
+fn align_concrete_params<'a>(
+    sp: &'a CuSubprog,
+    spec1: Option<&'a CuSubprog>,
+    spec2: Option<&'a CuSubprog>,
+    obj_ptr_off: Option<usize>,
+    cu_to_global_type: &FnvHashMap<usize, i64>,
+    types: &[TypeRow],
+) -> Vec<AlignedParam<'a>> {
+    let (decl_params, mid_params) = if let Some(s2) = spec2
+        && !s2.params.is_empty()
+    {
+        (s2.params.as_slice(), spec1.map(|s| s.params.as_slice()))
+    } else if let Some(s1) = spec1
+        && !s1.params.is_empty()
+    {
+        (s1.params.as_slice(), None)
+    } else {
+        return sp
+            .params
+            .iter()
+            .map(|p| AlignedParam {
+                concrete: Some(p),
+                decl: None,
+                mid: None,
+            })
+            .collect();
+    };
+
+    if sp.params.is_empty() {
+        return decl_params
+            .iter()
+            .enumerate()
+            .map(|(ord, dp)| {
+                let mid_p = mid_params.and_then(|ms| {
+                    ms.iter()
+                        .find(|m| m.abstract_origin_off == Some(dp.die_off))
+                        .or_else(|| ms.get(ord))
+                });
+                AlignedParam {
+                    concrete: None,
+                    decl: Some(dp),
+                    mid: mid_p,
+                }
+            })
+            .collect();
+    }
+
+    let underlying_tid = |p: &CuParam| -> Option<i64> {
+        p.type_off
+            .and_then(|o| cu_to_global_type.get(&o).copied())
+            .map(|t| resolve_global_underlying(types, t))
+    };
+
+    let mut used = vec![false; sp.params.len()];
+    let mut aligned = Vec::with_capacity(decl_params.len());
+    for (ord, dp) in decl_params.iter().enumerate() {
+        let mid_p = mid_params.and_then(|ms| {
+            ms.iter()
+                .find(|m| m.abstract_origin_off == Some(dp.die_off))
+                .or_else(|| ms.get(ord))
+        });
+        let dp_utid = underlying_tid(dp).or_else(|| mid_p.and_then(underlying_tid));
+
+        let mut matched_idx = (0..sp.params.len()).find(|&i| {
+            !used[i]
+                && (sp.params[i].abstract_origin_off == Some(dp.die_off)
+                    || mid_p.is_some_and(|m| sp.params[i].abstract_origin_off == Some(m.die_off)))
+        });
+
+        if matched_idx.is_none()
+            && ord == 0
+            && (dp.is_artificial
+                || dp.name.as_deref() == Some("this")
+                || obj_ptr_off == Some(dp.die_off))
+            && let Some(sp_obj) = sp.object_pointer_off
+        {
+            matched_idx = (0..sp.params.len()).find(|&i| !used[i] && sp.params[i].die_off == sp_obj);
+        }
+
+        if matched_idx.is_none()
+            && ord < sp.params.len()
+            && !used[ord]
+            && dp_utid.is_some()
+            && underlying_tid(&sp.params[ord]) == dp_utid
+            && !(ord == 0
+                && sp
+                    .object_pointer_off
+                    .is_some_and(|o| sp.params[ord].die_off != o))
+        {
+            matched_idx = Some(ord);
+        }
+
+        if matched_idx.is_none()
+            && let Some(utid) = dp_utid
+        {
+            matched_idx = (0..sp.params.len())
+                .find(|&i| !used[i] && underlying_tid(&sp.params[i]) == Some(utid));
+        }
+
+        let concrete = matched_idx.map(|i| {
+            used[i] = true;
+            &sp.params[i]
+        });
+        aligned.push(AlignedParam {
+            concrete,
+            decl: Some(dp),
+            mid: mid_p,
+        });
+    }
+
+    // Preserve any unmatched concrete `is_artificial` parameters (such as Itanium C2/D2
+    // `vtt` / `__vtt_parm` at ordinal 1 in `RSI`) and any other unmatched concrete params.
+    let mut art_insert_pos = if aligned.first().is_some_and(|a| {
+        a.concrete.is_some_and(|p| p.is_artificial) || a.decl.is_some_and(|p| p.is_artificial)
+    }) {
+        1
+    } else {
+        0
+    };
+    for (i, cp) in sp.params.iter().enumerate() {
+        if !used[i] && cp.is_artificial {
+            let pos = art_insert_pos.min(aligned.len());
+            aligned.insert(
+                pos,
+                AlignedParam {
+                    concrete: Some(cp),
+                    decl: None,
+                    mid: None,
+                },
+            );
+            art_insert_pos += 1;
+            used[i] = true;
+        }
+    }
+    for (i, cp) in sp.params.iter().enumerate() {
+        if !used[i] {
+            let pos = i.min(aligned.len());
+            aligned.insert(
+                pos,
+                AlignedParam {
+                    concrete: Some(cp),
+                    decl: None,
+                    mid: None,
+                },
+            );
+            used[i] = true;
+        }
+    }
+
+    aligned
+}
+
 fn detect_copy_or_move_ctors(
     cu_types: &mut FnvHashMap<usize, CuType>,
     cu_subprogs: &FnvHashMap<usize, CuSubprog>,
@@ -1471,7 +1633,10 @@ fn detect_copy_or_move_ctors(
         let Some(cls) = cu_types.get(&cls_off) else {
             continue;
         };
-        if sp.name.as_deref() != cls.name.as_deref() || sp.params.len() < 2 {
+        let (Some(sp_name), Some(cls_name)) = (sp.name.as_deref(), cls.name.as_deref()) else {
+            continue;
+        };
+        if strip_template_args(sp_name) != strip_template_args(cls_name) || sp.params.len() < 2 {
             continue;
         }
         // Check if param[1] (after `this`) is `&Class` or `&&Class` (possibly `const`).
@@ -2064,17 +2229,14 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                 .or_else(|| spec1.and_then(|s| s.object_pointer_off))
                 .or_else(|| spec2.and_then(|s| s.object_pointer_off));
 
-            let effective_params = if !sp.params.is_empty() {
-                &sp.params
-            } else if let Some(s1) = spec1
-                && !s1.params.is_empty()
-            {
-                &s1.params
-            } else if let Some(s2) = spec2 {
-                &s2.params
-            } else {
-                &sp.params
-            };
+            let aligned_params = align_concrete_params(
+                sp,
+                spec1,
+                spec2,
+                obj_ptr_off,
+                &cu_to_global_type,
+                &batch.types,
+            );
 
             let fid = next_function_id;
             next_function_id += 1;
@@ -2092,30 +2254,20 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
             emitted_concrete_subprogs.push((sp_off, fid));
 
             let mut resolved_has_obj_ptr = obj_ptr_off.is_some();
-            for (ord, p) in effective_params.iter().enumerate() {
-                let fb1 = spec1.and_then(|s1| {
-                    p.abstract_origin_off
-                        .and_then(|ao| s1.params.iter().find(|cand| cand.die_off == ao))
-                        .or_else(|| s1.params.get(ord))
-                });
-                let fb2 = spec2.and_then(|s2| {
-                    p.abstract_origin_off
-                        .or_else(|| fb1.and_then(|f| f.abstract_origin_off))
-                        .and_then(|ao| s2.params.iter().find(|cand| cand.die_off == ao))
-                        .or_else(|| s2.params.get(ord))
-                });
-                let pname = p
-                    .name
-                    .clone()
-                    .or_else(|| fb1.and_then(|f| f.name.clone()))
-                    .or_else(|| fb2.and_then(|f| f.name.clone()));
-                let ptype_off = p
-                    .type_off
-                    .or_else(|| fb1.and_then(|f| f.type_off))
-                    .or_else(|| fb2.and_then(|f| f.type_off));
-                let part = p.is_artificial
-                    || fb1.is_some_and(|f| f.is_artificial)
-                    || fb2.is_some_and(|f| f.is_artificial);
+            for (ord, ap) in aligned_params.iter().enumerate() {
+                let pname = ap
+                    .concrete
+                    .and_then(|p| p.name.clone())
+                    .or_else(|| ap.mid.and_then(|p| p.name.clone()))
+                    .or_else(|| ap.decl.and_then(|p| p.name.clone()));
+                let ptype_off = ap
+                    .concrete
+                    .and_then(|p| p.type_off)
+                    .or_else(|| ap.mid.and_then(|p| p.type_off))
+                    .or_else(|| ap.decl.and_then(|p| p.type_off));
+                let part = ap.concrete.is_some_and(|p| p.is_artificial)
+                    || ap.mid.is_some_and(|p| p.is_artificial)
+                    || ap.decl.is_some_and(|p| p.is_artificial);
                 if ord == 0
                     && containing_type_id.is_some()
                     && (part || pname.as_deref() == Some("this"))
@@ -2126,10 +2278,12 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     .and_then(|po| cu_to_global_type.get(&po).copied())
                     .unwrap_or(1);
                 let matches_obj_ptr_die = obj_ptr_off.is_some_and(|op| {
-                    op == p.die_off
-                        || p.abstract_origin_off == Some(op)
-                        || fb1.is_some_and(|f| f.die_off == op)
-                        || fb2.is_some_and(|f| f.die_off == op)
+                    ap.concrete
+                        .is_some_and(|p| p.die_off == op || p.abstract_origin_off == Some(op))
+                        || ap
+                            .mid
+                            .is_some_and(|p| p.die_off == op || p.abstract_origin_off == Some(op))
+                        || ap.decl.is_some_and(|p| p.die_off == op)
                 });
                 let is_obj_ptr = matches_obj_ptr_die
                     || (ord == 0
@@ -2137,11 +2291,20 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                         && (part || pname.as_deref() == Some("this")));
                 // Prologue-spilled parameters (`stack_offset < 8`) are not incoming ABI stack arguments;
                 // demote them to `none` so the backend binds their incoming register instead.
-                let (p_storage_kind, p_stack_offset) =
-                    if p.storage_kind == "stack" && p.stack_offset.is_some_and(|off| off < 8) {
-                        ("none", None)
+                let (p_storage_kind, p_dwarf_reg, p_reg_name, p_stack_offset) =
+                    if let Some(cp) = ap.concrete {
+                        if cp.storage_kind == "stack" && cp.stack_offset.is_some_and(|off| off < 8) {
+                            ("none", cp.dwarf_reg, cp.reg_name.clone(), None)
+                        } else {
+                            (
+                                cp.storage_kind,
+                                cp.dwarf_reg,
+                                cp.reg_name.clone(),
+                                cp.stack_offset,
+                            )
+                        }
                     } else {
-                        (p.storage_kind, p.stack_offset)
+                        ("none", None, None, None)
                     };
                 batch.parameters.push(ParameterRow {
                     function_id: fid,
@@ -2151,14 +2314,15 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     is_artificial: part || is_obj_ptr,
                     is_object_pointer: is_obj_ptr,
                     storage_kind: p_storage_kind,
-                    dwarf_reg: p.dwarf_reg,
-                    reg_name: p.reg_name.clone(),
+                    dwarf_reg: p_dwarf_reg,
+                    reg_name: p_reg_name,
                     stack_offset: p_stack_offset,
                 });
             }
 
-            let param0_in_rsi = effective_params
+            let param0_in_rsi = aligned_params
                 .first()
+                .and_then(|a| a.concrete)
                 .and_then(|p| p.dwarf_reg)
                 == Some(4);
 
@@ -3353,5 +3517,354 @@ mod tests {
         assert_eq!(r3.byte_size, 1);
         assert_eq!(r3.bit_offset, Some(4));
         assert_eq!(r3.bit_size, Some(1));
+    }
+
+    #[test]
+    fn test_detect_copy_or_move_ctors_template_base_name() {
+        let mut cu_types = FnvHashMap::default();
+        cu_types.insert(
+            10,
+            CuType {
+                kind: "struct",
+                name: Some("TEMPLATE_HANDLE<53>".to_string()),
+                qual_name: "WARSCAPE::TEMPLATE_HANDLE<53>".to_string(),
+                byte_size: Some(4),
+                target_off: None,
+                array_count: None,
+                containing_off: None,
+                is_decl: false,
+                has_virtual_method: false,
+                has_destructor: false,
+                has_user_copy_or_move_ctor: false,
+                members: Vec::new(),
+                inherits: Vec::new(),
+                enumerators: Vec::new(),
+                virtual_methods: Vec::new(),
+            },
+        );
+        cu_types.insert(
+            11,
+            CuType {
+                kind: "pointer",
+                name: None,
+                qual_name: "pointer::unit1::0xb".to_string(),
+                byte_size: Some(8),
+                target_off: Some(10),
+                array_count: None,
+                containing_off: None,
+                is_decl: false,
+                has_virtual_method: false,
+                has_destructor: false,
+                has_user_copy_or_move_ctor: false,
+                members: Vec::new(),
+                inherits: Vec::new(),
+                enumerators: Vec::new(),
+                virtual_methods: Vec::new(),
+            },
+        );
+        cu_types.insert(
+            12,
+            CuType {
+                kind: "const",
+                name: None,
+                qual_name: "const::unit1::0xc".to_string(),
+                byte_size: None,
+                target_off: Some(10),
+                array_count: None,
+                containing_off: None,
+                is_decl: false,
+                has_virtual_method: false,
+                has_destructor: false,
+                has_user_copy_or_move_ctor: false,
+                members: Vec::new(),
+                inherits: Vec::new(),
+                enumerators: Vec::new(),
+                virtual_methods: Vec::new(),
+            },
+        );
+        cu_types.insert(
+            13,
+            CuType {
+                kind: "reference",
+                name: None,
+                qual_name: "reference::unit1::0xd".to_string(),
+                byte_size: Some(8),
+                target_off: Some(12),
+                array_count: None,
+                containing_off: None,
+                is_decl: false,
+                has_virtual_method: false,
+                has_destructor: false,
+                has_user_copy_or_move_ctor: false,
+                members: Vec::new(),
+                inherits: Vec::new(),
+                enumerators: Vec::new(),
+                virtual_methods: Vec::new(),
+            },
+        );
+
+        let mut cu_subprogs = FnvHashMap::default();
+        cu_subprogs.insert(
+            20,
+            CuSubprog {
+                name: Some("TEMPLATE_HANDLE".to_string()),
+                qual_name: "WARSCAPE::TEMPLATE_HANDLE<53>::TEMPLATE_HANDLE".to_string(),
+                linkage_name: None,
+                enclosing_type_off: Some(10),
+                containing_type_off: Some(10),
+                return_type_off: None,
+                specification_off: None,
+                abstract_origin_off: None,
+                object_pointer_off: None,
+                low_pc: None,
+                byte_size: None,
+                vtable_slot_index: None,
+                virtuality: 0,
+                is_inline: false,
+                is_decl: true,
+                is_variadic: false,
+                is_artificial: false,
+                decl_file: None,
+                decl_line: None,
+                params: vec![
+                    CuParam {
+                        name: None,
+                        type_off: Some(11),
+                        is_artificial: true,
+                        die_off: 21,
+                        abstract_origin_off: None,
+                        storage_kind: "none",
+                        dwarf_reg: None,
+                        reg_name: None,
+                        stack_offset: None,
+                    },
+                    CuParam {
+                        name: None,
+                        type_off: Some(13),
+                        is_artificial: false,
+                        die_off: 22,
+                        abstract_origin_off: None,
+                        storage_kind: "none",
+                        dwarf_reg: None,
+                        reg_name: None,
+                        stack_offset: None,
+                    },
+                ],
+                variables: Vec::new(),
+                inlines: Vec::new(),
+            },
+        );
+
+        detect_copy_or_move_ctors(&mut cu_types, &cu_subprogs);
+        assert!(cu_types[&10].has_user_copy_or_move_ctor);
+    }
+
+    #[test]
+    fn test_align_concrete_params_clang_reordered() {
+        let make_type = |id: i64, kind: &'static str, qn: &str| TypeRow {
+            type_id: id,
+            kind,
+            qualified_name: qn.to_string(),
+            byte_size: Some(8),
+            target_type_id: None,
+            array_count: None,
+            containing_type_id: None,
+            vtable_symbol: None,
+            vtable_address: None,
+            is_declaration: false,
+            is_non_trivial_for_calls: false,
+            is_stl_stub: false,
+            is_referenced: false,
+        };
+        let types = vec![
+            make_type(1, "primitive", "void"),
+            make_type(2, "pointer", "FACTION *"),
+            make_type(3, "reference", "CHARACTER &"),
+            make_type(4, "primitive", "bool"),
+        ];
+        let mut cu_to_global_type = FnvHashMap::default();
+        cu_to_global_type.insert(101, 2);
+        cu_to_global_type.insert(102, 3);
+        cu_to_global_type.insert(103, 4);
+
+        let make_sp = |obj: Option<usize>, params: Vec<CuParam>| CuSubprog {
+            name: Some("f".to_string()),
+            qual_name: "C::f".to_string(),
+            linkage_name: None,
+            enclosing_type_off: None,
+            containing_type_off: None,
+            return_type_off: None,
+            specification_off: None,
+            abstract_origin_off: None,
+            object_pointer_off: obj,
+            low_pc: None,
+            byte_size: None,
+            vtable_slot_index: None,
+            virtuality: 0,
+            is_inline: false,
+            is_decl: false,
+            is_variadic: false,
+            is_artificial: false,
+            decl_file: None,
+            decl_line: None,
+            params,
+            variables: Vec::new(),
+            inlines: Vec::new(),
+        };
+        let mk_p = |name: Option<&str>, toff: usize, art: bool, die: usize, reg: Option<(i64, &str)>| {
+            CuParam {
+                name: name.map(|s| s.to_string()),
+                type_off: Some(toff),
+                is_artificial: art,
+                die_off: die,
+                abstract_origin_off: None,
+                storage_kind: if reg.is_some() { "register" } else { "none" },
+                dwarf_reg: reg.map(|r| r.0),
+                reg_name: reg.map(|r| r.1.to_string()),
+                stack_offset: None,
+            }
+        };
+
+        // Case 1: `[this, check_allies, character]` vs decl `[this, character, check_allies]`
+        let decl1 = make_sp(
+            None,
+            vec![
+                mk_p(None, 101, true, 10, None),
+                mk_p(None, 102, false, 11, None),
+                mk_p(None, 103, false, 12, None),
+            ],
+        );
+        let conc1 = make_sp(
+            Some(20),
+            vec![
+                mk_p(Some("this"), 101, true, 20, Some((5, "RDI"))),
+                mk_p(Some("check_allies"), 103, false, 21, None),
+                mk_p(Some("character"), 102, false, 22, None),
+            ],
+        );
+        let res1 = align_concrete_params(&conc1, Some(&decl1), None, Some(20), &cu_to_global_type, &types);
+        let names1: Vec<_> = res1
+            .iter()
+            .map(|a| a.concrete.and_then(|p| p.name.as_deref()).unwrap_or(""))
+            .collect();
+        assert_eq!(names1, vec!["this", "character", "check_allies"]);
+
+        // Case 2: `[allow_embark, this, pos, src]` vs decl `[this, pos, src, allow_embark]`
+        let decl2 = make_sp(
+            None,
+            vec![
+                mk_p(None, 101, true, 30, None),
+                mk_p(None, 102, false, 31, None),
+                mk_p(None, 103, false, 32, None),
+            ],
+        );
+        let conc2 = make_sp(
+            Some(41),
+            vec![
+                mk_p(Some("allow_embark"), 103, false, 40, None),
+                mk_p(Some("this"), 101, true, 41, Some((5, "RDI"))),
+                mk_p(Some("pos"), 102, false, 42, None),
+            ],
+        );
+        let res2 = align_concrete_params(&conc2, Some(&decl2), None, Some(41), &cu_to_global_type, &types);
+        let names2: Vec<_> = res2
+            .iter()
+            .map(|a| a.concrete.and_then(|p| p.name.as_deref()).unwrap_or(""))
+            .collect();
+        assert_eq!(names2, vec!["this", "pos", "allow_embark"]);
+        assert_eq!(res2[0].concrete.and_then(|p| p.dwarf_reg), Some(5));
+    }
+
+    #[test]
+    fn test_align_concrete_params_preserves_artificial_vtt() {
+        let make_type = |id: i64, kind: &'static str, qn: &str| TypeRow {
+            type_id: id,
+            kind,
+            qualified_name: qn.to_string(),
+            byte_size: Some(8),
+            target_type_id: None,
+            array_count: None,
+            containing_type_id: None,
+            vtable_symbol: None,
+            vtable_address: None,
+            is_declaration: false,
+            is_non_trivial_for_calls: false,
+            is_stl_stub: false,
+            is_referenced: false,
+        };
+        let types = vec![
+            make_type(1, "primitive", "void"),
+            make_type(2, "pointer", "FACTION *"),
+            make_type(3, "pointer", "void **"),
+            make_type(4, "primitive", "int"),
+            make_type(5, "pointer", "void *"),
+        ];
+        let mut cu_to_global_type = FnvHashMap::default();
+        cu_to_global_type.insert(101, 2);
+        cu_to_global_type.insert(102, 3);
+        cu_to_global_type.insert(103, 4);
+        cu_to_global_type.insert(104, 5);
+
+        let make_sp = |obj: Option<usize>, params: Vec<CuParam>| CuSubprog {
+            name: Some("FACTION".to_string()),
+            qual_name: "EMPIRECAMPAIGN::FACTION::FACTION".to_string(),
+            linkage_name: None,
+            enclosing_type_off: None,
+            containing_type_off: None,
+            return_type_off: None,
+            specification_off: None,
+            abstract_origin_off: None,
+            object_pointer_off: obj,
+            low_pc: None,
+            byte_size: None,
+            vtable_slot_index: None,
+            virtuality: 0,
+            is_inline: false,
+            is_decl: false,
+            is_variadic: false,
+            is_artificial: false,
+            decl_file: None,
+            decl_line: None,
+            params,
+            variables: Vec::new(),
+            inlines: Vec::new(),
+        };
+        let mk_p = |name: Option<&str>, toff: usize, art: bool, die: usize, reg: Option<(i64, &str)>| {
+            CuParam {
+                name: name.map(|s| s.to_string()),
+                type_off: Some(toff),
+                is_artificial: art,
+                die_off: die,
+                abstract_origin_off: None,
+                storage_kind: if reg.is_some() { "register" } else { "none" },
+                dwarf_reg: reg.map(|r| r.0),
+                reg_name: reg.map(|r| r.1.to_string()),
+                stack_offset: None,
+            }
+        };
+
+        let decl = make_sp(
+            None,
+            vec![
+                mk_p(None, 101, true, 10, None),
+                mk_p(None, 103, false, 11, None),
+                mk_p(None, 104, false, 12, None),
+            ],
+        );
+        let conc = make_sp(
+            Some(20),
+            vec![
+                mk_p(Some("this"), 101, true, 20, Some((5, "RDI"))),
+                mk_p(Some("vtt"), 102, true, 21, Some((4, "RSI"))),
+                mk_p(Some("access"), 103, false, 22, Some((1, "RDX"))),
+                mk_p(Some("parent"), 104, false, 23, Some((2, "RCX"))),
+            ],
+        );
+        let res = align_concrete_params(&conc, Some(&decl), None, Some(20), &cu_to_global_type, &types);
+        let names: Vec<_> = res
+            .iter()
+            .map(|a| a.concrete.and_then(|p| p.name.as_deref()).unwrap_or(""))
+            .collect();
+        assert_eq!(names, vec!["this", "vtt", "access", "parent"]);
     }
 }
