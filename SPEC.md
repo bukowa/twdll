@@ -229,8 +229,8 @@ cli/
 
 - **Pre-Implementation Empirical Gate (Step 3A)**:
   - Before locking the `extract` and `dwarf_*` SQLite schemas and join keys, run two empirical checks:
-    1. Inspect `attila_linux_64` DWARF v4 DIE attributes and `.symtab` `_ZTV*` vtables via `gimli` + `object` (benchmarked via `twdll-dwarf` at 52.04s / 2.11 GiB peak RSS across 469 CUs) and cross-check raw DIE counts with `llvm-dwarfdump` (1.64 GiB peak RSS) to finalize the exact `dwarf_*` tables and cross-binary mapping keys.
-    2. Inspect Ghidra 12.2's Python API (`Function`, `Symbol`, `Data`, `Reference`, `MemoryBlock`, and `DecompInterface` with coarse batch DWARF type/vtable/signature population) to finalize decompiler-extracted tables and decide whether bulk C pseudocode and FTS5 indexing are viable within an 8 GiB host budget.
+    1. Inspect `attila_linux_64` DWARF v4 DIE attributes and `.symtab` `_ZTV*` vtables via `gimli` + `object` (verified via `twdll-dwarf` across all 469 CUs: `722,704` types, `166,669` vtable entries, `166,593` concrete functions, `2.13M` inlines) and cross-check raw DIE counts with `llvm-dwarfdump` (1.64 GiB peak RSS) to finalize the exact `dwarf_*` tables and cross-binary mapping keys.
+    2. Inspect Ghidra 12.2's analyzed project (`ghidra_attila_linux_64.gpr`: `29` sections, `168,849` functions, `613,011` symbols, `55,185` strings, `2.38M` xrefs) and run an **automated DWARF-to-Ghidra decompilation quality audit loop** (scanning SQLite struct layout completeness and `DecompInterface` C++ output across stratified game namespaces at `~108 funcs/s` / `~3.5–4.1 GiB` peak RSS to detect and fix unmapped struct offsets, missing EBO/base fields, raw virtual call pointer arithmetic, and return/parameter storage mismatches case by case) before locking `twdll.extract` in Step 3B.
 - **Ordered Extraction Pipeline**:
   1. **DWARF-first step (`attila_linux_64`)**: Extract globally deduplicated DWARF types, pre-flattened struct layouts, synthesized vtable slot tables, functions, parameters, local variable live ranges, and inlined call sites out-of-process via `twdll-dwarf` (`gimli` + `object` + `libsqlite3` FFI) into backend-neutral SQLite tables—usable by both Ghidra (now) and IDA 9.5 (later).
   2. **Decompiler step**: Extract verified structural facts (and C pseudocode if approved by Step 3A, batch-populating DWARF types, `<Class>_vtbl` vtables, and `CUSTOM_STORAGE` function signatures on Ghidra) into `.twdll/extract/<decompiler>_<binary>.sqlite`.
@@ -280,6 +280,6 @@ uv run pytest
 1. **Slice 1 — Foundation & Setup (`init`, `status`, `clean`, `mcp`)** *(Completed)*
 2. **Slice 2 — Decompiler Analysis (`analyze`, `twdll._ghidra`, MCP Subprocess Isolation)** *(Completed + Rework)*
 3. **Slice 3 — Extraction & Read-Only SQL (`extract`, `sql`)**:
-   - **Step 3A (Empirical Gate)**: Run inspection and `DecompInterface` benchmark against analyzed `attila_linux_64` and `attila_windows_32` Ghidra 12.2 projects.
+   - **Step 3A (Empirical Gate)**: Complete `attila_linux_64` Ghidra analysis (`ghidra_attila_linux_64.gpr`, completed) and run the automated DWARF-to-Ghidra decompilation quality audit loop + `DecompInterface` benchmark against `attila_linux_64` (and `attila_windows_32`) before locking the decompiler-extracted schema.
    - **Step 3B (`extract` + `database.py`)**: Implement verified per-binary SQLite schema, `.sqlite.staging` atomic write, `twdll.extract`, `twdll extract`, and `twdll_extract`.
    - **Step 3C (`sql` + `query.py` + `database.py`)**: Implement `:memory:` `uri=True` read-only attachment, allowlist `set_authorizer`, `set_progress_handler`, `twdll.query.sql`, `twdll sql`, and `twdll_sql`.
