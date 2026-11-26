@@ -27,7 +27,6 @@ from rich.progress import (
     TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
-    TimeRemainingColumn,
 )
 from rich.prompt import Prompt
 from rich.table import Column, Table
@@ -170,7 +169,6 @@ def _cli_progress(enabled: bool) -> Generator[ProgressCallback]:
         TaskProgressColumn(),
         TextColumn("[cyan]{task.fields[units]}"),
         TimeElapsedColumn(),
-        TimeRemainingColumn(),
         console=Console(stderr=True),
         speed_estimate_period=300.0,
     )

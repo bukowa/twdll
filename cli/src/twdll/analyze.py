@@ -177,7 +177,7 @@ def _make_stage_tracker(
                 step_num = idx + 1
                 _emit(
                     on_progress,
-                    f"{prefix} ({step_num}/{_STEPS_PER_BINARY}: {stage_label})",
+                    f"{prefix}: stage {step_num}/{_STEPS_PER_BINARY} - {stage_label}",
                     completed=base_step + idx,
                     total=total_steps,
                 )
@@ -213,7 +213,7 @@ def _analyze_single_binary(
     first_stage = _ANALYZE_STAGES[0][0]
     _emit(
         on_progress,
-        f"{prefix} (1/{_STEPS_PER_BINARY}: {first_stage})",
+        f"{prefix}: stage 1/{_STEPS_PER_BINARY} - {first_stage}",
         completed=base_step,
         total=total_steps,
     )

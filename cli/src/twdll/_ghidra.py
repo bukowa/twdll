@@ -22,6 +22,8 @@ from twdll.domain import (
     resolve_toolchain,
 )
 
+_MAX_DETERMINATE_TOTAL = 100_000_000
+
 
 class _GhidraProgressMonitor:
     """Forwards Ghidra `TaskMonitor` updates to `ProgressCallback`."""
@@ -50,7 +52,11 @@ class _GhidraProgressMonitor:
         if not force and (now - self._last_emit) < 0.25:
             return
         self._last_emit = now
-        total = self._maximum if (self._maximum > 0 and not self._indeterminate) else None
+        total = (
+            self._maximum
+            if (0 < self._maximum <= _MAX_DETERMINATE_TOTAL and not self._indeterminate)
+            else None
+        )
         completed = min(self._progress, total) if total is not None else self._progress
         self._on_progress(
             ProgressEvent(
