@@ -197,31 +197,143 @@ fn eval_vtable_slot<R: gimli::Reader<Offset = usize>>(
     }
 }
 
-fn eval_frame_base_cfa_adjust<R: gimli::Reader<Offset = usize>>(
+#[derive(Clone, Copy, Debug)]
+struct FuncCfaInfo {
+    start: u64,
+    end: u64,
+    rsp_cfa: Option<i64>,
+    rbp_cfa: Option<i64>,
+}
+
+struct EhCfaIndex {
+    entries: Vec<FuncCfaInfo>,
+}
+
+impl EhCfaIndex {
+    fn from_elf(obj: &object::File<'_>) -> Self {
+        use gimli::{BaseAddresses, CfaRule, CieOrFde, EhFrame, UnwindContext, UnwindSection};
+        let Some(sec) = obj.section_by_name(".eh_frame") else {
+            return Self { entries: Vec::new() };
+        };
+        let Ok(data) = sec.uncompressed_data() else {
+            return Self { entries: Vec::new() };
+        };
+        let eh_frame = EhFrame::new(data.as_ref(), gimli::RunTimeEndian::Little);
+        let mut bases = BaseAddresses::default().set_eh_frame(sec.address());
+        if let Some(text_sec) = obj.section_by_name(".text") {
+            bases = bases.set_text(text_sec.address());
+        }
+        if let Some(got_sec) = obj.section_by_name(".got") {
+            bases = bases.set_got(got_sec.address());
+        }
+
+        let mut entries = Vec::new();
+        let mut ctx = UnwindContext::new();
+        let mut iter = eh_frame.entries(&bases);
+        while let Ok(Some(entry)) = iter.next() {
+            if let CieOrFde::Fde(partial) = entry
+                && let Ok(fde) = partial.parse(|_, b, off| eh_frame.cie_from_offset(b, off))
+            {
+                let start = fde.initial_address();
+                let end = start.saturating_add(fde.len());
+                let mut rsp_cfa: Option<i64> = None;
+                let mut rbp_cfa: Option<i64> = None;
+                if let Ok(mut rows) = fde.rows(&eh_frame, &bases, &mut ctx) {
+                    while let Ok(Some(row)) = rows.next_row() {
+                        if let CfaRule::RegisterAndOffset { register, offset } = row.cfa() {
+                            if register.0 == 7 {
+                                rsp_cfa = Some(rsp_cfa.map_or(*offset, |m| m.max(*offset)));
+                            } else if register.0 == 6 {
+                                rbp_cfa = Some(*offset);
+                            }
+                        }
+                    }
+                }
+                if rsp_cfa.is_some() || rbp_cfa.is_some() {
+                    entries.push(FuncCfaInfo {
+                        start,
+                        end,
+                        rsp_cfa,
+                        rbp_cfa,
+                    });
+                }
+            }
+        }
+        entries.sort_unstable_by_key(|e| e.start);
+        Self { entries }
+    }
+
+    fn lookup(&self, addr: u64) -> (i64, i64) {
+        let idx = self.entries.partition_point(|e| e.start <= addr);
+        if idx > 0 {
+            let e = self.entries[idx - 1];
+            if addr < e.end {
+                return (e.rsp_cfa.unwrap_or(8), e.rbp_cfa.unwrap_or(16));
+            }
+        }
+        (8, 16)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FrameCfaContext {
+    fb_adjust: i64,
+    rsp_cfa: i64,
+    rbp_cfa: i64,
+}
+
+fn eval_frame_base_cfa_context<R: gimli::Reader<Offset = usize>>(
     unit: &gimli::UnitRef<'_, R>,
     val: &gimli::AttributeValue<R>,
-) -> i64 {
+    rsp_cfa: i64,
+    rbp_cfa: i64,
+) -> FrameCfaContext {
+    let mut fb_adjust = 8;
     if let gimli::AttributeValue::Exprloc(expr) = val {
         let mut ops = expr.clone().operations(unit.encoding());
         while let Ok(Some(op)) = ops.next() {
             match op {
-                gimli::Operation::CallFrameCFA => return 8,
+                gimli::Operation::CallFrameCFA => {
+                    fb_adjust = 8;
+                    break;
+                }
+                gimli::Operation::Register {
+                    register: gimli::Register(7),
+                } => {
+                    fb_adjust = 8 - rsp_cfa;
+                    break;
+                }
+                gimli::Operation::Register {
+                    register: gimli::Register(6),
+                } => {
+                    fb_adjust = 8 - rbp_cfa;
+                    break;
+                }
                 gimli::Operation::RegisterOffset {
                     register: gimli::Register(7),
                     offset,
                     ..
-                } => return offset,
+                } => {
+                    fb_adjust = offset + 8 - rsp_cfa;
+                    break;
+                }
                 gimli::Operation::RegisterOffset {
                     register: gimli::Register(6),
                     offset,
                     ..
-                } => return offset + 16,
+                } => {
+                    fb_adjust = offset + 8 - rbp_cfa;
+                    break;
+                }
                 _ => {}
             }
         }
     }
-    // Default System V x86-64 `DW_AT_frame_base` is `CFA = RSP_entry + 8`.
-    8
+    FrameCfaContext {
+        fb_adjust,
+        rsp_cfa,
+        rbp_cfa,
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -236,7 +348,7 @@ struct ParsedExprLoc {
 fn parse_single_expr<R: gimli::Reader<Offset = usize>>(
     unit: &gimli::UnitRef<'_, R>,
     expr: gimli::Expression<R>,
-    cfa_adjust: i64,
+    cfa_ctx: FrameCfaContext,
 ) -> ParsedExprLoc {
     let mut ops = expr.operations(unit.encoding());
     let mut reg: Option<u16> = None;
@@ -253,7 +365,7 @@ fn parse_single_expr<R: gimli::Reader<Offset = usize>>(
             }
             gimli::Operation::FrameOffset { offset } => {
                 if fb_off.is_none() && reg.is_none() {
-                    fb_off = Some(offset + cfa_adjust);
+                    fb_off = Some(offset + cfa_ctx.fb_adjust);
                 }
             }
             gimli::Operation::RegisterOffset {
@@ -262,7 +374,16 @@ fn parse_single_expr<R: gimli::Reader<Offset = usize>>(
                 ..
             } => {
                 if fb_off.is_none() && reg.is_none() {
-                    fb_off = Some(offset);
+                    fb_off = Some(offset + 8 - cfa_ctx.rsp_cfa);
+                }
+            }
+            gimli::Operation::RegisterOffset {
+                register: gimli::Register(6),
+                offset,
+                ..
+            } => {
+                if fb_off.is_none() && reg.is_none() {
+                    fb_off = Some(offset + 8 - cfa_ctx.rbp_cfa);
                 }
             }
             gimli::Operation::UnsignedConstant { value } => {
@@ -318,17 +439,17 @@ fn resolve_param_location<R: gimli::Reader<Offset = usize>>(
     unit: &gimli::UnitRef<'_, R>,
     val: gimli::AttributeValue<R>,
     low_pc: Option<i64>,
-    cfa_adjust: i64,
+    cfa_ctx: FrameCfaContext,
 ) -> ParsedExprLoc {
     match val {
-        gimli::AttributeValue::Exprloc(expr) => parse_single_expr(unit, expr, cfa_adjust),
+        gimli::AttributeValue::Exprloc(expr) => parse_single_expr(unit, expr, cfa_ctx),
         other => {
             if let Ok(Some(off)) = unit.attr_locations_offset(other)
                 && let Ok(mut locs) = unit.locations(off)
             {
                 let mut first: Option<ParsedExprLoc> = None;
                 while let Ok(Some(loc)) = locs.next() {
-                    let parsed = parse_single_expr(unit, loc.data, cfa_adjust);
+                    let parsed = parse_single_expr(unit, loc.data, cfa_ctx);
                     if parsed.storage_kind == "none" {
                         continue;
                     }
@@ -364,12 +485,12 @@ fn resolve_variable_ranges<R: gimli::Reader<Offset = usize>>(
     val: gimli::AttributeValue<R>,
     func_low_pc: i64,
     func_high_pc: i64,
-    cfa_adjust: i64,
+    cfa_ctx: FrameCfaContext,
 ) -> Vec<CuVarRange> {
     let mut out = Vec::new();
     match val {
         gimli::AttributeValue::Exprloc(expr) => {
-            let parsed = parse_single_expr(unit, expr, cfa_adjust);
+            let parsed = parse_single_expr(unit, expr, cfa_ctx);
             if parsed.storage_kind != "none" {
                 out.push(CuVarRange {
                     name,
@@ -395,7 +516,7 @@ fn resolve_variable_ranges<R: gimli::Reader<Offset = usize>>(
                     if end <= start || start < func_low_pc {
                         continue;
                     }
-                    let parsed = parse_single_expr(unit, loc.data, cfa_adjust);
+                    let parsed = parse_single_expr(unit, loc.data, cfa_ctx);
                     if parsed.storage_kind != "none" {
                         out.push(CuVarRange {
                             name: name.clone(),
@@ -443,6 +564,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
     ns_stack: &mut Vec<String>,
     enclosing_type_off: Option<usize>,
     in_function_scope: bool,
+    eh_cfa: &EhCfaIndex,
     cu_types: &mut FnvHashMap<usize, CuType>,
     cu_subprogs: &mut FnvHashMap<usize, CuSubprog>,
 ) {
@@ -465,7 +587,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
     let mut virtuality: i64 = 0;
     let mut vtable_slot_index: Option<i64> = None;
     let mut is_inline = false;
-    let mut cfa_adjust: i64 = 8;
+    let mut frame_base_attr: Option<gimli::AttributeValue<R>> = None;
     let mut decl_file: Option<String> = None;
     let mut decl_line: Option<i64> = None;
 
@@ -545,7 +667,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                 }
             }
             gimli::DW_AT_frame_base => {
-                cfa_adjust = eval_frame_base_cfa_adjust(unit, &attr.value());
+                frame_base_attr = Some(attr.value());
             }
             gimli::DW_AT_decl_file => {
                 if let gimli::AttributeValue::FileIndex(fidx) = attr.value() {
@@ -584,6 +706,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                     ns_stack,
                     None,
                     false,
+                    eh_cfa,
                     cu_types,
                     cu_subprogs,
                 );
@@ -600,6 +723,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                     ns_stack,
                     enclosing_type_off,
                     in_function_scope,
+                    eh_cfa,
                     cu_types,
                     cu_subprogs,
                 );
@@ -753,6 +877,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                             ns_stack,
                             Some(off),
                             in_function_scope,
+                            eh_cfa,
                             cu_types,
                             cu_subprogs,
                         );
@@ -766,6 +891,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                             ns_stack,
                             Some(off),
                             in_function_scope,
+                            eh_cfa,
                             cu_types,
                             cu_subprogs,
                         );
@@ -931,6 +1057,17 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
 
             let func_low = low_pc.unwrap_or(0);
             let func_high = func_low + high_pc_size.unwrap_or(0);
+            let (rsp_cfa, rbp_cfa) = low_pc
+                .map(|pc| eh_cfa.lookup(pc as u64))
+                .unwrap_or((8, 16));
+            let cfa_ctx = match &frame_base_attr {
+                Some(fb) => eval_frame_base_cfa_context(unit, fb, rsp_cfa, rbp_cfa),
+                None => FrameCfaContext {
+                    fb_adjust: 8,
+                    rsp_cfa,
+                    rbp_cfa,
+                },
+            };
 
             walk_subprog_body(
                 unit_id,
@@ -940,8 +1077,9 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                 low_pc,
                 func_low,
                 func_high,
-                cfa_adjust,
+                cfa_ctx,
                 true,
+                eh_cfa,
                 &mut params,
                 &mut is_variadic,
                 &mut variables,
@@ -988,6 +1126,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                     ns_stack,
                     enclosing_type_off,
                     in_function_scope,
+                    eh_cfa,
                     cu_types,
                     cu_subprogs,
                 );
@@ -1005,8 +1144,9 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
     low_pc: Option<i64>,
     func_low: i64,
     func_high: i64,
-    cfa_adjust: i64,
+    cfa_ctx: FrameCfaContext,
     is_top_subprog: bool,
+    eh_cfa: &EhCfaIndex,
     params: &mut Vec<CuParam>,
     is_variadic: &mut bool,
     variables: &mut Vec<CuVarRange>,
@@ -1052,7 +1192,7 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
                             porigin = ref_to_section_offset(unit, &a.value());
                         }
                         gimli::DW_AT_location if low_pc.is_some() => {
-                            ploc = resolve_param_location(unit, a.value(), low_pc, cfa_adjust);
+                            ploc = resolve_param_location(unit, a.value(), low_pc, cfa_ctx);
                         }
                         _ => {}
                     }
@@ -1103,7 +1243,7 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
                 if let Some(vn) = vname {
                     if let Some(loc_attr) = vloc {
                         let ranges = resolve_variable_ranges(
-                            unit, vn, vtype, loc_attr, func_low, func_high, cfa_adjust,
+                            unit, vn, vtype, loc_attr, func_low, func_high, cfa_ctx,
                         );
                         variables.extend(ranges);
                     } else if let Some(cv) = vconst {
@@ -1201,8 +1341,9 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
                     low_pc,
                     func_low,
                     func_high,
-                    cfa_adjust,
+                    cfa_ctx,
                     false,
+                    eh_cfa,
                     params,
                     is_variadic,
                     variables,
@@ -1220,8 +1361,9 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
                     low_pc,
                     func_low,
                     func_high,
-                    cfa_adjust,
+                    cfa_ctx,
                     false,
+                    eh_cfa,
                     params,
                     is_variadic,
                     variables,
@@ -1238,6 +1380,7 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
                     ns_stack,
                     None,
                     true,
+                    eh_cfa,
                     cu_types,
                     cu_subprogs,
                 );
@@ -1301,6 +1444,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
         return Err("Target binary is not 64-bit ELF".to_string());
     }
 
+    let eh_cfa = EhCfaIndex::from_elf(&obj);
     let vtable_index = build_elf_vtable_index(&obj);
     let endian = gimli::RunTimeEndian::Little;
     let load_sec =
@@ -1440,6 +1584,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
             &mut ns_stack,
             None,
             false,
+            &eh_cfa,
             &mut cu_types,
             &mut cu_subprogs,
         );
@@ -1500,7 +1645,6 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     if ct.has_virtual_method
                         || ct.has_destructor
                         || ct.has_user_copy_or_move_ctor
-                        || ct.byte_size.unwrap_or(0) > 16
                     {
                         types_out[idx].is_non_trivial_for_calls = true;
                     }
@@ -1534,8 +1678,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     .map(|z| (Some(z.symbol_name.clone()), Some(z.vtable_address as i64)))
                     .unwrap_or((None, None));
 
-                let direct_non_trivial = ct.byte_size.unwrap_or(0) > 16
-                    || ct.has_virtual_method
+                let direct_non_trivial = ct.has_virtual_method
                     || ct.has_destructor
                     || ct.has_user_copy_or_move_ctor;
                 let stl_stub = is_stl_stub_name(&ct.qual_name);
@@ -1892,6 +2035,14 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     || (ord == 0
                         && resolved_has_obj_ptr
                         && (part || pname.as_deref() == Some("this")));
+                // Prologue-spilled parameters (`stack_offset < 8`) are not incoming ABI stack arguments;
+                // demote them to `none` so the backend binds their incoming register instead.
+                let (p_storage_kind, p_stack_offset) =
+                    if p.storage_kind == "stack" && p.stack_offset.is_some_and(|off| off < 8) {
+                        ("none", None)
+                    } else {
+                        (p.storage_kind, p.stack_offset)
+                    };
                 batch.parameters.push(ParameterRow {
                     function_id: fid,
                     ordinal: ord as i64,
@@ -1899,10 +2050,10 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     type_id: ptid,
                     is_artificial: part || is_obj_ptr,
                     is_object_pointer: is_obj_ptr,
-                    storage_kind: p.storage_kind,
+                    storage_kind: p_storage_kind,
                     dwarf_reg: p.dwarf_reg,
                     reg_name: p.reg_name.clone(),
-                    stack_offset: p.stack_offset,
+                    stack_offset: p_stack_offset,
                 });
             }
 
@@ -2029,21 +2180,6 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
     }
 
     // Resolve concrete member byte sizes and propagate `is_non_trivial_for_calls` across the global type graph
-    let resolve_global_underlying = |types: &[TypeRow], mut tid: i64| -> i64 {
-        for _ in 0..12 {
-            let Some(t) = types.get((tid - 1) as usize) else {
-                break;
-            };
-            if matches!(t.kind, "typedef" | "const" | "volatile")
-                && let Some(target) = t.target_type_id
-            {
-                tid = target;
-            } else {
-                break;
-            }
-        }
-        tid
-    };
 
     let type_byte_size = |types: &[TypeRow], mut tid: i64| -> i64 {
         let mut mul: i64 = 1;
@@ -2168,9 +2304,22 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                 .get((u_base - 1) as usize)
                 .and_then(|t| t.byte_size)
                 .unwrap_or(1);
-            let bmems = raw_direct_members.get(&u_base).cloned().unwrap_or_default();
-            let b_inhs = raw_direct_inherits.get(&u_base).map_or(0, Vec::len);
-            let b_empty = bsize == 1 && bmems.is_empty() && b_inhs == 0;
+            let mut base_seen = FnvHashSet::default();
+            let bmems = collect_non_virtual_base_members(
+                u_base,
+                &batch.types,
+                &raw_direct_members,
+                &raw_direct_inherits,
+                &mut base_seen,
+            );
+            let mut visiting = FnvHashSet::default();
+            let b_empty = is_recursively_empty_base(
+                u_base,
+                &batch.types,
+                &raw_direct_members,
+                &raw_direct_inherits,
+                &mut visiting,
+            );
             d_inherits.push(RawInheritSpec {
                 base_type_id: u_base,
                 base_byte_size: bsize,
@@ -2408,4 +2557,360 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
     }
 
     Ok(batch)
+}
+
+fn resolve_global_underlying(types: &[TypeRow], mut tid: i64) -> i64 {
+    for _ in 0..12 {
+        let Some(t) = types.get((tid - 1) as usize) else {
+            break;
+        };
+        if matches!(t.kind, "typedef" | "const" | "volatile")
+            && let Some(target) = t.target_type_id
+        {
+            tid = target;
+        } else {
+            break;
+        }
+    }
+    tid
+}
+
+fn collect_non_virtual_base_members(
+    tid: i64,
+    types: &[TypeRow],
+    raw_direct_members: &FnvHashMap<i64, Vec<RawMemberSpec>>,
+    raw_direct_inherits: &FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>>,
+    visiting: &mut FnvHashSet<i64>,
+) -> Vec<RawMemberSpec> {
+    let u = resolve_global_underlying(types, tid);
+    if !visiting.insert(u) {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    if let Some(inhs) = raw_direct_inherits.get(&u) {
+        for &(btid, boff, _, is_virt) in inhs {
+            if is_virt {
+                continue;
+            }
+            let base_off = boff.unwrap_or(0);
+            for mut bm in collect_non_virtual_base_members(
+                btid,
+                types,
+                raw_direct_members,
+                raw_direct_inherits,
+                visiting,
+            ) {
+                bm.byte_offset += base_off;
+                out.push(bm);
+            }
+        }
+    }
+    if let Some(mems) = raw_direct_members.get(&u) {
+        out.extend(mems.iter().cloned());
+    }
+    visiting.remove(&u);
+    out
+}
+
+fn is_recursively_empty_base(
+    tid: i64,
+    types: &[TypeRow],
+    raw_direct_members: &FnvHashMap<i64, Vec<RawMemberSpec>>,
+    raw_direct_inherits: &FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>>,
+    visiting: &mut FnvHashSet<i64>,
+) -> bool {
+    let u = resolve_global_underlying(types, tid);
+    if !visiting.insert(u) {
+        return false;
+    }
+    let result = (|| {
+        let Some(t) = types.get((u - 1) as usize) else {
+            return false;
+        };
+        if t.is_declaration || t.byte_size != Some(1) {
+            return false;
+        }
+        if raw_direct_members.get(&u).is_some_and(|m| !m.is_empty()) {
+            return false;
+        }
+        if let Some(inhs) = raw_direct_inherits.get(&u) {
+            for &(btid, _, _, is_virt) in inhs {
+                if is_virt {
+                    return false;
+                }
+                if !is_recursively_empty_base(
+                    btid,
+                    types,
+                    raw_direct_members,
+                    raw_direct_inherits,
+                    visiting,
+                ) {
+                    return false;
+                }
+            }
+        }
+        true
+    })();
+    visiting.remove(&u);
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_type(
+        type_id: i64,
+        kind: &'static str,
+        qualified_name: &str,
+        byte_size: Option<i64>,
+        target_type_id: Option<i64>,
+        is_declaration: bool,
+    ) -> TypeRow {
+        TypeRow {
+            type_id,
+            kind,
+            qualified_name: qualified_name.to_string(),
+            byte_size,
+            target_type_id,
+            array_count: None,
+            containing_type_id: None,
+            vtable_symbol: None,
+            vtable_address: None,
+            is_declaration,
+            is_non_trivial_for_calls: false,
+            is_stl_stub: false,
+            is_referenced: false,
+        }
+    }
+
+    fn make_member(name: &str, member_type_id: i64, byte_offset: i64, byte_size: i64) -> RawMemberSpec {
+        RawMemberSpec {
+            name: name.to_string(),
+            member_type_id,
+            byte_offset,
+            byte_size,
+            bit_offset: None,
+            bit_size: None,
+            is_artificial: false,
+        }
+    }
+
+    #[test]
+    fn test_multi_level_empty_base_chain_and_ebo_layout() {
+        // 1: void* (primitive), 2: CA_STD::ALLOCATOR_BASE (1B empty),
+        // 3: CA_STD::ALLOCATOR<int> : ALLOCATOR_BASE (1B empty),
+        // 4: typedef AllocAlias -> ALLOCATOR<int>,
+        // 5: CA::EMPTY_BASE_OPTIMISATION<int*, ALLOCATOR<int>> : AllocAlias (8B, m_member at 0)
+        let types = vec![
+            make_type(1, "pointer", "void*", Some(8), None, false),
+            make_type(2, "class", "CA_STD::ALLOCATOR_BASE", Some(1), None, false),
+            make_type(3, "class", "CA_STD::ALLOCATOR<int>", Some(1), None, false),
+            make_type(4, "typedef", "AllocAlias", None, Some(3), false),
+            make_type(5, "class", "CA::EMPTY_BASE_OPTIMISATION", Some(8), None, false),
+        ];
+        let raw_direct_members: FnvHashMap<i64, Vec<RawMemberSpec>> = FnvHashMap::default();
+        let mut raw_direct_inherits: FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>> =
+            FnvHashMap::default();
+        raw_direct_inherits.insert(3, vec![(2, Some(0), None, false)]);
+
+        let mut visiting = FnvHashSet::default();
+        assert!(is_recursively_empty_base(
+            4,
+            &types,
+            &raw_direct_members,
+            &raw_direct_inherits,
+            &mut visiting,
+        ));
+        assert!(visiting.is_empty());
+
+        let u_base = resolve_global_underlying(&types, 4);
+        let mut visiting_ebo = FnvHashSet::default();
+        let b_empty = is_recursively_empty_base(
+            u_base,
+            &types,
+            &raw_direct_members,
+            &raw_direct_inherits,
+            &mut visiting_ebo,
+        );
+        let d_members = vec![make_member("m_member", 1, 0, 8)];
+        let d_inherits = vec![RawInheritSpec {
+            base_type_id: u_base,
+            base_byte_size: 1,
+            base_is_empty: b_empty,
+            byte_offset: Some(0),
+            vbase_vtable_offset: None,
+            is_virtual: false,
+            base_members: Vec::new(),
+        }];
+
+        let mut next_m = 1;
+        let mut next_i = 1;
+        let (members, inh_rows) = resolve_struct_layout(
+            5,
+            false,
+            8,
+            &d_members,
+            &d_inherits,
+            &mut next_m,
+            &mut next_i,
+        );
+        assert!(inh_rows[0].is_empty_base);
+        assert_eq!(members.len(), 1);
+        assert!(!members[0].is_layout_conflict);
+    }
+
+    #[test]
+    fn test_recursively_empty_base_negative_cases() {
+        // 1: empty base, 2: decl-only 1B, 3: 8B empty, 4: direct member 1B,
+        // 5: inherits from 4 (ancestor has member), 6: virtual base 1B, 7: unsized
+        let types = vec![
+            make_type(1, "class", "EmptyLeaf", Some(1), None, false),
+            make_type(2, "class", "DeclOnly", Some(1), None, true),
+            make_type(3, "class", "EightBytes", Some(8), None, false),
+            make_type(4, "class", "HasMember", Some(1), None, false),
+            make_type(5, "class", "DerivedFromMember", Some(1), None, false),
+            make_type(6, "class", "HasVirtualBase", Some(1), None, false),
+            make_type(7, "class", "Unsized", None, None, false),
+        ];
+        let mut raw_direct_members: FnvHashMap<i64, Vec<RawMemberSpec>> = FnvHashMap::default();
+        raw_direct_members.insert(4, vec![make_member("m_flag", 1, 0, 1)]);
+
+        let mut raw_direct_inherits: FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>> =
+            FnvHashMap::default();
+        raw_direct_inherits.insert(5, vec![(4, Some(0), None, false)]);
+        raw_direct_inherits.insert(6, vec![(1, None, Some(-24), true)]);
+
+        for tid in [2, 3, 4, 5, 6, 7] {
+            let mut visiting = FnvHashSet::default();
+            assert!(
+                !is_recursively_empty_base(
+                    tid,
+                    &types,
+                    &raw_direct_members,
+                    &raw_direct_inherits,
+                    &mut visiting,
+                ),
+                "expected tid {tid} not to be recursively empty"
+            );
+        }
+    }
+
+    #[test]
+    fn test_recursively_empty_base_diamond_and_cycle() {
+        // Diamond: 4 (D) -> 2 (B), 3 (C); 2 -> 1 (A), 3 -> 1 (A)
+        // Cycle: 5 (X) -> 6 (Y); 6 -> 5 (X)
+        let types = vec![
+            make_type(1, "class", "A", Some(1), None, false),
+            make_type(2, "class", "B", Some(1), None, false),
+            make_type(3, "class", "C", Some(1), None, false),
+            make_type(4, "class", "D", Some(1), None, false),
+            make_type(5, "class", "X", Some(1), None, false),
+            make_type(6, "class", "Y", Some(1), None, false),
+        ];
+        let raw_direct_members: FnvHashMap<i64, Vec<RawMemberSpec>> = FnvHashMap::default();
+        let mut raw_direct_inherits: FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>> =
+            FnvHashMap::default();
+        raw_direct_inherits.insert(2, vec![(1, Some(0), None, false)]);
+        raw_direct_inherits.insert(3, vec![(1, Some(0), None, false)]);
+        raw_direct_inherits.insert(4, vec![(2, Some(0), None, false), (3, Some(0), None, false)]);
+        raw_direct_inherits.insert(5, vec![(6, Some(0), None, false)]);
+        raw_direct_inherits.insert(6, vec![(5, Some(0), None, false)]);
+
+        let mut visiting = FnvHashSet::default();
+        assert!(is_recursively_empty_base(
+            4,
+            &types,
+            &raw_direct_members,
+            &raw_direct_inherits,
+            &mut visiting,
+        ));
+        assert!(visiting.is_empty());
+
+        let mut visiting_cycle = FnvHashSet::default();
+        assert!(!is_recursively_empty_base(
+            5,
+            &types,
+            &raw_direct_members,
+            &raw_direct_inherits,
+            &mut visiting_cycle,
+        ));
+        assert!(visiting_cycle.is_empty());
+    }
+
+    #[test]
+    fn test_collect_non_virtual_base_members_multi_level_tail_padding() {
+        // Grandparent (1): field_a@0 (4B)
+        // Parent (2) : Grandparent@0 (8B, 4B tail padding)
+        // Child (3) : Parent@0 + field_b@4 (1B)
+        let types = vec![
+            make_type(1, "struct", "Grandparent", Some(4), None, false),
+            make_type(2, "struct", "Parent", Some(8), None, false),
+            make_type(3, "struct", "Child", Some(8), None, false),
+            make_type(4, "primitive", "int", Some(4), None, false),
+            make_type(5, "primitive", "char", Some(1), None, false),
+        ];
+        let mut raw_direct_members: FnvHashMap<i64, Vec<RawMemberSpec>> = FnvHashMap::default();
+        raw_direct_members.insert(1, vec![make_member("field_a", 4, 0, 4)]);
+        let mut raw_direct_inherits: FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>> =
+            FnvHashMap::default();
+        raw_direct_inherits.insert(2, vec![(1, Some(0), None, false)]);
+
+        let mut visiting = FnvHashSet::default();
+        let bmems = collect_non_virtual_base_members(
+            2,
+            &types,
+            &raw_direct_members,
+            &raw_direct_inherits,
+            &mut visiting,
+        );
+        assert_eq!(bmems.len(), 1);
+        assert_eq!(bmems[0].name, "field_a");
+        assert_eq!(bmems[0].byte_offset, 0);
+
+        let d_members = vec![make_member("field_b", 5, 4, 1)];
+        let d_inherits = vec![RawInheritSpec {
+            base_type_id: 2,
+            base_byte_size: 8,
+            base_is_empty: false,
+            byte_offset: Some(0),
+            vbase_vtable_offset: None,
+            is_virtual: false,
+            base_members: bmems,
+        }];
+        let mut next_m = 1;
+        let mut next_i = 1;
+        let (members, inh_rows) = resolve_struct_layout(
+            3,
+            false,
+            8,
+            &d_members,
+            &d_inherits,
+            &mut next_m,
+            &mut next_i,
+        );
+        assert!(inh_rows[0].has_tail_padding_overlap);
+        assert_eq!(members.len(), 2);
+        assert!(!members[0].is_layout_conflict);
+        assert!(!members[1].is_layout_conflict);
+    }
+
+    #[test]
+    fn test_eh_cfa_index_lookup_and_frame_base_normalization() {
+        let idx = EhCfaIndex {
+            entries: vec![FuncCfaInfo {
+                start: 0x1000,
+                end: 0x1100,
+                rsp_cfa: Some(256),
+                rbp_cfa: Some(16),
+            }],
+        };
+        assert_eq!(idx.lookup(0x1000), (256, 16));
+        assert_eq!(idx.lookup(0x10ff), (256, 16));
+        assert_eq!(idx.lookup(0x1100), (8, 16));
+        // Clang DW_AT_frame_base = DW_OP_reg7 -> fb_adjust = 8 - 256 = -248
+        // Variable at DW_OP_fbreg(+136) -> 136 + (-248) = -112
+        let fb_adjust = 8 - 256;
+        assert_eq!(136 + fb_adjust, -112);
+    }
 }

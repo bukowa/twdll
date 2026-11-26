@@ -4,13 +4,8 @@
 use crate::db::{InheritanceRow, MemberRow};
 
 pub fn is_stl_stub_name(qualified_name: &str) -> bool {
-    qualified_name.starts_with("std::_Rb_tree")
-        || qualified_name.starts_with("std::__detail::")
+    qualified_name.starts_with("std::__detail::")
         || qualified_name.starts_with("__gnu_cxx::")
-        || qualified_name.starts_with("std::_Vector_base")
-        || qualified_name.starts_with("std::_Deque_base")
-        || qualified_name.starts_with("std::_List_base")
-        || qualified_name.starts_with("std::_Bvector_base")
 }
 
 #[derive(Clone, Debug)]
