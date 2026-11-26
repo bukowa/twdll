@@ -18,9 +18,22 @@ struct CuMember {
     byte_offset: i64,
     byte_size: Option<i64>,
     bit_offset: Option<i64>,
+    data_bit_offset: Option<i64>,
     bit_size: Option<i64>,
     is_artificial: bool,
     is_decl: bool,
+}
+
+#[derive(Clone, Debug)]
+struct PendingMemberSpec {
+    name: String,
+    member_type_id: i64,
+    byte_offset: i64,
+    explicit_byte_size: Option<i64>,
+    data_bit_offset: Option<i64>,
+    msb_bit_offset: Option<i64>,
+    bit_size: Option<i64>,
+    is_artificial: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -33,10 +46,38 @@ struct CuInherit {
 
 #[derive(Clone, Debug)]
 struct CuVirtualMethod {
+    subprog_off: usize,
     slot_index: i64,
     name: String,
     linkage_name: Option<String>,
     is_pure_virtual: bool,
+}
+
+#[derive(Clone, Debug)]
+struct RawDeclParam {
+    name: Option<String>,
+    type_id: i64,
+    is_artificial: bool,
+    is_object_pointer: bool,
+}
+
+#[derive(Clone, Debug)]
+struct RawVtableDecl {
+    declaring_class_tid: i64,
+    unit_id: i64,
+    slot_index: i64,
+    method_name: String,
+    qualified_name: String,
+    linkage_name: Option<String>,
+    return_type_id: Option<i64>,
+    virtuality: i64,
+    is_pure_virtual: bool,
+    is_inline: bool,
+    is_variadic: bool,
+    has_object_pointer: bool,
+    decl_file: Option<String>,
+    decl_line: Option<i64>,
+    params: Vec<RawDeclParam>,
 }
 
 #[derive(Clone, Debug)]
@@ -766,6 +807,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                             byte_offset: 0,
                             byte_size: None,
                             bit_offset: None,
+                            data_bit_offset: None,
                             bit_size: None,
                             is_artificial: false,
                             is_decl: false,
@@ -789,8 +831,11 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                                 gimli::DW_AT_byte_size => {
                                     m.byte_size = a.udata_value().map(|v| v as i64);
                                 }
-                                gimli::DW_AT_bit_offset | gimli::DW_AT_data_bit_offset => {
+                                gimli::DW_AT_bit_offset => {
                                     m.bit_offset = a.udata_value().map(|v| v as i64);
+                                }
+                                gimli::DW_AT_data_bit_offset => {
+                                    m.data_bit_offset = a.udata_value().map(|v| v as i64);
                                 }
                                 gimli::DW_AT_bit_size => {
                                     m.bit_size = a.udata_value().map(|v| v as i64);
@@ -809,7 +854,15 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                             }
                         }
                         if m.name.is_empty() {
-                            m.name = format!("anon_member_0x{:x}", m.byte_offset);
+                            if kind == "union" {
+                                m.name = format!("anon_arm_{}", members.len());
+                            } else {
+                                let approx_byte = m
+                                    .data_bit_offset
+                                    .map(|dbo| dbo.div_euclid(8))
+                                    .unwrap_or(m.byte_offset);
+                                m.name = format!("anon_member_0x{approx_byte:x}");
+                            }
                         }
                         members.push(m);
                     }
@@ -911,6 +964,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                         has_virtual_method = true;
                         if let Some(slot) = sp.vtable_slot_index {
                             virtual_methods.push(CuVirtualMethod {
+                                subprog_off: *sp_off,
                                 slot_index: slot,
                                 name: sp
                                     .name
@@ -1472,11 +1526,10 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
 
     // Raw layout & vtable specs per canonical `type_id` (populated once when concrete definition is seen)
     let mut type_populated_def: FnvHashSet<i64> = FnvHashSet::default();
-    let mut raw_direct_members: FnvHashMap<i64, Vec<RawMemberSpec>> = FnvHashMap::default();
+    let mut raw_pending_members: FnvHashMap<i64, Vec<PendingMemberSpec>> = FnvHashMap::default();
     let mut raw_direct_inherits: FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>> =
         FnvHashMap::default();
-    let mut raw_vtable_decls: FnvHashMap<i64, Vec<(i64, String, Option<String>, bool, Option<i64>)>> =
-        FnvHashMap::default();
+    let mut raw_vtable_decls: FnvHashMap<i64, Vec<RawVtableDecl>> = FnvHashMap::default();
 
     // Ensure `void` exists as type_id 1
     batch.types.push(TypeRow {
@@ -1833,18 +1886,18 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                         .type_off
                         .and_then(|mo| cu_to_global_type.get(&mo).copied())
                         .unwrap_or(1);
-                    let msize = m.byte_size.unwrap_or(1);
-                    mspecs.push(RawMemberSpec {
+                    mspecs.push(PendingMemberSpec {
                         name: m.name.clone(),
                         member_type_id: mtid,
                         byte_offset: m.byte_offset,
-                        byte_size: msize,
-                        bit_offset: m.bit_offset,
+                        explicit_byte_size: m.byte_size,
+                        data_bit_offset: m.data_bit_offset,
+                        msb_bit_offset: m.bit_offset,
                         bit_size: m.bit_size,
                         is_artificial: m.is_artificial,
                     });
                 }
-                raw_direct_members.insert(tid, mspecs);
+                raw_pending_members.insert(tid, mspecs);
 
                 let mut ispecs = Vec::new();
                 for inh in &ct.inherits {
@@ -1866,13 +1919,60 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                         .virtual_methods
                         .iter()
                         .map(|vm| {
-                            (
-                                vm.slot_index,
-                                vm.name.clone(),
-                                vm.linkage_name.clone(),
-                                vm.is_pure_virtual,
-                                None,
-                            )
+                            let sp = cu_subprogs.get(&vm.subprog_off);
+                            let return_type_id = sp
+                                .and_then(|s| s.return_type_off)
+                                .and_then(|ro| cu_to_global_type.get(&ro).copied());
+                            let obj_ptr_off = sp.and_then(|s| s.object_pointer_off);
+                            let mut has_obj_ptr = obj_ptr_off.is_some();
+                            let mut params = Vec::new();
+                            if let Some(s) = sp {
+                                for (ord, p) in s.params.iter().enumerate() {
+                                    if ord == 0
+                                        && (p.is_artificial || p.name.as_deref() == Some("this"))
+                                    {
+                                        has_obj_ptr = true;
+                                    }
+                                    let is_object_pointer = obj_ptr_off == Some(p.die_off)
+                                        || (ord == 0
+                                            && has_obj_ptr
+                                            && (p.is_artificial
+                                                || p.name.as_deref() == Some("this")));
+                                    let type_id = p
+                                        .type_off
+                                        .and_then(|po| cu_to_global_type.get(&po).copied())
+                                        .unwrap_or(1);
+                                    let name = p
+                                        .name
+                                        .clone()
+                                        .or_else(|| is_object_pointer.then(|| "this".to_string()));
+                                    params.push(RawDeclParam {
+                                        name,
+                                        type_id,
+                                        is_artificial: p.is_artificial || is_object_pointer,
+                                        is_object_pointer,
+                                    });
+                                }
+                            }
+                            RawVtableDecl {
+                                declaring_class_tid: tid,
+                                unit_id,
+                                slot_index: vm.slot_index,
+                                method_name: vm.name.clone(),
+                                qualified_name: sp
+                                    .map(|s| s.qual_name.clone())
+                                    .unwrap_or_else(|| format!("{}::{}", ct.qual_name, vm.name)),
+                                linkage_name: vm.linkage_name.clone(),
+                                return_type_id,
+                                virtuality: sp.map(|s| s.virtuality).unwrap_or(1),
+                                is_pure_virtual: vm.is_pure_virtual,
+                                is_inline: sp.is_some_and(|s| s.is_inline),
+                                is_variadic: sp.is_some_and(|s| s.is_variadic),
+                                has_object_pointer: has_obj_ptr,
+                                decl_file: sp.and_then(|s| s.decl_file.clone()),
+                                decl_line: sp.and_then(|s| s.decl_line),
+                                params,
+                            }
                         })
                         .collect();
                     raw_vtable_decls.insert(tid, vdecls);
@@ -2208,12 +2308,18 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
         mul.max(1)
     };
 
-    for mvec in raw_direct_members.values_mut() {
-        for m in mvec.iter_mut() {
-            if m.byte_size <= 1 {
-                m.byte_size = type_byte_size(&batch.types, m.member_type_id);
-            }
+    let mut raw_direct_members: FnvHashMap<i64, Vec<RawMemberSpec>> =
+        FnvHashMap::with_capacity_and_hasher(raw_pending_members.len(), Default::default());
+    for (tid, pvec) in raw_pending_members {
+        let mut resolved = Vec::with_capacity(pvec.len());
+        for m in pvec {
+            let resolved_storage_size = m
+                .explicit_byte_size
+                .filter(|&s| s > 0)
+                .unwrap_or_else(|| type_byte_size(&batch.types, m.member_type_id));
+            resolved.push(resolve_member_spec(m, resolved_storage_size));
         }
+        raw_direct_members.insert(tid, resolved);
     }
 
     // Fixed-point propagation of `is_non_trivial_for_calls` across bases and members
@@ -2258,17 +2364,12 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
 
     // Finalize `dwarf_functions.is_sret` using both `param[0] == RSI` and return type `is_non_trivial_for_calls`
     for f in &mut batch.functions {
-        let Some(rt_id) = f.return_type_id else {
-            f.is_sret = false;
-            continue;
-        };
-        let u_rt = resolve_global_underlying(&batch.types, rt_id);
-        let Some(rt) = batch.types.get((u_rt - 1) as usize) else {
-            f.is_sret = false;
-            continue;
-        };
-        if matches!(rt.kind, "struct" | "class" | "union") {
-            if rt.is_non_trivial_for_calls || rt.byte_size.unwrap_or(0) > 16 {
+        if let Some(rt_id) = f.return_type_id
+            && let u_rt = resolve_global_underlying(&batch.types, rt_id)
+            && let Some(rt) = batch.types.get((u_rt - 1) as usize)
+            && matches!(rt.kind, "struct" | "class" | "union")
+        {
+            if compute_return_is_sret(&batch.types, f.return_type_id) {
                 f.is_sret = true;
             }
         } else {
@@ -2346,16 +2447,13 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
 
     // Synthesize `dwarf_vtable_entries` (inheriting primary base vtable slots + `_ZTV` D1Ev/D0Ev)
     let resolve_class_vtable_slots = |tid: i64,
-                                      raw_vtable_decls: &FnvHashMap<
-        i64,
-        Vec<(i64, String, Option<String>, bool, Option<i64>)>,
-    >,
+                                      raw_vtable_decls: &FnvHashMap<i64, Vec<RawVtableDecl>>,
                                       raw_direct_inherits: &FnvHashMap<
         i64,
         Vec<(i64, Option<i64>, Option<i64>, bool)>,
     >,
                                       types: &[TypeRow]|
-     -> Vec<(i64, String, Option<String>, bool)> {
+     -> Vec<RawVtableDecl> {
         let mut chain = Vec::new();
         let mut cur = Some(tid);
         for _ in 0..16 {
@@ -2373,19 +2471,16 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
             }
         }
         chain.reverse();
-        let mut slots: HashMap<i64, (String, Option<String>, bool)> = HashMap::new();
+        let mut slots: HashMap<i64, RawVtableDecl> = HashMap::new();
         for c in chain {
             if let Some(decls) = raw_vtable_decls.get(&c) {
-                for (slot, mname, lname, is_pv, _) in decls {
-                    slots.insert(*slot, (mname.clone(), lname.clone(), *is_pv));
+                for decl in decls {
+                    slots.insert(decl.slot_index, decl.clone());
                 }
             }
         }
-        let mut out: Vec<_> = slots
-            .into_iter()
-            .map(|(s, (m, l, pv))| (s, m, l, pv))
-            .collect();
-        out.sort_by_key(|x| x.0);
+        let mut out: Vec<_> = slots.into_values().collect();
+        out.sort_by_key(|d| d.slot_index);
         out
     };
 
@@ -2397,6 +2492,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
         .collect();
     poly_tids.sort_unstable();
 
+    let mut decl_func_id_by_slot: FnvHashMap<(i64, i64), i64> = FnvHashMap::default();
     for tid in poly_tids {
         let qn = &batch.types[(tid - 1) as usize].qualified_name;
         let ztv_info = vtable_index.ztv_by_class.get(qn);
@@ -2404,24 +2500,36 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
             resolve_class_vtable_slots(tid, &raw_vtable_decls, &raw_direct_inherits, &batch.types);
 
         let mut slot_map: HashMap<i64, VtableEntryRow> = HashMap::new();
-        for (slot_idx, mname, lname, is_pv) in decl_slots {
+        for decl in decl_slots {
+            let slot_idx = decl.slot_index;
             let target_addr = ztv_info
                 .and_then(|z| z.slot_targets.get(slot_idx as usize).copied())
                 .filter(|&a| a != 0);
-            let is_pure = is_pv
+            let is_pure = decl.is_pure_virtual
                 || target_addr.is_some_and(|a| vtable_index.pure_virtual_addrs.contains(&a));
-            let fid = lname
+            let fid = decl
+                .linkage_name
                 .as_ref()
                 .and_then(|l| func_id_by_linkage.get(l).copied())
-                .or_else(|| target_addr.and_then(|a| func_id_by_address.get(&(a as i64)).copied()));
+                .or_else(|| target_addr.and_then(|a| func_id_by_address.get(&(a as i64)).copied()))
+                .or_else(|| {
+                    Some(get_or_insert_decl_function(
+                        &decl,
+                        &mut decl_func_id_by_slot,
+                        &mut next_function_id,
+                        &batch.types,
+                        &mut batch.functions,
+                        &mut batch.parameters,
+                    ))
+                });
 
             slot_map.insert(
                 slot_idx,
                 VtableEntryRow {
                     class_type_id: tid,
                     slot_index: slot_idx,
-                    method_name: mname.clone(),
-                    linkage_name: lname,
+                    method_name: decl.method_name.clone(),
+                    linkage_name: decl.linkage_name,
                     function_id: fid,
                     target_address: target_addr.map(|a| a as i64),
                     is_pure_virtual: is_pure,
@@ -2429,7 +2537,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
             );
 
             // Itanium dual virtual destructor slot (`D1Ev` at `slot_idx`, `D0Ev` deleting dtor at `slot_idx + 1`)
-            if mname.starts_with('~') {
+            if decl.method_name.starts_with('~') {
                 let d0_slot = slot_idx + 1;
                 let d0_target = ztv_info
                     .and_then(|z| z.slot_targets.get(d0_slot as usize).copied())
@@ -2441,11 +2549,12 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     .and_then(|l| func_id_by_linkage.get(l).copied())
                     .or_else(|| {
                         d0_target.and_then(|a| func_id_by_address.get(&(a as i64)).copied())
-                    });
+                    })
+                    .or(fid);
                 slot_map.entry(d0_slot).or_insert(VtableEntryRow {
                     class_type_id: tid,
                     slot_index: d0_slot,
-                    method_name: format!("{mname}_deleting"),
+                    method_name: format!("{}_deleting", decl.method_name),
                     linkage_name: d0_sym,
                     function_id: d0_fid,
                     target_address: d0_target.map(|a| a as i64),
@@ -2520,13 +2629,11 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
     };
 
     for f in &batch.functions {
-        if f.address.is_some() && !f.is_declaration {
-            if let Some(rt) = f.return_type_id {
-                enqueue(rt, &mut batch.types, &mut queue);
-            }
-            if let Some(ct) = f.containing_type_id {
-                enqueue(ct, &mut batch.types, &mut queue);
-            }
+        if let Some(rt) = f.return_type_id {
+            enqueue(rt, &mut batch.types, &mut queue);
+        }
+        if let Some(ct) = f.containing_type_id {
+            enqueue(ct, &mut batch.types, &mut queue);
         }
     }
     for p in &batch.parameters {
@@ -2559,6 +2666,84 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
     Ok(batch)
 }
 
+/// Resolve a pending DWARF member into a normalized `RawMemberSpec`.
+///
+/// Clang 3.4.2 emits `DW_AT_bit_offset = -bit_size` (negative) and `DW_AT_bit_size = size * 8`
+/// on non-bitfield members with incomplete types or `decltype(nullptr)`; those are treated as
+/// normal non-bitfield members at their raw `byte_offset`.
+fn resolve_member_spec(m: PendingMemberSpec, resolved_storage_size: i64) -> RawMemberSpec {
+    if let Some(bs) = m.bit_size {
+        let is_real_bitfield =
+            bs <= 64 && (m.data_bit_offset.is_some() || m.msb_bit_offset.is_none_or(|bo| bo >= 0));
+        if is_real_bitfield {
+            let (norm_byte_off, norm_lsb_bit, span_bytes) = normalize_bitfield_location(
+                m.byte_offset,
+                resolved_storage_size,
+                m.data_bit_offset,
+                m.msb_bit_offset,
+                bs,
+            );
+            return RawMemberSpec {
+                name: m.name,
+                member_type_id: m.member_type_id,
+                byte_offset: norm_byte_off,
+                byte_size: span_bytes,
+                bit_offset: Some(norm_lsb_bit),
+                bit_size: Some(bs),
+                is_artificial: m.is_artificial,
+            };
+        }
+        let byte_size = if bs > 0 && bs % 8 == 0 {
+            resolved_storage_size.max(bs / 8)
+        } else {
+            resolved_storage_size
+        };
+        return RawMemberSpec {
+            name: m.name,
+            member_type_id: m.member_type_id,
+            byte_offset: m.byte_offset,
+            byte_size,
+            bit_offset: None,
+            bit_size: None,
+            is_artificial: m.is_artificial,
+        };
+    }
+    RawMemberSpec {
+        name: m.name,
+        member_type_id: m.member_type_id,
+        byte_offset: m.byte_offset,
+        byte_size: resolved_storage_size,
+        bit_offset: None,
+        bit_size: None,
+        is_artificial: m.is_artificial,
+    }
+}
+
+/// Normalize a DWARF v4 bitfield (`DW_AT_data_bit_offset` or `DW_AT_bit_offset`)
+/// into canonical little-endian `(byte_offset, lsb_bit_offset [0..7], span_bytes)`.
+fn normalize_bitfield_location(
+    raw_byte_offset: i64,
+    storage_byte_size: i64,
+    data_bit_offset: Option<i64>,
+    msb_bit_offset: Option<i64>,
+    bit_size: i64,
+) -> (i64, i64, i64) {
+    if bit_size <= 0 {
+        return (raw_byte_offset, 0, 1);
+    }
+    let total_bit = if let Some(dbo) = data_bit_offset {
+        dbo
+    } else if let Some(bo) = msb_bit_offset {
+        raw_byte_offset * 8 + (storage_byte_size.max(1) * 8 - bo - bit_size)
+    } else {
+        raw_byte_offset * 8
+    };
+    let norm_byte_off = total_bit.div_euclid(8);
+    let norm_lsb_bit = total_bit.rem_euclid(8);
+    let span_bytes = ((norm_lsb_bit + bit_size + 7) / 8).max(1);
+    (norm_byte_off, norm_lsb_bit, span_bytes)
+}
+
 fn resolve_global_underlying(types: &[TypeRow], mut tid: i64) -> i64 {
     for _ in 0..12 {
         let Some(t) = types.get((tid - 1) as usize) else {
@@ -2573,6 +2758,70 @@ fn resolve_global_underlying(types: &[TypeRow], mut tid: i64) -> i64 {
         }
     }
     tid
+}
+
+fn compute_return_is_sret(types: &[TypeRow], return_type_id: Option<i64>) -> bool {
+    let Some(rt_id) = return_type_id else {
+        return false;
+    };
+    let u_rt = resolve_global_underlying(types, rt_id);
+    let Some(rt) = types.get((u_rt - 1) as usize) else {
+        return false;
+    };
+    matches!(rt.kind, "struct" | "class" | "union")
+        && (rt.is_non_trivial_for_calls || rt.byte_size.unwrap_or(0) > 16)
+}
+
+fn get_or_insert_decl_function(
+    decl: &RawVtableDecl,
+    decl_func_id_by_slot: &mut FnvHashMap<(i64, i64), i64>,
+    next_function_id: &mut i64,
+    types: &[TypeRow],
+    functions: &mut Vec<FunctionRow>,
+    parameters: &mut Vec<ParameterRow>,
+) -> i64 {
+    let key = (decl.declaring_class_tid, decl.slot_index);
+    if let Some(&existing_fid) = decl_func_id_by_slot.get(&key) {
+        return existing_fid;
+    }
+    let fid = *next_function_id;
+    *next_function_id += 1;
+    decl_func_id_by_slot.insert(key, fid);
+
+    for (ord, p) in decl.params.iter().enumerate() {
+        parameters.push(ParameterRow {
+            function_id: fid,
+            ordinal: ord as i64,
+            name: p.name.clone(),
+            type_id: p.type_id,
+            is_artificial: p.is_artificial,
+            is_object_pointer: p.is_object_pointer,
+            storage_kind: "none",
+            dwarf_reg: None,
+            reg_name: None,
+            stack_offset: None,
+        });
+    }
+    functions.push(FunctionRow {
+        function_id: fid,
+        unit_id: decl.unit_id,
+        address: None,
+        byte_size: None,
+        linkage_name: decl.linkage_name.clone(),
+        qualified_name: decl.qualified_name.clone(),
+        containing_type_id: Some(decl.declaring_class_tid),
+        return_type_id: decl.return_type_id,
+        vtable_slot_index: Some(decl.slot_index),
+        virtuality: decl.virtuality,
+        is_inline: decl.is_inline,
+        is_declaration: true,
+        is_variadic: decl.is_variadic,
+        has_object_pointer: decl.has_object_pointer,
+        is_sret: compute_return_is_sret(types, decl.return_type_id),
+        decl_file: decl.decl_file.clone(),
+        decl_line: decl.decl_line,
+    });
+    fid
 }
 
 fn collect_non_virtual_base_members(
@@ -2912,5 +3161,197 @@ mod tests {
         // Variable at DW_OP_fbreg(+136) -> 136 + (-248) = -112
         let fb_adjust = 8 - 256;
         assert_eq!(136 + fb_adjust, -112);
+    }
+
+    #[test]
+    fn test_get_or_insert_decl_function_dedup_and_sret() {
+        let mut non_trivial = make_type(2, "class", "CA::String", Some(8), None, false);
+        non_trivial.is_non_trivial_for_calls = true;
+        let types = vec![
+            make_type(1, "primitive", "void", Some(0), None, false),
+            non_trivial,
+            make_type(3, "pointer", "WARSCAPE::WS_SCENE *", Some(8), None, false),
+        ];
+
+        let mut decl_map: FnvHashMap<(i64, i64), i64> = FnvHashMap::default();
+        let mut next_fid = 100;
+        let mut functions = Vec::new();
+        let mut parameters = Vec::new();
+
+        let decl_ptr = RawVtableDecl {
+            declaring_class_tid: 10,
+            unit_id: 1,
+            slot_index: 50,
+            method_name: "scene".to_string(),
+            qualified_name: "WARSCAPE::WS_ENGINE::scene".to_string(),
+            linkage_name: None,
+            return_type_id: Some(3),
+            virtuality: 2,
+            is_pure_virtual: true,
+            is_inline: false,
+            is_variadic: false,
+            has_object_pointer: true,
+            decl_file: None,
+            decl_line: None,
+            params: vec![RawDeclParam {
+                name: Some("this".to_string()),
+                type_id: 3,
+                is_artificial: true,
+                is_object_pointer: true,
+            }],
+        };
+
+        let fid1 = get_or_insert_decl_function(
+            &decl_ptr,
+            &mut decl_map,
+            &mut next_fid,
+            &types,
+            &mut functions,
+            &mut parameters,
+        );
+        let fid2 = get_or_insert_decl_function(
+            &decl_ptr,
+            &mut decl_map,
+            &mut next_fid,
+            &types,
+            &mut functions,
+            &mut parameters,
+        );
+        assert_eq!(fid1, 100);
+        assert_eq!(fid2, 100);
+        assert_eq!(functions.len(), 1);
+        assert!(functions[0].is_declaration);
+        assert_eq!(functions[0].address, None);
+        assert!(!functions[0].is_sret);
+        assert_eq!(parameters.len(), 1);
+        assert_eq!(parameters[0].storage_kind, "none");
+
+        let decl_sret = RawVtableDecl {
+            declaring_class_tid: 10,
+            unit_id: 1,
+            slot_index: 51,
+            method_name: "name".to_string(),
+            qualified_name: "WARSCAPE::WS_ENGINE::name".to_string(),
+            linkage_name: None,
+            return_type_id: Some(2),
+            virtuality: 2,
+            is_pure_virtual: true,
+            is_inline: false,
+            is_variadic: false,
+            has_object_pointer: true,
+            decl_file: None,
+            decl_line: None,
+            params: Vec::new(),
+        };
+        let fid3 = get_or_insert_decl_function(
+            &decl_sret,
+            &mut decl_map,
+            &mut next_fid,
+            &types,
+            &mut functions,
+            &mut parameters,
+        );
+        assert_eq!(fid3, 101);
+        assert!(functions[1].is_sret);
+    }
+
+    #[test]
+    fn test_normalize_bitfield_location_dwarf_v4_variants() {
+        // DWARF v3/v4 MSB-relative `DW_AT_bit_offset` within a 4-byte storage unit at byte 0:
+        // - bit_offset=31, bit_size=1 -> LSB bit 0 -> (byte 0, lsb 0, span 1)
+        assert_eq!(
+            normalize_bitfield_location(0, 4, None, Some(31), 1),
+            (0, 0, 1)
+        );
+        // - bit_offset=27, bit_size=1 -> LSB bit 4 (0x10 mask, e.g. IMPOSTER_DATA::alive)
+        assert_eq!(
+            normalize_bitfield_location(0, 4, None, Some(27), 1),
+            (0, 4, 1)
+        );
+        // - bit_offset=16, bit_size=4 -> LSB bit 12 -> (byte 1, lsb 4, span 1)
+        assert_eq!(
+            normalize_bitfield_location(0, 4, None, Some(16), 4),
+            (1, 4, 1)
+        );
+        // - Cross-byte: bit_offset=21, bit_size=5 -> LSB bit 6 -> (byte 0, lsb 6, span 2)
+        assert_eq!(
+            normalize_bitfield_location(0, 4, None, Some(21), 5),
+            (0, 6, 2)
+        );
+        // Explicit 1-byte storage unit (`DW_AT_byte_size = 1`): bit_offset=3, bit_size=1 -> LSB bit 4
+        assert_eq!(
+            normalize_bitfield_location(8, 1, None, Some(3), 1),
+            (8, 4, 1)
+        );
+        // DWARF v4 `DW_AT_data_bit_offset` (LSB-relative from struct start):
+        // - data_bit_offset=193, bit_size=1 -> (byte 24, lsb 1, span 1)
+        assert_eq!(
+            normalize_bitfield_location(0, 4, Some(193), None, 1),
+            (24, 1, 1)
+        );
+        // - Cross-byte: data_bit_offset=15, bit_size=4 -> (byte 1, lsb 7, span 2)
+        assert_eq!(
+            normalize_bitfield_location(0, 4, Some(15), None, 4),
+            (1, 7, 2)
+        );
+        // Fallback with neither offset attr
+        assert_eq!(
+            normalize_bitfield_location(4, 4, None, None, 3),
+            (4, 0, 1)
+        );
+    }
+
+    #[test]
+    fn test_resolve_member_spec_clang_negative_bit_offset() {
+        // Clang 3.4.2 negative DW_AT_bit_offset = -bit_size on non-bitfield member
+        let dll_loader = PendingMemberSpec {
+            name: "m_dll_loader".to_string(),
+            member_type_id: 10,
+            byte_offset: 0,
+            explicit_byte_size: None,
+            data_bit_offset: None,
+            msb_bit_offset: Some(-576),
+            bit_size: Some(576),
+            is_artificial: false,
+        };
+        let r1 = resolve_member_spec(dll_loader, 72);
+        assert_eq!(r1.byte_offset, 0);
+        assert_eq!(r1.byte_size, 72);
+        assert_eq!(r1.bit_offset, None);
+        assert_eq!(r1.bit_size, None);
+
+        // decltype(nullptr) with msb_bit_offset = -64, bit_size = 64, fallback storage 1 -> 8 bytes
+        let nullptr_mem = PendingMemberSpec {
+            name: "second".to_string(),
+            member_type_id: 11,
+            byte_offset: 8,
+            explicit_byte_size: None,
+            data_bit_offset: None,
+            msb_bit_offset: Some(-64),
+            bit_size: Some(64),
+            is_artificial: false,
+        };
+        let r2 = resolve_member_spec(nullptr_mem, 1);
+        assert_eq!(r2.byte_offset, 8);
+        assert_eq!(r2.byte_size, 8);
+        assert_eq!(r2.bit_offset, None);
+        assert_eq!(r2.bit_size, None);
+
+        // Real bitfield (IMPOSTER_DATA::alive)
+        let alive = PendingMemberSpec {
+            name: "alive".to_string(),
+            member_type_id: 12,
+            byte_offset: 284,
+            explicit_byte_size: Some(4),
+            data_bit_offset: None,
+            msb_bit_offset: Some(27),
+            bit_size: Some(1),
+            is_artificial: false,
+        };
+        let r3 = resolve_member_spec(alive, 4);
+        assert_eq!(r3.byte_offset, 284);
+        assert_eq!(r3.byte_size, 1);
+        assert_eq!(r3.bit_offset, Some(4));
+        assert_eq!(r3.bit_size, Some(1));
     }
 }

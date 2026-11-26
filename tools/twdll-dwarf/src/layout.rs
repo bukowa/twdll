@@ -105,8 +105,8 @@ pub fn resolve_struct_layout(
         candidate_members.push((dm.clone(), false));
     }
 
-    // Track occupied byte intervals `[start, end)` from valid non-overlapping bases first.
-    let mut occupied: Vec<(i64, i64)> = out_inherits
+    // Track occupied bit intervals `[start_bit, end_bit)` from valid non-overlapping bases first.
+    let mut occupied_bits: Vec<(i64, i64)> = out_inherits
         .iter()
         .filter(|i| !i.is_virtual && !i.is_empty_base && !i.has_tail_padding_overlap)
         .filter_map(|i| {
@@ -116,7 +116,7 @@ pub fn resolve_struct_layout(
                 .find(|d| d.base_type_id == i.base_type_id && d.byte_offset == Some(start))?;
             let len = bspec.base_byte_size.max(1);
             if start >= 0 && (parent_byte_size <= 0 || start + len <= parent_byte_size) {
-                Some((start, start + len))
+                Some((start * 8, (start + len) * 8))
             } else {
                 None
             }
@@ -130,17 +130,31 @@ pub fn resolve_struct_layout(
 
         let len = m.byte_size.max(1);
         let start = m.byte_offset;
-        let end = start + len;
-        let out_of_bounds = start < 0 || (parent_byte_size > 0 && end > parent_byte_size);
-        let is_bitfield = m.bit_size.is_some();
-        let interval_overlap = if parent_is_union {
-            idx > 0
-        } else {
-            occupied.iter().any(|&(os, oe)| start < oe && os < end)
+        let (bit_start, bit_end, out_of_bounds, invalid_zero_bitfield) = match m.bit_size {
+            Some(bs) if bs <= 0 => (start * 8, start * 8, false, true),
+            Some(bs) => {
+                let bo = m.bit_offset.unwrap_or(0);
+                let b_start = start * 8 + bo;
+                let b_end = b_start + bs;
+                let oob = b_start < 0 || (parent_byte_size > 0 && b_end > parent_byte_size * 8);
+                (b_start, b_end, oob, false)
+            }
+            None => {
+                let end = start + len;
+                let oob = start < 0 || (parent_byte_size > 0 && end > parent_byte_size);
+                (start * 8, end * 8, oob, false)
+            }
         };
-        let is_conflict = out_of_bounds || interval_overlap || (is_bitfield && interval_overlap);
+        let interval_overlap = if parent_is_union {
+            false
+        } else {
+            occupied_bits
+                .iter()
+                .any(|&(os, oe)| bit_start < oe && os < bit_end)
+        };
+        let is_conflict = out_of_bounds || invalid_zero_bitfield || interval_overlap;
         if !is_conflict && !parent_is_union {
-            occupied.push((start, end));
+            occupied_bits.push((bit_start, bit_end));
         }
 
         out_members.push(MemberRow {
@@ -225,5 +239,125 @@ mod tests {
         assert!(members[0].is_flattened_base_member);
         assert!(!members[0].is_layout_conflict);
         assert!(!members[1].is_layout_conflict);
+    }
+
+    #[test]
+    fn test_bitfield_intervals_and_union_arms() {
+        let bitfield_members = vec![
+            RawMemberSpec {
+                name: "flag_a".to_string(),
+                member_type_id: 2,
+                byte_offset: 0,
+                byte_size: 1,
+                bit_offset: Some(0),
+                bit_size: Some(4),
+                is_artificial: false,
+            },
+            RawMemberSpec {
+                name: "flag_b".to_string(),
+                member_type_id: 2,
+                byte_offset: 0,
+                byte_size: 2,
+                bit_offset: Some(4),
+                bit_size: Some(6),
+                is_artificial: false,
+            },
+            RawMemberSpec {
+                name: "overlap_c".to_string(),
+                member_type_id: 2,
+                byte_offset: 0,
+                byte_size: 1,
+                bit_offset: Some(2),
+                bit_size: Some(2),
+                is_artificial: false,
+            },
+            RawMemberSpec {
+                name: "zero_bf".to_string(),
+                member_type_id: 2,
+                byte_offset: 2,
+                byte_size: 1,
+                bit_offset: Some(0),
+                bit_size: Some(0),
+                is_artificial: false,
+            },
+            RawMemberSpec {
+                name: "oob_bf".to_string(),
+                member_type_id: 2,
+                byte_offset: 3,
+                byte_size: 1,
+                bit_offset: Some(6),
+                bit_size: Some(4),
+                is_artificial: false,
+            },
+        ];
+
+        let mut next_m = 1;
+        let mut next_i = 1;
+        let (members, _) = resolve_struct_layout(
+            200,
+            false,
+            4,
+            &bitfield_members,
+            &[],
+            &mut next_m,
+            &mut next_i,
+        );
+        assert!(!members[0].is_layout_conflict);
+        assert!(!members[1].is_layout_conflict);
+        assert!(members[2].is_layout_conflict);
+        assert!(members[3].is_layout_conflict);
+        assert!(members[4].is_layout_conflict);
+
+        let union_members = vec![
+            RawMemberSpec {
+                name: "as_int".to_string(),
+                member_type_id: 2,
+                byte_offset: 0,
+                byte_size: 4,
+                bit_offset: None,
+                bit_size: None,
+                is_artificial: false,
+            },
+            RawMemberSpec {
+                name: "as_float".to_string(),
+                member_type_id: 3,
+                byte_offset: 0,
+                byte_size: 4,
+                bit_offset: None,
+                bit_size: None,
+                is_artificial: false,
+            },
+            RawMemberSpec {
+                name: "as_bit".to_string(),
+                member_type_id: 2,
+                byte_offset: 0,
+                byte_size: 1,
+                bit_offset: Some(0),
+                bit_size: Some(1),
+                is_artificial: false,
+            },
+            RawMemberSpec {
+                name: "too_big".to_string(),
+                member_type_id: 4,
+                byte_offset: 0,
+                byte_size: 8,
+                bit_offset: None,
+                bit_size: None,
+                is_artificial: false,
+            },
+        ];
+        let (u_members, _) = resolve_struct_layout(
+            201,
+            true,
+            4,
+            &union_members,
+            &[],
+            &mut next_m,
+            &mut next_i,
+        );
+        assert!(!u_members[0].is_layout_conflict);
+        assert!(!u_members[1].is_layout_conflict);
+        assert!(!u_members[2].is_layout_conflict);
+        assert!(u_members[3].is_layout_conflict);
     }
 }
