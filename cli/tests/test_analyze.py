@@ -198,6 +198,7 @@ def test_analyze_fresh_and_skip_when_analyzed(
         "Create Address Tables",
         "Stack",
         "Variadic Function Signature Override",
+        "Non-Returning Functions - Discovered",
     ):
         set_bool.assert_any_call(opt_name, False)
     programs[0].endTransaction.assert_called_once_with(7, True)

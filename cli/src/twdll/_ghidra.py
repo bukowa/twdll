@@ -245,6 +245,7 @@ def _disable_dwarf_analyzer(program: Any) -> None:
         options.setBoolean("Create Address Tables", False)
         options.setBoolean("Stack", False)
         options.setBoolean("Variadic Function Signature Override", False)
+        options.setBoolean("Non-Returning Functions - Discovered", False)
     finally:
         program.endTransaction(tx_id, True)
 
