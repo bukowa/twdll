@@ -14,6 +14,7 @@ from typing import Final
 from twdll.domain import (
     DwarfEnumeratorRow,
     DwarfFunctionRow,
+    DwarfGlobalRow,
     DwarfInheritanceRow,
     DwarfInlineRow,
     DwarfMemberRow,
@@ -50,7 +51,8 @@ CREATE TABLE IF NOT EXISTS dwarf_types (
     is_declaration INTEGER NOT NULL DEFAULT 0,
     is_non_trivial_for_calls INTEGER NOT NULL DEFAULT 0,
     is_stl_stub INTEGER NOT NULL DEFAULT 0,
-    is_referenced INTEGER NOT NULL DEFAULT 0
+    is_referenced INTEGER NOT NULL DEFAULT 0,
+    abi_class TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_dwarf_types_qualified_name
     ON dwarf_types (qualified_name);
@@ -173,6 +175,17 @@ CREATE INDEX IF NOT EXISTS idx_dwarf_inlines_caller
     ON dwarf_inlines (caller_function_id);
 CREATE INDEX IF NOT EXISTS idx_dwarf_inlines_start_address
     ON dwarf_inlines (start_address);
+
+CREATE TABLE IF NOT EXISTS dwarf_globals (
+    global_id INTEGER PRIMARY KEY,
+    unit_id INTEGER NOT NULL,
+    address INTEGER NOT NULL UNIQUE,
+    linkage_name TEXT,
+    qualified_name TEXT NOT NULL,
+    type_id INTEGER NOT NULL,
+    byte_size INTEGER,
+    is_static_member INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
@@ -267,6 +280,7 @@ def _row_to_dwarf_type(row: tuple[object, ...]) -> DwarfTypeRow:
         is_non_trivial_for_calls=bool(row[10]),
         is_stl_stub=bool(row[11]),
         is_referenced=bool(row[12]),
+        abi_class=str(row[13]) if row[13] is not None else None,
     )
 
 
@@ -278,7 +292,7 @@ def load_dwarf_type_shells(
         type_rows = conn.execute(
             "SELECT type_id, kind, qualified_name, byte_size, target_type_id, array_count, "
             "containing_type_id, vtable_symbol, vtable_address, is_declaration, "
-            "is_non_trivial_for_calls, is_stl_stub, is_referenced "
+            "is_non_trivial_for_calls, is_stl_stub, is_referenced, abi_class "
             "FROM dwarf_types ORDER BY type_id"
         ).fetchall()
         enum_rows = conn.execute(
@@ -493,3 +507,56 @@ def load_dwarf_locals_and_inlines(
         for r in inline_rows
     )
     return tuple(_row_to_dwarf_variable(r) for r in var_rows), inlines
+
+
+def _row_to_dwarf_global(row: tuple[object, ...]) -> DwarfGlobalRow:
+    return DwarfGlobalRow(
+        global_id=int(str(row[0])),
+        unit_id=int(str(row[1])),
+        address=int(str(row[2])),
+        linkage_name=str(row[3]) if row[3] is not None else None,
+        qualified_name=str(row[4]),
+        type_id=int(str(row[5])),
+        byte_size=int(str(row[6])) if row[6] is not None else None,
+        is_static_member=bool(row[7]),
+    )
+
+
+def load_dwarf_globals(staging_path: Path) -> tuple[DwarfGlobalRow, ...]:
+    """Pass 2 loader: stream deduplicated global and static-member rows ordered by address."""
+    with closing(sqlite3.connect(staging_path)) as conn:
+        rows = conn.execute(
+            "SELECT global_id, unit_id, address, linkage_name, qualified_name, "
+            "type_id, byte_size, is_static_member "
+            "FROM dwarf_globals ORDER BY address, global_id"
+        ).fetchall()
+    return tuple(_row_to_dwarf_global(row) for row in rows)
+
+
+def load_dwarf_vtable_function_signatures(
+    staging_path: Path,
+) -> tuple[dict[int, DwarfFunctionRow], dict[int, tuple[DwarfParameterRow, ...]]]:
+    """Pass 2 loader: stream functions and parameters referenced by `dwarf_vtable_entries`."""
+    with closing(sqlite3.connect(staging_path)) as conn:
+        func_rows = conn.execute(
+            "SELECT DISTINCT f.function_id, f.unit_id, f.address, f.byte_size, f.linkage_name, "
+            "f.qualified_name, f.containing_type_id, f.return_type_id, f.vtable_slot_index, "
+            "f.virtuality, f.is_inline, f.is_declaration, f.is_variadic, "
+            "f.has_object_pointer, f.is_sret, f.decl_file, f.decl_line "
+            "FROM dwarf_functions AS f "
+            "INNER JOIN dwarf_vtable_entries AS v ON v.function_id = f.function_id "
+            "ORDER BY f.function_id"
+        ).fetchall()
+        param_rows = conn.execute(
+            "SELECT DISTINCT p.function_id, p.ordinal, p.name, p.type_id, p.is_artificial, "
+            "p.is_object_pointer, p.storage_kind, p.dwarf_reg, p.reg_name, p.stack_offset "
+            "FROM dwarf_parameters AS p "
+            "INNER JOIN dwarf_vtable_entries AS v ON v.function_id = p.function_id "
+            "ORDER BY p.function_id, p.ordinal"
+        ).fetchall()
+    funcs = {func.function_id: func for func in (_row_to_dwarf_function(r) for r in func_rows)}
+    grouped_params: dict[int, list[DwarfParameterRow]] = {}
+    for row in param_rows:
+        param = _row_to_dwarf_parameter(row)
+        grouped_params.setdefault(param.function_id, []).append(param)
+    return funcs, {fid: tuple(params) for fid, params in grouped_params.items()}

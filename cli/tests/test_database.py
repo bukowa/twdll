@@ -14,9 +14,11 @@ from twdll.database import (
     is_extract_db_complete,
     list_sqlite_tables,
     load_dwarf_function_signatures,
+    load_dwarf_globals,
     load_dwarf_locals_and_inlines,
     load_dwarf_struct_layouts,
     load_dwarf_type_shells,
+    load_dwarf_vtable_function_signatures,
 )
 from twdll.domain import (
     BinaryName,
@@ -32,8 +34,8 @@ def _seed_sample_dwarf_rows(staging: Path) -> None:
             "INSERT INTO dwarf_types "
             "(type_id, kind, qualified_name, byte_size, target_type_id, array_count, "
             "containing_type_id, vtable_symbol, vtable_address, is_declaration, "
-            "is_non_trivial_for_calls, is_stl_stub, is_referenced) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "is_non_trivial_for_calls, is_stl_stub, is_referenced, abi_class) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 (
                     1,
@@ -49,6 +51,7 @@ def _seed_sample_dwarf_rows(staging: Path) -> None:
                     1,
                     0,
                     1,
+                    "memory",
                 ),
                 (
                     2,
@@ -64,8 +67,9 @@ def _seed_sample_dwarf_rows(staging: Path) -> None:
                     0,
                     1,
                     1,
+                    "memory",
                 ),
-                (3, "enum", "CA::STATE", 4, None, None, None, None, None, 0, 0, 0, 1),
+                (3, "enum", "CA::STATE", 4, None, None, None, None, None, 0, 0, 0, 1, "int"),
             ),
         )
         conn.execute(
@@ -94,11 +98,15 @@ def _seed_sample_dwarf_rows(staging: Path) -> None:
                 (22, 1, 3, None, 24, 1, 0, 0),
             ),
         )
-        conn.execute(
+        conn.executemany(
             "INSERT INTO dwarf_vtable_entries "
             "(class_type_id, slot_index, method_name, linkage_name, function_id, "
             "target_address, is_pure_virtual) "
-            "VALUES (1, 0, '~UNIT', '_ZN4UNITD2Ev', 100, 4200000, 0)"
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                (1, 0, "~UNIT", "_ZN4UNITD2Ev", 100, 4200000, 0),
+                (1, 1, "inlined_decl", None, 101, None, 1),
+            ),
         )
         conn.executemany(
             "INSERT INTO dwarf_functions "
@@ -147,11 +155,15 @@ def _seed_sample_dwarf_rows(staging: Path) -> None:
                 ),
             ),
         )
-        conn.execute(
+        conn.executemany(
             "INSERT INTO dwarf_parameters "
             "(function_id, ordinal, name, type_id, is_artificial, is_object_pointer, "
             "storage_kind, dwarf_reg, reg_name, stack_offset) "
-            "VALUES (100, 0, 'this', 1, 1, 1, 'register', 4, 'RSI', NULL)"
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                (100, 0, "this", 1, 1, 1, "register", 4, "RSI", None),
+                (101, 0, "this", 1, 1, 1, "none", None, None, None),
+            ),
         )
         conn.executemany(
             "INSERT INTO dwarf_variables "
@@ -169,6 +181,13 @@ def _seed_sample_dwarf_rows(staging: Path) -> None:
             "start_address, end_address, call_file, call_line) "
             "VALUES (400, 100, 101, 'EMPIREBATTLE::UNIT::inlined_decl', "
             "4198408, 4198420, 'unit.h', 20)"
+        )
+        conn.execute(
+            "INSERT INTO dwarf_globals "
+            "(global_id, unit_id, address, linkage_name, qualified_name, type_id, "
+            "byte_size, is_static_member) "
+            "VALUES (500, 1, 5755040, '_ZN17EMPIRE_APP_MODULE10s_instanceE', "
+            "'EMPIRE_APP_MODULE::s_instance', 1, 64, 1)"
         )
         conn.commit()
 
@@ -188,6 +207,7 @@ def test_staging_db_lifecycle_and_wal_cleanup(tmp_path: Path, host_os: HostOS) -
     expected_tables = (
         "dwarf_enumerators",
         "dwarf_functions",
+        "dwarf_globals",
         "dwarf_inheritance",
         "dwarf_inlines",
         "dwarf_members",
@@ -223,12 +243,14 @@ def test_pass_scoped_dwarf_loaders_filter_and_roundtrip(tmp_path: Path) -> None:
     types, enumerators = load_dwarf_type_shells(staging)
     assert len(types) == 3
     assert types[0].is_non_trivial_for_calls is True
+    assert types[0].abi_class == "memory"
     assert types[1].is_stl_stub is True
+    assert types[2].abi_class == "int"
     assert len(enumerators) == 1
     assert enumerators[0].name == "ACTIVE"
 
     vtables, members, inheritances = load_dwarf_struct_layouts(staging)
-    assert len(vtables) == 1
+    assert len(vtables) == 2
     assert vtables[0].method_name == "~UNIT"
     assert [m.member_id for m in members] == [10]
     assert [i.inheritance_id for i in inheritances] == [20]
@@ -243,3 +265,36 @@ def test_pass_scoped_dwarf_loaders_filter_and_roundtrip(tmp_path: Path) -> None:
     assert [v.variable_id for v in variables] == [300]
     assert len(inlines) == 1
     assert inlines[0].callee_name == "EMPIREBATTLE::UNIT::inlined_decl"
+
+
+def test_dwarf_globals_and_vtable_function_signatures_roundtrip(tmp_path: Path) -> None:
+    paths = WorkspaceContext.from_root(tmp_path).paths
+    staging = paths.extract_staging_db_path(Decompiler.GHIDRA, BinaryName.ATTILA_LINUX_64)
+    init_extract_staging_db(staging)
+    _seed_sample_dwarf_rows(staging)
+
+    globals_ = load_dwarf_globals(staging)
+    assert len(globals_) == 1
+    assert globals_[0].address == 5755040
+    assert globals_[0].is_static_member is True
+
+    vtable_funcs, vtable_params = load_dwarf_vtable_function_signatures(staging)
+    assert set(vtable_funcs) == {100, 101}
+    assert vtable_funcs[101].is_declaration is True
+    assert vtable_params[100][0].reg_name == "RSI"
+    assert vtable_params[101][0].storage_kind == "none"
+
+
+def test_dwarf_globals_unique_address_constraint(tmp_path: Path) -> None:
+    paths = WorkspaceContext.from_root(tmp_path).paths
+    staging = paths.extract_staging_db_path(Decompiler.GHIDRA, BinaryName.ATTILA_LINUX_64)
+    init_extract_staging_db(staging)
+    _seed_sample_dwarf_rows(staging)
+
+    with closing(sqlite3.connect(staging)) as conn, pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO dwarf_globals "
+            "(global_id, unit_id, address, linkage_name, qualified_name, type_id, "
+            "byte_size, is_static_member) "
+            "VALUES (501, 1, 5755040, NULL, 'dup_global', 1, 64, 0)"
+        )

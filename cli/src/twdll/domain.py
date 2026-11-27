@@ -591,16 +591,21 @@ DWARF_EXPORTER_EXECUTABLES: Final[dict[HostOS, str]] = {
 
 
 def resolve_dwarf_exporter(ctx: WorkspaceContext) -> Path:
-    """Resolve `twdll-dwarf` executable from `.twdll/init/tools/` or repo `target/release/`."""
+    """Resolve `twdll-dwarf` executable from repo `target/release/` or `.twdll/init/tools/`."""
     exe = DWARF_EXPORTER_EXECUTABLES[ctx.host_os]
-    candidates = (
-        ctx.paths.tools_dir / DWARF_EXPORTER_DIR_NAME / exe,
-        ctx.paths.root.joinpath(*DWARF_EXPORTER_BUILD_REL_DIR, exe),
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    searched = ", ".join(str(path) for path in candidates)
+    repo_bin = ctx.paths.root.joinpath(*DWARF_EXPORTER_BUILD_REL_DIR, exe)
+    staged_bin = ctx.paths.tools_dir / DWARF_EXPORTER_DIR_NAME / exe
+    repo_exists = repo_bin.is_file()
+    staged_exists = staged_bin.is_file()
+    if repo_exists and staged_exists:
+        if repo_bin.stat().st_mtime_ns >= staged_bin.stat().st_mtime_ns:
+            return repo_bin
+        return staged_bin
+    if repo_exists:
+        return repo_bin
+    if staged_exists:
+        return staged_bin
+    searched = ", ".join(str(path) for path in (repo_bin, staged_bin))
     msg = f"twdll-dwarf binary not found; searched: {searched}"
     raise RuntimeError(msg)
 
@@ -629,6 +634,7 @@ class DwarfTypeRow:
     is_non_trivial_for_calls: bool
     is_stl_stub: bool
     is_referenced: bool
+    abi_class: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -739,6 +745,59 @@ class DwarfInlineRow:
     end_address: int
     call_file: str | None
     call_line: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class DwarfGlobalRow:
+    global_id: int
+    unit_id: int
+    address: int
+    linkage_name: str | None
+    qualified_name: str
+    type_id: int
+    byte_size: int | None
+    is_static_member: bool
+
+
+class DwarfPassName(StrEnum):
+    PASS1_TYPES = "pass1_types"
+    PASS2_LAYOUTS = "pass2_layouts"
+    PASS3_SIGNATURES = "pass3_signatures"
+    PASS4_LOCALS = "pass4_locals"
+
+
+@dataclass(frozen=True)
+class DwarfPassStats:
+    pass_name: DwarfPassName
+    counts: tuple[tuple[str, int], ...] = ()
+    error_counts: tuple[tuple[str, int], ...] = ()
+    sample_errors: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "pass_name": self.pass_name.value,
+            "counts": dict(self.counts),
+            "error_counts": dict(self.error_counts),
+            "sample_errors": list(self.sample_errors),
+        }
+
+
+@dataclass(frozen=True)
+class DwarfInjectionReport:
+    pass1: DwarfPassStats
+    pass2: DwarfPassStats
+    pass3: DwarfPassStats
+    pass4: DwarfPassStats
+    total_errors: int
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "pass1": self.pass1.to_dict(),
+            "pass2": self.pass2.to_dict(),
+            "pass3": self.pass3.to_dict(),
+            "pass4": self.pass4.to_dict(),
+            "total_errors": self.total_errors,
+        }
 
 
 _ELF_MAGIC = b"\x7fELF"

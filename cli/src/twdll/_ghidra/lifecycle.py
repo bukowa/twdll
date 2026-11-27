@@ -1,4 +1,4 @@
-"""Shared internal PyGhidra/JVM lifecycle and project helpers."""
+"""Shared internal PyGhidra/JVM lifecycle, Java bridge, and pass telemetry helpers."""
 
 from __future__ import annotations
 
@@ -6,13 +6,17 @@ import os
 import shutil
 import tempfile
 import time
-from collections.abc import Callable, Generator
+from collections import Counter
+from collections.abc import Callable, Generator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
 from twdll.domain import (
     BinaryName,
+    DwarfInjectionReport,
+    DwarfPassName,
+    DwarfPassStats,
     HostOS,
     ProgressCallback,
     ProgressEvent,
@@ -175,6 +179,65 @@ def make_task_monitor(
         import pyghidra
 
         return cast(Any, pyghidra).task_monitor()
+
+
+def jclass(name: str) -> Any:
+    """Load a Java class by fully-qualified name via `jpype.JClass`."""
+    import jpype
+
+    return cast(Any, jpype).JClass(name)
+
+
+def jarray(cls_name: str, items: Sequence[Any]) -> Any:
+    """Construct a typed Java array from `items` via `jpype.JArray`."""
+    import jpype
+
+    jp = cast(Any, jpype)
+    return jp.JArray(jp.JClass(cls_name))(list(items))
+
+
+class StatsCollector:
+    """Mutable pass-local telemetry accumulator exporting frozen `DwarfPassStats`."""
+
+    def __init__(self, pass_name: DwarfPassName, max_samples: int = 10) -> None:
+        self._pass_name = pass_name
+        self._max_samples = max_samples
+        self._counts: Counter[str] = Counter()
+        self._error_counts: Counter[str] = Counter()
+        self._sample_errors: list[str] = []
+
+    def inc(self, key: str, amount: int = 1) -> None:
+        self._counts[key] += amount
+
+    def record_error(self, key: str, context: str, exc: Exception) -> None:
+        self._error_counts[key] += 1
+        if len(self._sample_errors) < self._max_samples:
+            self._sample_errors.append(f"{context}: {type(exc).__name__}: {exc}")
+
+    def freeze(self) -> DwarfPassStats:
+        return DwarfPassStats(
+            pass_name=self._pass_name,
+            counts=tuple(sorted(self._counts.items())),
+            error_counts=tuple(sorted(self._error_counts.items())),
+            sample_errors=tuple(self._sample_errors),
+        )
+
+
+def build_injection_report(
+    pass1: DwarfPassStats,
+    pass2: DwarfPassStats,
+    pass3: DwarfPassStats,
+    pass4: DwarfPassStats,
+) -> DwarfInjectionReport:
+    """Aggregate Pass 1-4 telemetry into an immutable `DwarfInjectionReport`."""
+    total_errors = sum(count for s in (pass1, pass2, pass3, pass4) for _, count in s.error_counts)
+    return DwarfInjectionReport(
+        pass1=pass1,
+        pass2=pass2,
+        pass3=pass3,
+        pass4=pass4,
+        total_errors=total_errors,
+    )
 
 
 def require_ghidra_toolchain(ctx: WorkspaceContext) -> tuple[Path, Path]:

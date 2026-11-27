@@ -1,0 +1,263 @@
+{
+  "accepted_irreducible_patterns": [
+    ["TRUNCATION", "decompile_timeout"],
+    ["TRUNCATION", "unrecovered_jumptable"],
+    ["TRUNCATION", "could_not_recover_jumptable"],
+    ["TRUNCATION", "jumptable_recovery_failed"],
+    ["OTHER", "untyped_thunk_this_pointer"],
+    ["PARAMS", "untyped_thunk_this_param"],
+    ["ABI_REG", "extraout_return_register_from_bad_vcall_type"],
+    ["OTHER", "type_propagation_failure"],
+    ["OTHER", "base_pointer_overlay"],
+    ["STRUCT_FIELD", "base_ptr_out_of_bounds_indexing"],
+    ["OTHER", "missing_callee_varargs"]
+  ],
+  "pass_error_budgets": {
+    "pass1_types": {
+      "total": 0
+    },
+    "pass2_layouts": {
+      "vtbl_stamp_err": 0,
+      "global_stamp_err": 0,
+      "union_raw_err": 50,
+      "bitfield_insert_err": 500,
+      "member_replace_err": 500,
+      "vtbl_slot_err": 50,
+      "union_add_err": 500
+    },
+    "pass3_signatures": {
+      "unthunk_err": 0,
+      "sig_apply_err": 200
+    },
+    "pass4_locals": {
+      "local_err": 500,
+      "inline_comment_err": 200
+    }
+  },
+  "functions": [
+    {
+      "address": "0x57d0a0",
+      "name": "EMPIRE::MULTIPLAYER_INITIALISER::~MULTIPLAYER_INITIALISER",
+      "defect_class": "untyped_global_singleton",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "s_instance"
+      ],
+      "must_not_contain_regex": [
+        "\\b_?DAT_"
+      ]
+    },
+    {
+      "address": "0x2a1f850",
+      "name": "UIDLL::CharacterInterface::Initialise",
+      "defect_class": "untyped_global_singleton",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "s_ui"
+      ],
+      "must_not_contain_regex": [
+        "\\b_?DAT_"
+      ]
+    },
+    {
+      "address": "0x2cdedb0",
+      "name": "UIDLL::MPBattleSetupClanSelection::notify",
+      "defect_class": "untyped_global_singleton",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "s_ui"
+      ],
+      "must_not_contain_regex": [
+        "\\(\\*\\*\\(code \\*\\*\\)\\(\\*"
+      ]
+    },
+    {
+      "address": "0x3095a40",
+      "name": "WARSCAPE::WS_CONTEXT_MODIFIER::res_create",
+      "defect_class": "untyped_global_singleton",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "m_e_engine"
+      ],
+      "must_not_contain_regex": [
+        "\\(\\*\\*\\(code \\*\\*\\)\\(\\*"
+      ]
+    },
+    {
+      "address": "0x30a6180",
+      "name": "WARSCAPE::UI_TEXTURE_HANDLER::display_open",
+      "defect_class": "untyped_global_singleton",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "m_pf_device"
+      ],
+      "must_not_contain_regex": [
+        "\\(\\*\\*\\(code \\*\\*\\)\\(\\*"
+      ]
+    },
+    {
+      "address": "0x1de0b20",
+      "name": "DATABASE_TABLE<...>::clearing_packs",
+      "defect_class": "16b_int_return_sret",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "_M_insert_unique"
+      ],
+      "must_not_contain_regex": [
+        "\\bin_RSI\\b",
+        "extraout_RDX",
+        "\\bin_RDX\\b"
+      ]
+    },
+    {
+      "address": "0x2b71350",
+      "name": "UIDLL::CampaignWealthTooltip::Function",
+      "defect_class": "16b_ptr_to_member_sret",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "cc_find_function"
+      ],
+      "must_not_contain_regex": [
+        "\\bin_RSI\\b"
+      ]
+    },
+    {
+      "address": "0x349af30",
+      "name": "WARSCAPE::EMITTER_INSTANCE::update_orbital_effect",
+      "defect_class": "8_16b_sse_float_struct_return",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "get_orientation_world"
+      ],
+      "must_not_contain_regex": [
+        "\\bextraout_XMM0",
+        "\\bunaff_XMM"
+      ]
+    },
+    {
+      "address": "0x28c8a10",
+      "name": "std::deque<Json::Reader::ErrorInfo, ...>::_M_reallocate_map",
+      "defect_class": "external_plt_noreturn",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "__throw_bad_alloc"
+      ],
+      "must_not_contain_regex": [
+        "halt_baddata"
+      ]
+    },
+    {
+      "address": "0x13fc540",
+      "name": "std::remove_if<CONST_SAFE_PTR_VECTOR<...>::iterator, ...>",
+      "defect_class": "inlined_copy_ctor_sret",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "__return_storage_ptr__"
+      ],
+      "must_not_contain_regex": [
+        "\\bin_RCX\\b"
+      ]
+    },
+    {
+      "address": "0x7ec8c0",
+      "name": "std::partial_sort<CONST_SAFE_PTR_VECTOR<...>::iterator>",
+      "defect_class": "inlined_copy_ctor_param",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "iterator \\*\\s*__first"
+      ],
+      "must_not_contain_regex": [
+        "\\*__first\\.m_iter"
+      ]
+    },
+    {
+      "address": "0x8819c0",
+      "name": "EMPIREBATTLE::SHIP::can_be_selected_in_ui",
+      "defect_class": "secondary_vtable_ownership",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "_vptr_TOGGLE_OBJECT\\[2\\]"
+      ],
+      "must_not_contain_regex": [
+        "constrain_accelerations",
+        "\\bin_XMM0",
+        "\\bin_RSI\\b",
+        "\\bin_RDX\\b"
+      ]
+    },
+    {
+      "address": "0x7bab40",
+      "name": "EMPIREBATTLE::ENTITY_ACTION_PLACE_BOARDING_PLANK::start_lifting",
+      "defect_class": "nested_secondary_vtable_ownership",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "notify_listeners"
+      ],
+      "must_not_contain_regex": [
+        "issue_postponed_messages"
+      ]
+    },
+    {
+      "address": "0x2e7b1a0",
+      "name": "non-virtual thunk to TWIN::WINDOW::on_mouse_up",
+      "defect_class": "non_virtual_thunk_this",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "void \\*\\s*this"
+      ],
+      "must_not_contain_regex": [
+        "this\\[-1\\]"
+      ]
+    },
+    {
+      "address": "0x3575890",
+      "name": "luaV_execute",
+      "defect_class": "lua_noreturn_fallthrough",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "luaG_runerror"
+      ],
+      "must_not_contain_regex": [
+        "\\*\\(code \\*\\)L->top"
+      ]
+    },
+    {
+      "address": "0x3632130",
+      "name": "CAkMusicCtx::Release",
+      "defect_class": "artificial_in_chrg_dtor_param",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "~CAkMusicCtx"
+      ],
+      "must_not_contain_regex": [
+        "\\bin_ESI\\b"
+      ]
+    },
+    {
+      "address": "0x2fbd2d0",
+      "name": "png_calloc",
+      "defect_class": "libpng_noreturn_fallthrough",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "png_error"
+      ],
+      "must_not_contain_regex": [
+        "malloc\\(\\(size_t\\)pcVar"
+      ]
+    },
+    {
+      "address": "0xfccc80",
+      "name": "std::__stable_partition_adaptive",
+      "defect_class": "void_phantom_param_shift",
+      "require_decompile_ok": true,
+      "must_contain_regex": [
+        "longlong __len",
+        "longlong __buffer_size"
+      ],
+      "must_not_contain_regex": [
+        "void \\*\\s*param_3",
+        "void \\*\\s*__pred"
+      ]
+    }
+  ]
+}

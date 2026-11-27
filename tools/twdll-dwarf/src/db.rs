@@ -1,7 +1,7 @@
 //! SQLite prepared-statement batch writer for `twdll-dwarf`.
 //!
 //! Opens an already-initialized `.sqlite.staging` database created by `twdll.database`
-//! and bulk-inserts all 10 `dwarf_*` tables in a single transaction without touching
+//! and bulk-inserts all 11 `dwarf_*` tables in a single transaction without touching
 //! `meta` or renaming the staging file.
 
 use std::ffi::{CStr, CString};
@@ -89,6 +89,7 @@ pub struct TypeRow {
     pub is_non_trivial_for_calls: bool,
     pub is_stl_stub: bool,
     pub is_referenced: bool,
+    pub abi_class: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -201,6 +202,18 @@ pub struct InlineRow {
     pub call_line: Option<i64>,
 }
 
+#[derive(Clone, Debug)]
+pub struct GlobalRow {
+    pub global_id: i64,
+    pub unit_id: i64,
+    pub address: i64,
+    pub linkage_name: Option<String>,
+    pub qualified_name: String,
+    pub type_id: i64,
+    pub byte_size: Option<i64>,
+    pub is_static_member: bool,
+}
+
 #[derive(Default)]
 pub struct DwarfBatch {
     pub units: Vec<UnitRow>,
@@ -213,6 +226,7 @@ pub struct DwarfBatch {
     pub parameters: Vec<ParameterRow>,
     pub variables: Vec<VariableRow>,
     pub inlines: Vec<InlineRow>,
+    pub globals: Vec<GlobalRow>,
 }
 
 struct DbConn {
@@ -331,9 +345,9 @@ impl DbConn {
             return Err(db_err(self.ptr, "Failed querying sqlite_master"));
         }
         let count = unsafe { sqlite3_column_int64(stmt.ptr, 0) };
-        if count < 10 {
+        if count < 11 {
             return Err(format!(
-                "Staging SQLite database is missing pre-initialized dwarf_* tables (found {count}/10)"
+                "Staging SQLite database is missing pre-initialized dwarf_* tables (found {count}/11)"
             ));
         }
         Ok(())
@@ -431,7 +445,7 @@ pub fn write_batch_to_staging_db(staging_path: &Path, batch: &DwarfBatch) -> Res
         }
         {
             let stmt = conn.prepare(
-                "INSERT INTO dwarf_types (type_id, kind, qualified_name, byte_size, target_type_id, array_count, containing_type_id, vtable_symbol, vtable_address, is_declaration, is_non_trivial_for_calls, is_stl_stub, is_referenced) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                "INSERT INTO dwarf_types (type_id, kind, qualified_name, byte_size, target_type_id, array_count, containing_type_id, vtable_symbol, vtable_address, is_declaration, is_non_trivial_for_calls, is_stl_stub, is_referenced, abi_class) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             )?;
             for t in &batch.types {
                 stmt.bind_i64(1, t.type_id)?;
@@ -447,6 +461,7 @@ pub fn write_batch_to_staging_db(staging_path: &Path, batch: &DwarfBatch) -> Res
                 stmt.bind_bool(11, t.is_non_trivial_for_calls)?;
                 stmt.bind_bool(12, t.is_stl_stub)?;
                 stmt.bind_bool(13, t.is_referenced)?;
+                stmt.bind_opt_str(14, t.abi_class.as_deref())?;
                 stmt.step_and_reset()?;
             }
         }
@@ -592,6 +607,22 @@ pub fn write_batch_to_staging_db(staging_path: &Path, batch: &DwarfBatch) -> Res
                 stmt.step_and_reset()?;
             }
         }
+        {
+            let stmt = conn.prepare(
+                "INSERT INTO dwarf_globals (global_id, unit_id, address, linkage_name, qualified_name, type_id, byte_size, is_static_member) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )?;
+            for g in &batch.globals {
+                stmt.bind_i64(1, g.global_id)?;
+                stmt.bind_i64(2, g.unit_id)?;
+                stmt.bind_i64(3, g.address)?;
+                stmt.bind_opt_str(4, g.linkage_name.as_deref())?;
+                stmt.bind_str(5, &g.qualified_name)?;
+                stmt.bind_i64(6, g.type_id)?;
+                stmt.bind_opt_i64(7, g.byte_size)?;
+                stmt.bind_bool(8, g.is_static_member)?;
+                stmt.step_and_reset()?;
+            }
+        }
         Ok(())
     })();
 
@@ -601,4 +632,418 @@ pub fn write_batch_to_staging_db(staging_path: &Path, batch: &DwarfBatch) -> Res
     }
     conn.exec("COMMIT;")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    const SQLITE_OPEN_CREATE: c_int = 0x0000_0004;
+
+    #[link(name = "sqlite3")]
+    unsafe extern "C" {
+        fn sqlite3_column_text(stmt: *mut Sqlite3Stmt, i_col: c_int) -> *const c_char;
+    }
+
+    static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    struct TempDb {
+        path: PathBuf,
+    }
+
+    impl TempDb {
+        fn new(name: &str) -> Self {
+            let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "twdll_dwarf_test_{name}_{}_{n}.sqlite",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_file(&path);
+            Self { path }
+        }
+
+        fn open_with_ddl(&self, ddl: &str) -> DbConn {
+            let c_path = CString::new(self.path.to_string_lossy().as_bytes()).unwrap();
+            let mut ptr: *mut Sqlite3 = ptr::null_mut();
+            let rc = unsafe {
+                sqlite3_open_v2(
+                    c_path.as_ptr(),
+                    &mut ptr,
+                    SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+                    ptr::null(),
+                )
+            };
+            let conn = DbConn { ptr };
+            assert_eq!(rc, SQLITE_OK);
+            conn.exec(ddl).unwrap();
+            conn
+        }
+    }
+
+    impl Drop for TempDb {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    const DDL_11_TABLES: &str = "
+        CREATE TABLE dwarf_units (
+            unit_id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            comp_dir TEXT NOT NULL,
+            producer TEXT NOT NULL,
+            language INTEGER NOT NULL
+        );
+        CREATE TABLE dwarf_types (
+            type_id INTEGER PRIMARY KEY,
+            kind TEXT NOT NULL,
+            qualified_name TEXT NOT NULL,
+            byte_size INTEGER,
+            target_type_id INTEGER,
+            array_count INTEGER,
+            containing_type_id INTEGER,
+            vtable_symbol TEXT,
+            vtable_address INTEGER,
+            is_declaration INTEGER NOT NULL DEFAULT 0,
+            is_non_trivial_for_calls INTEGER NOT NULL DEFAULT 0,
+            is_stl_stub INTEGER NOT NULL DEFAULT 0,
+            is_referenced INTEGER NOT NULL DEFAULT 0,
+            abi_class TEXT
+        );
+        CREATE TABLE dwarf_members (
+            member_id INTEGER PRIMARY KEY,
+            parent_type_id INTEGER NOT NULL,
+            ordinal INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            member_type_id INTEGER NOT NULL,
+            byte_offset INTEGER NOT NULL,
+            byte_size INTEGER NOT NULL,
+            bit_offset INTEGER,
+            bit_size INTEGER,
+            is_artificial INTEGER NOT NULL DEFAULT 0,
+            is_flattened_base_member INTEGER NOT NULL DEFAULT 0,
+            is_layout_conflict INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE dwarf_inheritance (
+            inheritance_id INTEGER PRIMARY KEY,
+            derived_type_id INTEGER NOT NULL,
+            base_type_id INTEGER NOT NULL,
+            byte_offset INTEGER,
+            vbase_vtable_offset INTEGER,
+            is_virtual INTEGER NOT NULL DEFAULT 0,
+            is_empty_base INTEGER NOT NULL DEFAULT 0,
+            has_tail_padding_overlap INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE dwarf_vtable_entries (
+            class_type_id INTEGER NOT NULL,
+            slot_index INTEGER NOT NULL,
+            method_name TEXT NOT NULL,
+            linkage_name TEXT,
+            function_id INTEGER,
+            target_address INTEGER,
+            is_pure_virtual INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (class_type_id, slot_index)
+        );
+        CREATE TABLE dwarf_enumerators (
+            enum_type_id INTEGER NOT NULL,
+            ordinal INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            value INTEGER NOT NULL,
+            PRIMARY KEY (enum_type_id, ordinal)
+        );
+        CREATE TABLE dwarf_functions (
+            function_id INTEGER PRIMARY KEY,
+            unit_id INTEGER NOT NULL,
+            address INTEGER,
+            byte_size INTEGER,
+            linkage_name TEXT,
+            qualified_name TEXT NOT NULL,
+            containing_type_id INTEGER,
+            return_type_id INTEGER,
+            vtable_slot_index INTEGER,
+            virtuality INTEGER NOT NULL DEFAULT 0,
+            is_inline INTEGER NOT NULL DEFAULT 0,
+            is_declaration INTEGER NOT NULL DEFAULT 0,
+            is_variadic INTEGER NOT NULL DEFAULT 0,
+            has_object_pointer INTEGER NOT NULL DEFAULT 0,
+            is_sret INTEGER NOT NULL DEFAULT 0,
+            decl_file TEXT,
+            decl_line INTEGER
+        );
+        CREATE TABLE dwarf_parameters (
+            function_id INTEGER NOT NULL,
+            ordinal INTEGER NOT NULL,
+            name TEXT,
+            type_id INTEGER NOT NULL,
+            is_artificial INTEGER NOT NULL DEFAULT 0,
+            is_object_pointer INTEGER NOT NULL DEFAULT 0,
+            storage_kind TEXT NOT NULL,
+            dwarf_reg INTEGER,
+            reg_name TEXT,
+            stack_offset INTEGER,
+            PRIMARY KEY (function_id, ordinal)
+        );
+        CREATE TABLE dwarf_variables (
+            variable_id INTEGER PRIMARY KEY,
+            function_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            type_id INTEGER NOT NULL,
+            range_index INTEGER NOT NULL DEFAULT 0,
+            start_address INTEGER NOT NULL,
+            end_address INTEGER NOT NULL,
+            first_use_offset INTEGER NOT NULL,
+            storage_kind TEXT NOT NULL,
+            reg_name TEXT,
+            stack_offset INTEGER,
+            const_value INTEGER
+        );
+        CREATE TABLE dwarf_inlines (
+            inline_id INTEGER PRIMARY KEY,
+            caller_function_id INTEGER NOT NULL,
+            callee_function_id INTEGER,
+            callee_name TEXT NOT NULL,
+            start_address INTEGER NOT NULL,
+            end_address INTEGER NOT NULL,
+            call_file TEXT,
+            call_line INTEGER
+        );
+        CREATE TABLE dwarf_globals (
+            global_id INTEGER PRIMARY KEY,
+            unit_id INTEGER NOT NULL,
+            address INTEGER NOT NULL UNIQUE,
+            linkage_name TEXT,
+            qualified_name TEXT NOT NULL,
+            type_id INTEGER NOT NULL,
+            byte_size INTEGER,
+            is_static_member INTEGER NOT NULL DEFAULT 0
+        );
+    ";
+
+    fn sample_batch() -> DwarfBatch {
+        DwarfBatch {
+            units: vec![UnitRow {
+                unit_id: 1,
+                name: "unit.cpp".to_string(),
+                comp_dir: "/build".to_string(),
+                producer: "clang 3.4.2".to_string(),
+                language: 4,
+            }],
+            types: vec![TypeRow {
+                type_id: 1,
+                kind: "struct",
+                qualified_name: "Vec2".to_string(),
+                byte_size: Some(16),
+                target_type_id: None,
+                array_count: None,
+                containing_type_id: None,
+                vtable_symbol: None,
+                vtable_address: None,
+                is_declaration: false,
+                is_non_trivial_for_calls: false,
+                is_stl_stub: false,
+                is_referenced: true,
+                abi_class: Some("sse,sse".to_string()),
+            }],
+            members: vec![MemberRow {
+                member_id: 1,
+                parent_type_id: 1,
+                ordinal: 0,
+                name: "x".to_string(),
+                member_type_id: 1,
+                byte_offset: 0,
+                byte_size: 8,
+                bit_offset: None,
+                bit_size: None,
+                is_artificial: false,
+                is_flattened_base_member: false,
+                is_layout_conflict: false,
+            }],
+            inheritances: vec![InheritanceRow {
+                inheritance_id: 1,
+                derived_type_id: 1,
+                base_type_id: 1,
+                byte_offset: Some(0),
+                vbase_vtable_offset: None,
+                is_virtual: false,
+                is_empty_base: false,
+                has_tail_padding_overlap: false,
+            }],
+            vtable_entries: vec![VtableEntryRow {
+                class_type_id: 1,
+                slot_index: 0,
+                method_name: "f".to_string(),
+                linkage_name: None,
+                function_id: Some(1),
+                target_address: Some(0x401000),
+                is_pure_virtual: false,
+            }],
+            enumerators: vec![EnumeratorRow {
+                enum_type_id: 1,
+                ordinal: 0,
+                name: "A".to_string(),
+                value: 0,
+            }],
+            functions: vec![FunctionRow {
+                function_id: 1,
+                unit_id: 1,
+                address: Some(0x401000),
+                byte_size: Some(16),
+                linkage_name: None,
+                qualified_name: "Vec2::f".to_string(),
+                containing_type_id: Some(1),
+                return_type_id: Some(1),
+                vtable_slot_index: None,
+                virtuality: 0,
+                is_inline: false,
+                is_declaration: false,
+                is_variadic: false,
+                has_object_pointer: true,
+                is_sret: false,
+                decl_file: None,
+                decl_line: None,
+            }],
+            parameters: vec![ParameterRow {
+                function_id: 1,
+                ordinal: 0,
+                name: Some("this".to_string()),
+                type_id: 1,
+                is_artificial: true,
+                is_object_pointer: true,
+                storage_kind: "register",
+                dwarf_reg: Some(5),
+                reg_name: Some("RDI".to_string()),
+                stack_offset: None,
+            }],
+            variables: vec![VariableRow {
+                variable_id: 1,
+                function_id: 1,
+                name: "v".to_string(),
+                type_id: 1,
+                range_index: 0,
+                start_address: 0x401000,
+                end_address: 0x401010,
+                first_use_offset: 0,
+                storage_kind: "register",
+                reg_name: Some("RAX".to_string()),
+                stack_offset: None,
+                const_value: None,
+            }],
+            inlines: vec![InlineRow {
+                inline_id: 1,
+                caller_function_id: 1,
+                callee_function_id: None,
+                callee_name: "helper".to_string(),
+                start_address: 0x401004,
+                end_address: 0x401008,
+                call_file: None,
+                call_line: None,
+            }],
+            globals: vec![GlobalRow {
+                global_id: 1,
+                unit_id: 1,
+                address: 0x57d0a0,
+                linkage_name: Some("_ZN17EMPIRE_APP_MODULE10s_instanceE".to_string()),
+                qualified_name: "EMPIRE_APP_MODULE::s_instance".to_string(),
+                type_id: 1,
+                byte_size: Some(16),
+                is_static_member: true,
+            }],
+        }
+    }
+
+    #[test]
+    fn test_write_batch_roundtrip_all_11_tables() {
+        let tmp = TempDb::new("roundtrip");
+        let conn = tmp.open_with_ddl(DDL_11_TABLES);
+        drop(conn);
+
+        let batch = sample_batch();
+        write_batch_to_staging_db(&tmp.path, &batch).unwrap();
+
+        let verify_conn = DbConn::open_existing(&tmp.path).unwrap();
+        for table in [
+            "dwarf_units",
+            "dwarf_types",
+            "dwarf_members",
+            "dwarf_inheritance",
+            "dwarf_vtable_entries",
+            "dwarf_enumerators",
+            "dwarf_functions",
+            "dwarf_parameters",
+            "dwarf_variables",
+            "dwarf_inlines",
+            "dwarf_globals",
+        ] {
+            let stmt = verify_conn
+                .prepare(&format!("SELECT COUNT(*) FROM {table}"))
+                .unwrap();
+            assert_eq!(unsafe { sqlite3_step(stmt.ptr) }, SQLITE_ROW);
+            assert_eq!(unsafe { sqlite3_column_int64(stmt.ptr, 0) }, 1);
+        }
+
+        let stmt = verify_conn
+            .prepare("SELECT abi_class FROM dwarf_types WHERE type_id = 1")
+            .unwrap();
+        assert_eq!(unsafe { sqlite3_step(stmt.ptr) }, SQLITE_ROW);
+        let text_ptr = unsafe { sqlite3_column_text(stmt.ptr, 0) };
+        assert!(!text_ptr.is_null());
+        let abi = unsafe { CStr::from_ptr(text_ptr) }.to_str().unwrap();
+        assert_eq!(abi, "sse,sse");
+
+        let gstmt = verify_conn
+            .prepare("SELECT address, qualified_name, is_static_member FROM dwarf_globals WHERE global_id = 1")
+            .unwrap();
+        assert_eq!(unsafe { sqlite3_step(gstmt.ptr) }, SQLITE_ROW);
+        assert_eq!(unsafe { sqlite3_column_int64(gstmt.ptr, 0) }, 0x57d0a0);
+        let qn_ptr = unsafe { sqlite3_column_text(gstmt.ptr, 1) };
+        assert_eq!(
+            unsafe { CStr::from_ptr(qn_ptr) }.to_str().unwrap(),
+            "EMPIRE_APP_MODULE::s_instance"
+        );
+        assert_eq!(unsafe { sqlite3_column_int64(gstmt.ptr, 2) }, 1);
+    }
+
+    #[test]
+    fn test_dwarf_globals_unique_address_enforced() {
+        let tmp = TempDb::new("unique_addr");
+        let conn = tmp.open_with_ddl(DDL_11_TABLES);
+        drop(conn);
+
+        let mut batch = sample_batch();
+        batch.globals.push(GlobalRow {
+            global_id: 2,
+            unit_id: 1,
+            address: 0x57d0a0,
+            linkage_name: None,
+            qualified_name: "dup".to_string(),
+            type_id: 1,
+            byte_size: Some(8),
+            is_static_member: false,
+        });
+        let err = write_batch_to_staging_db(&tmp.path, &batch).unwrap_err();
+        assert!(err.contains("UNIQUE"), "unexpected error: {err}");
+
+        let verify_conn = DbConn::open_existing(&tmp.path).unwrap();
+        let stmt = verify_conn
+            .prepare("SELECT COUNT(*) FROM dwarf_globals")
+            .unwrap();
+        assert_eq!(unsafe { sqlite3_step(stmt.ptr) }, SQLITE_ROW);
+        assert_eq!(unsafe { sqlite3_column_int64(stmt.ptr, 0) }, 0);
+    }
+
+    #[test]
+    fn test_verify_required_tables_rejects_fewer_than_11() {
+        let tmp = TempDb::new("missing_table");
+        let ddl_10 = DDL_11_TABLES
+            .split("CREATE TABLE dwarf_globals")
+            .next()
+            .unwrap();
+        let conn = tmp.open_with_ddl(ddl_10);
+        drop(conn);
+
+        let err = write_batch_to_staging_db(&tmp.path, &DwarfBatch::default()).unwrap_err();
+        assert!(err.contains("10/11"), "unexpected error: {err}");
+    }
 }

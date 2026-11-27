@@ -14,6 +14,23 @@ pub struct ElfVtableIndex {
     pub ztv_by_class: HashMap<String, ZtvSymbolInfo>,
     pub pure_virtual_addrs: HashSet<u64>,
     pub func_sym_by_addr: HashMap<u64, String>,
+    pub data_sym_by_name: HashMap<String, u64>,
+    pub ctor_sym_names: HashSet<String>,
+}
+
+fn is_indexable_data_symbol(name: &str, addr: u64, kind: SymbolKind) -> bool {
+    addr != 0
+        && !name.is_empty()
+        && matches!(kind, SymbolKind::Data | SymbolKind::Unknown)
+        && !name.starts_with("_ZTV")
+        && !name.starts_with("_ZTI")
+}
+
+fn is_itanium_ctor_symbol(name: &str, addr: u64, kind: SymbolKind) -> bool {
+    addr != 0
+        && kind == SymbolKind::Text
+        && name.starts_with("_Z")
+        && (name.contains("C1E") || name.contains("C2E"))
 }
 
 fn parse_len_ident(s: &str) -> Option<(String, &str)> {
@@ -72,6 +89,8 @@ pub fn build_elf_vtable_index(obj: &object::File<'_>) -> ElfVtableIndex {
     let mut rtti_addrs: HashSet<u64> = HashSet::new();
     let mut pure_virtual_addrs: HashSet<u64> = HashSet::new();
     let mut func_sym_by_addr: HashMap<u64, String> = HashMap::new();
+    let mut data_sym_by_name: HashMap<String, u64> = HashMap::new();
+    let mut ctor_sym_names: HashSet<String> = HashSet::new();
 
     for sym in obj.symbols() {
         let Ok(name) = sym.name() else { continue };
@@ -88,6 +107,15 @@ pub fn build_elf_vtable_index(obj: &object::File<'_>) -> ElfVtableIndex {
             func_sym_by_addr
                 .entry(addr)
                 .or_insert_with(|| name.to_string());
+        }
+
+        if !sym.is_undefined() {
+            if is_itanium_ctor_symbol(name, addr, sym.kind()) {
+                ctor_sym_names.insert(name.to_string());
+            }
+            if is_indexable_data_symbol(name, addr, sym.kind()) {
+                data_sym_by_name.entry(name.to_string()).or_insert(addr);
+            }
         }
     }
     for sym in obj.dynamic_symbols() {
@@ -158,12 +186,15 @@ pub fn build_elf_vtable_index(obj: &object::File<'_>) -> ElfVtableIndex {
         ztv_by_class,
         pure_virtual_addrs,
         func_sym_by_addr,
+        data_sym_by_name,
+        ctor_sym_names,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_itanium_ztv_name;
+    use super::{is_indexable_data_symbol, is_itanium_ctor_symbol, parse_itanium_ztv_name};
+    use object::SymbolKind;
 
     #[test]
     fn test_parse_itanium_ztv_name() {
@@ -179,5 +210,66 @@ mod tests {
             parse_itanium_ztv_name("_ZTVNSt6locale5facetE").as_deref(),
             Some("std::locale::facet")
         );
+    }
+
+    #[test]
+    fn test_data_and_ctor_symbol_filtering() {
+        assert!(is_indexable_data_symbol(
+            "_ZN17EMPIRE_APP_MODULE10s_instanceE",
+            0x57d0a0,
+            SymbolKind::Data
+        ));
+        assert!(is_indexable_data_symbol(
+            "g_unknown_kind_data",
+            0x3095a40,
+            SymbolKind::Unknown
+        ));
+        assert!(!is_indexable_data_symbol(
+            "_ZTV4UNIT",
+            0x37a2fb0,
+            SymbolKind::Data
+        ));
+        assert!(!is_indexable_data_symbol(
+            "_ZTI4UNIT",
+            0x37a2fc0,
+            SymbolKind::Data
+        ));
+        assert!(!is_indexable_data_symbol(
+            "g_zero",
+            0,
+            SymbolKind::Data
+        ));
+        assert!(!is_indexable_data_symbol("", 0x1000, SymbolKind::Data));
+        assert!(!is_indexable_data_symbol(
+            "_ZN4UNIT3fooEv",
+            0x401000,
+            SymbolKind::Text
+        ));
+
+        assert!(is_itanium_ctor_symbol(
+            "_ZN15TEMPLATE_HANDLEC1ERKS_",
+            0x402000,
+            SymbolKind::Text
+        ));
+        assert!(is_itanium_ctor_symbol(
+            "_ZN15TEMPLATE_HANDLEC2EOS_",
+            0x402100,
+            SymbolKind::Text
+        ));
+        assert!(!is_itanium_ctor_symbol(
+            "_ZN4UNIT3fooEv",
+            0x401000,
+            SymbolKind::Text
+        ));
+        assert!(!is_itanium_ctor_symbol(
+            "_ZN15TEMPLATE_HANDLEC1ERKS_",
+            0,
+            SymbolKind::Text
+        ));
+        assert!(!is_itanium_ctor_symbol(
+            "_ZN15TEMPLATE_HANDLEC1ERKS_",
+            0x402000,
+            SymbolKind::Data
+        ));
     }
 }

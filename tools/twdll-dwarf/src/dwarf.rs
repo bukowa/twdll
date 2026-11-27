@@ -5,8 +5,8 @@ use fnv::{FnvHashMap, FnvHashSet};
 use object::{Object, ObjectSection};
 
 use crate::db::{
-    DwarfBatch, EnumeratorRow, FunctionRow, InlineRow, ParameterRow, TypeRow, UnitRow, VariableRow,
-    VtableEntryRow,
+    DwarfBatch, EnumeratorRow, FunctionRow, GlobalRow, InlineRow, ParameterRow, TypeRow, UnitRow,
+    VariableRow, VtableEntryRow,
 };
 use crate::layout::{is_stl_stub_name, resolve_struct_layout, RawInheritSpec, RawMemberSpec};
 use crate::vtable::build_elf_vtable_index;
@@ -81,6 +81,43 @@ struct RawVtableDecl {
 }
 
 #[derive(Clone, Debug)]
+struct CuGlobalDecl {
+    qual_name: String,
+    type_off: Option<usize>,
+    linkage_name: Option<String>,
+    is_static_member: bool,
+}
+
+#[derive(Clone, Debug)]
+struct CuGlobalVar {
+    name: Option<String>,
+    qual_name: String,
+    type_off: Option<usize>,
+    linkage_name: Option<String>,
+    specification_off: Option<usize>,
+    abstract_origin_off: Option<usize>,
+    addr: Option<u64>,
+    is_static_member: bool,
+}
+
+#[derive(Clone, Debug)]
+struct PendingGlobal {
+    unit_id: i64,
+    address: u64,
+    linkage_name: Option<String>,
+    qualified_name: String,
+    type_id: i64,
+    is_static_member: bool,
+}
+
+#[derive(Clone, Debug)]
+struct CandidateCopyCtor {
+    class_tid: i64,
+    has_concrete_def: bool,
+    linkage_name: Option<String>,
+}
+
+#[derive(Clone, Debug)]
 struct CuType {
     kind: &'static str,
     name: Option<String>,
@@ -92,7 +129,6 @@ struct CuType {
     is_decl: bool,
     has_virtual_method: bool,
     has_destructor: bool,
-    has_user_copy_or_move_ctor: bool,
     members: Vec<CuMember>,
     inherits: Vec<CuInherit>,
     enumerators: Vec<(String, i64)>,
@@ -597,6 +633,34 @@ fn file_path_from_unit<R: gimli::Reader<Offset = usize>>(
     Some(file_name.to_string())
 }
 
+fn parse_op_addr_expr<R: gimli::Reader<Offset = usize>>(
+    expr: gimli::Expression<R>,
+    encoding: gimli::Encoding,
+) -> Option<u64> {
+    let mut ops = expr.operations(encoding);
+    let first = ops.next().ok()??;
+    if !matches!(ops.next(), Ok(None)) {
+        return None;
+    }
+    match first {
+        gimli::Operation::Address { address } if address != 0 => Some(address),
+        _ => None,
+    }
+}
+
+fn parse_op_addr<R: gimli::Reader<Offset = usize>>(
+    unit: &gimli::UnitRef<'_, R>,
+    val: &gimli::AttributeValue<R>,
+) -> Option<u64> {
+    match val {
+        gimli::AttributeValue::Exprloc(expr) => parse_op_addr_expr(expr.clone(), unit.encoding()),
+        gimli::AttributeValue::Block(bytes) => {
+            parse_op_addr_expr(gimli::Expression(bytes.clone()), unit.encoding())
+        }
+        _ => None,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
     unit_id: i64,
@@ -608,6 +672,8 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
     eh_cfa: &EhCfaIndex,
     cu_types: &mut FnvHashMap<usize, CuType>,
     cu_subprogs: &mut FnvHashMap<usize, CuSubprog>,
+    cu_global_decls: &mut FnvHashMap<usize, CuGlobalDecl>,
+    cu_globals: &mut Vec<CuGlobalVar>,
 ) {
     let entry = node.entry();
     let tag = entry.tag();
@@ -629,6 +695,7 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
     let mut vtable_slot_index: Option<i64> = None;
     let mut is_inline = false;
     let mut frame_base_attr: Option<gimli::AttributeValue<R>> = None;
+    let mut location_attr: Option<gimli::AttributeValue<R>> = None;
     let mut decl_file: Option<String> = None;
     let mut decl_line: Option<i64> = None;
 
@@ -710,6 +777,9 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
             gimli::DW_AT_frame_base => {
                 frame_base_attr = Some(attr.value());
             }
+            gimli::DW_AT_location => {
+                location_attr = Some(attr.value());
+            }
             gimli::DW_AT_decl_file => {
                 if let gimli::AttributeValue::FileIndex(fidx) = attr.value() {
                     decl_file = file_path_from_unit(unit, fidx);
@@ -750,6 +820,8 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                     eh_cfa,
                     cu_types,
                     cu_subprogs,
+                    cu_global_decls,
+                    cu_globals,
                 );
             }
         }
@@ -767,9 +839,43 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                     eh_cfa,
                     cu_types,
                     cu_subprogs,
+                    cu_global_decls,
+                    cu_globals,
                 );
             }
             ns_stack.pop();
+        }
+        gimli::DW_TAG_variable if !in_function_scope => {
+            let qual_name = make_qual(ns_stack, name.as_deref(), off);
+            let is_static_member = enclosing_type_off.is_some();
+            if name.is_some() || type_off.is_some() || linkage_name.is_some() {
+                cu_global_decls.insert(
+                    off,
+                    CuGlobalDecl {
+                        qual_name: qual_name.clone(),
+                        type_off,
+                        linkage_name: linkage_name.clone(),
+                        is_static_member,
+                    },
+                );
+            }
+            let addr = location_attr.as_ref().and_then(|a| parse_op_addr(unit, a));
+            if addr.is_some()
+                || linkage_name.is_some()
+                || specification_off.is_some()
+                || abstract_origin_off.is_some()
+            {
+                cu_globals.push(CuGlobalVar {
+                    name,
+                    qual_name,
+                    type_off,
+                    linkage_name,
+                    specification_off,
+                    abstract_origin_off,
+                    addr,
+                    is_static_member,
+                });
+            }
         }
         gimli::DW_TAG_structure_type
         | gimli::DW_TAG_class_type
@@ -801,6 +907,8 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                 let ctag = c.entry().tag();
                 match ctag {
                     gimli::DW_TAG_member => {
+                        let moff = c.entry().offset().to_unit_section_offset(unit).0;
+                        let mut m_linkage_name: Option<String> = None;
                         let mut m = CuMember {
                             name: String::new(),
                             type_off: None,
@@ -819,6 +927,13 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                                         && let Ok(st) = s.to_string()
                                     {
                                         m.name = st.to_string();
+                                    }
+                                }
+                                gimli::DW_AT_linkage_name | gimli::DW_AT_MIPS_linkage_name => {
+                                    if let Ok(s) = unit.attr_string(a.value())
+                                        && let Ok(st) = s.to_string()
+                                    {
+                                        m_linkage_name = Some(st.to_string());
                                     }
                                 }
                                 gimli::DW_AT_type => {
@@ -851,6 +966,30 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                                     }
                                 }
                                 _ => {}
+                            }
+                        }
+                        if m.is_decl && !in_function_scope && !m.name.is_empty() {
+                            let qname = format!("{}::{}", ns_stack.join("::"), m.name);
+                            cu_global_decls.insert(
+                                moff,
+                                CuGlobalDecl {
+                                    qual_name: qname.clone(),
+                                    type_off: m.type_off,
+                                    linkage_name: m_linkage_name.clone(),
+                                    is_static_member: true,
+                                },
+                            );
+                            if m_linkage_name.is_some() {
+                                cu_globals.push(CuGlobalVar {
+                                    name: Some(m.name.clone()),
+                                    qual_name: qname,
+                                    type_off: m.type_off,
+                                    linkage_name: m_linkage_name,
+                                    specification_off: None,
+                                    abstract_origin_off: None,
+                                    addr: None,
+                                    is_static_member: true,
+                                });
                             }
                         }
                         if m.name.is_empty() {
@@ -933,6 +1072,8 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                             eh_cfa,
                             cu_types,
                             cu_subprogs,
+                            cu_global_decls,
+                            cu_globals,
                         );
                         child_subprogs.push(child_off);
                     }
@@ -947,6 +1088,8 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                             eh_cfa,
                             cu_types,
                             cu_subprogs,
+                            cu_global_decls,
+                            cu_globals,
                         );
                     }
                 }
@@ -991,7 +1134,6 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                     is_decl,
                     has_virtual_method,
                     has_destructor,
-                    has_user_copy_or_move_ctor: false,
                     members,
                     inherits,
                     enumerators,
@@ -1068,7 +1210,6 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
             };
             let default_size = match kind {
                 "pointer" | "reference" | "rvalue_reference" => Some(8),
-                "ptr_to_member" => Some(byte_size.unwrap_or(16)),
                 _ => byte_size,
             };
             cu_types.insert(
@@ -1084,7 +1225,6 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                     is_decl,
                     has_virtual_method: false,
                     has_destructor: false,
-                    has_user_copy_or_move_ctor: false,
                     members: Vec::new(),
                     inherits: Vec::new(),
                     enumerators: Vec::new(),
@@ -1140,6 +1280,8 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                 &mut inlines,
                 cu_types,
                 cu_subprogs,
+                cu_global_decls,
+                cu_globals,
             );
 
             cu_subprogs.insert(
@@ -1183,6 +1325,8 @@ fn walk_cu_node<R: gimli::Reader<Offset = usize>>(
                     eh_cfa,
                     cu_types,
                     cu_subprogs,
+                    cu_global_decls,
+                    cu_globals,
                 );
             }
         }
@@ -1207,6 +1351,8 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
     inlines: &mut Vec<CuInline>,
     cu_types: &mut FnvHashMap<usize, CuType>,
     cu_subprogs: &mut FnvHashMap<usize, CuSubprog>,
+    cu_global_decls: &mut FnvHashMap<usize, CuGlobalDecl>,
+    cu_globals: &mut Vec<CuGlobalVar>,
 ) {
     let mut ch = node.children();
     while let Ok(Some(c)) = ch.next() {
@@ -1404,6 +1550,8 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
                     inlines,
                     cu_types,
                     cu_subprogs,
+                    cu_global_decls,
+                    cu_globals,
                 );
             }
             gimli::DW_TAG_lexical_block if low_pc.is_some() => {
@@ -1424,6 +1572,8 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
                     inlines,
                     cu_types,
                     cu_subprogs,
+                    cu_global_decls,
+                    cu_globals,
                 );
             }
             _ if low_pc.is_some() => {
@@ -1437,6 +1587,8 @@ fn walk_subprog_body<R: gimli::Reader<Offset = usize>>(
                     eh_cfa,
                     cu_types,
                     cu_subprogs,
+                    cu_global_decls,
+                    cu_globals,
                 );
             }
             _ => {}
@@ -1636,12 +1788,31 @@ fn align_concrete_params<'a>(
     aligned
 }
 
-fn detect_copy_or_move_ctors(
-    cu_types: &mut FnvHashMap<usize, CuType>,
+fn collect_copy_or_move_ctor_candidates(
+    cu_types: &FnvHashMap<usize, CuType>,
     cu_subprogs: &FnvHashMap<usize, CuSubprog>,
-) {
-    let mut copy_ctor_classes = Vec::new();
+) -> Vec<(usize, bool, Option<String>)> {
+    let mut concrete_spec_targets: FnvHashSet<usize> = FnvHashSet::default();
+    let mut spec_linkages: FnvHashMap<usize, String> = FnvHashMap::default();
     for sp in cu_subprogs.values() {
+        if sp.low_pc.is_some() || sp.is_inline {
+            if let Some(spec_off) = sp.specification_off {
+                concrete_spec_targets.insert(spec_off);
+                if let Some(ln) = &sp.linkage_name {
+                    spec_linkages.entry(spec_off).or_insert_with(|| ln.clone());
+                }
+            }
+            if let Some(ao_off) = sp.abstract_origin_off {
+                concrete_spec_targets.insert(ao_off);
+                if let Some(ln) = &sp.linkage_name {
+                    spec_linkages.entry(ao_off).or_insert_with(|| ln.clone());
+                }
+            }
+        }
+    }
+
+    let mut candidates = Vec::new();
+    for (&sp_off, sp) in cu_subprogs {
         if sp.is_artificial {
             continue;
         }
@@ -1665,13 +1836,443 @@ fn detect_copy_or_move_ctors(
             && let Some(unwrapped) = unwrap_cv_typedef(cu_types, target_off)
             && unwrapped == cls_off
         {
-            copy_ctor_classes.push(cls_off);
+            let has_concrete_def =
+                sp.low_pc.is_some() || sp.is_inline || concrete_spec_targets.contains(&sp_off);
+            let linkage_name = sp
+                .linkage_name
+                .clone()
+                .or_else(|| spec_linkages.get(&sp_off).cloned());
+            candidates.push((cls_off, has_concrete_def, linkage_name));
         }
     }
-    for cls_off in copy_ctor_classes {
-        if let Some(cls) = cu_types.get_mut(&cls_off) {
-            cls.has_user_copy_or_move_ctor = true;
+    candidates
+}
+
+fn should_replace_global(
+    existing: &PendingGlobal,
+    candidate: &PendingGlobal,
+    types: &[TypeRow],
+) -> bool {
+    let rank = |g: &PendingGlobal| -> (bool, bool, bool, std::cmp::Reverse<i64>) {
+        let is_concrete_non_void = g.type_id != 1
+            && types
+                .get((g.type_id - 1) as usize)
+                .is_some_and(|t| !t.is_declaration);
+        (
+            is_concrete_non_void,
+            g.is_static_member,
+            g.linkage_name.is_some(),
+            std::cmp::Reverse(g.unit_id),
+        )
+    };
+    rank(candidate) > rank(existing)
+}
+
+fn apply_verified_copy_or_move_ctors(
+    types: &mut [TypeRow],
+    candidates: &[CandidateCopyCtor],
+    ctor_sym_names: &HashSet<String>,
+    func_id_by_linkage: &HashMap<String, i64>,
+) {
+    for c in candidates {
+        let verified = c.has_concrete_def
+            || c.linkage_name.as_ref().is_some_and(|ln| {
+                ctor_sym_names.contains(ln) || func_id_by_linkage.contains_key(ln)
+            });
+        if verified && let Some(t) = types.get_mut((c.class_tid - 1) as usize) {
+            t.is_non_trivial_for_calls = true;
         }
+    }
+}
+
+fn is_int_or_ptr_abi_param(types: &[TypeRow], tid: i64) -> bool {
+    let utid = resolve_global_underlying(types, tid);
+    let Some(t) = types.get((utid - 1) as usize) else {
+        return false;
+    };
+    match t.kind {
+        "pointer" | "reference" | "rvalue_reference" | "enum" => true,
+        "primitive" => {
+            t.qualified_name != "void" && !is_float_primitive_name(&t.qualified_name)
+        }
+        _ => false,
+    }
+}
+
+fn apply_empirical_rdi_rsi_triviality(
+    types: &mut [TypeRow],
+    functions: &[FunctionRow],
+    func_param0_info: &FnvHashMap<i64, (i64, i64)>,
+) {
+    let mut witnesses: FnvHashMap<i64, (usize, usize)> = FnvHashMap::default();
+    for f in functions {
+        if f.is_declaration || f.address.is_none() {
+            continue;
+        }
+        let Some(rt_id) = f.return_type_id else {
+            continue;
+        };
+        let u_rt = resolve_global_underlying(types, rt_id);
+        let Some(rt) = types.get((u_rt - 1) as usize) else {
+            continue;
+        };
+        if !matches!(rt.kind, "struct" | "class" | "union")
+            || rt.byte_size.is_none_or(|sz| sz <= 0 || sz > 16)
+        {
+            continue;
+        }
+        let Some(&(reg, param0_tid)) = func_param0_info.get(&f.function_id) else {
+            continue;
+        };
+        if !is_int_or_ptr_abi_param(types, param0_tid) {
+            continue;
+        }
+        let entry = witnesses.entry(u_rt).or_insert((0, 0));
+        if reg == 5 {
+            entry.0 += 1;
+        } else if reg == 4 {
+            entry.1 += 1;
+        }
+    }
+    for (u_rt, (rdi_count, rsi_count)) in witnesses {
+        if let Some(t) = types.get_mut((u_rt - 1) as usize) {
+            if rdi_count > 0 && rsi_count == 0 {
+                t.is_non_trivial_for_calls = false;
+            } else if rsi_count > 0 && rdi_count == 0 {
+                t.is_non_trivial_for_calls = true;
+            }
+        }
+    }
+}
+
+fn resolve_ptr_to_member_sizes(types: &mut [TypeRow]) {
+    let target_kinds: Vec<(&'static str, Option<i64>, Option<i64>)> = types
+        .iter()
+        .map(|t| (t.kind, t.byte_size, t.target_type_id))
+        .collect();
+    for (idx, &(kind, byte_size, target_type_id)) in target_kinds.iter().enumerate() {
+        if kind != "ptr_to_member" || byte_size.is_some() {
+            continue;
+        }
+        let resolved = target_type_id
+            .map(|ttid| resolve_global_underlying(types, ttid))
+            .and_then(|utid| types.get((utid - 1) as usize))
+            .is_some_and(|t| t.kind == "subroutine");
+        types[idx].byte_size = Some(if resolved { 16 } else { 8 });
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum EightbyteClass {
+    NoClass,
+    Integer,
+    Sse,
+    Memory,
+}
+
+fn merge_eightbyte(a: EightbyteClass, b: EightbyteClass) -> EightbyteClass {
+    if a == b {
+        return a;
+    }
+    if a == EightbyteClass::NoClass {
+        return b;
+    }
+    if b == EightbyteClass::NoClass {
+        return a;
+    }
+    if a == EightbyteClass::Memory || b == EightbyteClass::Memory {
+        return EightbyteClass::Memory;
+    }
+    if a == EightbyteClass::Integer || b == EightbyteClass::Integer {
+        return EightbyteClass::Integer;
+    }
+    EightbyteClass::Sse
+}
+
+fn is_x87_or_128_float_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.contains("long double")
+        || lower.contains("float80")
+        || lower.contains("float128")
+        || lower.contains("complex")
+}
+
+fn is_float_primitive_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    !is_x87_or_128_float_name(&lower) && (lower.contains("float") || lower.contains("double"))
+}
+
+fn classify_type_bytes_into_eightbytes(
+    tid: i64,
+    base_offset: i64,
+    types: &[TypeRow],
+    raw_direct_members: &FnvHashMap<i64, Vec<RawMemberSpec>>,
+    raw_direct_inherits: &FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>>,
+    eb: &mut [EightbyteClass; 2],
+    depth: usize,
+) -> bool {
+    if depth > 16 || base_offset < 0 {
+        return false;
+    }
+    let utid = resolve_global_underlying(types, tid);
+    let Some(t) = types.get((utid - 1) as usize) else {
+        return false;
+    };
+    let add_span = |start: i64, size: i64, cls: EightbyteClass, out: &mut [EightbyteClass; 2]| -> bool {
+        if start < 0 || size <= 0 || start + size > 16 {
+            return false;
+        }
+        if start < 8 {
+            out[0] = merge_eightbyte(out[0], cls);
+        }
+        if start + size > 8 {
+            out[1] = merge_eightbyte(out[1], cls);
+        }
+        true
+    };
+
+    match t.kind {
+        "pointer" | "reference" | "rvalue_reference" => {
+            if base_offset % 8 != 0 {
+                return false;
+            }
+            add_span(base_offset, 8, EightbyteClass::Integer, eb)
+        }
+        "ptr_to_member" => {
+            if base_offset % 8 != 0 {
+                return false;
+            }
+            let sz = t.byte_size.unwrap_or(8);
+            add_span(base_offset, sz, EightbyteClass::Integer, eb)
+        }
+        "enum" => {
+            let sz = t.byte_size.unwrap_or(4).max(1);
+            let align = sz.min(8);
+            if align > 1 && base_offset % align != 0 {
+                return false;
+            }
+            add_span(base_offset, sz, EightbyteClass::Integer, eb)
+        }
+        "primitive" => {
+            let sz = t.byte_size.unwrap_or(0);
+            if sz <= 0 || t.qualified_name == "void" || is_x87_or_128_float_name(&t.qualified_name)
+            {
+                return false;
+            }
+            if is_float_primitive_name(&t.qualified_name) {
+                if sz != 4 && sz != 8 {
+                    return false;
+                }
+                if base_offset % sz != 0 {
+                    return false;
+                }
+                return add_span(base_offset, sz, EightbyteClass::Sse, eb);
+            }
+            if sz > 16 {
+                return false;
+            }
+            let align = sz.min(8);
+            if align > 1 && base_offset % align != 0 {
+                return false;
+            }
+            if sz == 16 {
+                return add_span(base_offset, 8, EightbyteClass::Integer, eb)
+                    && add_span(base_offset + 8, 8, EightbyteClass::Integer, eb);
+            }
+            add_span(base_offset, sz, EightbyteClass::Integer, eb)
+        }
+        "array" => {
+            let Some(count) = t.array_count else {
+                return false;
+            };
+            let Some(elem_tid) = t.target_type_id else {
+                return false;
+            };
+            if count <= 0 || count > 16 {
+                return false;
+            }
+            let elem_sz = type_byte_size_val(types, elem_tid);
+            if elem_sz <= 0 || count.saturating_mul(elem_sz) > 16 {
+                return false;
+            }
+            for idx in 0..count {
+                if !classify_type_bytes_into_eightbytes(
+                    elem_tid,
+                    base_offset + idx * elem_sz,
+                    types,
+                    raw_direct_members,
+                    raw_direct_inherits,
+                    eb,
+                    depth + 1,
+                ) {
+                    return false;
+                }
+            }
+            true
+        }
+        "struct" | "class" | "union" => {
+            if t.is_non_trivial_for_calls || t.is_declaration || t.is_stl_stub {
+                return false;
+            }
+            let Some(sz) = t.byte_size else {
+                return false;
+            };
+            if sz <= 0 || sz > 16 || base_offset + sz > 16 {
+                return false;
+            }
+            if let Some(inhs) = raw_direct_inherits.get(&utid) {
+                for &(btid, boff, _, is_virt) in inhs {
+                    if is_virt {
+                        return false;
+                    }
+                    let Some(off) = boff else {
+                        return false;
+                    };
+                    if !classify_type_bytes_into_eightbytes(
+                        btid,
+                        base_offset + off,
+                        types,
+                        raw_direct_members,
+                        raw_direct_inherits,
+                        eb,
+                        depth + 1,
+                    ) {
+                        return false;
+                    }
+                }
+            }
+            if let Some(mems) = raw_direct_members.get(&utid) {
+                for m in mems {
+                    if m.bit_size.is_some() {
+                        if !add_span(
+                            base_offset + m.byte_offset,
+                            m.byte_size.max(1),
+                            EightbyteClass::Integer,
+                            eb,
+                        ) {
+                            return false;
+                        }
+                        continue;
+                    }
+                    if !classify_type_bytes_into_eightbytes(
+                        m.member_type_id,
+                        base_offset + m.byte_offset,
+                        types,
+                        raw_direct_members,
+                        raw_direct_inherits,
+                        eb,
+                        depth + 1,
+                    ) {
+                        return false;
+                    }
+                }
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
+fn type_byte_size_val(types: &[TypeRow], mut tid: i64) -> i64 {
+    let mut mul: i64 = 1;
+    for _ in 0..12 {
+        let Some(t) = types.get((tid - 1) as usize) else {
+            break;
+        };
+        if t.kind == "array" {
+            mul = mul.saturating_mul(t.array_count.unwrap_or(1).max(1));
+            if let Some(target) = t.target_type_id {
+                tid = target;
+                continue;
+            }
+        }
+        if let Some(sz) = t.byte_size
+            && sz > 0
+        {
+            return sz.saturating_mul(mul);
+        }
+        if let Some(target) = t.target_type_id {
+            tid = target;
+        } else {
+            break;
+        }
+    }
+    mul.max(1)
+}
+
+fn classify_sysv_abi_class(
+    tid: i64,
+    types: &[TypeRow],
+    raw_direct_members: &FnvHashMap<i64, Vec<RawMemberSpec>>,
+    raw_direct_inherits: &FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>>,
+) -> Option<String> {
+    let utid = resolve_global_underlying(types, tid);
+    let t = types.get((utid - 1) as usize)?;
+    match t.kind {
+        "void" | "subroutine" | "array" => None,
+        "pointer" | "reference" | "rvalue_reference" | "enum" => Some("int".to_string()),
+        "ptr_to_member" => match t.byte_size {
+            Some(16) => Some("int,int".to_string()),
+            Some(8) => Some("int".to_string()),
+            _ => Some("memory".to_string()),
+        },
+        "primitive" => {
+            if t.qualified_name == "void" || t.byte_size == Some(0) {
+                None
+            } else if is_x87_or_128_float_name(&t.qualified_name) {
+                Some("memory".to_string())
+            } else if is_float_primitive_name(&t.qualified_name) {
+                match t.byte_size {
+                    Some(4) | Some(8) => Some("sse".to_string()),
+                    _ => Some("memory".to_string()),
+                }
+            } else {
+                match t.byte_size {
+                    Some(16) => Some("int,int".to_string()),
+                    Some(sz) if (1..=8).contains(&sz) => Some("int".to_string()),
+                    None => Some("int".to_string()),
+                    _ => Some("memory".to_string()),
+                }
+            }
+        }
+        "struct" | "class" | "union" => {
+            let Some(sz) = t.byte_size else {
+                return Some("memory".to_string());
+            };
+            if sz <= 0 || sz > 16 || t.is_non_trivial_for_calls || t.is_declaration || t.is_stl_stub
+            {
+                return Some("memory".to_string());
+            }
+            let mut eb = [EightbyteClass::NoClass, EightbyteClass::NoClass];
+            if !classify_type_bytes_into_eightbytes(
+                utid,
+                0,
+                types,
+                raw_direct_members,
+                raw_direct_inherits,
+                &mut eb,
+                0,
+            ) {
+                return Some("memory".to_string());
+            }
+            if sz <= 8 {
+                let label = match eb[0] {
+                    EightbyteClass::Sse => "sse",
+                    EightbyteClass::Integer | EightbyteClass::NoClass => "int",
+                    EightbyteClass::Memory => "memory",
+                };
+                return Some(label.to_string());
+            }
+            let label = match (eb[0], eb[1]) {
+                (EightbyteClass::Integer, EightbyteClass::Integer) => "int,int",
+                (EightbyteClass::Sse, EightbyteClass::Sse) => "sse,sse",
+                (EightbyteClass::Sse, EightbyteClass::Integer) => "sse,int",
+                (EightbyteClass::Integer, EightbyteClass::Sse) => "int,sse",
+                _ => "memory",
+            };
+            Some(label.to_string())
+        }
+        _ => None,
     }
 }
 
@@ -1729,6 +2330,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
         is_non_trivial_for_calls: false,
         is_stl_stub: false,
         is_referenced: true,
+        abi_class: None,
     });
     named_type_ids
         .entry("primitive")
@@ -1744,6 +2346,9 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
     let mut func_id_by_linkage: HashMap<String, i64> = HashMap::new();
     let mut func_id_by_address: FnvHashMap<i64, i64> = FnvHashMap::default();
     let mut pending_inline_linkages: Vec<(usize, String)> = Vec::new();
+    let mut all_copy_ctor_candidates: Vec<CandidateCopyCtor> = Vec::new();
+    let mut func_param0_info: FnvHashMap<i64, (i64, i64)> = FnvHashMap::default();
+    let mut pending_globals_by_addr: HashMap<u64, PendingGlobal> = HashMap::new();
 
     let mut unit_headers = dwarf.units();
     while let Some(header) = unit_headers
@@ -1812,6 +2417,8 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
         let mut ns_stack = Vec::new();
         let mut cu_types: FnvHashMap<usize, CuType> = FnvHashMap::default();
         let mut cu_subprogs: FnvHashMap<usize, CuSubprog> = FnvHashMap::default();
+        let mut cu_global_decls: FnvHashMap<usize, CuGlobalDecl> = FnvHashMap::default();
+        let mut cu_globals: Vec<CuGlobalVar> = Vec::new();
 
         walk_cu_node(
             unit_id,
@@ -1823,8 +2430,10 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
             &eh_cfa,
             &mut cu_types,
             &mut cu_subprogs,
+            &mut cu_global_decls,
+            &mut cu_globals,
         );
-        detect_copy_or_move_ctors(&mut cu_types, &cu_subprogs);
+        let cu_ctor_candidates = collect_copy_or_move_ctor_candidates(&cu_types, &cu_subprogs);
 
         // Map CU DIE offsets -> global canonical `type_id`
         let mut cu_to_global_type: FnvHashMap<usize, i64> =
@@ -1878,10 +2487,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                             types_out[idx].byte_size = ct.byte_size;
                         }
                     }
-                    if ct.has_virtual_method
-                        || ct.has_destructor
-                        || ct.has_user_copy_or_move_ctor
-                    {
+                    if ct.has_virtual_method || ct.has_destructor {
                         types_out[idx].is_non_trivial_for_calls = true;
                     }
                     if types_out[idx].target_type_id.is_none()
@@ -1914,9 +2520,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     .map(|z| (Some(z.symbol_name.clone()), Some(z.vtable_address as i64)))
                     .unwrap_or((None, None));
 
-                let direct_non_trivial = ct.has_virtual_method
-                    || ct.has_destructor
-                    || ct.has_user_copy_or_move_ctor;
+                let direct_non_trivial = ct.has_virtual_method || ct.has_destructor;
                 let stl_stub = is_stl_stub_name(&ct.qual_name);
 
                 types_out.push(TypeRow {
@@ -1933,6 +2537,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     is_non_trivial_for_calls: direct_non_trivial,
                     is_stl_stub: stl_stub,
                     is_referenced: false,
+                    abi_class: None,
                 });
 
                 if let Some(toff) = ct.target_off {
@@ -2023,6 +2628,7 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                     is_non_trivial_for_calls: false,
                     is_stl_stub: false,
                     is_referenced: false,
+                    abi_class: None,
                 });
                 tid
             }
@@ -2040,6 +2646,71 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                 &vtable_index.ztv_by_class,
                 0,
             );
+        }
+
+        for (cls_off, has_concrete_def, ln) in cu_ctor_candidates {
+            if let Some(&class_tid) = cu_to_global_type.get(&cls_off) {
+                all_copy_ctor_candidates.push(CandidateCopyCtor {
+                    class_tid,
+                    has_concrete_def,
+                    linkage_name: ln,
+                });
+            }
+        }
+
+        for g in cu_globals {
+            let spec = g
+                .specification_off
+                .or(g.abstract_origin_off)
+                .and_then(|o| cu_global_decls.get(&o));
+            let qualified_name = if let Some(s) = spec {
+                if g.specification_off.is_some()
+                    || g.abstract_origin_off.is_some()
+                    || g.name.is_none()
+                {
+                    s.qual_name.clone()
+                } else {
+                    g.qual_name
+                }
+            } else {
+                g.qual_name
+            };
+            let type_off = g.type_off.or_else(|| spec.and_then(|s| s.type_off));
+            let linkage_name = g
+                .linkage_name
+                .or_else(|| spec.and_then(|s| s.linkage_name.clone()));
+            let is_static_member = g.is_static_member || spec.is_some_and(|s| s.is_static_member);
+            let Some(addr) = g.addr.or_else(|| {
+                linkage_name
+                    .as_deref()
+                    .and_then(|ln| vtable_index.data_sym_by_name.get(ln).copied())
+            }) else {
+                continue;
+            };
+            if addr == 0 {
+                continue;
+            }
+            let type_id = type_off
+                .and_then(|o| cu_to_global_type.get(&o).copied())
+                .unwrap_or(1);
+            let candidate = PendingGlobal {
+                unit_id,
+                address: addr,
+                linkage_name,
+                qualified_name,
+                type_id,
+                is_static_member,
+            };
+            match pending_globals_by_addr.get_mut(&addr) {
+                Some(existing) => {
+                    if should_replace_global(existing, &candidate, &batch.types) {
+                        *existing = candidate;
+                    }
+                }
+                None => {
+                    pending_globals_by_addr.insert(addr, candidate);
+                }
+            }
         }
 
         // Record members, inheritances, enumerators, and vtable declarations for newly defined types
@@ -2338,6 +3009,19 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
                 });
             }
 
+            if let Some(first_param) = aligned_params.first()
+                && let Some(cp) = first_param.concrete
+                && let Some(reg) = cp.dwarf_reg
+            {
+                let p0_type_id = cp
+                    .type_off
+                    .or_else(|| first_param.mid.and_then(|p| p.type_off))
+                    .or_else(|| first_param.decl.and_then(|p| p.type_off))
+                    .and_then(|po| cu_to_global_type.get(&po).copied())
+                    .unwrap_or(1);
+                func_param0_info.insert(fid, (reg, p0_type_id));
+            }
+
             let param0_in_rsi = aligned_params
                 .first()
                 .and_then(|a| a.concrete)
@@ -2461,34 +3145,31 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
         }
     }
 
+    resolve_ptr_to_member_sizes(&mut batch.types);
+
     // Resolve concrete member byte sizes and propagate `is_non_trivial_for_calls` across the global type graph
 
-    let type_byte_size = |types: &[TypeRow], mut tid: i64| -> i64 {
-        let mut mul: i64 = 1;
-        for _ in 0..12 {
-            let Some(t) = types.get((tid - 1) as usize) else {
-                break;
-            };
-            if t.kind == "array" {
-                mul = mul.saturating_mul(t.array_count.unwrap_or(1).max(1));
-                if let Some(target) = t.target_type_id {
-                    tid = target;
-                    continue;
-                }
-            }
-            if let Some(sz) = t.byte_size
-                && sz > 0
-            {
-                return sz.saturating_mul(mul);
-            }
-            if let Some(target) = t.target_type_id {
-                tid = target;
-            } else {
-                break;
-            }
-        }
-        mul.max(1)
-    };
+    let type_byte_size = |types: &[TypeRow], tid: i64| -> i64 { type_byte_size_val(types, tid) };
+
+    let mut sorted_globals: Vec<PendingGlobal> = pending_globals_by_addr.into_values().collect();
+    sorted_globals.sort_unstable_by_key(|g| g.address);
+    for (idx, g) in sorted_globals.into_iter().enumerate() {
+        let byte_size = if g.type_id == 1 {
+            None
+        } else {
+            Some(type_byte_size(&batch.types, g.type_id))
+        };
+        batch.globals.push(GlobalRow {
+            global_id: (idx as i64) + 1,
+            unit_id: g.unit_id,
+            address: g.address as i64,
+            linkage_name: g.linkage_name,
+            qualified_name: g.qualified_name,
+            type_id: g.type_id,
+            byte_size,
+            is_static_member: g.is_static_member,
+        });
+    }
 
     let mut raw_direct_members: FnvHashMap<i64, Vec<RawMemberSpec>> =
         FnvHashMap::with_capacity_and_hasher(raw_pending_members.len(), Default::default());
@@ -2503,6 +3184,14 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
         }
         raw_direct_members.insert(tid, resolved);
     }
+
+    apply_verified_copy_or_move_ctors(
+        &mut batch.types,
+        &all_copy_ctor_candidates,
+        &vtable_index.ctor_sym_names,
+        &func_id_by_linkage,
+    );
+    apply_empirical_rdi_rsi_triviality(&mut batch.types, &batch.functions, &func_param0_info);
 
     // Fixed-point propagation of `is_non_trivial_for_calls` across bases and members
     for _ in 0..6 {
@@ -2544,6 +3233,16 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
         }
     }
 
+    for tid in 1..=(batch.types.len() as i64) {
+        let abi = classify_sysv_abi_class(
+            tid,
+            &batch.types,
+            &raw_direct_members,
+            &raw_direct_inherits,
+        );
+        batch.types[(tid - 1) as usize].abi_class = abi;
+    }
+
     // Finalize `dwarf_functions.is_sret` using both `param[0] == RSI` and return type `is_non_trivial_for_calls`
     for f in &mut batch.functions {
         if let Some(rt_id) = f.return_type_id
@@ -2551,7 +3250,13 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
             && let Some(rt) = batch.types.get((u_rt - 1) as usize)
             && matches!(rt.kind, "struct" | "class" | "union")
         {
-            if compute_return_is_sret(&batch.types, f.return_type_id) {
+            if func_param0_info
+                .get(&f.function_id)
+                .is_some_and(|&(reg, _)| reg == 5)
+                && rt.byte_size.unwrap_or(0) <= 16
+            {
+                f.is_sret = false;
+            } else if compute_return_is_sret(&batch.types, f.return_type_id) {
                 f.is_sret = true;
             }
         } else {
@@ -2826,6 +3531,9 @@ pub fn extract_elf_dwarf(elf_bytes: &[u8]) -> Result<DwarfBatch, String> {
     }
     for var in &batch.variables {
         enqueue(var.type_id, &mut batch.types, &mut queue);
+    }
+    for g in &batch.globals {
+        enqueue(g.type_id, &mut batch.types, &mut queue);
     }
 
     while let Some(tid) = queue.pop_front() {
@@ -3112,6 +3820,7 @@ mod tests {
             is_non_trivial_for_calls: false,
             is_stl_stub: false,
             is_referenced: false,
+            abi_class: None,
         }
     }
 
@@ -3553,7 +4262,6 @@ mod tests {
                 is_decl: false,
                 has_virtual_method: false,
                 has_destructor: false,
-                has_user_copy_or_move_ctor: false,
                 members: Vec::new(),
                 inherits: Vec::new(),
                 enumerators: Vec::new(),
@@ -3573,7 +4281,6 @@ mod tests {
                 is_decl: false,
                 has_virtual_method: false,
                 has_destructor: false,
-                has_user_copy_or_move_ctor: false,
                 members: Vec::new(),
                 inherits: Vec::new(),
                 enumerators: Vec::new(),
@@ -3593,7 +4300,6 @@ mod tests {
                 is_decl: false,
                 has_virtual_method: false,
                 has_destructor: false,
-                has_user_copy_or_move_ctor: false,
                 members: Vec::new(),
                 inherits: Vec::new(),
                 enumerators: Vec::new(),
@@ -3613,7 +4319,6 @@ mod tests {
                 is_decl: false,
                 has_virtual_method: false,
                 has_destructor: false,
-                has_user_copy_or_move_ctor: false,
                 members: Vec::new(),
                 inherits: Vec::new(),
                 enumerators: Vec::new(),
@@ -3673,8 +4378,422 @@ mod tests {
             },
         );
 
-        detect_copy_or_move_ctors(&mut cu_types, &cu_subprogs);
-        assert!(cu_types[&10].has_user_copy_or_move_ctor);
+        let candidates = collect_copy_or_move_ctor_candidates(&cu_types, &cu_subprogs);
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].0, 10);
+        assert!(!candidates[0].1);
+
+        let mut types = vec![make_type(
+            1,
+            "struct",
+            "WARSCAPE::TEMPLATE_HANDLE<53>",
+            Some(4),
+            None,
+            false,
+        )];
+        let mut ctor_sym_names = HashSet::new();
+        ctor_sym_names.insert("_ZN8WARSCAPE15TEMPLATE_HANDLEILi53EEC2ERKS1_".to_string());
+        let verified_candidates = vec![CandidateCopyCtor {
+            class_tid: 1,
+            has_concrete_def: false,
+            linkage_name: Some("_ZN8WARSCAPE15TEMPLATE_HANDLEILi53EEC2ERKS1_".to_string()),
+        }];
+        apply_verified_copy_or_move_ctors(
+            &mut types,
+            &verified_candidates,
+            &ctor_sym_names,
+            &HashMap::new(),
+        );
+        assert!(types[0].is_non_trivial_for_calls);
+    }
+
+    #[test]
+    fn test_std_pair_decl_only_copy_ctor_remains_trivial() {
+        let mut types = vec![make_type(
+            1,
+            "struct",
+            "std::pair<int, int>",
+            Some(8),
+            None,
+            false,
+        )];
+        let candidates = vec![CandidateCopyCtor {
+            class_tid: 1,
+            has_concrete_def: false,
+            linkage_name: None,
+        }];
+        apply_verified_copy_or_move_ctors(
+            &mut types,
+            &candidates,
+            &HashSet::new(),
+            &HashMap::new(),
+        );
+        assert!(!types[0].is_non_trivial_for_calls);
+    }
+
+    #[test]
+    fn test_empirical_rdi_rsi_witness_overrides_triviality() {
+        let mut pair_t = make_type(2, "struct", "std::pair<int, int>", Some(16), None, false);
+        pair_t.is_non_trivial_for_calls = true;
+        let types_base = vec![
+            make_type(1, "primitive", "void", Some(0), None, false),
+            pair_t,
+            make_type(3, "pointer", "void *", Some(8), None, false),
+        ];
+        let mut types = types_base;
+        let functions = vec![FunctionRow {
+            function_id: 1,
+            unit_id: 1,
+            address: Some(0x1de0b20),
+            byte_size: Some(32),
+            linkage_name: None,
+            qualified_name: "make_pair_like".to_string(),
+            containing_type_id: None,
+            return_type_id: Some(2),
+            vtable_slot_index: None,
+            virtuality: 0,
+            is_inline: false,
+            is_declaration: false,
+            is_variadic: false,
+            has_object_pointer: false,
+            is_sret: true,
+            decl_file: None,
+            decl_line: None,
+        }];
+        let mut func_param0_info = FnvHashMap::default();
+        func_param0_info.insert(1, (5, 3)); // param[0] is RDI (5), pointer (3)
+
+        apply_empirical_rdi_rsi_triviality(&mut types, &functions, &func_param0_info);
+        assert!(!types[1].is_non_trivial_for_calls);
+    }
+
+    #[test]
+    fn test_inlined_copy_ctor_marks_has_concrete_def() {
+        let mut types = vec![make_type(1, "class", "VEC::iterator", Some(8), None, false)];
+        let mut cu_types = FnvHashMap::default();
+        cu_types.insert(
+            10,
+            CuType {
+                kind: "class",
+                name: Some("iterator".to_string()),
+                qual_name: "VEC::iterator".to_string(),
+                byte_size: Some(8),
+                target_off: None,
+                array_count: None,
+                containing_off: None,
+                is_decl: false,
+                has_virtual_method: false,
+                has_destructor: false,
+                members: Vec::new(),
+                inherits: Vec::new(),
+                enumerators: Vec::new(),
+                virtual_methods: Vec::new(),
+            },
+        );
+        cu_types.insert(
+            11,
+            CuType {
+                kind: "reference",
+                name: None,
+                qual_name: "VEC::iterator &".to_string(),
+                byte_size: Some(8),
+                target_off: Some(10),
+                array_count: None,
+                containing_off: None,
+                is_decl: false,
+                has_virtual_method: false,
+                has_destructor: false,
+                members: Vec::new(),
+                inherits: Vec::new(),
+                enumerators: Vec::new(),
+                virtual_methods: Vec::new(),
+            },
+        );
+        let mut cu_subprogs = FnvHashMap::default();
+        cu_subprogs.insert(
+            20,
+            CuSubprog {
+                name: Some("iterator".to_string()),
+                qual_name: "VEC::iterator::iterator".to_string(),
+                linkage_name: None,
+                enclosing_type_off: Some(10),
+                containing_type_off: Some(10),
+                return_type_off: None,
+                specification_off: None,
+                abstract_origin_off: None,
+                object_pointer_off: None,
+                low_pc: None,
+                byte_size: None,
+                vtable_slot_index: None,
+                virtuality: 0,
+                is_inline: true,
+                is_decl: false,
+                is_variadic: false,
+                is_artificial: false,
+                decl_file: None,
+                decl_line: None,
+                params: vec![
+                    CuParam {
+                        name: Some("this".to_string()),
+                        type_off: None,
+                        is_artificial: true,
+                        die_off: 21,
+                        abstract_origin_off: None,
+                        storage_kind: "none",
+                        dwarf_reg: None,
+                        reg_name: None,
+                        stack_offset: None,
+                    },
+                    CuParam {
+                        name: Some("other".to_string()),
+                        type_off: Some(11),
+                        is_artificial: false,
+                        die_off: 22,
+                        abstract_origin_off: None,
+                        storage_kind: "none",
+                        dwarf_reg: None,
+                        reg_name: None,
+                        stack_offset: None,
+                    },
+                ],
+                variables: Vec::new(),
+                inlines: Vec::new(),
+            },
+        );
+        let detected = collect_copy_or_move_ctor_candidates(&cu_types, &cu_subprogs);
+        assert_eq!(detected.len(), 1);
+        assert!(detected[0].1);
+        let candidates = vec![CandidateCopyCtor {
+            class_tid: 1,
+            has_concrete_def: detected[0].1,
+            linkage_name: detected[0].2.clone(),
+        }];
+        apply_verified_copy_or_move_ctors(
+            &mut types,
+            &candidates,
+            &HashSet::new(),
+            &HashMap::new(),
+        );
+        assert!(types[0].is_non_trivial_for_calls);
+    }
+
+    #[test]
+    fn test_empirical_rsi_marks_inlined_copy_ctor_non_trivial() {
+        let iter_t = make_type(2, "class", "VEC::iterator", Some(8), None, false);
+        let mut types = vec![
+            make_type(1, "primitive", "void", Some(0), None, false),
+            iter_t,
+            make_type(3, "pointer", "void *", Some(8), None, false),
+        ];
+        let functions = vec![FunctionRow {
+            function_id: 1,
+            unit_id: 1,
+            address: Some(0x13fc540),
+            byte_size: Some(64),
+            linkage_name: None,
+            qualified_name: "std::remove_if".to_string(),
+            containing_type_id: None,
+            return_type_id: Some(2),
+            vtable_slot_index: None,
+            virtuality: 0,
+            is_inline: false,
+            is_declaration: false,
+            is_variadic: false,
+            has_object_pointer: false,
+            is_sret: false,
+            decl_file: None,
+            decl_line: None,
+        }];
+        let mut func_param0_info = FnvHashMap::default();
+        func_param0_info.insert(1, (4, 3)); // param[0] is RSI (4), pointer (3)
+
+        apply_empirical_rdi_rsi_triviality(&mut types, &functions, &func_param0_info);
+        assert!(types[1].is_non_trivial_for_calls);
+    }
+
+    #[test]
+    fn test_parse_op_addr_variants() {
+        let enc = gimli::Encoding {
+            format: gimli::Format::Dwarf32,
+            version: 4,
+            address_size: 8,
+        };
+        // DW_OP_addr(0x57d0a0) = [0x03, 8-byte LE]
+        let mut valid_bytes = vec![0x03u8];
+        valid_bytes.extend_from_slice(&0x57d0a0u64.to_le_bytes());
+        assert_eq!(
+            parse_op_addr_expr(
+                gimli::Expression(gimli::EndianSlice::new(&valid_bytes, gimli::RunTimeEndian::Little)),
+                enc
+            ),
+            Some(0x57d0a0)
+        );
+
+        // DW_OP_addr(0) -> rejected
+        let mut zero_bytes = vec![0x03u8];
+        zero_bytes.extend_from_slice(&0u64.to_le_bytes());
+        assert_eq!(
+            parse_op_addr_expr(
+                gimli::Expression(gimli::EndianSlice::new(&zero_bytes, gimli::RunTimeEndian::Little)),
+                enc
+            ),
+            None
+        );
+
+        // Multi-op: DW_OP_addr(0x57d0a0) + DW_OP_plus_uconst(8) -> rejected
+        let mut multi_bytes = valid_bytes.clone();
+        multi_bytes.extend_from_slice(&[0x23, 0x08]);
+        assert_eq!(
+            parse_op_addr_expr(
+                gimli::Expression(gimli::EndianSlice::new(&multi_bytes, gimli::RunTimeEndian::Little)),
+                enc
+            ),
+            None
+        );
+
+        // TLS: DW_OP_const8u(0) + DW_OP_GNU_push_tls_address (0xe0) -> rejected
+        let mut tls_bytes = vec![0x0eu8];
+        tls_bytes.extend_from_slice(&0u64.to_le_bytes());
+        tls_bytes.push(0xe0);
+        assert_eq!(
+            parse_op_addr_expr(
+                gimli::Expression(gimli::EndianSlice::new(&tls_bytes, gimli::RunTimeEndian::Little)),
+                enc
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn test_global_dedup_precedence() {
+        let types = vec![
+            make_type(1, "primitive", "void", Some(0), None, false),
+            make_type(2, "class", "DeclOnly", None, None, true),
+            make_type(3, "class", "Concrete", Some(8), None, false),
+        ];
+        let g_decl = PendingGlobal {
+            unit_id: 1,
+            address: 0x57d0a0,
+            linkage_name: None,
+            qualified_name: "s_inst".to_string(),
+            type_id: 2,
+            is_static_member: false,
+        };
+        let g_concrete = PendingGlobal {
+            unit_id: 5,
+            address: 0x57d0a0,
+            linkage_name: Some("_ZN1C6s_instE".to_string()),
+            qualified_name: "C::s_inst".to_string(),
+            type_id: 3,
+            is_static_member: true,
+        };
+        assert!(should_replace_global(&g_decl, &g_concrete, &types));
+        assert!(!should_replace_global(&g_concrete, &g_decl, &types));
+    }
+
+    #[test]
+    fn test_resolve_ptr_to_member_sizes() {
+        let mut types = vec![
+            make_type(1, "primitive", "void", Some(0), None, false),
+            make_type(2, "primitive", "int", Some(4), None, false),
+            make_type(3, "subroutine", "void()", None, None, false),
+            make_type(4, "typedef", "fn_t", None, Some(3), false),
+            make_type(5, "ptr_to_member", "pm_data", None, Some(2), false),
+            make_type(6, "ptr_to_member", "pm_func", None, Some(4), false),
+        ];
+        resolve_ptr_to_member_sizes(&mut types);
+        assert_eq!(types[4].byte_size, Some(8));
+        assert_eq!(types[5].byte_size, Some(16));
+    }
+
+    #[test]
+    fn test_classify_sysv_abi_class() {
+        let mut pair_t = make_type(9, "struct", "std::pair<int, void*>", Some(16), None, false);
+        pair_t.is_non_trivial_for_calls = false;
+        let mut nontrivial_t = make_type(15, "class", "CA::String", Some(8), None, false);
+        nontrivial_t.is_non_trivial_for_calls = true;
+        let mut arr2_float = make_type(16, "array", "float[2]", Some(8), Some(3), false);
+        arr2_float.array_count = Some(2);
+
+        let types = vec![
+            make_type(1, "primitive", "void", Some(0), None, false),
+            make_type(2, "primitive", "int", Some(4), None, false),
+            make_type(3, "primitive", "float", Some(4), None, false),
+            make_type(4, "primitive", "double", Some(8), None, false),
+            make_type(5, "primitive", "long double", Some(16), None, false),
+            make_type(6, "pointer", "void *", Some(8), None, false),
+            make_type(7, "ptr_to_member", "pm8", Some(8), Some(2), false),
+            make_type(8, "ptr_to_member", "pm16", Some(16), None, false),
+            pair_t,
+            make_type(10, "struct", "Vec2f", Some(8), None, false),
+            make_type(11, "struct", "Vec3f", Some(12), None, false),
+            make_type(12, "struct", "Vec2d", Some(16), None, false),
+            make_type(13, "struct", "DerivedVec", Some(16), None, false),
+            make_type(14, "struct", "Mixed", Some(16), None, false),
+            nontrivial_t,
+            arr2_float,
+            make_type(17, "struct", "PackedFloat", Some(5), None, false),
+            make_type(18, "struct", "TooBig", Some(24), None, false),
+            make_type(19, "struct", "Empty1B", Some(1), None, false),
+        ];
+
+        let mut raw_direct_members: FnvHashMap<i64, Vec<RawMemberSpec>> = FnvHashMap::default();
+        raw_direct_members.insert(
+            9,
+            vec![
+                make_member("first", 2, 0, 4),
+                make_member("second", 6, 8, 8),
+            ],
+        );
+        raw_direct_members.insert(
+            10,
+            vec![make_member("x", 3, 0, 4), make_member("y", 3, 4, 4)],
+        );
+        raw_direct_members.insert(
+            11,
+            vec![
+                make_member("x", 3, 0, 4),
+                make_member("y", 3, 4, 4),
+                make_member("z", 3, 8, 4),
+            ],
+        );
+        raw_direct_members.insert(
+            12,
+            vec![make_member("x", 4, 0, 8), make_member("y", 4, 8, 8)],
+        );
+        raw_direct_members.insert(13, vec![make_member("zw", 16, 8, 8)]);
+        raw_direct_members.insert(
+            14,
+            vec![make_member("f", 3, 0, 4), make_member("p", 6, 8, 8)],
+        );
+        raw_direct_members.insert(
+            17,
+            vec![make_member("b", 2, 0, 1), make_member("f", 3, 1, 4)],
+        );
+
+        let mut raw_direct_inherits: FnvHashMap<i64, Vec<(i64, Option<i64>, Option<i64>, bool)>> =
+            FnvHashMap::default();
+        raw_direct_inherits.insert(13, vec![(10, Some(0), None, false)]);
+
+        let cls = |id| classify_sysv_abi_class(id, &types, &raw_direct_members, &raw_direct_inherits);
+        assert_eq!(cls(1), None);
+        assert_eq!(cls(2).as_deref(), Some("int"));
+        assert_eq!(cls(3).as_deref(), Some("sse"));
+        assert_eq!(cls(4).as_deref(), Some("sse"));
+        assert_eq!(cls(5).as_deref(), Some("memory"));
+        assert_eq!(cls(6).as_deref(), Some("int"));
+        assert_eq!(cls(7).as_deref(), Some("int"));
+        assert_eq!(cls(8).as_deref(), Some("int,int"));
+        assert_eq!(cls(9).as_deref(), Some("int,int"));
+        assert_eq!(cls(10).as_deref(), Some("sse"));
+        assert_eq!(cls(11).as_deref(), Some("sse,sse"));
+        assert_eq!(cls(12).as_deref(), Some("sse,sse"));
+        assert_eq!(cls(13).as_deref(), Some("sse,sse"));
+        assert_eq!(cls(14).as_deref(), Some("sse,int"));
+        assert_eq!(cls(15).as_deref(), Some("memory"));
+        assert_eq!(cls(17).as_deref(), Some("memory"));
+        assert_eq!(cls(18).as_deref(), Some("memory"));
+        assert_eq!(cls(19).as_deref(), Some("int"));
     }
 
     #[test]
@@ -3693,6 +4812,7 @@ mod tests {
             is_non_trivial_for_calls: false,
             is_stl_stub: false,
             is_referenced: false,
+            abi_class: None,
         };
         let types = vec![
             make_type(1, "primitive", "void"),
@@ -3809,6 +4929,7 @@ mod tests {
             is_non_trivial_for_calls: false,
             is_stl_stub: false,
             is_referenced: false,
+            abi_class: None,
         };
         let types = vec![
             make_type(1, "primitive", "void"),
@@ -3902,6 +5023,7 @@ mod tests {
             is_non_trivial_for_calls: false,
             is_stl_stub: false,
             is_referenced: false,
+            abi_class: None,
         };
         let types = vec![
             make_type(1, "pointer", "lua_State *"),
