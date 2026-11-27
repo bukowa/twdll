@@ -1518,6 +1518,12 @@ fn align_concrete_params<'a>(
             .and_then(|o| cu_to_global_type.get(&o).copied())
             .map(|t| resolve_global_underlying(types, t))
     };
+    let canonical_type_name = |p: &CuParam| -> Option<&str> {
+        let utid = underlying_tid(p)?;
+        types
+            .get((utid - 1) as usize)
+            .map(|t| t.qualified_name.as_str())
+    };
 
     let mut used = vec![false; sp.params.len()];
     let mut aligned = Vec::with_capacity(decl_params.len());
@@ -1528,6 +1534,7 @@ fn align_concrete_params<'a>(
                 .or_else(|| ms.get(ord))
         });
         let dp_utid = underlying_tid(dp).or_else(|| mid_p.and_then(underlying_tid));
+        let dp_qname = canonical_type_name(dp).or_else(|| mid_p.and_then(canonical_type_name));
 
         let mut matched_idx = (0..sp.params.len()).find(|&i| {
             !used[i]
@@ -1545,15 +1552,19 @@ fn align_concrete_params<'a>(
             matched_idx = (0..sp.params.len()).find(|&i| !used[i] && sp.params[i].die_off == sp_obj);
         }
 
+        let same_ord_obj_ok = !(ord == 0
+            && ord < sp.params.len()
+            && sp
+                .object_pointer_off
+                .is_some_and(|o| sp.params[ord].die_off != o));
+
         if matched_idx.is_none()
             && ord < sp.params.len()
             && !used[ord]
-            && dp_utid.is_some()
-            && underlying_tid(&sp.params[ord]) == dp_utid
-            && !(ord == 0
-                && sp
-                    .object_pointer_off
-                    .is_some_and(|o| sp.params[ord].die_off != o))
+            && same_ord_obj_ok
+            && ((dp_utid.is_some() && underlying_tid(&sp.params[ord]) == dp_utid)
+                || (dp_qname.is_some() && canonical_type_name(&sp.params[ord]) == dp_qname)
+                || (dp_utid.is_none() && underlying_tid(&sp.params[ord]).is_none()))
         {
             matched_idx = Some(ord);
         }
@@ -1563,6 +1574,13 @@ fn align_concrete_params<'a>(
         {
             matched_idx = (0..sp.params.len())
                 .find(|&i| !used[i] && underlying_tid(&sp.params[i]) == Some(utid));
+        }
+
+        if matched_idx.is_none()
+            && let Some(qname) = dp_qname
+        {
+            matched_idx = (0..sp.params.len())
+                .find(|&i| !used[i] && canonical_type_name(&sp.params[i]) == Some(qname));
         }
 
         let concrete = matched_idx.map(|i| {
@@ -3866,5 +3884,91 @@ mod tests {
             .map(|a| a.concrete.and_then(|p| p.name.as_deref()).unwrap_or(""))
             .collect();
         assert_eq!(names, vec!["this", "vtt", "access", "parent"]);
+    }
+
+    #[test]
+    fn test_align_concrete_params_merges_distinct_type_ids_same_qname() {
+        let make_type = |id: i64, kind: &'static str, qn: &str| TypeRow {
+            type_id: id,
+            kind,
+            qualified_name: qn.to_string(),
+            byte_size: Some(8),
+            target_type_id: None,
+            array_count: None,
+            containing_type_id: None,
+            vtable_symbol: None,
+            vtable_address: None,
+            is_declaration: false,
+            is_non_trivial_for_calls: false,
+            is_stl_stub: false,
+            is_referenced: false,
+        };
+        let types = vec![
+            make_type(1, "pointer", "lua_State *"),
+            make_type(2, "pointer", "lua_State *"),
+            make_type(3, "class", "EMPIRECAMPAIGN::GARRISON_RESIDENCE::BUILDING_CONST_ITERATOR"),
+        ];
+        let mut cu_to_global_type = FnvHashMap::default();
+        cu_to_global_type.insert(101, 1);
+        cu_to_global_type.insert(102, 2);
+        cu_to_global_type.insert(103, 3);
+
+        let make_sp = |params: Vec<CuParam>| CuSubprog {
+            name: Some("create_list_and_push_to_stack_overload".to_string()),
+            qual_name: "BUILDING_LIST_SCRIPT_INTERFACE::create_list_and_push_to_stack_overload"
+                .to_string(),
+            linkage_name: None,
+            enclosing_type_off: None,
+            containing_type_off: None,
+            return_type_off: None,
+            specification_off: None,
+            abstract_origin_off: None,
+            object_pointer_off: None,
+            low_pc: None,
+            byte_size: None,
+            vtable_slot_index: None,
+            virtuality: 0,
+            is_inline: false,
+            is_decl: false,
+            is_variadic: false,
+            is_artificial: false,
+            decl_file: None,
+            decl_line: None,
+            params,
+            variables: Vec::new(),
+            inlines: Vec::new(),
+        };
+        let mk_p = |name: Option<&str>, toff: usize, die: usize, reg: Option<(i64, &str)>| {
+            CuParam {
+                name: name.map(|s| s.to_string()),
+                type_off: Some(toff),
+                is_artificial: false,
+                die_off: die,
+                abstract_origin_off: None,
+                storage_kind: if reg.is_some() { "register" } else { "none" },
+                dwarf_reg: reg.map(|r| r.0),
+                reg_name: reg.map(|r| r.1.to_string()),
+                stack_offset: None,
+            }
+        };
+
+        let decl = make_sp(vec![
+            mk_p(None, 102, 10, None),
+            mk_p(None, 103, 11, None),
+            mk_p(None, 103, 12, None),
+        ]);
+        let conc = make_sp(vec![
+            mk_p(Some("ls"), 101, 20, Some((5, "RDI"))),
+            mk_p(Some("begin"), 103, 21, None),
+            mk_p(Some("end"), 103, 22, None),
+        ]);
+        let res = align_concrete_params(&conc, Some(&decl), None, None, &cu_to_global_type, &types);
+        assert_eq!(res.len(), 3);
+        let names: Vec<_> = res
+            .iter()
+            .map(|a| a.concrete.and_then(|p| p.name.as_deref()).unwrap_or(""))
+            .collect();
+        assert_eq!(names, vec!["ls", "begin", "end"]);
+        assert_eq!(res[0].decl.map(|d| d.die_off), Some(10));
     }
 }
